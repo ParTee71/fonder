@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Grön petrol — identitetsfärger för launcher och splash -->
+    <color name="petrol_splash">#0E5249</color>
+    <color name="ic_launcher_background">#0E5249</color>
+</resources>

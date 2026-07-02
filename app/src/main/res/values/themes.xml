@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Skal-tema — Compose (FonderTheme) sköter all riktig theming -->
+    <style name="Theme.Fonder" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <!-- Startskärm: mässings-logotyp på petrolbakgrund -->
+    <style name="Theme.Fonder.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/petrol_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Fonder</item>
+    </style>
+</resources>

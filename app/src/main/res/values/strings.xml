@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fonder</string>
+
+    <!-- Gemensamma åtgärder -->
+    <string name="back">Tillbaka</string>
+    <string name="save">Spara</string>
+    <string name="delete">Ta bort</string>
+    <string name="cancel">Avbryt</string>
+    <string name="edit">Redigera</string>
+    <string name="add">Lägg till</string>
+    <string name="ok">OK</string>
+    <string name="settings">Inställningar</string>
+    <string name="sign_in_with_google">Logga in med Google</string>
+    <string name="sign_out">Logga ut</string>
+
+    <!-- Navigation / skärmar -->
+    <string name="nav_portfolj">Portfölj</string>
+    <string name="nav_transaktioner">Transaktioner</string>
+    <string name="nav_fond">Fond</string>
+    <string name="nav_settings">Inställningar</string>
+
+    <!-- Portfölj -->
+    <string name="portfolj_title">Portfölj</string>
+    <string name="portfolj_empty_title">Inga innehav ännu</string>
+    <string name="portfolj_empty_body">Lägg till din första fondtransaktion för att se värde och utveckling.</string>
+    <string name="portfolj_total_value">Totalt värde</string>
+
+    <!-- Transaktioner -->
+    <string name="transaktioner_title">Transaktioner</string>
+    <string name="transaktioner_empty_title">Inga transaktioner</string>
+    <string name="transaktioner_empty_body">Registrera köp och sälj för att räkna ut värde.</string>
+    <string name="transaktioner_add">Ny transaktion</string>
+
+    <!-- Fonddetalj / diagram -->
+    <string name="fond_title">Fond</string>
+    <string name="fond_diagram_placeholder">Diagram kommer i en kommande version.</string>
+
+    <!-- Inställningar -->
+    <string name="settings_title">Inställningar</string>
+    <string name="settings_theme_section">Tema</string>
+    <string name="theme_light">Ljust</string>
+    <string name="theme_dark">Mörkt</string>
+    <string name="theme_auto">Auto</string>
+    <string name="settings_account_section">Google-konto &amp; säkerhetskopiering</string>
+    <string name="settings_account_body">Inloggning och molnbackup läggs till i en kommande version.</string>
+    <string name="settings_about_section">Om appen</string>
+</resources>
