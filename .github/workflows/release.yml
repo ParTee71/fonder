@@ -1,0 +1,83 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 0.2.0) — leave blank to use value in build.gradle.kts'
+        required: false
+        type: string
+
+permissions:
+  contents: write   # required to create a GitHub Release on tag push
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 --decode > app/fonder.jks
+
+      - name: Convert keystore to legacy PKCS12
+        run: |
+          keytool -importkeystore \
+            -srckeystore app/fonder.jks \
+            -srcstorepass "${{ secrets.SIGNING_STORE_PASSWORD }}" \
+            -destkeystore app/fonder-legacy.jks \
+            -deststorepass "${{ secrets.SIGNING_STORE_PASSWORD }}" \
+            -deststoretype pkcs12 \
+            -J-Dkeystore.pkcs12.legacy \
+            -noprompt
+          mv app/fonder-legacy.jks app/fonder.jks
+
+      - name: Build release APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "${{ inputs.version_name }}" ]; then
+            ./gradlew :app:assembleRelease \
+              -PversionNameOverride="${{ inputs.version_name }}"
+          else
+            ./gradlew :app:assembleRelease
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fonder-release
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      # Publish a GitHub Release with the signed APK + auto-generated changelog.
+      # Only on tag pushes (vX.Y.Z) — workflow_dispatch runs stay artifact-only.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Fonder ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/*.apk
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f app/fonder.jks
