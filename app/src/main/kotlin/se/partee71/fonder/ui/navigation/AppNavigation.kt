@@ -1,6 +1,9 @@
 package se.partee71.fonder.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -17,7 +20,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import se.partee71.fonder.R
 import se.partee71.fonder.ui.fond.FondDetaljScreen
+import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
@@ -59,6 +64,13 @@ fun AppNavigation() {
                 }
             }
         },
+        floatingActionButton = {
+            if (currentRoute == Screen.Portfolj.route) {
+                FloatingActionButton(onClick = { navController.navigate(Routes.FUND_SEARCH) }) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.fondsok_fab))
+                }
+            }
+        },
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -66,7 +78,7 @@ fun AppNavigation() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Screen.Portfolj.route) {
-                PortfoljScreen(onFundClick = { isin -> navController.navigate(Routes.fond(isin)) })
+                PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
             }
             composable(Screen.Transaktioner.route) {
                 TransaktionerScreen()
@@ -76,9 +88,12 @@ fun AppNavigation() {
             }
             composable(
                 route = Routes.FOND,
-                arguments = listOf(navArgument("isin") { type = NavType.StringType }),
+                arguments = listOf(navArgument("fundId") { type = NavType.StringType }),
             ) { entry ->
-                FondDetaljScreen(isin = entry.arguments?.getString("isin").orEmpty())
+                FondDetaljScreen(fundId = entry.arguments?.getString("fundId").orEmpty())
+            }
+            composable(Routes.FUND_SEARCH) {
+                FundSearchScreen()
             }
         }
     }

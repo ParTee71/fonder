@@ -16,11 +16,11 @@ import se.partee71.fonder.R
 
 /**
  * Fonddetalj — kurshistorik/diagram tillkommer i diagram-issuet (via delad FundLineChart).
- * Tar emot ISIN via navigering; visar placeholder tills kursdata finns.
+ * Tar emot fondens fundId via navigering; visar placeholder tills kursdata finns.
  */
 @Composable
 fun FondDetaljScreen(
-    isin: String,
+    fundId: String,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -28,7 +28,7 @@ fun FondDetaljScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(isin, style = MaterialTheme.typography.titleLarge)
+        Text(fundId, style = MaterialTheme.typography.titleLarge)
         Text(
             stringResource(R.string.fond_diagram_placeholder),
             style = MaterialTheme.typography.bodyMedium,

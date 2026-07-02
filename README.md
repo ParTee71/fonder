@@ -13,10 +13,10 @@ och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
 ## Status
 
-Projektet är i **init-fas**. Grunden (arkitektur, tema, Room/DataStore, navigering,
+Projektet är i **tidig fas**. Grunden (arkitektur, tema, Room/DataStore, navigering,
 repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 
-- [ ] Kurskälla från Handelsbanken utan inloggning (spike #2)
+- [x] Kurskälla från Handelsbanken utan inloggning (spike #2 → implementerad i #3)
 - [ ] Fondtransaktioner (köp/sälj)
 - [ ] Värdeberäkning (historiskt + nuvarande)
 - [ ] Utveckling i tabell och diagram
@@ -62,33 +62,42 @@ Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 data/
 ├── auth/         AuthRepository (Google-inloggning — stub tills auth-issue)
 ├── datastore/    PreferencesRepository (tema m.m.)
-├── repository/   TransactionRepository (Room) · FundPriceRepository (stub, #2) · BackupRepository (stub)
-└── room/         AppDatabase (v1) · entities · daos
-di/               Hilt-moduler (AppModule, RepositoryModule)
+├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3)
+├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken) · BackupRepository (stub)
+└── room/         AppDatabase (v2) · entities · daos
+di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund · Transaction · FundPrice · Holding
+├── model/        Fund (fundId) · Transaction · FundPrice · Holding
 └── usecase/      PortfolioCalc · MoneyFormat
 ui/
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel
 ├── fond/         FondDetaljScreen (diagram-placeholder)
+├── fondsok/      FundSearchScreen + ViewModel (sök & lägg till Handelsbanken-fond)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState …)
 ├── diagram/      Delade diagram (FundLineChart — tillkommer)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi
-worker/           WorkManager-jobb (tillkommer)
+worker/           FundPriceUpdateWorker (daglig kursuppdatering)
 ```
 
-Repository är single source of truth. `FundPriceRepository`, `BackupRepository` och
-`AuthRepository` är kontrakt vars implementationer är stubbar tills respektive feature
-byggs (så arkitekturen är komplett från dag ett).
+Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
+kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —
+odokumenterad, inofficiell HTML-källa). `BackupRepository` och `AuthRepository` är
+fortfarande kontrakt med stubbar tills respektive feature byggs.
 
 ---
 
 ## Tester
 
-- **Enhet (JVM):** `domain/` (PortfolioCalc, MoneyFormat) och ViewModels (Turbine).
-- **Instrument:** Room DAO-rundtur (`androidTest`).
+- **Enhet (JVM):** `domain/` (PortfolioCalc, MoneyFormat), `data/network/`
+  (HTML-parsning mot verkliga sidfixturer), `data/repository/` (cache/fallback-logik med
+  fejkad HTTP-källa) och ViewModels (Turbine).
+- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`.
+
+> Formell `MigrationTestHelper`-baserad migreringstest saknas för 1→2 (ingen
+> version-1-schemasnapshot finns i repot). Framtida schemaändringar (v2→v3+) bör testas
+> med `MigrationTestHelper` mot committade `app/schemas/*.json`.
 
 Kör i **GitHub Actions** (`.github/workflows/android.yml`) vid PR/push mot `master`.

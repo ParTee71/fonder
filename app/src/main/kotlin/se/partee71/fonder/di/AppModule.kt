@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
+import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import javax.inject.Singleton
 
@@ -38,4 +39,7 @@ object AppModule {
 
     @Provides
     fun provideTransactionDao(db: AppDatabase): TransactionDao = db.transactionDao()
+
+    @Provides
+    fun provideFundPriceDao(db: AppDatabase): FundPriceDao = db.fundPriceDao()
 }

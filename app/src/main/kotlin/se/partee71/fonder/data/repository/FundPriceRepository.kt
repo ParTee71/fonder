@@ -1,27 +1,73 @@
 package se.partee71.fonder.data.repository
 
+import android.util.Log
+import se.partee71.fonder.data.network.FondlistaHtmlSource
+import se.partee71.fonder.data.network.HandelsbankenHtmlParser
+import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Kontrakt för fondkurser (NAV).
- *
- * Implementationen beror på spike-issue #2 (källa hos Handelsbanken utan inloggning).
- * Tills beslutet är taget finns en stub som returnerar tomt — appen ska bygga och köra
- * utan kursdata.
+ * Kontrakt för fondkurser (NAV). Källa: handelsbanken.fondlista.se, beslutad i spike-issue
+ * #2, implementerad i #3.
  */
 interface FundPriceRepository {
-    /** Senaste kända kurs för en fond, eller null om okänd. */
-    suspend fun latestPrice(isin: String): FundPrice?
+    /** Senaste kända (cachade) kurs för en fond, eller null om okänd. */
+    suspend fun latestPrice(fundId: String): FundPrice?
 
-    /** Kurshistorik för en fond inom ett epoch-day-intervall (inklusive). */
-    suspend fun priceHistory(isin: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice>
+    /** Kurshistorik för en fond inom ett epoch-day-intervall (inklusive), ur lokal cache. */
+    suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice>
+
+    /** Hämtar senaste årets kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
+    suspend fun refresh(fundId: String)
+
+    /** Handelsbankens egna fonder (namn + fundId) för fondsök-UI. */
+    suspend fun fetchFundCatalog(): List<Fund>
 }
 
 @Singleton
-class StubFundPriceRepository @Inject constructor() : FundPriceRepository {
-    // TODO(#2): ersätt med riktig hämtning när kurskällan är fastställd.
-    override suspend fun latestPrice(isin: String): FundPrice? = null
-    override suspend fun priceHistory(isin: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
+class HandelsbankenFundPriceRepository @Inject constructor(
+    private val client: FondlistaHtmlSource,
+    private val dao: FundPriceDao,
+) : FundPriceRepository {
+
+    override suspend fun latestPrice(fundId: String): FundPrice? =
+        dao.getLatest(fundId)?.toDomain()
+
+    override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
+        dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
+
+    override suspend fun refresh(fundId: String) {
+        runCatching {
+            val to = LocalDate.now()
+            val from = to.minusYears(1)
+            val html = client.fetchHistoryPage(fundId, from, to)
+            HandelsbankenHtmlParser.parseHistory(html, fundId)
+        }.onSuccess { prices ->
+            if (prices.isNotEmpty()) {
+                dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
+            }
+        }.onFailure { e ->
+            // Nätverksfel eller ett brott i sidans format — behåll senast cachade kurs,
+            // krascha aldrig UI:t. Se riskavsnittet i issue #2/#3.
+            Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
+        }
+    }
+
+    override suspend fun fetchFundCatalog(): List<Fund> =
+        runCatching {
+            val today = LocalDate.now()
+            val html = client.fetchHistoryPage(fundId = null, from = today, to = today)
+            HandelsbankenHtmlParser.parseHandelsbankenFundCatalog(html)
+        }.onFailure { e ->
+            Log.w(TAG, "Kunde inte hämta fondkatalogen", e)
+        }.getOrDefault(emptyList())
+
+    private companion object {
+        const val TAG = "FundPriceRepository"
+    }
 }

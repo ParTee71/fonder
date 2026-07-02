@@ -6,14 +6,14 @@ import se.partee71.fonder.domain.model.Fund
 
 @Entity(tableName = "funds")
 data class FundEntity(
-    @PrimaryKey val isin: String,
+    @PrimaryKey val fundId: String,
     val name: String,
     val currency: String,
 ) {
-    fun toDomain() = Fund(isin = isin, name = name, currency = currency)
+    fun toDomain() = Fund(fundId = fundId, name = name, currency = currency)
 
     companion object {
         fun fromDomain(fund: Fund) =
-            FundEntity(isin = fund.isin, name = fund.name, currency = fund.currency)
+            FundEntity(fundId = fund.fundId, name = fund.name, currency = fund.currency)
     }
 }

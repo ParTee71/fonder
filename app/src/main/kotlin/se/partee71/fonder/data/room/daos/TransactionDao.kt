@@ -12,8 +12,8 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY epochDay DESC, id DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE fundIsin = :isin ORDER BY epochDay ASC, id ASC")
-    fun observeForFund(isin: String): Flow<List<TransactionEntity>>
+    @Query("SELECT * FROM transactions WHERE fundId = :fundId ORDER BY epochDay ASC, id ASC")
+    fun observeForFund(fundId: String): Flow<List<TransactionEntity>>
 
     @Insert
     suspend fun insert(tx: TransactionEntity): Long

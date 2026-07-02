@@ -9,14 +9,14 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 
 class PortfolioCalcTest {
 
-    private val fondA = Fund(isin = "SE0000000001", name = "Fond A")
-    private val fondB = Fund(isin = "SE0000000002", name = "Fond B")
+    private val fondA = Fund(fundId = "SHB0000442", name = "Fond A")
+    private val fondB = Fund(fundId = "SHB0000627", name = "Fond B")
 
     @Test
     fun `net shares och invested subtraherar salj fran kop`() {
         val txs = listOf(
-            Transaction(fundIsin = fondA.isin, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundIsin = fondA.isin, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0),
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
@@ -29,8 +29,8 @@ class PortfolioCalcTest {
     @Test
     fun `holdings sorteras pa namn och totalen summeras`() {
         val txs = listOf(
-            Transaction(fundIsin = fondB.isin, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 200.0),
-            Transaction(fundIsin = fondA.isin, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 300.0),
+            Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 200.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 300.0),
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA, fondB), txs)
@@ -42,7 +42,7 @@ class PortfolioCalcTest {
     @Test
     fun `transaktion utan matchande fond ignoreras`() {
         val txs = listOf(
-            Transaction(fundIsin = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0),
+            Transaction(fundId = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0),
         )
         assertEquals(0, PortfolioCalc.computeHoldings(listOf(fondA), txs).size)
     }

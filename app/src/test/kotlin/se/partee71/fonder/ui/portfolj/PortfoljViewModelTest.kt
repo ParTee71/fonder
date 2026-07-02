@@ -31,7 +31,7 @@ class PortfoljViewModelTest {
     private val fakeRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
         override fun observeTransactions(): Flow<List<Transaction>> = transactions
-        override fun observeTransactionsForFund(isin: String): Flow<List<Transaction>> = transactions
+        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactions
         override suspend fun upsertFund(fund: Fund) {}
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
@@ -56,10 +56,10 @@ class PortfoljViewModelTest {
 
     @Test
     fun `holdings och total berakas fran transaktioner`() = runTest(dispatcher) {
-        val fond = Fund(isin = "SE0000000001", name = "Fond A")
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundIsin = fond.isin, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
         )
 
         val vm = PortfoljViewModel(fakeRepo)

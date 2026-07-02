@@ -41,8 +41,8 @@ fun PortfoljScreen(
         else -> Column(modifier = modifier.fillMaxSize()) {
             TotalCard(total = state.totalInvested)
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.holdings, key = { it.fund.isin }) { holding ->
-                    HoldingRow(holding = holding, onClick = { onFundClick(holding.fund.isin) })
+                items(state.holdings, key = { it.fund.fundId }) { holding ->
+                    HoldingRow(holding = holding, onClick = { onFundClick(holding.fund.fundId) })
                 }
             }
         }

@@ -36,6 +36,13 @@
     <string name="fond_title">Fond</string>
     <string name="fond_diagram_placeholder">Diagram kommer i en kommande version.</string>
 
+    <!-- Fondsök (lägg till fond i bevakningen) -->
+    <string name="fondsok_label">Sök fond</string>
+    <string name="fondsok_empty_title">Inga fonder hittades</string>
+    <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
+    <string name="fondsok_added">Tillagd</string>
+    <string name="fondsok_fab">Lägg till fond</string>
+
     <!-- Inställningar -->
     <string name="settings_title">Inställningar</string>
     <string name="settings_theme_section">Tema</string>

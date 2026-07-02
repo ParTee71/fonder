@@ -13,14 +13,14 @@ interface FundDao {
     @Query("SELECT * FROM funds ORDER BY name COLLATE NOCASE")
     fun observeAll(): Flow<List<FundEntity>>
 
-    @Query("SELECT * FROM funds WHERE isin = :isin")
-    suspend fun getByIsin(isin: String): FundEntity?
+    @Query("SELECT * FROM funds WHERE fundId = :fundId")
+    suspend fun getByFundId(fundId: String): FundEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(fund: FundEntity)
 
-    @Query("DELETE FROM funds WHERE isin = :isin")
-    suspend fun deleteByIsin(isin: String)
+    @Query("DELETE FROM funds WHERE fundId = :fundId")
+    suspend fun deleteByFundId(fundId: String)
 
     @Query("SELECT * FROM funds")
     suspend fun getAll(): List<FundEntity>

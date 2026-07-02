@@ -15,7 +15,7 @@ import javax.inject.Singleton
 interface TransactionRepository {
     fun observeFunds(): Flow<List<Fund>>
     fun observeTransactions(): Flow<List<Transaction>>
-    fun observeTransactionsForFund(isin: String): Flow<List<Transaction>>
+    fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>>
     suspend fun upsertFund(fund: Fund)
     suspend fun addTransaction(tx: Transaction): Long
     suspend fun deleteTransaction(id: Long)
@@ -33,8 +33,8 @@ class RoomTransactionRepository @Inject constructor(
     override fun observeTransactions(): Flow<List<Transaction>> =
         transactionDao.observeAll().map { list -> list.map(TransactionEntity::toDomain) }
 
-    override fun observeTransactionsForFund(isin: String): Flow<List<Transaction>> =
-        transactionDao.observeForFund(isin).map { list -> list.map(TransactionEntity::toDomain) }
+    override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> =
+        transactionDao.observeForFund(fundId).map { list -> list.map(TransactionEntity::toDomain) }
 
     override suspend fun upsertFund(fund: Fund) =
         fundDao.upsert(FundEntity.fromDomain(fund))

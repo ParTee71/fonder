@@ -48,7 +48,7 @@ fun TransaktionerScreen(
 private fun TransactionRow(tx: Transaction) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("${tx.type} · ${tx.fundIsin}", style = MaterialTheme.typography.titleSmall)
+            Text("${tx.type} · ${tx.fundId}", style = MaterialTheme.typography.titleSmall)
             Text(
                 MoneyFormat.kr(tx.amount),
                 style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),

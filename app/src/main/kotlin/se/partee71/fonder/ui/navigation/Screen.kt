@@ -18,7 +18,10 @@ enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
 }
 
 object Routes {
-    /** Fonddetalj för en given ISIN. */
-    const val FOND = "fond/{isin}"
-    fun fond(isin: String) = "fond/$isin"
+    /** Fonddetalj för ett givet fundId (Handelsbankens fondlista-id, se issue #2/#3). */
+    const val FOND = "fond/{fundId}"
+    fun fond(fundId: String) = "fond/$fundId"
+
+    /** Sök och lägg till en Handelsbanken-fond i bevakningen. */
+    const val FUND_SEARCH = "fund-search"
 }

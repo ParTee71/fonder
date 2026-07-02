@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 /**
  * En fond i användarens bevakning/portfölj.
  *
- * Identiteten (ISIN vs Handelsbankens interna id) avgörs i spike-issue #2. Tills vidare
- * bär [isin] fondens stabila nyckel; byt fält när beslutet är taget.
+ * Identitet: [fundId] är Handelsbankens fondlista-plattforms egen kod (t.ex. "SHB0000627"),
+ * inte ISIN — källan (spike-issue #2) exponerar inget ISIN.
  */
 @Serializable
 data class Fund(
-    val isin: String,
+    val fundId: String,
     val name: String,
     val currency: String = "SEK",
 )

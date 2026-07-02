@@ -8,11 +8,11 @@ import se.partee71.fonder.domain.model.TransactionType
 
 @Entity(
     tableName = "transactions",
-    indices = [Index("fundIsin")],
+    indices = [Index("fundId")],
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val fundIsin: String,
+    val fundId: String,
     val type: String,
     val epochDay: Long,
     val shares: Double,
@@ -20,7 +20,7 @@ data class TransactionEntity(
 ) {
     fun toDomain() = Transaction(
         id = id,
-        fundIsin = fundIsin,
+        fundId = fundId,
         type = TransactionType.valueOf(type),
         epochDay = epochDay,
         shares = shares,
@@ -30,7 +30,7 @@ data class TransactionEntity(
     companion object {
         fun fromDomain(tx: Transaction) = TransactionEntity(
             id = tx.id,
-            fundIsin = tx.fundIsin,
+            fundId = tx.fundId,
             type = tx.type.name,
             epochDay = tx.epochDay,
             shares = tx.shares,

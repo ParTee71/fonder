@@ -7,17 +7,17 @@ import se.partee71.fonder.domain.model.TransactionType
 
 /**
  * Ren, testbar sammanräkning av innehav ur fonder + transaktioner.
- * Kursberoende värdering tillkommer när kurskällan finns (spike-issue #2).
+ * Kursberoende värdering tillkommer när kurserna används i portföljvärdering (eget issue).
  */
 object PortfolioCalc {
 
     /** Räknar ut nettoinnehav per fond. Fonder utan transaktioner utelämnas. */
     fun computeHoldings(funds: List<Fund>, transactions: List<Transaction>): List<Holding> {
-        val byIsin = funds.associateBy { it.isin }
+        val byFundId = funds.associateBy { it.fundId }
         return transactions
-            .groupBy { it.fundIsin }
-            .mapNotNull { (isin, txs) ->
-                val fund = byIsin[isin] ?: return@mapNotNull null
+            .groupBy { it.fundId }
+            .mapNotNull { (fundId, txs) ->
+                val fund = byFundId[fundId] ?: return@mapNotNull null
                 var netShares = 0.0
                 var netInvested = 0.0
                 for (tx in txs) {

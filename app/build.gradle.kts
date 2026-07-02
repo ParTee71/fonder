@@ -28,8 +28,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = versionNameOverride ?: "0.1.0"
+        versionCode = 2
+        versionName = versionNameOverride ?: "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -157,10 +157,14 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
-    // WorkManager + Hilt (uppsatt för kommande bakgrundsjobb: backup/kursuppdatering)
+    // WorkManager + Hilt (backup/kursuppdatering)
     implementation(libs.work.runtime.ktx)
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
+
+    // Nätverk + HTML-parsning för FundPriceRepository (se issue #2/#3)
+    implementation(libs.okhttp)
+    implementation(libs.jsoup)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
