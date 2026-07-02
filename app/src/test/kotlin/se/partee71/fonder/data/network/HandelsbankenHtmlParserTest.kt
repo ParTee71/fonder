@@ -8,6 +8,8 @@ import java.time.LocalDate
 /**
  * Fixturerna nedan är trimmade utdrag av verklig markup från handelsbanken.fondlista.se
  * (verifierad i spike-issue #2 mot en riktig sidkälla från användaren, 2026-07-02).
+ * Jsoup:s HTML5-parser kräver en `<table>`-omslutning runt `<tbody>`/`<tr>`/`<td>` för att
+ * bygga trädet korrekt — fragment utan den foster-parentas och missas av selektorer.
  */
 class HandelsbankenHtmlParserTest {
 
@@ -45,14 +47,14 @@ class HandelsbankenHtmlParserTest {
     @Test
     fun `parseHistory hanterar tusentalsavgransare med hart mellanslag`() {
         val html = """
-            <tbody>
+            <table><tbody>
             <tr class="funds-data">
                 <td class="name "><span class="arrow" id="SHB0000442"></span></td>
-                <td class="positive">1${' '}563,19</td>
+                <td class="positive">1${' '}563,19</td>
                 <td class="left">SEK</td>
                 <td>2026-07-01</td>
             </tr>
-            </tbody>
+            </tbody></table>
         """.trimIndent()
 
         val prices = HandelsbankenHtmlParser.parseHistory(html, fundId = "SHB0000442")
@@ -64,7 +66,7 @@ class HandelsbankenHtmlParserTest {
     @Test
     fun `parseHistory hoppar over rader med trasig data`() {
         val html = """
-            <tbody>
+            <table><tbody>
             <tr class="funds-data">
                 <td class="name ">Fond</td>
                 <td class="positive">inte-ett-tal</td>
@@ -77,7 +79,7 @@ class HandelsbankenHtmlParserTest {
                 <td class="left">SEK</td>
                 <td>ogiltigt-datum</td>
             </tr>
-            </tbody>
+            </tbody></table>
         """.trimIndent()
 
         val prices = HandelsbankenHtmlParser.parseHistory(html, fundId = "SHB0000442")
@@ -108,7 +110,7 @@ class HandelsbankenHtmlParserTest {
 
     @Test
     fun `parseSwedishNumber hanterar komma minus och tomt`() {
-        assertEquals(1234.5, HandelsbankenHtmlParser.parseSwedishNumber("1${' '}234,5"))
+        assertEquals(1234.5, HandelsbankenHtmlParser.parseSwedishNumber("1${' '}234,5"))
         assertEquals(-12.3, HandelsbankenHtmlParser.parseSwedishNumber("-12,3"))
         assertNull(HandelsbankenHtmlParser.parseSwedishNumber("—"))
     }

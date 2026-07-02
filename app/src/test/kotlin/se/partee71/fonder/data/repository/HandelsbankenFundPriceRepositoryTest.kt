@@ -93,13 +93,13 @@ class HandelsbankenFundPriceRepositoryTest {
     }
 
     private fun historyHtml(fundId: String, nav: String, currency: String, date: String) = """
-        <tbody>
+        <table><tbody>
         <tr class="funds-data">
             <td class="name "><span class="arrow" id="$fundId"></span></td>
             <td class="positive">$nav</td>
             <td class="left">$currency</td>
             <td>$date</td>
         </tr>
-        </tbody>
+        </tbody></table>
     """.trimIndent()
 }
