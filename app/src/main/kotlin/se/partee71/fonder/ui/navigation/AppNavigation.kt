@@ -25,6 +25,7 @@ import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
+import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -65,9 +66,12 @@ fun AppNavigation() {
             }
         },
         floatingActionButton = {
-            if (currentRoute == Screen.Portfolj.route) {
-                FloatingActionButton(onClick = { navController.navigate(Routes.FUND_SEARCH) }) {
+            when (currentRoute) {
+                Screen.Portfolj.route -> FloatingActionButton(onClick = { navController.navigate(Routes.FUND_SEARCH) }) {
                     Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.fondsok_fab))
+                }
+                Screen.Transaktioner.route -> FloatingActionButton(onClick = { navController.navigate(Routes.TRANSACTION_FORM) }) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.transaktioner_add))
                 }
             }
         },
@@ -94,6 +98,9 @@ fun AppNavigation() {
             }
             composable(Routes.FUND_SEARCH) {
                 FundSearchScreen()
+            }
+            composable(Routes.TRANSACTION_FORM) {
+                TransactionFormScreen(onSaved = { navController.popBackStack() })
             }
         }
     }

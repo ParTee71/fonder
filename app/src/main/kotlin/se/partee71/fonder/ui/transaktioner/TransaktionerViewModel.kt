@@ -5,17 +5,24 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Transaction
 import javax.inject.Inject
 
+/** En transaktionsrad med fondnamnet redan uppslaget för visning. */
+data class TransaktionRad(
+    val transaction: Transaction,
+    val fundName: String,
+)
+
 data class TransaktionerUiState(
     val loading: Boolean = true,
-    val transactions: List<Transaction> = emptyList(),
+    val rows: List<TransaktionRad> = emptyList(),
 ) {
-    val isEmpty: Boolean get() = !loading && transactions.isEmpty()
+    val isEmpty: Boolean get() = !loading && rows.isEmpty()
 }
 
 @HiltViewModel
@@ -24,11 +31,19 @@ class TransaktionerViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState: StateFlow<TransaktionerUiState> =
-        repository.observeTransactions()
-            .map { TransaktionerUiState(loading = false, transactions = it) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = TransaktionerUiState(),
-            )
+        combine(repository.observeTransactions(), repository.observeFunds()) { transactions, funds ->
+            val namesByFundId = funds.associateBy({ it.fundId }, { it.name })
+            val rows = transactions.map { tx ->
+                TransaktionRad(transaction = tx, fundName = namesByFundId[tx.fundId] ?: tx.fundId)
+            }
+            TransaktionerUiState(loading = false, rows = rows)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = TransaktionerUiState(),
+        )
+
+    fun deleteTransaction(id: Long) {
+        viewModelScope.launch { repository.deleteTransaction(id) }
+    }
 }

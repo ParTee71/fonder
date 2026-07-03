@@ -31,6 +31,17 @@
     <string name="transaktioner_empty_title">Inga transaktioner</string>
     <string name="transaktioner_empty_body">Registrera köp och sälj för att räkna ut värde.</string>
     <string name="transaktioner_add">Ny transaktion</string>
+    <string name="transaktion_kop">Köp</string>
+    <string name="transaktion_salj">Sälj</string>
+    <string name="format_transaktion_rad">%1$s andelar à %2$s</string>
+    <string name="transaktion_delete_title">Ta bort transaktion?</string>
+    <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
+    <string name="transaktionsform_fund_label">Fond</string>
+    <string name="transaktionsform_date_label">Datum</string>
+    <string name="transaktionsform_shares_label">Antal andelar</string>
+    <string name="transaktionsform_price_label">Kurs per andel</string>
+    <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
+    <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>

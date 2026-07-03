@@ -17,7 +17,7 @@ Projektet är i **tidig fas**. Grunden (arkitektur, tema, Room/DataStore, navige
 repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 
 - [x] Kurskälla från Handelsbanken utan inloggning (spike #2 → implementerad i #3)
-- [ ] Fondtransaktioner (köp/sälj)
+- [x] Fondtransaktioner (köp/sälj) (#4)
 - [ ] Värdeberäkning (historiskt + nuvarande)
 - [ ] Utveckling i tabell och diagram
 - [ ] Google Drive-backup
@@ -68,15 +68,15 @@ data/
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId) · FundCompany · FundCatalog · Transaction · FundPrice · Holding
-└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag, se nedan)
+└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · TransactionFormValidator
 ui/
 ├── portfolj/     PortfoljScreen + ViewModel
-├── transaktioner/TransaktionerScreen + ViewModel
+├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj)
 ├── fond/         FondDetaljScreen (diagram-placeholder)
 ├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
-├── components/   Delade komponenter (EmptyState …)
+├── components/   Delade komponenter (EmptyState, SelectField, DateField …)
 ├── diagram/      Delade diagram (FundLineChart — tillkommer)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi
 worker/           FundPriceUpdateWorker (daglig kursuppdatering)

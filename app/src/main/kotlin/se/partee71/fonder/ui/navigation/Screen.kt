@@ -24,4 +24,7 @@ object Routes {
 
     /** Sök och lägg till en Handelsbanken-fond i bevakningen. */
     const val FUND_SEARCH = "fund-search"
+
+    /** Registrera en ny fondtransaktion (köp/sälj), se issue #4. */
+    const val TRANSACTION_FORM = "transaction-form"
 }
