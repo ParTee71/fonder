@@ -41,6 +41,16 @@ android {
     val hasSigningCredentials = releaseStorePassword != null && releaseKeyPassword != null
 
     signingConfigs {
+        // Fast, incheckad debug-keystore (se .gitignore) — annars auto-genererar AGP en ny
+        // ~/.android/debug.keystore per körning på GitHub Actions ephemeral runners, vilket
+        // gör att varje CI-byggd debug-APK signeras med olika nyckel och inte går att
+        // installera som uppgradering av föregående. Lösenord/alias är Android-standard.
+        getByName("debug") {
+            storeFile     = file("debug.keystore")
+            storePassword = "android"
+            keyAlias      = "androiddebugkey"
+            keyPassword   = "android"
+        }
         if (hasSigningCredentials) {
             create("release") {
                 storeFile     = file("fonder.jks")

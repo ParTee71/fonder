@@ -4,6 +4,14 @@
 local.properties
 google-services.json
 
+# Undantag: fast debug-keystore, medvetet incheckad så alla CI-byggda debug-APK:er
+# signeras med samma nyckel och kan installeras som uppgradering av varandra
+# (Androids auto-genererade ~/.android/debug.keystore finns inte kvar mellan
+# GitHub Actions-körningar, vilket annars ger en ny nyckel — och ett trasigt
+# uppgraderingsflöde — varje gång). Lösenord/alias är de kända Android-standardvärdena
+# ("android"/"androiddebugkey"), inte hemliga.
+!app/debug.keystore
+
 # Gradle / build
 /.gradle/
 /build/
