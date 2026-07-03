@@ -70,9 +70,11 @@ variant av något som redan finns; utöka den delade komponenten i stället.
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
 ```
 
-**Tester körs i GitHub Actions** — inte i sessionen. Vid PR/push mot `master` kör
-`.github/workflows/android.yml` kompilering + enhetstester. Från telefonen: **pusha
-branchen och öppna en PR mot `master`** så kör Actions testerna.
+**Tester körs i GitHub Actions** — inte i sessionen. Vid push mot `master` kör
+`.github/workflows/android.yml` kompilering + enhetstester. Instrumenttester
+(`.github/workflows/instrumented.yml`, emulator) körs **endast på pull requests** mot
+`master` — ren push triggar dem inte. Från telefonen: **pusha branchen och öppna en PR
+mot `master`** så kör Actions båda.
 
 > I fjärr-/telefonsessioner finns ingen Android SDK och Google Maven kan vara blockerad —
 > försök därför **inte** köra `./gradlew` där. Lita på CI.
