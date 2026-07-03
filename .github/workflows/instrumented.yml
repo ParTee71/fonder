@@ -37,6 +37,12 @@ jobs:
           device: pixel_6
           script: ./gradlew :app:connectedDebugAndroidTest
 
+      - name: Print failure stack traces
+        if: failure()
+        run: |
+          find app/build/outputs/androidTest-results app/build/reports/androidTests \
+            -name '*.xml' -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || true
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
