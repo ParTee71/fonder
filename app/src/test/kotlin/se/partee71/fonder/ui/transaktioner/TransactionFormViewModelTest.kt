@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -46,6 +47,7 @@ class TransactionFormViewModelTest {
 
     private val fakePriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPriceValue
+        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
         override suspend fun refresh(fundId: String) {}
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())

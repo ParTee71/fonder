@@ -4,6 +4,8 @@ import android.util.Log
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -21,6 +23,13 @@ private class FakeFundPriceDao : FundPriceDao {
 
     override suspend fun getLatest(fundId: String): FundPriceEntity? =
         stored.filter { it.fundId == fundId }.maxByOrNull { it.epochDay }
+
+    override fun observeLatest(fundIds: List<String>): Flow<List<FundPriceEntity>> =
+        flowOf(
+            stored.filter { it.fundId in fundIds }
+                .groupBy { it.fundId }
+                .mapNotNull { (_, prices) -> prices.maxByOrNull { it.epochDay } },
+        )
 
     override suspend fun getRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPriceEntity> =
         stored.filter { it.fundId == fundId && it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay }

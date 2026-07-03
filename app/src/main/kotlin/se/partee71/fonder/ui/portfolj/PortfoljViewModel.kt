@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.portfolj
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ data class PortfoljUiState(
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PortfoljViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
