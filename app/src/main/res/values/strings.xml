@@ -42,6 +42,8 @@
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
     <string name="fondsok_added">Tillagd</string>
     <string name="fondsok_fab">Lägg till fond</string>
+    <string name="fondsok_company_label">Fondbolag</string>
+    <string name="fondsok_company_all">Alla fondbolag</string>
 
     <!-- Inställningar -->
     <string name="settings_title">Inställningar</string>

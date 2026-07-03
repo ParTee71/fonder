@@ -2,6 +2,7 @@ package se.partee71.fonder.data.network
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -88,7 +89,7 @@ class HandelsbankenHtmlParserTest {
     }
 
     @Test
-    fun `parseHandelsbankenFundCatalog filtrerar till SHB-prefixade fonder`() {
+    fun `parseFundCatalog ar ofiltrerad och tar med alla fondbolags fonder`() {
         val html = """
             <select id="FundId" name="FundId" style="width:230px;"><option value="">Välj fond</option>
             <option value="0P000083RV">AstraZeneca Allemansfond</option>
@@ -99,13 +100,30 @@ class HandelsbankenHtmlParserTest {
             </select>
         """.trimIndent()
 
-        val catalog = HandelsbankenHtmlParser.parseHandelsbankenFundCatalog(html)
+        val catalog = HandelsbankenHtmlParser.parseFundCatalog(html)
 
-        assertEquals(3, catalog.size)
-        assertEquals(setOf("SHB0000625", "SHB0000627", "SHB0000442"), catalog.map { it.fundId }.toSet())
+        // Filtrering per fondbolag görs inte här (se FundCompanyMatcher) — bara tomma val bort.
+        assertEquals(5, catalog.size)
         assertEquals("Handelsbanken Amerika Småbolag Tema", catalog.first { it.fundId == "SHB0000442" }.name)
-        // Externa fonder (0P-prefix) och tomma val ska inte vara med.
-        assertEquals(emptyList<String>(), catalog.filter { it.fundId.startsWith("0P") }.map { it.fundId })
+        assertTrue(catalog.any { it.fundId == "0P000083RV" })
+    }
+
+    @Test
+    fun `parseFundCompanies laser id och namn per fondbolag, hoppar over tomt val`() {
+        val html = """
+            <select id="company" name="company" style="width:230px;"><option value="">Välj fondbolag</option>
+            <option selected="selected" value="1">Handelsbanken</option>
+            <option value="1101">Aberdeen Global Services S.A.</option>
+            <option value="1339">AIFM Capital AB</option>
+            </select>
+        """.trimIndent()
+
+        val companies = HandelsbankenHtmlParser.parseFundCompanies(html)
+
+        assertEquals(3, companies.size)
+        assertEquals("Handelsbanken", companies.first { it.id == "1" }.name)
+        assertEquals("Aberdeen Global Services S.A.", companies.first { it.id == "1101" }.name)
+        assertTrue(companies.none { it.id.isEmpty() })
     }
 
     @Test

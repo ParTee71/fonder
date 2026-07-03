@@ -67,13 +67,13 @@ data/
 └── room/         AppDatabase (v2) · entities · daos
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund (fundId) · Transaction · FundPrice · Holding
-└── usecase/      PortfolioCalc · MoneyFormat
+├── model/        Fund (fundId) · FundCompany · FundCatalog · Transaction · FundPrice · Holding
+└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag, se nedan)
 ui/
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel
 ├── fond/         FondDetaljScreen (diagram-placeholder)
-├── fondsok/      FundSearchScreen + ViewModel (sök & lägg till Handelsbanken-fond)
+├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState …)
@@ -86,6 +86,11 @@ Repository är single source of truth. `FundPriceRepository` hämtar och cachar 
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —
 odokumenterad, inofficiell HTML-källa). `BackupRepository` och `AuthRepository` är
 fortfarande kontrakt med stubbar tills respektive feature byggs.
+
+**Fondbolagsfilter:** sidans eget "Fondbolag"-filter visade sig inte filtrera fondlistan i
+praktiken (verifierat manuellt) — `FundCompanyMatcher` bygger därför en egen, ungefärlig
+koppling fond ↔ fondbolag i appen: Handelsbanken via `FundId`-prefixet `SHB` (täcker även
+varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städats bort.
 
 ---
 

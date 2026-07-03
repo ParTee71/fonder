@@ -2,6 +2,7 @@ package se.partee71.fonder.data.network
 
 import org.jsoup.Jsoup
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -30,25 +31,37 @@ object HandelsbankenHtmlParser {
     }
 
     /**
-     * Parsar `<select id="FundId">` till Handelsbankens egna fonder. Plattformen är delad
-     * med andra fondbolag — Handelsbankens fonder identifieras genom att deras `FundId`
-     * börjar med "SHB" (verifierat mot riktig sidkälla i #2).
+     * Parsar `<select id="FundId">` till hela fondkatalogen (alla fondbolag — plattformen är
+     * delad, se [FundCompany]). Ofiltrerad avsiktligt: koppling fond → fondbolag görs av
+     * [se.partee71.fonder.domain.usecase.FundCompanyMatcher], inte här.
      */
-    fun parseHandelsbankenFundCatalog(html: String): List<Fund> {
+    fun parseFundCatalog(html: String): List<Fund> {
         val doc = Jsoup.parse(html)
         return doc.select("select#FundId option[value]").mapNotNull { option ->
             val id = option.attr("value").trim()
-            if (id.isEmpty() || !id.startsWith("SHB", ignoreCase = true)) return@mapNotNull null
+            if (id.isEmpty()) return@mapNotNull null
             val name = option.text().trim()
             if (name.isEmpty()) return@mapNotNull null
             Fund(fundId = id, name = name)
         }
     }
 
-    /** Svenskt talformat: mellanslag (vanligt eller hårt,  ) som tusentalsavgränsare, komma som decimal. */
+    /** Parsar `<select id="company">` till listan av fondbolag på plattformen. */
+    fun parseFundCompanies(html: String): List<FundCompany> {
+        val doc = Jsoup.parse(html)
+        return doc.select("select#company option[value]").mapNotNull { option ->
+            val id = option.attr("value").trim()
+            if (id.isEmpty()) return@mapNotNull null
+            val name = option.text().trim()
+            if (name.isEmpty()) return@mapNotNull null
+            FundCompany(id = id, name = name)
+        }
+    }
+
+    /** Svenskt talformat: mellanslag (vanligt eller hårt,  ) som tusentalsavgränsare, komma som decimal. */
     internal fun parseSwedishNumber(raw: String): Double? {
         val cleaned = raw.trim()
-            .replace(" ", "")
+            .replace(" ", "")
             .replace(" ", "")
             .replace(",", ".")
         return cleaned.toDoubleOrNull()

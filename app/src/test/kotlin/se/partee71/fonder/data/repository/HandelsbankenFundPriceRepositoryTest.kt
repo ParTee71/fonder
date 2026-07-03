@@ -77,8 +77,12 @@ class HandelsbankenFundPriceRepositoryTest {
     }
 
     @Test
-    fun `fetchFundCatalog filtrerar Handelsbankens fonder`() = runTest {
+    fun `fetchFundCatalog hamtar bolag och ofiltrerad fondkatalog i ett anrop`() = runTest {
         val html = """
+            <select id="company" name="company"><option value="">Välj fondbolag</option>
+            <option selected="selected" value="1">Handelsbanken</option>
+            <option value="1101">Aberdeen Global Services S.A.</option>
+            </select>
             <select id="FundId" name="FundId"><option value="">Välj fond</option>
             <option value="0P000083RV">AstraZeneca Allemansfond</option>
             <option value="SHB0000442">Handelsbanken Amerika Småbolag Tema</option>
@@ -88,8 +92,21 @@ class HandelsbankenFundPriceRepositoryTest {
 
         val catalog = repo.fetchFundCatalog()
 
-        assertEquals(1, catalog.size)
-        assertEquals("SHB0000442", catalog.first().fundId)
+        assertEquals(2, catalog.companies.size)
+        assertEquals("Handelsbanken", catalog.companies.first { it.id == "1" }.name)
+        // Ofiltrerad katalog — bägge fonderna med, oavsett fondbolag.
+        assertEquals(2, catalog.funds.size)
+    }
+
+    @Test
+    fun `fetchFundCatalog vid natverksfel returnerar tom katalog utan att krascha`() = runTest {
+        val failingClient = FondlistaHtmlSource { _, _, _ -> throw IOException("nätverksfel") }
+        val repo = HandelsbankenFundPriceRepository(client = failingClient, dao = dao)
+
+        val catalog = repo.fetchFundCatalog()
+
+        assertEquals(0, catalog.companies.size)
+        assertEquals(0, catalog.funds.size)
     }
 
     private fun historyHtml(fundId: String, nav: String, currency: String, date: String) = """

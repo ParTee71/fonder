@@ -5,7 +5,7 @@ import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
-import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import java.time.LocalDate
 import javax.inject.Inject
@@ -25,8 +25,8 @@ interface FundPriceRepository {
     /** Hämtar senaste årets kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
     suspend fun refresh(fundId: String)
 
-    /** Handelsbankens egna fonder (namn + fundId) för fondsök-UI. */
-    suspend fun fetchFundCatalog(): List<Fund>
+    /** Alla fondbolag + hela fondkatalogen (en hämtning) för fondsök-UI. */
+    suspend fun fetchFundCatalog(): FundCatalog
 }
 
 @Singleton
@@ -58,14 +58,17 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         }
     }
 
-    override suspend fun fetchFundCatalog(): List<Fund> =
+    override suspend fun fetchFundCatalog(): FundCatalog =
         runCatching {
             val today = LocalDate.now()
             val html = client.fetchHistoryPage(fundId = null, from = today, to = today)
-            HandelsbankenHtmlParser.parseHandelsbankenFundCatalog(html)
+            FundCatalog(
+                companies = HandelsbankenHtmlParser.parseFundCompanies(html),
+                funds = HandelsbankenHtmlParser.parseFundCatalog(html),
+            )
         }.onFailure { e ->
             Log.w(TAG, "Kunde inte hämta fondkatalogen", e)
-        }.getOrDefault(emptyList())
+        }.getOrDefault(FundCatalog(companies = emptyList(), funds = emptyList()))
 
     private companion object {
         const val TAG = "FundPriceRepository"

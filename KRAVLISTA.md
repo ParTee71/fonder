@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.2.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.3.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -13,7 +13,7 @@
 |----|------|
 | ÖV-1 | Appen ska låta användaren **bevaka fonder** och se innehav samlat i en portfölj. |
 | ÖV-2 | Appen ska hämta **fondkurser (NAV) från Handelsbanken utan inloggning**, från `handelsbanken.fondlista.se` (beslutad i spike #2, implementerad i #3), cachat lokalt och uppdaterat dagligen. |
-| ÖV-2b | Användaren ska kunna **söka bland Handelsbankens fonder på namn och lägga till dem** i sin bevakning. |
+| ÖV-2b | Användaren ska kunna **söka bland fonder på namn och lägga till dem** i sin bevakning, filtrerat på valt **fondbolag** (dropdown, förvalt Handelsbanken). |
 | ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj). *(planerad)* |
 | ÖV-4 | Appen ska räkna ut **historiskt och nuvarande värde** utifrån transaktioner och kurser. *(planerad)* |
 | ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram**. *(planerad)* |
@@ -36,6 +36,7 @@
 | TP-8 | Krävd behörighet: `INTERNET`. |
 | TP-9 | Fondidentitet: **`FundId`** (Handelsbankens fondlista-plattforms egen kod, t.ex. `SHB0000442`) — källan exponerar inget ISIN. |
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
+| TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 
 ---
 
@@ -56,7 +57,7 @@
 |----|------|
 | NAV-1 | Toppnivå med navigeringsrad: **Portfölj**, **Transaktioner**, **Inställningar**. |
 | NAV-2 | Från Portfölj kan man öppna **Fonddetalj** (kurshistorik/diagram — planerad). |
-| NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en Handelsbanken-fond i bevakningen. |
+| NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp**. |
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 
@@ -82,3 +83,6 @@ läggs till som egna krav i respektive avsnitt när de implementeras.
 - **Kurskälla (#2, #3):** Handelsbankens fondkurser hämtas från `handelsbanken.fondlista.se`
   (offentlig, ingen inloggning). Identitet: plattformens `FundId`, inte ISIN — se TP-9.
   Cache i Room, daglig uppdatering via WorkManager (TP-5), fondsök i UI (NAV-3, ÖV-2b).
+- **Fondbolagsfilter (#3-uppföljning):** sidans eget "Fondbolag"-filter visade sig inte
+  filtrera fondlistan i praktiken (verifierat manuellt) — appen bygger därför en egen
+  klient-side-filtrering (`FundCompanyMatcher`, TP-11) istället för att lita på servern.
