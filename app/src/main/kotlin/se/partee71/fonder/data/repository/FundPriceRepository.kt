@@ -28,6 +28,9 @@ interface FundPriceRepository {
     /** Kurshistorik för en fond inom ett epoch-day-intervall (inklusive), ur lokal cache. */
     suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice>
 
+    /** Som [priceHistory], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
+    fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>>
+
     /** Hämtar senaste årets kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
     suspend fun refresh(fundId: String)
 
@@ -51,6 +54,9 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
         dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
+
+    override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> =
+        dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
 
     override suspend fun refresh(fundId: String) {
         runCatching {

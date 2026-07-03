@@ -46,6 +46,7 @@ class FundSearchViewModelTest {
         override suspend fun latestPrice(fundId: String): FundPrice? = null
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
+        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String) {}
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }

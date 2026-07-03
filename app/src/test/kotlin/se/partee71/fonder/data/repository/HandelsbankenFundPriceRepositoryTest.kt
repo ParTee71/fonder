@@ -34,6 +34,9 @@ private class FakeFundPriceDao : FundPriceDao {
     override suspend fun getRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPriceEntity> =
         stored.filter { it.fundId == fundId && it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay }
 
+    override fun observeRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPriceEntity>> =
+        flowOf(stored.filter { it.fundId == fundId && it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay })
+
     override suspend fun upsertAll(prices: List<FundPriceEntity>) {
         prices.forEach { new ->
             stored.removeAll { it.fundId == new.fundId && it.epochDay == new.epochDay }

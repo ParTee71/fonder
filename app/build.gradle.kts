@@ -28,8 +28,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 5
-        versionName = versionNameOverride ?: "0.5.0"
+        versionCode = 6
+        versionName = versionNameOverride ?: "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -175,6 +175,9 @@ dependencies {
     // Nätverk + HTML-parsning för FundPriceRepository (se issue #2/#3)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+
+    // Diagram (kurshistorik i Fonddetalj, se issue #7)
+    implementation(libs.vico.compose.m3)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)

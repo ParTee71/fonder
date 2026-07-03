@@ -28,6 +28,13 @@ interface FundPriceDao {
     )
     suspend fun getRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPriceEntity>
 
+    /** Som [getRange], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
+    @Query(
+        "SELECT * FROM fund_prices WHERE fundId = :fundId " +
+            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC",
+    )
+    fun observeRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPriceEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(prices: List<FundPriceEntity>)
 }

@@ -93,8 +93,8 @@ fun AppNavigation() {
             composable(
                 route = Routes.FOND,
                 arguments = listOf(navArgument("fundId") { type = NavType.StringType }),
-            ) { entry ->
-                FondDetaljScreen(fundId = entry.arguments?.getString("fundId").orEmpty())
+            ) {
+                FondDetaljScreen()
             }
             composable(Routes.FUND_SEARCH) {
                 FundSearchScreen()

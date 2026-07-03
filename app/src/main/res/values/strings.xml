@@ -46,7 +46,7 @@
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>
-    <string name="fond_diagram_placeholder">Diagram kommer i en kommande version.</string>
+    <string name="fond_history_empty_body">Ingen kurshistorik hämtad än för den här fonden.</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>

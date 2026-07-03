@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.5.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.6.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -16,7 +16,7 @@
 | ÖV-2b | Användaren ska kunna **söka bland fonder på namn och lägga till dem** i sin bevakning, filtrerat på valt **fondbolag** (dropdown, förvalt Handelsbanken). |
 | ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj) mot en redan bevakad fond, med förifylld kurs från senast kända NAV, samt ta bort en felregistrerad transaktion (bekräftelsedialog). |
 | ÖV-4 | Appen ska räkna ut **nuvarande värde** utifrån transaktioner och senast kända kurs (issue #6). Historisk värdeutveckling i diagram är fortfarande *(planerad)*. |
-| ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram**. *(planerad)* |
+| ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram** — kurshistorik senaste året i Fonddetalj (issue #7). |
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
 
@@ -37,6 +37,7 @@
 | TP-9 | Fondidentitet: **`FundId`** (Handelsbankens fondlista-plattforms egen kod, t.ex. `SHB0000442`) — källan exponerar inget ISIN. |
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
+| TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
 
 ---
 
@@ -56,7 +57,7 @@
 | ID | Krav |
 |----|------|
 | NAV-1 | Toppnivå med navigeringsrad: **Portfölj**, **Transaktioner**, **Inställningar**. |
-| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** (kurshistorik/diagram — planerad). |
+| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik senaste året i diagram (`FundLineChart`, `ui/diagram/`) och tabell (datum + kurs), med tomt-tillstånd om ingen historik finns än. |
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp**. |
@@ -80,8 +81,8 @@
 
 ## Följdkrav (planerade — se GitHub-issues)
 
-Diagram, Drive-backup och Google-inloggning läggs till som egna krav i respektive
-avsnitt när de implementeras.
+Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnitt när de
+implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
 
 ## Historik
 
@@ -100,3 +101,8 @@ avsnitt när de implementeras.
   `FundPriceDao.observeLatest` (Room `Flow`) genom repository och ViewModel, så
   portföljen uppdateras direkt när en kurs cachas (POR-4). Historisk
   värdeutveckling/diagram är fortsatt planerat.
+- **Diagram/kurshistorik (#7):** ÖV-5 klar — Fonddetalj visar senaste årets kurshistorik
+  i diagram (`FundLineChart`, TP-12) och tabell (NAV-2), reaktivt via en ny
+  `FundPriceDao.observeRange`/`observePriceHistory`-kedja (samma reaktiva mönster som
+  #6). Google Drive-backup och Google-inloggning (kvarstår i följdkraven) väntar på att
+  ett Firebase-projekt sätts upp för fonder.

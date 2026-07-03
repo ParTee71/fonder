@@ -19,9 +19,9 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Kurskälla från Handelsbanken utan inloggning (spike #2 → implementerad i #3)
 - [x] Fondtransaktioner (köp/sälj) (#4)
 - [x] Värdeberäkning, nuvarande värde (#6)
-- [ ] Historisk värdeutveckling i tabell och diagram
-- [ ] Google Drive-backup
-- [ ] Google-inloggning
+- [x] Historisk värdeutveckling i tabell och diagram (#7)
+- [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
+- [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
 ---
 
