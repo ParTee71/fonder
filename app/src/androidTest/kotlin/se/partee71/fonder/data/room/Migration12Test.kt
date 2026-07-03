@@ -29,7 +29,9 @@ class Migration12Test {
     private val dbName = "migration12-test.db"
 
     @After
-    fun tearDown() = context.deleteDatabase(dbName)
+    fun tearDown() {
+        context.deleteDatabase(dbName)
+    }
 
     @Test
     fun migration_1_2_byter_namn_pa_kolumner_och_lagger_till_fund_prices() = runTest {
