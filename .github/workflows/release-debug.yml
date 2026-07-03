@@ -1,19 +1,22 @@
-name: Debug Release Build
+name: Debug Snapshot Build
 
-# Bygger en debug-signerad APK (Androids auto-genererade debug-nyckel) och publicerar
-# den som en GitHub Release. Kräver inga signeringssecrets — använd tills en riktig
-# release-keystore finns (se release.yml). Debug-APK:er är inte avsedda för Play Store.
+# Bygger en debug-signerad APK (fast debug.keystore, se app/debug.keystore) och
+# publicerar den som en ENDA rullande "snapshot"-release (taggen debug-snapshot).
+# Varje körning skriver över föregående i stället för att skapa en ny versionstaggad
+# release — dev-byggen är många och behöver inte en egen version var. Kräver inga
+# signeringssecrets — använd tills en riktig release-keystore finns (se release.yml).
+# Debug-APK:er är inte avsedda för Play Store.
 
 on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name (e.g. 0.1.0-debug) — leave blank to use value in build.gradle.kts'
+        description: 'Version name att bygga med (visas i appen, t.ex. i Inställningar) — lämna tomt för värdet i build.gradle.kts'
         required: false
         type: string
 
 permissions:
-  contents: write   # required to create a GitHub Release
+  contents: write   # required to create/replace a GitHub Release
 
 jobs:
   release-debug:
@@ -41,14 +44,15 @@ jobs:
             ./gradlew :app:assembleDebug
           fi
 
-      - name: Determine release tag
-        id: tag
+      - name: Determine snapshot label
+        id: snapshot
         run: |
-          VERSION="${{ inputs.version_name }}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep -oP 'versionName\s*=\s*versionNameOverride\s*\?:\s*"\K[^"]+' app/build.gradle.kts)
-          fi
-          echo "tag=debug-v${VERSION}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "label=$(date -u +'%Y-%m-%d %H:%M UTC') · ${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Remove previous snapshot release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete debug-snapshot --yes --cleanup-tag || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -57,14 +61,17 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
-      - name: Publish GitHub Release (prerelease)
+      - name: Publish GitHub Release (rolling snapshot)
         uses: softprops/action-gh-release@v2
         with:
-          name: Fonder ${{ steps.tag.outputs.tag }} (debug)
-          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Fonder debug-snapshot (${{ steps.snapshot.outputs.label }})
+          tag_name: debug-snapshot
           prerelease: true
-          generate_release_notes: true
           files: app/build/outputs/apk/debug/*.apk
           body: |
-            Debug-signerad byggning (Androids auto-genererade debug-nyckel).
+            Rullande debug-snapshot — skrivs över vid varje ny körning, taggen pekar alltid
+            på det senaste bygget. Debug-signerad med den fasta `app/debug.keystore` (samma
+            nyckel varje gång, går alltid att installera som uppgradering av föregående).
             **Inte** avsedd för Play Store eller produktion — installera direkt för test.
+
+            Byggd från: ${{ github.sha }}
