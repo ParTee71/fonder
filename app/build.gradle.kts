@@ -22,7 +22,7 @@ private val localProps = Properties().apply {
 
 android {
     namespace = "se.partee71.fonder"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "se.partee71.fonder"

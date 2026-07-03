@@ -26,7 +26,7 @@
 
 | ID | Krav |
 |----|------|
-| TP-1 | Android, **minSdk 30**, target/compileSdk 35, JDK 17. Paket `se.partee71.fonder`. |
+| TP-1 | Android, **minSdk 30**, targetSdk 35, **compileSdk 36** (höjt för Vico-beroendet, issue #7), JDK 17. Paket `se.partee71.fonder`. |
 | TP-2 | UI byggt med **Jetpack Compose** + Material 3. |
 | TP-3 | Arkitektur: **MVVM** med Hilt (DI), Repository-mönster, ViewModels med `StateFlow`. |
 | TP-4 | Lokal lagring i **Room** (`exportSchema = true`); inställningar i **DataStore (Preferences)**. |

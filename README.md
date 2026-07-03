@@ -38,7 +38,7 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 
 ### Förutsättningar
 
-- Android Studio (senaste), JDK 17, Android SDK API 35 (compileSdk), minSdk 30
+- Android Studio (senaste), JDK 17, Android SDK API 36 (compileSdk), minSdk 30
 
 ### Bygg och kör
 
