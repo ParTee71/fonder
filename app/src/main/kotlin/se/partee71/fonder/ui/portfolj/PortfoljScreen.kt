@@ -22,6 +22,7 @@ import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.theme.ReturnColors
 
 @Composable
 fun PortfoljScreen(
@@ -39,7 +40,7 @@ fun PortfoljScreen(
         )
 
         else -> Column(modifier = modifier.fillMaxSize()) {
-            TotalCard(total = state.totalInvested)
+            TotalCard(state = state)
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.holdings, key = { it.fund.fundId }) { holding ->
                     HoldingRow(holding = holding, onClick = { onFundClick(holding.fund.fundId) })
@@ -50,11 +51,26 @@ fun PortfoljScreen(
 }
 
 @Composable
-private fun TotalCard(total: Double) {
+private fun TotalCard(state: PortfoljUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(stringResource(R.string.portfolj_total_value), style = MaterialTheme.typography.labelMedium)
-            Text(MoneyFormat.kr(total), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+            val fraction = state.totalGainLossFraction
+            if (fraction != null) {
+                Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+                Text(
+                    "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
+                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                    color = ReturnColors.forAmount(state.totalGainLoss),
+                )
+            } else {
+                Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+                Text(
+                    stringResource(R.string.portfolj_price_missing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -68,11 +84,32 @@ private fun HoldingRow(holding: Holding, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(holding.fund.name, style = MaterialTheme.typography.titleMedium)
-            Text(
-                MoneyFormat.kr(holding.netInvested),
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            val value = holding.currentValue
+            val fraction = holding.gainLossFraction
+            if (value != null) {
+                Text(
+                    MoneyFormat.kr(value),
+                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                )
+                if (fraction != null) {
+                    Text(
+                        "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(holding.gainLoss ?: 0.0)}",
+                        style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
+                        color = ReturnColors.forAmount(holding.gainLoss ?: 0.0),
+                    )
+                }
+            } else {
+                Text(
+                    MoneyFormat.kr(holding.netInvested),
+                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.portfolj_price_missing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.4.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.5.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -15,7 +15,7 @@
 | ÖV-2 | Appen ska hämta **fondkurser (NAV) från Handelsbanken utan inloggning**, från `handelsbanken.fondlista.se` (beslutad i spike #2, implementerad i #3), cachat lokalt och uppdaterat dagligen. |
 | ÖV-2b | Användaren ska kunna **söka bland fonder på namn och lägga till dem** i sin bevakning, filtrerat på valt **fondbolag** (dropdown, förvalt Handelsbanken). |
 | ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj) mot en redan bevakad fond, med förifylld kurs från senast kända NAV, samt ta bort en felregistrerad transaktion (bekräftelsedialog). |
-| ÖV-4 | Appen ska räkna ut **historiskt och nuvarande värde** utifrån transaktioner och kurser. *(planerad)* |
+| ÖV-4 | Appen ska räkna ut **nuvarande värde** utifrån transaktioner och senast kända kurs (issue #6). Historisk värdeutveckling i diagram är fortfarande *(planerad)*. |
 | ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram**. *(planerad)* |
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
@@ -61,6 +61,8 @@
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp**. |
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
+| POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
+| POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 
@@ -78,8 +80,8 @@
 
 ## Följdkrav (planerade — se GitHub-issues)
 
-Värdeberäkning, diagram, Drive-backup och Google-inloggning läggs till som egna krav i
-respektive avsnitt när de implementeras.
+Diagram, Drive-backup och Google-inloggning läggs till som egna krav i respektive
+avsnitt när de implementeras.
 
 ## Historik
 
@@ -92,3 +94,9 @@ respektive avsnitt när de implementeras.
 - **Fondtransaktioner (#4):** ÖV-3 klar — transaktionsformulär (NAV-4), delade
   komponenter `SelectField`/`DateField` i `ui/components/` (regel 4), förbättrad
   transaktionsrad och ta-bort-flöde (TRX-1, TRX-2).
+- **Värdeberäkning (#6):** ÖV-4 delvis klar — Portfölj visar nuvarande värde och
+  vinst/förlust per innehav och totalt när kursen är känd, med grafiskt tydlig
+  "kurs saknas ännu"-fallback annars (POR-3). Kurser hålls reaktiva via
+  `FundPriceDao.observeLatest` (Room `Flow`) genom repository och ViewModel, så
+  portföljen uppdateras direkt när en kurs cachas (POR-4). Historisk
+  värdeutveckling/diagram är fortsatt planerat.

@@ -25,6 +25,7 @@
     <string name="portfolj_empty_title">Inga innehav ännu</string>
     <string name="portfolj_empty_body">Lägg till din första fondtransaktion för att se värde och utveckling.</string>
     <string name="portfolj_total_value">Totalt värde</string>
+    <string name="portfolj_price_missing">Kurs saknas ännu</string>
 
     <!-- Transaktioner -->
     <string name="transaktioner_title">Transaktioner</string>

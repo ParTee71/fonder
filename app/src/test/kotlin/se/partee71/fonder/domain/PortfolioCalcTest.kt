@@ -1,8 +1,11 @@
 package se.partee71.fonder.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.PortfolioCalc
@@ -45,5 +48,55 @@ class PortfolioCalcTest {
             Transaction(fundId = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0),
         )
         assertEquals(0, PortfolioCalc.computeHoldings(listOf(fondA), txs).size)
+    }
+
+    @Test
+    fun `withCurrentValue berakar varde for innehav med kand kurs`() {
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0)
+        val prices = mapOf(fondA.fundId to FundPrice(fundId = fondA.fundId, epochDay = 5, nav = 120.0))
+
+        val result = PortfolioCalc.withCurrentValue(listOf(holding), prices)
+
+        assertEquals(1200.0, result.first().currentValue ?: -1.0, 1e-9)
+        assertEquals(200.0, result.first().gainLoss ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `withCurrentValue lamnar currentValue null utan kand kurs`() {
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0)
+
+        val result = PortfolioCalc.withCurrentValue(listOf(holding), emptyMap())
+
+        assertNull(result.first().currentValue)
+        assertNull(result.first().gainLoss)
+    }
+
+    @Test
+    fun `totalValue och totalGainLoss ignorerar innehav utan kurs`() {
+        val medKurs = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1200.0)
+        val utanKurs = Holding(fund = fondB, netShares = 5.0, netInvested = 500.0)
+
+        val holdings = listOf(medKurs, utanKurs)
+
+        assertEquals(1200.0, PortfolioCalc.totalValue(holdings), 1e-9)
+        assertEquals(200.0, PortfolioCalc.totalGainLoss(holdings), 1e-9)
+        assertEquals(1500.0, PortfolioCalc.totalInvested(holdings), 1e-9)
+    }
+
+    @Test
+    fun `totalGainLossFraction baseras endast pa innehav med kand kurs`() {
+        val medKurs = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val utanKurs = Holding(fund = fondB, netShares = 5.0, netInvested = 500.0)
+
+        val fraction = PortfolioCalc.totalGainLossFraction(listOf(medKurs, utanKurs))
+
+        assertEquals(0.1, fraction ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `totalGainLossFraction ar null utan nagot innehav med kand kurs`() {
+        val utanKurs = Holding(fund = fondA, netShares = 5.0, netInvested = 500.0)
+
+        assertNull(PortfolioCalc.totalGainLossFraction(listOf(utanKurs)))
     }
 }

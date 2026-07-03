@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 
 @Dao
@@ -11,6 +12,15 @@ interface FundPriceDao {
 
     @Query("SELECT * FROM fund_prices WHERE fundId = :fundId ORDER BY epochDay DESC LIMIT 1")
     suspend fun getLatest(fundId: String): FundPriceEntity?
+
+    /** Senaste kända kurs per fondId i [fundIds], reaktivt (uppdateras när WorkManager cachar nya kurser). */
+    @Query(
+        "SELECT fp.* FROM fund_prices fp " +
+            "INNER JOIN (SELECT fundId, MAX(epochDay) AS maxEpochDay FROM fund_prices " +
+            "WHERE fundId IN (:fundIds) GROUP BY fundId) latest " +
+            "ON fp.fundId = latest.fundId AND fp.epochDay = latest.maxEpochDay",
+    )
+    fun observeLatest(fundIds: List<String>): Flow<List<FundPriceEntity>>
 
     @Query(
         "SELECT * FROM fund_prices WHERE fundId = :fundId " +

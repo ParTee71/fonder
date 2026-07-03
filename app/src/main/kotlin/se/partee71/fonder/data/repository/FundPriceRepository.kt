@@ -1,6 +1,9 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.room.daos.FundPriceDao
@@ -18,6 +21,9 @@ import javax.inject.Singleton
 interface FundPriceRepository {
     /** Senaste kända (cachade) kurs för en fond, eller null om okänd. */
     suspend fun latestPrice(fundId: String): FundPrice?
+
+    /** Senaste kända kurs per fondId, reaktivt — uppdateras när cachen ändras (issue #6). */
+    fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>>
 
     /** Kurshistorik för en fond inom ett epoch-day-intervall (inklusive), ur lokal cache. */
     suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice>
@@ -37,6 +43,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     override suspend fun latestPrice(fundId: String): FundPrice? =
         dao.getLatest(fundId)?.toDomain()
+
+    override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> {
+        if (fundIds.isEmpty()) return flowOf(emptyMap())
+        return dao.observeLatest(fundIds).map { list -> list.associateBy({ it.fundId }, { it.toDomain() }) }
+    }
 
     override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
         dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
