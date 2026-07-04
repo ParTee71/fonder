@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.FundCompany
 
 class FundNameMatcherTest {
 
@@ -51,22 +50,35 @@ class FundNameMatcherTest {
     @Test
     fun `fondbolagsledtrad avgor mellan annars lika traffar`() {
         // Fondnamnet ensamt ger exakt samma likhet mot båda kandidaterna (tie) — bara
-        // fondbolagsledtråden ur exportraden avgör vilken som är rätt.
+        // fondbolagsledtråden ur exportraden avgör vilken som är rätt. Kandidaternas namn
+        // inleds med bolagets varumärke, precis som i den verkliga katalogen.
         val fundA = Fund(fundId = "A", name = "Aktiebolag Ett Fond Sverige")
         val fundB = Fund(fundId = "B", name = "Aktiebolag Tva Fond Sverige")
-        val companies = listOf(
-            FundCompany(id = "2", name = "Aktiebolag Ett AB"),
-            FundCompany(id = "3", name = "Aktiebolag Tva AB"),
-        )
 
         val match = FundNameMatcher.bestMatch(
             importedFundName = "Fond Sverige",
             candidates = listOf(fundA, fundB),
             importedCompanyName = "Aktiebolag Ett AB",
-            companies = companies,
         )
 
         assertEquals(fundA, match?.fund)
+    }
+
+    @Test
+    fun `bolagsnamn med bolagsform matchar katalogfond som borjar med varumarket`() {
+        // "Handelsbanken Fonder AB" → kärnnamn "Handelsbanken"; katalogfonden inleds med
+        // "Handelsbanken" och ska få bolagsförsprånget. (Tidigare tvåstegsmatchning mot
+        // katalogbolaget "Handelsbanken" nådde inte likhetströskeln och gav inget försprång.)
+        val correct = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige")
+        val distractor = Fund(fundId = "0P0000AAA", name = "Nordea Sverige")
+
+        val match = FundNameMatcher.bestMatch(
+            importedFundName = "Sverige",
+            candidates = listOf(correct, distractor),
+            importedCompanyName = "Handelsbanken Fonder AB",
+        )
+
+        assertEquals(correct, match?.fund)
     }
 
     @Test
@@ -77,7 +89,6 @@ class FundNameMatcherTest {
             importedFundName = "Handelsbanken Sverige (A1 SEK)",
             candidates = listOf(fund),
             importedCompanyName = "Ett bolag som inte finns i katalogen",
-            companies = emptyList(),
         )
 
         assertEquals(fund, match?.fund)

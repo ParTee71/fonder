@@ -1,7 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
 import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.FundCompany
 
 /**
  * Föreslår vilken katalogfond en importerad innehavsrad (issue #8) motsvarar, genom att
@@ -14,41 +13,47 @@ import se.partee71.fonder.domain.model.FundCompany
  * eftersom extra/saknade ord bara späder ut träffen i stället för att slå ut den helt.
  *
  * Exportraden anger även fondbolagets namn ([importedCompanyName], t.ex.
- * "Handelsbanken Fonder AB") — ett användbart ledtrådsfält när flera fondbolag har
- * likartat namngivna fonder. Matchas den mot en katalogpost ([companies], via
- * [FundCompanyMatcher]) ges kandidater från samma bolag ett litet försprång, utan att
- * ovillkorligen utesluta andra kandidater (bolagskopplingen är själv ungefärlig).
+ * "Handelsbanken Fonder AB"). Både export- och katalogfondnamn **inleds** normalt med
+ * fondbolagets varumärke ("Handelsbanken Sverige …", "AMF Aktiefond …"), så en kandidat
+ * vars namn börjar med bolagets kärnnamn (via [FundCompanyMatcher.coreBrandName], t.ex.
+ * "Handelsbanken Fonder AB" → "Handelsbanken") ges ett litet försprång. Det avgör mellan
+ * annars likvärdiga fonder från olika bolag utan att utesluta andra kandidater. (Tidigare
+ * mellansteg — matcha bolagsnamnet mot katalogens separata fondbolagslista — var för
+ * skört: "Handelsbanken Fonder AB" nådde inte likhetströskeln mot katalogbolaget
+ * "Handelsbanken".)
  */
 object FundNameMatcher {
 
     /** Under denna likhet anses ingen kandidat vara en tillförlitlig automatisk träff. */
     private const val CONFIDENCE_THRESHOLD = 0.5
 
-    /** Litet försprång för en kandidat som tillhör samma (ungefärligt bestämda) fondbolag. */
+    /** Litet försprång för en kandidat vars namn inleds med importradens fondbolag. */
     private const val COMPANY_MATCH_BONUS = 0.2
 
     data class Match(val fund: Fund, val confidence: Double)
 
     /**
      * Bästa kandidat bland [candidates] för [importedFundName], eller null om ingen är
-     * tillräckligt lik. [importedCompanyName] + [companies] är valfria och används bara för
-     * att ge kandidater från rätt fondbolag ett litet försprång vid annars jämna träffar.
+     * tillräckligt lik. [importedCompanyName] är valfritt och används bara för att ge
+     * kandidater vars namn inleds med samma fondbolag ett litet försprång vid annars jämna
+     * träffar.
      */
     fun bestMatch(
         importedFundName: String,
         candidates: List<Fund>,
         importedCompanyName: String? = null,
-        companies: List<FundCompany> = emptyList(),
     ): Match? {
         val targetTokens = tokenize(importedFundName)
         if (targetTokens.isEmpty()) return null
 
-        val matchedCompany = importedCompanyName?.let { findCompany(it, companies) }
+        val companyBrand = importedCompanyName
+            ?.let { FundCompanyMatcher.coreBrandName(it) }
+            ?.takeIf { it.isNotBlank() }
 
         val best = candidates
             .map { fund ->
                 var score = similarity(targetTokens, tokenize(fund.name))
-                if (matchedCompany != null && FundCompanyMatcher.matches(fund, matchedCompany)) {
+                if (companyBrand != null && fund.name.startsWith(companyBrand, ignoreCase = true)) {
                     score += COMPANY_MATCH_BONUS
                 }
                 fund to score
@@ -61,16 +66,6 @@ object FundNameMatcher {
         } else {
             null
         }
-    }
-
-    private fun findCompany(importedCompanyName: String, companies: List<FundCompany>): FundCompany? {
-        val targetTokens = tokenize(importedCompanyName)
-        if (targetTokens.isEmpty()) return null
-        return companies
-            .map { company -> company to similarity(targetTokens, tokenize(company.name)) }
-            .maxByOrNull { it.second }
-            ?.takeIf { it.second >= CONFIDENCE_THRESHOLD }
-            ?.first
     }
 
     /** Jaccard-likhet (0..1) mellan två ordmängder. */

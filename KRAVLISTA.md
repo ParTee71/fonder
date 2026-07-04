@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.4 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.5 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -39,7 +39,7 @@
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
-| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), med fondbolagsnamnet som ledtråd vid annars jämna träffar (via `FundCompanyMatcher`, TP-11) — inte ISIN. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
+| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), med fondbolagets **kärnnamn** (början av fondbolagsnamnet, via `FundCompanyMatcher.coreBrandName`) som ledtråd — kandidater vars namn inleds med samma varumärke får ett litet försprång vid annars jämna träffar — inte ISIN. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 
 ---
 
@@ -144,8 +144,15 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   `PurchaseDateEstimator` att söka i, särskilt för äldre innehav. Saknas en tillförlitlig
   träff antas inköpsdatumet vara fem år tillbaka i tiden i stället för dagens datum (samma
   gräns som söks inom, så gissningen aldrig hamnar utanför fönstret). `FundNameMatcher`
-  använder nu även exportradens fondbolagsnamn som ledtråd (via `FundCompanyMatcher`,
-  TP-11) — ger ett litet försprång åt kandidater från rätt bolag vid annars jämna
-  namnträffar, utan att utesluta andra kandidater. En overlay-modal (IMP-4) visas medan
-  matchning/kursuppdatering pågår, eftersom fem års historik per fond kan ta en stund att
-  hämta.
+  använder nu även exportradens fondbolagsnamn som ledtråd — ger ett litet försprång åt
+  kandidater från rätt bolag vid annars jämna namnträffar, utan att utesluta andra
+  kandidater. En overlay-modal (IMP-4) visas medan matchning/kursuppdatering pågår,
+  eftersom fem års historik per fond kan ta en stund att hämta.
+- **Robustare fondbolagsledtråd (#8-uppföljning):** den första bolagsledtråden matchade
+  exportens bolagsnamn mot katalogens separata fondbolagslista (Jaccard) och gav i praktiken
+  sällan något utslag — t.ex. nådde "Handelsbanken Fonder AB" inte likhetströskeln mot
+  katalogbolaget "Handelsbanken". `FundNameMatcher` jämför nu i stället fondbolagets
+  **kärnnamn** (början av bolagsnamnet, `FundCompanyMatcher.coreBrandName`, t.ex.
+  "Handelsbanken Fonder AB" → "Handelsbanken") direkt mot början av kandidatens fondnamn —
+  eftersom både export- och katalogfondnamn normalt inleds med varumärket. Ger ett
+  tillförlitligt försprång åt rätt bolags fonder (TP-13).

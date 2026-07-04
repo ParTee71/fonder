@@ -109,7 +109,7 @@ class ImportHoldingsViewModel @Inject constructor(
     }
 
     private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog): ImportRowUiState {
-        val fund = FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName, catalog.companies)
+        val fund = FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName)
         // Utan en tillförlitlig datumuppskattning (inget kurshistorik-fynd) antas ett gammalt
         // innehav hellre ha köpts för länge sedan än "idag" — samma gräns som kurshistoriken
         // (PRICE_HISTORY_YEARS) söks inom, så gissningen aldrig hamnar utanför sökfönstret.
