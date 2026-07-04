@@ -128,13 +128,34 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `fil som inte ar en zip ger EMPTY_FILE`() = runTest(dispatcher) {
-        // ZipInputStream kastar inte på ogiltiga byte — den hittar bara inga poster,
-        // så parse() returnerar en tom lista i stället för att kasta.
+    fun `filen ar varken en xlsx-zip eller giltig XML ger PARSE_FAILED`() = runTest(dispatcher) {
+        // Filen är varken zippad (för kort/fel magibyte) eller giltig XML — det ska
+        // fortfarande ge ett tydligt fel, inte krascha appen.
         val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(byteArrayOf(1, 2, 3))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(ImportError.PARSE_FAILED, state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `giltig XML utan ISIN-headerrad ger EMPTY_FILE`() = runTest(dispatcher) {
+        val xmlUtanHeader = """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                <sheetData>
+                <row r="1"><c r="A1" t="inlineStr"><is><t>Ingen rubrikrad har</t></is></c></row>
+                </sheetData>
+            </worksheet>
+        """.trimIndent()
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xmlUtanHeader.toByteArray(Charsets.UTF_8))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -153,6 +174,24 @@ class ImportHoldingsViewModelTest {
             while (state.loading) state = awaitItem()
 
             assertEquals(ImportError.PARSE_FAILED, state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ozippad ra-XML (verklig exportform) parsas direkt utan zip-uppackning`() = runTest(dispatcher) {
+        // Handelsbankens faktiska export är inte en riktig zip-baserad .xlsx — bara det
+        // inre kalkylbladets råa XML. onFileSelected ska hantera den utan att zippa den.
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(sampleSheetXml.toByteArray(Charsets.UTF_8))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(1, state.rows.size)
+            assertEquals(handelsbankenFund, state.rows.first().matchedFund)
+            assertNull(state.error)
             cancelAndIgnoreRemainingEvents()
         }
     }

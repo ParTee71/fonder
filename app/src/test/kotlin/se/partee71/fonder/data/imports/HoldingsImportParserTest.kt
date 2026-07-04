@@ -98,6 +98,26 @@ class HoldingsImportParserTest {
     }
 
     @Test
+    fun `parse hanterar ozippad ra-XML direkt (verklig exportform)`() {
+        // Handelsbankens export visade sig inte vara en riktig zip-baserad .xlsx, bara det
+        // inre kalkylbladets råa XML — parse() ska tolka den direkt utan zip-uppackning.
+        val rows = HoldingsImportParser.parse(sampleSheetXml.toByteArray(Charsets.UTF_8).inputStream())
+        assertEquals(7, rows.size)
+    }
+
+    @Test
+    fun `parse packar upp en zippad xlsx om zip-magibytena hittas`() {
+        val bytes = java.io.ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(bytes).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("xl/worksheets/sheet1.xml"))
+            zip.write(sampleSheetXml.toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+        val rows = HoldingsImportParser.parse(bytes.toByteArray().inputStream())
+        assertEquals(7, rows.size)
+    }
+
+    @Test
     fun `rad utan antal hoppas over`() {
         val xml = """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

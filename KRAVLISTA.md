@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.2 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.3 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -39,7 +39,7 @@
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
-| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens `.xlsx`-export utan extra bibliotek (ren zip/DOM-parsning) — identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), inte ISIN. Isolerad, odokumenterat exportformat — se risknotis i #8. |
+| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), inte ISIN. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 
 ---
 
@@ -133,3 +133,8 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   `PurchaseDateEstimator` mindre träffsäker. `refresh(fundId)` (senaste årets kurser)
   anropas därför alltid vid import för varje matchad rad, oavsett om fonden redan har en
   cachad kurs — inte bara första gången en fond läggs till (TP-13, jämför POR-4).
+- **Stöd för ozippad exportfil (#8-uppföljning):** Handelsbankens faktiska export visade
+  sig inte vara en riktig zip-baserad `.xlsx` (OOXML), utan bara kalkylbladets råa XML
+  (samma schema som `xl/worksheets/sheet1.xml` i en uppackad `.xlsx`, aldrig zippad).
+  `HoldingsImportParser.parse` avgör format via zip-magibytena och tolkar råXML direkt om
+  filen inte är zippad (TP-13); filväljaren accepterar nu både xlsx- och XML-mimetyper.

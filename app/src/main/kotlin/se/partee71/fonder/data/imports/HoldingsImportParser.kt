@@ -9,10 +9,15 @@ import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Parsar Handelsbankens "Innehav Fonder"-Excel-export (`.xlsx`, en OOXML-zip) till
- * [ImportedHoldingRow] (issue #8). Isolerad i en egen fil — precis som
- * [se.partee71.fonder.data.network.HandelsbankenHtmlParser] — eftersom det är ett
- * odokumenterat exportformat som kan ändras.
+ * Parsar Handelsbankens "Innehav Fonder"-export till [ImportedHoldingRow] (issue #8).
+ * Isolerad i en egen fil — precis som [se.partee71.fonder.data.network.HandelsbankenHtmlParser]
+ * — eftersom det är ett odokumenterat exportformat som kan ändras.
+ *
+ * Exporten visade sig i praktiken **inte** vara en riktig zip-baserad `.xlsx` (OOXML) —
+ * den är bara det inre kalkylbladets råa XML (samma innehåll/schema som
+ * `xl/worksheets/sheet1.xml` i en uppackad `.xlsx`, men aldrig zippad). [parse] hanterar
+ * därför båda fallen: hittas zip-magibytena (`PK\x03\x04`) i början packas filen upp som
+ * vanligt, annars tolkas hela innehållet direkt som kalkylbladets XML.
  *
  * Kolumnordning (headerrad med "ISIN" i kolumn A): ISIN, Kortnamn, Värdepapper, Antal,
  * Senast, Valuta, Kursdatum, Marknadsvärde (SEK), Anskaffningsvärde (SEK),
@@ -23,13 +28,22 @@ import javax.xml.parsers.DocumentBuilderFactory
 object HoldingsImportParser {
 
     private val dateFormatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+    private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04) // "PK\x03\x04"
 
-    /** Läser en `.xlsx`-fil (t.ex. från en filväljare) och returnerar de parsade raderna. */
+    /** Läser en exportfil (t.ex. från en filväljare) och returnerar de parsade raderna. */
     fun parse(input: InputStream): List<ImportedHoldingRow> {
+        val bytes = input.readBytes()
+        return if (isZip(bytes)) parseZip(bytes) else parseSheetXml(bytes.toString(Charsets.UTF_8), sharedStrings = emptyList())
+    }
+
+    private fun isZip(bytes: ByteArray): Boolean =
+        bytes.size >= ZIP_MAGIC.size && bytes.take(ZIP_MAGIC.size).toByteArray().contentEquals(ZIP_MAGIC)
+
+    private fun parseZip(bytes: ByteArray): List<ImportedHoldingRow> {
         var sheetXml: String? = null
         var sharedStringsXml: String? = null
 
-        ZipInputStream(input).use { zip ->
+        ZipInputStream(bytes.inputStream()).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 when {

@@ -44,8 +44,14 @@ import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
 
-private const val XLSX_MIME_TYPE =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+// Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
+// (se HoldingsImportParser) — filväljaren behöver därför acceptera båda mime-typerna,
+// beroende på vad enheten/webbläsaren råkar rapportera för den nedladdade filen.
+private val IMPORT_MIME_TYPES = arrayOf(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/xml",
+    "application/xml",
+)
 
 /** Importera befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export (issue #8). */
 @Composable
@@ -79,7 +85,7 @@ fun ImportHoldingsScreen(
         ) {
             Text(stringResource(R.string.import_pick_file_body), style = MaterialTheme.typography.bodyMedium)
             Button(
-                onClick = { filePicker.launch(arrayOf(XLSX_MIME_TYPE)) },
+                onClick = { filePicker.launch(IMPORT_MIME_TYPES) },
                 modifier = Modifier.padding(top = 16.dp),
             ) { Text(stringResource(R.string.import_pick_file)) }
         }
