@@ -105,11 +105,27 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `felaktig fil ger PARSE_FAILED`() = runTest(dispatcher) {
+    fun `fil som inte ar en zip ger EMPTY_FILE`() = runTest(dispatcher) {
+        // ZipInputStream kastar inte på ogiltiga byte — den hittar bara inga poster,
+        // så parse() returnerar en tom lista i stället för att kasta.
         val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(byteArrayOf(1, 2, 3))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(ImportError.EMPTY_FILE, state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `trasig xml i arbetsbladet ger PARSE_FAILED`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes("<worksheet><sheetData><row>"))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
