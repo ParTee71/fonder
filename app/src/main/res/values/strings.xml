@@ -65,5 +65,24 @@
     <string name="theme_auto">Auto</string>
     <string name="settings_account_section">Google-konto &amp; säkerhetskopiering</string>
     <string name="settings_account_body">Inloggning och molnbackup läggs till i en kommande version.</string>
+    <string name="settings_import_section">Importera innehav</string>
+    <string name="settings_import_body">Importera befintliga fondinnehav från Handelsbankens Excel-export (\"Innehav Fonder\").</string>
+    <string name="settings_import_button">Importera innehav</string>
     <string name="settings_about_section">Om appen</string>
+
+    <!-- Importera innehav (issue #8) -->
+    <string name="import_title">Importera innehav</string>
+    <string name="import_pick_file">Välj Excel-fil</string>
+    <string name="import_pick_file_body">Välj filen du exporterade som \"Innehav Fonder\" från Handelsbankens internetbank (.xlsx).</string>
+    <string name="import_error_parse">Kunde inte läsa filen. Kontrollera att det är en giltig Handelsbanken-export.</string>
+    <string name="import_error_empty">Inga rader hittades i filen.</string>
+    <string name="format_import_row_isin">ISIN: %s</string>
+    <string name="import_match_label">Matchad fond</string>
+    <string name="import_match_none">Ingen fond vald</string>
+    <string name="import_match_uncertain">Osäker matchning – kontrollera</string>
+    <string name="import_date_label">Uppskattat inköpsdatum</string>
+    <string name="import_date_uncertain">Osäkert datum – kurshistoriken räcker inte tillbaka, kontrollera</string>
+    <string name="import_commit_button">Importera %d poster</string>
+    <string name="import_success_title">Import klar</string>
+    <string name="import_success_body">Innehaven har importerats som transaktioner.</string>
 </resources>

@@ -27,4 +27,7 @@ object Routes {
 
     /** Registrera en ny fondtransaktion (köp/sälj), se issue #4. */
     const val TRANSACTION_FORM = "transaction-form"
+
+    /** Importera befintliga innehav från en Handelsbanken-Excel-export, se issue #8. */
+    const val IMPORT_HOLDINGS = "import-holdings"
 }

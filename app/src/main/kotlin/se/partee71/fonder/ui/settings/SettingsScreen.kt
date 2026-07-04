@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import se.partee71.fonder.data.datastore.ThemeMode
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    onImportHoldings: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -52,6 +54,19 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_import_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_import_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                Button(onClick = onImportHoldings) { Text(stringResource(R.string.settings_import_button)) }
             }
         }
     }

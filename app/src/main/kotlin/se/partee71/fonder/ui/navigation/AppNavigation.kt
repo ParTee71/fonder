@@ -23,6 +23,7 @@ import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
+import se.partee71.fonder.ui.imports.ImportHoldingsScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
@@ -88,7 +89,7 @@ fun AppNavigation() {
                 TransaktionerScreen()
             }
             composable(Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) })
             }
             composable(
                 route = Routes.FOND,
@@ -101,6 +102,9 @@ fun AppNavigation() {
             }
             composable(Routes.TRANSACTION_FORM) {
                 TransactionFormScreen(onSaved = { navController.popBackStack() })
+            }
+            composable(Routes.IMPORT_HOLDINGS) {
+                ImportHoldingsScreen()
             }
         }
     }

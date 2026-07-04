@@ -20,6 +20,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Fondtransaktioner (köp/sälj) (#4)
 - [x] Värdeberäkning, nuvarande värde (#6)
 - [x] Historisk värdeutveckling i tabell och diagram (#7)
+- [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 

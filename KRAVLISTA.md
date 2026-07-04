@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.6.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -19,6 +19,7 @@
 | ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram** — kurshistorik senaste året i Fonddetalj (issue #7). |
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
+| ÖV-8 | Användaren ska kunna **importera befintliga fondinnehav** från Handelsbankens Excel-export ("Innehav Fonder") — automatisk fondmatchning och uppskattat inköpsdatum, med manuell bekräftelse/korrigering innan import (issue #8). |
 
 ---
 
@@ -38,6 +39,7 @@
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
+| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens `.xlsx`-export utan extra bibliotek (ren zip/DOM-parsning) — identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), inte ISIN. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 
 ---
 
@@ -66,6 +68,8 @@
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
+| IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
+| IMP-2 | Rader med osäker fondmatchning eller osäkert uppskattat inköpsdatum markeras tydligt (text, inte enbart färg) — användaren väljer fond/datum manuellt (samma delade komponenter som transaktionsformuläret, regel 4). |
 
 ---
 
@@ -106,3 +110,11 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   `FundPriceDao.observeRange`/`observePriceHistory`-kedja (samma reaktiva mönster som
   #6). Google Drive-backup och Google-inloggning (kvarstår i följdkraven) väntar på att
   ett Firebase-projekt sätts upp för fonder.
+- **Innehavsimport (#8):** ÖV-8 klar — import av Handelsbankens "Innehav Fonder"-Excel
+  (IMP-1, IMP-2, TP-13). Exportens `.xlsx` identifierar fonder med ISIN, som saknas i
+  fondlista-katalogen (TP-9) — `FundNameMatcher` föreslår i stället en katalogfond genom
+  ordbaserad namnlikhet, och `PurchaseDateEstimator` uppskattar inköpsdatum genom att
+  hitta dagen i kurshistoriken vars NAV ligger närmast radens snittkurs
+  (anskaffningsvärde / antal). Båda kräver alltid en bekräftelse/korrigering-vy innan
+  import — automatiken kan missa fonder som inte säljs via Handelsbankens plattform, och
+  kurshistoriken räcker bara ett år tillbaka.

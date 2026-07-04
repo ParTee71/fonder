@@ -59,11 +59,6 @@ object HandelsbankenHtmlParser {
     }
 
     /** Svenskt talformat: mellanslag (vanligt eller hårt,  ) som tusentalsavgränsare, komma som decimal. */
-    internal fun parseSwedishNumber(raw: String): Double? {
-        val cleaned = raw.trim()
-            .replace(" ", "")
-            .replace(" ", "")
-            .replace(",", ".")
-        return cleaned.toDoubleOrNull()
-    }
+    internal fun parseSwedishNumber(raw: String): Double? =
+        se.partee71.fonder.domain.usecase.SwedishNumberFormat.parse(raw)
 }
