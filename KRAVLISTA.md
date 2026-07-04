@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.1 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.2 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -127,3 +127,9 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   anskaffningsvärde / totalt antal) används för alla tillfällen eftersom källfilen bara
   ger en aggregerad kostnad. Summan av tillfällenas andelar valideras mot radens totala
   antal innan import tillåts för raden.
+- **Fullständig kursuppdatering vid import (#8-uppföljning):** en matchad fond som redan
+  bevakades sedan tidigare kunde ha en ofullständig cachad kurshistorik (t.ex. bara de
+  senaste dagarna via den dagliga bakgrundsuppdateringen), vilket gjorde
+  `PurchaseDateEstimator` mindre träffsäker. `refresh(fundId)` (senaste årets kurser)
+  anropas därför alltid vid import för varje matchad rad, oavsett om fonden redan har en
+  cachad kurs — inte bara första gången en fond läggs till (TP-13, jämför POR-4).

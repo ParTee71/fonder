@@ -110,9 +110,11 @@ class ImportHoldingsViewModel @Inject constructor(
         var dateConfident = false
 
         if (fund != null) {
-            if (fundPriceRepository.latestPrice(fund.fund.fundId) == null) {
-                fundPriceRepository.refresh(fund.fund.fundId)
-            }
+            // Uppdatera alltid hela kurshistoriken vid import — även om fonden redan bevakas
+            // sedan tidigare och har en cachad kurs — så att både inköpsdatum-uppskattningen
+            // nedan och den historiska värdeutvecklingen (#7) baseras på fullständig data,
+            // inte bara de dagar som råkat cachas via den dagliga bakgrundsuppdateringen.
+            fundPriceRepository.refresh(fund.fund.fundId)
             val to = LocalDate.now()
             val history = fundPriceRepository.priceHistory(fund.fund.fundId, to.minusYears(1).toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->

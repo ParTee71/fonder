@@ -107,6 +107,27 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
+    fun `alla dagars kurser hamtas vid import aven om en kurs redan ar cachad`() = runTest(dispatcher) {
+        // Fonden är redan bevakad (har en cachad kurs sedan tidigare) — refresh() ska
+        // ändå anropas vid import, så att hela kurshistoriken finns för både
+        // inköpsdatum-uppskattningen och den historiska värdeutvecklingen (#7).
+        val priceRepoMedCachadKurs = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun latestPrice(fundId: String): FundPrice =
+                FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedCachadKurs)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `fil som inte ar en zip ger EMPTY_FILE`() = runTest(dispatcher) {
         // ZipInputStream kastar inte på ogiltiga byte — den hittar bara inga poster,
         // så parse() returnerar en tom lista i stället för att kasta.
