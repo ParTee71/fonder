@@ -22,6 +22,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import java.time.LocalDate
@@ -123,6 +124,84 @@ class ImportHoldingsViewModelTest {
             while (state.loading) state = awaitItem()
 
             assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kurshistorik hamtas for fem ar tillbaka`() = runTest(dispatcher) {
+        var capturedFrom: Long? = null
+        var capturedTo: Long? = null
+        val priceRepoMedFangst = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> {
+                capturedFrom = fromEpochDay
+                capturedTo = toEpochDay
+                return fakePriceRepo.priceHistory(fundId, fromEpochDay, toEpochDay)
+            }
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedFangst)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val today = LocalDate.now()
+        assertEquals(today.minusYears(5).toEpochDay(), capturedFrom)
+        assertEquals(today.toEpochDay(), capturedTo)
+    }
+
+    @Test
+    fun `standarddatum blir fem ar tillbaka om ingen kurshistorik finns`() = runTest(dispatcher) {
+        val priceRepoUtanHistorik = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoUtanHistorik)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            val occasion = state.rows.first().occasions.first()
+            assertEquals(LocalDate.now().minusYears(5), occasion.date)
+            assertFalse(occasion.dateConfident)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `fondbolagsledtrad hjalper vid tvetydig namnmatchning`() = runTest(dispatcher) {
+        val fundA = Fund(fundId = "A", name = "Aktiebolag Ett Fond Sverige")
+        val fundB = Fund(fundId = "B", name = "Aktiebolag Tva Fond Sverige")
+        val ambiguousCatalog = FundCatalog(
+            companies = listOf(
+                FundCompany(id = "2", name = "Aktiebolag Ett AB"),
+                FundCompany(id = "3", name = "Aktiebolag Tva AB"),
+            ),
+            funds = listOf(fundA, fundB),
+        )
+        val ambiguousSheetXml = """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                <sheetData>
+                <row r="5"><c r="A5" t="inlineStr"><is><t>ISIN</t></is></c></row>
+                <row r="6"><c r="A6" t="inlineStr"><is><t>SE0009999999</t></is></c><c r="B6" t="inlineStr"><is><t>Aktiebolag Ett AB</t></is></c><c r="C6" t="inlineStr"><is><t>Fond Sverige</t></is></c><c r="D6" t="inlineStr"><is><t>1,0000</t></is></c><c r="E6"><v>100.0</v></c><c r="F6" t="inlineStr"><is><t>SEK</t></is></c><c r="G6" t="inlineStr"><is><t>2026-01-01</t></is></c><c r="H6"><v>100.0</v></c><c r="I6"><v>100.0</v></c></row>
+                </sheetData>
+            </worksheet>
+        """.trimIndent()
+        val priceRepoMedTvetydigKatalog = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun fetchFundCatalog(): FundCatalog = ambiguousCatalog
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedTvetydigKatalog)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(ambiguousSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(fundA, state.rows.first().matchedFund)
             cancelAndIgnoreRemainingEvents()
         }
     }

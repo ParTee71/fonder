@@ -31,7 +31,7 @@ interface FundPriceRepository {
     /** Som [priceHistory], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
     fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>>
 
-    /** Hämtar senaste årets kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
+    /** Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
     suspend fun refresh(fundId: String)
 
     /** Alla fondbolag + hela fondkatalogen (en hämtning) för fondsök-UI. */
@@ -61,7 +61,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override suspend fun refresh(fundId: String) {
         runCatching {
             val to = LocalDate.now()
-            val from = to.minusYears(1)
+            val from = to.minusYears(5)
             val html = client.fetchHistoryPage(fundId, from, to)
             HandelsbankenHtmlParser.parseHistory(html, fundId)
         }.onSuccess { prices ->

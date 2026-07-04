@@ -71,6 +71,24 @@ class HandelsbankenFundPriceRepositoryTest {
     }
 
     @Test
+    fun `refresh hamtar fem ars kurshistorik`() = runTest {
+        var capturedFrom: LocalDate? = null
+        var capturedTo: LocalDate? = null
+        val client = FondlistaHtmlSource { _, from, to ->
+            capturedFrom = from
+            capturedTo = to
+            ""
+        }
+        val repo = HandelsbankenFundPriceRepository(client = client, dao = dao)
+
+        repo.refresh("SHB0000442")
+
+        val today = LocalDate.now()
+        assertEquals(today.minusYears(5), capturedFrom)
+        assertEquals(today, capturedTo)
+    }
+
+    @Test
     fun `refresh vid natverksfel behaller cachad data`() = runTest {
         dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = LocalDate.of(2026, 6, 30).toEpochDay(), nav = 140.0, currency = "SEK"))
         val failingClient = FondlistaHtmlSource { _, _, _ -> throw IOException("nätverksfel") }

@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.3 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.4 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -39,7 +39,7 @@
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
-| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), inte ISIN. Isolerad, odokumenterat exportformat — se risknotis i #8. |
+| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), med fondbolagsnamnet som ledtråd vid annars jämna träffar (via `FundCompanyMatcher`, TP-11) — inte ISIN. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 
 ---
 
@@ -71,6 +71,7 @@
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
 | IMP-2 | Rader med osäker fondmatchning eller osäkert uppskattat inköpsdatum markeras tydligt (text, inte enbart färg) — användaren väljer fond/datum manuellt (samma delade komponenter som transaktionsformuläret, regel 4). |
 | IMP-3 | En importrad kan delas upp i **flera inköpstillfällen** (eget datum + antal andelar per tillfälle) eftersom en exportrad ofta är ett aggregerat innehav byggt av flera köp — varje tillfälle blir en egen transaktion vid import. Summan av tillfällenas andelar måste matcha radens totala antal (tydlig felmarkering annars) innan raden går att importera. |
+| IMP-4 | Under fondmatchning och kursuppdatering (kan ta en stund) visas en overlay-modal ("Importerar…") som inte kan avfärdas förrän steget är klart — ingen tom eller ointeraktiv vy under tiden. |
 
 ---
 
@@ -118,7 +119,7 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   hitta dagen i kurshistoriken vars NAV ligger närmast radens snittkurs
   (anskaffningsvärde / antal). Båda kräver alltid en bekräftelse/korrigering-vy innan
   import — automatiken kan missa fonder som inte säljs via Handelsbankens plattform, och
-  kurshistoriken räcker bara ett år tillbaka.
+  kurshistoriken räcker bara fem år tillbaka (se uppföljning nedan).
 - **Flera inköpstillfällen per importrad (#8-uppföljning):** en exportrad är ofta ett
   aggregerat innehav byggt upp av flera köp vid olika tidpunkter, inte ett enda köp — att
   alltid skapa exakt en transaktion per rad gav en missvisande historik (IMP-3). Raden kan
@@ -130,7 +131,7 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
 - **Fullständig kursuppdatering vid import (#8-uppföljning):** en matchad fond som redan
   bevakades sedan tidigare kunde ha en ofullständig cachad kurshistorik (t.ex. bara de
   senaste dagarna via den dagliga bakgrundsuppdateringen), vilket gjorde
-  `PurchaseDateEstimator` mindre träffsäker. `refresh(fundId)` (senaste årets kurser)
+  `PurchaseDateEstimator` mindre träffsäker. `refresh(fundId)` (senaste fem årens kurser)
   anropas därför alltid vid import för varje matchad rad, oavsett om fonden redan har en
   cachad kurs — inte bara första gången en fond läggs till (TP-13, jämför POR-4).
 - **Stöd för ozippad exportfil (#8-uppföljning):** Handelsbankens faktiska export visade
@@ -138,3 +139,13 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   (samma schema som `xl/worksheets/sheet1.xml` i en uppackad `.xlsx`, aldrig zippad).
   `HoldingsImportParser.parse` avgör format via zip-magibytena och tolkar råXML direkt om
   filen inte är zippad (TP-13); filväljaren accepterar nu både xlsx- och XML-mimetyper.
+- **Fem års kurshistorik, bättre fondmatchning och importmodal (#8-uppföljning):**
+  `refresh()` hämtar nu fem års kurser i stället för ett (TP-13) — mer historik för
+  `PurchaseDateEstimator` att söka i, särskilt för äldre innehav. Saknas en tillförlitlig
+  träff antas inköpsdatumet vara fem år tillbaka i tiden i stället för dagens datum (samma
+  gräns som söks inom, så gissningen aldrig hamnar utanför fönstret). `FundNameMatcher`
+  använder nu även exportradens fondbolagsnamn som ledtråd (via `FundCompanyMatcher`,
+  TP-11) — ger ett litet försprång åt kandidater från rätt bolag vid annars jämna
+  namnträffar, utan att utesluta andra kandidater. En overlay-modal (IMP-4) visas medan
+  matchning/kursuppdatering pågår, eftersom fem års historik per fond kan ta en stund att
+  hämta.

@@ -9,9 +9,9 @@ import kotlin.math.abs
  * vars NAV ligger närmast snittkursen.
  *
  * **Begränsning:** [FundPriceRepository][se.partee71.fonder.data.repository.FundPriceRepository]
- * cachar bara ungefär ett års historik (`refresh()` hämtar senaste året). Köp äldre än så
- * kan aldrig hittas exakt — [Estimate.confident] blir `false` när den närmaste träffen ändå
- * avviker för mycket, så att UI:t kan be användaren välja datum manuellt i stället.
+ * cachar bara ungefär fem års historik (`refresh()` hämtar senaste fem åren). Köp äldre än
+ * så kan aldrig hittas exakt — [Estimate.confident] blir `false` när den närmaste träffen
+ * ändå avviker för mycket, så att UI:t kan be användaren välja datum manuellt i stället.
  */
 object PurchaseDateEstimator {
 

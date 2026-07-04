@@ -12,6 +12,7 @@ import se.partee71.fonder.data.imports.HoldingsImportParser
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedHoldingRow
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -22,6 +23,9 @@ import javax.inject.Inject
 import kotlin.math.abs
 
 private const val SHARES_MATCH_TOLERANCE = 1e-6
+
+/** Hur långt tillbaka kurshistoriken hämtas/söks vid import — se KRAVLISTA (TP-13). */
+private const val PRICE_HISTORY_YEARS = 5L
 
 /**
  * Ett enskilt inköpstillfälle för en importerad rad (issue #8-uppföljning: en rad i
@@ -99,14 +103,17 @@ class ImportHoldingsViewModel @Inject constructor(
             }
 
             val catalog = fundPriceRepository.fetchFundCatalog()
-            val rowStates = parsedRows.map { row -> buildRowState(row, catalog.funds) }
+            val rowStates = parsedRows.map { row -> buildRowState(row, catalog) }
             _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }
         }
     }
 
-    private suspend fun buildRowState(row: ImportedHoldingRow, catalogFunds: List<Fund>): ImportRowUiState {
-        val fund = FundNameMatcher.bestMatch(row.fundName, catalogFunds)
-        var date = LocalDate.now()
+    private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog): ImportRowUiState {
+        val fund = FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName, catalog.companies)
+        // Utan en tillförlitlig datumuppskattning (inget kurshistorik-fynd) antas ett gammalt
+        // innehav hellre ha köpts för länge sedan än "idag" — samma gräns som kurshistoriken
+        // (PRICE_HISTORY_YEARS) söks inom, så gissningen aldrig hamnar utanför sökfönstret.
+        var date = LocalDate.now().minusYears(PRICE_HISTORY_YEARS)
         var dateConfident = false
 
         if (fund != null) {
@@ -116,7 +123,7 @@ class ImportHoldingsViewModel @Inject constructor(
             // inte bara de dagar som råkat cachas via den dagliga bakgrundsuppdateringen.
             fundPriceRepository.refresh(fund.fund.fundId)
             val to = LocalDate.now()
-            val history = fundPriceRepository.priceHistory(fund.fund.fundId, to.minusYears(1).toEpochDay(), to.toEpochDay())
+            val history = fundPriceRepository.priceHistory(fund.fund.fundId, to.minusYears(PRICE_HISTORY_YEARS).toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->
                 date = LocalDate.ofEpochDay(estimate.epochDay)
                 dateConfident = estimate.confident

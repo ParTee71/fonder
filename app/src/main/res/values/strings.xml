@@ -74,6 +74,8 @@
     <string name="import_title">Importera innehav</string>
     <string name="import_pick_file">Välj Excel-fil</string>
     <string name="import_pick_file_body">Välj filen du exporterade som \"Innehav Fonder\" från Handelsbankens internetbank.</string>
+    <string name="import_loading_title">Importerar…</string>
+    <string name="import_loading_body">Matchar fonder och hämtar kurshistorik. Det kan ta en liten stund.</string>
     <string name="import_error_parse">Kunde inte läsa filen. Kontrollera att det är en giltig Handelsbanken-export.</string>
     <string name="import_error_empty">Inga rader hittades i filen.</string>
     <string name="format_import_row_isin">ISIN: %s</string>
