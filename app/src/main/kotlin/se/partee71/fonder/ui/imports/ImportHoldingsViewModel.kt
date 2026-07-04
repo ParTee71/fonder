@@ -19,16 +19,40 @@ import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
 import java.time.LocalDate
 import javax.inject.Inject
+import kotlin.math.abs
 
-/** En importerad rad + användarens (eventuellt korrigerade) matchning/datum/val (issue #8). */
+private const val SHARES_MATCH_TOLERANCE = 1e-6
+
+/**
+ * Ett enskilt inköpstillfälle för en importerad rad (issue #8-uppföljning: en rad i
+ * exporten är ofta en aggregerad post byggd av flera köp vid olika tillfällen — hela
+ * innehavet behöver därför kunna delas upp i flera transaktioner med egna datum/antal,
+ * i stället för att tvinga in allt i en enda syntetisk transaktion).
+ */
+data class ImportOccasion(
+    val date: LocalDate,
+    val dateConfident: Boolean,
+    val sharesText: String,
+) {
+    val shares: Double? get() = sharesText.trim().replace(",", ".").toDoubleOrNull()
+}
+
+/** En importerad rad + användarens (eventuellt korrigerade) matchning/inköpstillfällen (issue #8). */
 data class ImportRowUiState(
     val row: ImportedHoldingRow,
     val matchedFund: Fund?,
     val matchConfidence: Double?,
-    val date: LocalDate,
-    val dateConfident: Boolean,
+    val occasions: List<ImportOccasion>,
     val included: Boolean = true,
-)
+) {
+    val occasionSharesTotal: Double get() = occasions.sumOf { it.shares ?: 0.0 }
+    val sharesMismatch: Boolean get() = abs(occasionSharesTotal - row.shares) > SHARES_MATCH_TOLERANCE
+
+    private val occasionsValid: Boolean
+        get() = occasions.isNotEmpty() && occasions.all { (it.shares ?: 0.0) > 0.0 } && !sharesMismatch
+
+    val readyToImport: Boolean get() = included && matchedFund != null && occasionsValid
+}
 
 enum class ImportError { PARSE_FAILED, EMPTY_FILE }
 
@@ -40,13 +64,14 @@ data class ImportHoldingsUiState(
     val imported: Boolean = false,
     val error: ImportError? = null,
 ) {
-    val canImport: Boolean get() = rows.any { it.included && it.matchedFund != null }
+    val canImport: Boolean get() = rows.any { it.readyToImport }
 }
 
 /**
  * Importerar befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export
  * (issue #8). Föreslår automatiskt fondmatchning ([FundNameMatcher]) och inköpsdatum
- * ([PurchaseDateEstimator]) per rad — användaren bekräftar/korrigerar innan import.
+ * ([PurchaseDateEstimator]) per rad — användaren bekräftar/korrigerar innan import, och
+ * kan dela upp raden i flera inköpstillfällen om innehavet byggts upp vid olika datum.
  */
 @HiltViewModel
 class ImportHoldingsViewModel @Inject constructor(
@@ -100,8 +125,7 @@ class ImportHoldingsViewModel @Inject constructor(
             row = row,
             matchedFund = fund?.fund,
             matchConfidence = fund?.confidence,
-            date = date,
-            dateConfident = dateConfident,
+            occasions = listOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
         )
     }
 
@@ -109,12 +133,34 @@ class ImportHoldingsViewModel @Inject constructor(
         updateRow(row) { it.copy(matchedFund = fund, matchConfidence = null) }
     }
 
-    fun onDateOverride(row: ImportedHoldingRow, date: LocalDate) {
-        updateRow(row) { it.copy(date = date, dateConfident = true) }
-    }
-
     fun onIncludedChange(row: ImportedHoldingRow, included: Boolean) {
         updateRow(row) { it.copy(included = included) }
+    }
+
+    fun onOccasionDateChange(row: ImportedHoldingRow, index: Int, date: LocalDate) {
+        updateOccasion(row, index) { it.copy(date = date, dateConfident = true) }
+    }
+
+    fun onOccasionSharesChange(row: ImportedHoldingRow, index: Int, sharesText: String) {
+        updateOccasion(row, index) { it.copy(sharesText = sharesText) }
+    }
+
+    /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
+    fun onAddOccasion(row: ImportedHoldingRow) {
+        updateRow(row) { it.copy(occasions = it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")) }
+    }
+
+    fun onRemoveOccasion(row: ImportedHoldingRow, index: Int) {
+        updateRow(row) { state ->
+            if (state.occasions.size <= 1) return@updateRow state
+            state.copy(occasions = state.occasions.filterIndexed { i, _ -> i != index })
+        }
+    }
+
+    private fun updateOccasion(row: ImportedHoldingRow, index: Int, transform: (ImportOccasion) -> ImportOccasion) {
+        updateRow(row) { state ->
+            state.copy(occasions = state.occasions.mapIndexed { i, occasion -> if (i == index) transform(occasion) else occasion })
+        }
     }
 
     private fun updateRow(row: ImportedHoldingRow, transform: (ImportRowUiState) -> ImportRowUiState) {
@@ -126,19 +172,21 @@ class ImportHoldingsViewModel @Inject constructor(
     fun import() {
         viewModelScope.launch {
             _uiState.value.rows
-                .filter { it.included && it.matchedFund != null }
+                .filter { it.readyToImport }
                 .forEach { rowState ->
                     val fund = requireNotNull(rowState.matchedFund)
                     transactionRepository.upsertFund(fund)
-                    transactionRepository.addTransaction(
-                        Transaction(
-                            fundId = fund.fundId,
-                            type = TransactionType.KOP,
-                            epochDay = rowState.date.toEpochDay(),
-                            shares = rowState.row.shares,
-                            pricePerShare = rowState.row.averageCostPerShare,
-                        ),
-                    )
+                    rowState.occasions.forEach { occasion ->
+                        transactionRepository.addTransaction(
+                            Transaction(
+                                fundId = fund.fundId,
+                                type = TransactionType.KOP,
+                                epochDay = occasion.date.toEpochDay(),
+                                shares = requireNotNull(occasion.shares),
+                                pricePerShare = rowState.row.averageCostPerShare,
+                            ),
+                        )
+                    }
                 }
             _uiState.update { it.copy(imported = true) }
         }

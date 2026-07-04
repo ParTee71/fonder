@@ -10,11 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -91,8 +99,11 @@ fun ImportHoldingsScreen(
                         rowState = rowState,
                         catalogFunds = state.catalogFunds,
                         onFundOverride = { fund -> viewModel.onFundOverride(rowState.row, fund) },
-                        onDateOverride = { date -> viewModel.onDateOverride(rowState.row, date) },
                         onIncludedChange = { included -> viewModel.onIncludedChange(rowState.row, included) },
+                        onOccasionDateChange = { index, date -> viewModel.onOccasionDateChange(rowState.row, index, date) },
+                        onOccasionSharesChange = { index, text -> viewModel.onOccasionSharesChange(rowState.row, index, text) },
+                        onAddOccasion = { viewModel.onAddOccasion(rowState.row) },
+                        onRemoveOccasion = { index -> viewModel.onRemoveOccasion(rowState.row, index) },
                     )
                 }
             }
@@ -101,7 +112,7 @@ fun ImportHoldingsScreen(
                 enabled = state.canImport,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) {
-                Text(stringResource(R.string.import_commit_button, state.rows.count { it.included && it.matchedFund != null }))
+                Text(stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }))
             }
         }
     }
@@ -112,8 +123,11 @@ private fun ImportRowCard(
     rowState: ImportRowUiState,
     catalogFunds: List<Fund>,
     onFundOverride: (Fund?) -> Unit,
-    onDateOverride: (LocalDate) -> Unit,
     onIncludedChange: (Boolean) -> Unit,
+    onOccasionDateChange: (Int, LocalDate) -> Unit,
+    onOccasionSharesChange: (Int, String) -> Unit,
+    onAddOccasion: () -> Unit,
+    onRemoveOccasion: (Int) -> Unit,
 ) {
     val row = rowState.row
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -152,15 +166,55 @@ private fun ImportRowCard(
                 )
             }
 
-            DateField(
-                label = stringResource(R.string.import_date_label),
-                date = rowState.date,
-                onDateChange = onDateOverride,
-                modifier = Modifier.padding(top = 8.dp),
+            Text(
+                stringResource(R.string.import_occasions_label),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 12.dp),
             )
-            if (!rowState.dateConfident) {
+            rowState.occasions.forEachIndexed { index, occasion ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        DateField(
+                            label = stringResource(R.string.import_date_label),
+                            date = occasion.date,
+                            onDateChange = { date -> onOccasionDateChange(index, date) },
+                        )
+                        OutlinedTextField(
+                            value = occasion.sharesText,
+                            onValueChange = { text -> onOccasionSharesChange(index, text) },
+                            label = { Text(stringResource(R.string.import_occasion_shares_label)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        )
+                        if (!occasion.dateConfident) {
+                            Text(
+                                stringResource(R.string.import_date_uncertain),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    if (rowState.occasions.size > 1) {
+                        IconButton(onClick = { onRemoveOccasion(index) }) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.import_remove_occasion))
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = onAddOccasion, modifier = Modifier.padding(top = 4.dp)) {
+                Text(stringResource(R.string.import_add_occasion))
+            }
+            if (rowState.sharesMismatch) {
                 Text(
-                    stringResource(R.string.import_date_uncertain),
+                    stringResource(
+                        R.string.format_import_shares_mismatch,
+                        rowState.occasionSharesTotal.toString(),
+                        row.shares.toString(),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

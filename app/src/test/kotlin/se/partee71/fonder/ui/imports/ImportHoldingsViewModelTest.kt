@@ -99,6 +99,8 @@ class ImportHoldingsViewModelTest {
 
             assertEquals(1, state.rows.size)
             assertEquals(handelsbankenFund, state.rows.first().matchedFund)
+            assertEquals(1, state.rows.first().occasions.size)
+            assertEquals(1.9378, state.rows.first().occasions.first().shares!!, 1e-9)
             assertNull(state.error)
             cancelAndIgnoreRemainingEvents()
         }
@@ -135,7 +137,7 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `fondval och datum kan overridas per rad`() = runTest(dispatcher) {
+    fun `fondval och inkopstillfalle kan overridas per rad`() = runTest(dispatcher) {
         val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
         vm.uiState.test {
             awaitItem()
@@ -153,10 +155,48 @@ class ImportHoldingsViewModelTest {
             assertEquals(handelsbankenFund, state.rows.first().matchedFund)
 
             val newDate = LocalDate.of(2025, 1, 1)
-            vm.onDateOverride(row, newDate)
+            vm.onOccasionDateChange(row, 0, newDate)
             state = awaitItem()
-            assertEquals(newDate, state.rows.first().date)
-            assertTrue(state.rows.first().dateConfident)
+            assertEquals(newDate, state.rows.first().occasions.first().date)
+            assertTrue(state.rows.first().occasions.first().dateConfident)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `rad kan delas i flera inkopstillfallen`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            val row = state.rows.first().row
+
+            vm.onAddOccasion(row)
+            state = awaitItem()
+            assertEquals(2, state.rows.first().occasions.size)
+            // Nya tillfället saknar andelar tills användaren fyller i — blockerar import trots att
+            // summan (0 + ursprungliga andelarna) råkar matcha totalt.
+            assertFalse(state.rows.first().readyToImport)
+
+            vm.onOccasionSharesChange(row, 0, "1")
+            state = awaitItem()
+            // Nu är summan (1) för låg jämfört med totalt (1,9378) — riktig avvikelse.
+            assertTrue(state.rows.first().sharesMismatch)
+
+            vm.onOccasionSharesChange(row, 1, "0,9378")
+            state = awaitItem()
+            assertFalse(state.rows.first().sharesMismatch)
+            assertTrue(state.rows.first().readyToImport)
+
+            vm.onOccasionDateChange(row, 1, LocalDate.of(2024, 6, 1))
+            state = awaitItem()
+
+            vm.onRemoveOccasion(row, 1)
+            state = awaitItem()
+            assertEquals(1, state.rows.first().occasions.size)
+            assertTrue(state.rows.first().sharesMismatch)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -178,6 +218,64 @@ class ImportHoldingsViewModelTest {
             assertEquals(handelsbankenFund, addedFunds.first())
             assertEquals(1, addedTransactions.size)
             assertEquals(1.9378, addedTransactions.first().shares, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `import skapar en transaktion per inkopstillfalle`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            val row = state.rows.first().row
+            val expectedPrice = state.rows.first().row.averageCostPerShare
+
+            vm.onAddOccasion(row)
+            state = awaitItem()
+            vm.onOccasionSharesChange(row, 0, "1")
+            state = awaitItem()
+            vm.onOccasionSharesChange(row, 1, "0,9378")
+            state = awaitItem()
+            val secondDate = LocalDate.of(2024, 6, 1)
+            vm.onOccasionDateChange(row, 1, secondDate)
+            state = awaitItem()
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(2, addedTransactions.size)
+            assertEquals(1.0, addedTransactions[0].shares, 1e-9)
+            assertEquals(0.9378, addedTransactions[1].shares, 1e-9)
+            assertEquals(secondDate.toEpochDay(), addedTransactions[1].epochDay)
+            assertEquals(expectedPrice, addedTransactions[0].pricePerShare, 1e-9)
+            assertEquals(expectedPrice, addedTransactions[1].pricePerShare, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `rad med felaktig andelssumma importeras inte`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            val row = state.rows.first().row
+
+            vm.onAddOccasion(row)
+            state = awaitItem()
+            assertFalse(state.rows.first().readyToImport)
+            assertFalse(state.canImport)
+
+            vm.import()
+            advanceUntilIdle()
+
+            assertEquals(0, addedTransactions.size)
             cancelAndIgnoreRemainingEvents()
         }
     }

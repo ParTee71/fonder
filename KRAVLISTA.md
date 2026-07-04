@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.7.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -70,6 +70,7 @@
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
 | IMP-2 | Rader med osäker fondmatchning eller osäkert uppskattat inköpsdatum markeras tydligt (text, inte enbart färg) — användaren väljer fond/datum manuellt (samma delade komponenter som transaktionsformuläret, regel 4). |
+| IMP-3 | En importrad kan delas upp i **flera inköpstillfällen** (eget datum + antal andelar per tillfälle) eftersom en exportrad ofta är ett aggregerat innehav byggt av flera köp — varje tillfälle blir en egen transaktion vid import. Summan av tillfällenas andelar måste matcha radens totala antal (tydlig felmarkering annars) innan raden går att importera. |
 
 ---
 
@@ -118,3 +119,11 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   (anskaffningsvärde / antal). Båda kräver alltid en bekräftelse/korrigering-vy innan
   import — automatiken kan missa fonder som inte säljs via Handelsbankens plattform, och
   kurshistoriken räcker bara ett år tillbaka.
+- **Flera inköpstillfällen per importrad (#8-uppföljning):** en exportrad är ofta ett
+  aggregerat innehav byggt upp av flera köp vid olika tidpunkter, inte ett enda köp — att
+  alltid skapa exakt en transaktion per rad gav en missvisande historik (IMP-3). Raden kan
+  nu delas i flera inköpstillfällen (`ImportOccasion`), vart och ett med eget
+  (uppskattat eller manuellt) datum och antal andelar; samma snittkurs (radens
+  anskaffningsvärde / totalt antal) används för alla tillfällen eftersom källfilen bara
+  ger en aggregerad kostnad. Summan av tillfällenas andelar valideras mot radens totala
+  antal innan import tillåts för raden.
