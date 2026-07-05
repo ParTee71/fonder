@@ -184,7 +184,10 @@ class ImportHoldingsViewModel @Inject constructor(
                 .filter { it.readyToImport }
                 .forEach { rowState ->
                     val fund = requireNotNull(rowState.matchedFund)
-                    transactionRepository.upsertFund(fund)
+                    // Exportradens ISIN är auktoritativt (kommer direkt från källfilen, ingen
+                    // gissning) — sparas på den matchade fonden så full kurshistorik sedan
+                    // köpdatum kan hämtas från ISIN-baserade källor (KRAVLISTA TP-14).
+                    transactionRepository.upsertFund(fund.copy(isin = rowState.row.isin))
                     rowState.occasions.forEach { occasion ->
                         transactionRepository.addTransaction(
                             Transaction(

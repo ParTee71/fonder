@@ -64,6 +64,8 @@ class ImportHoldingsViewModelTest {
         override suspend fun refresh(fundId: String) {
             refreshedFundId = fundId
         }
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
+        override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -354,9 +356,30 @@ class ImportHoldingsViewModelTest {
             while (!state.imported) state = awaitItem()
 
             assertEquals(1, addedFunds.size)
-            assertEquals(handelsbankenFund, addedFunds.first())
+            assertEquals(handelsbankenFund.copy(isin = "SE0000582033"), addedFunds.first())
             assertEquals(1, addedTransactions.size)
             assertEquals(1.9378, addedTransactions.first().shares, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `import sparar exportradens ISIN pa den matchade fonden`() = runTest(dispatcher) {
+        // Exportens ISIN (kolumn A i sampleSheetXml, "SE0000582033") ska sparas på fonden
+        // vid import — inte kasseras — så full kurshistorik sedan köpdatum kan hämtas från
+        // ISIN-baserade källor (KRAVLISTA TP-14).
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals("SE0000582033", addedFunds.first().isin)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -47,6 +47,9 @@
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>
     <string name="fond_history_empty_body">Ingen kurshistorik hämtad än för den här fonden.</string>
+    <string name="fond_isin_label">ISIN</string>
+    <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
+    <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>

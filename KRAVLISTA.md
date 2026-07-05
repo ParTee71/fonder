@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.7.5 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.8.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -16,7 +16,7 @@
 | ÖV-2b | Användaren ska kunna **söka bland fonder på namn och lägga till dem** i sin bevakning, filtrerat på valt **fondbolag** (dropdown, förvalt Handelsbanken). |
 | ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj) mot en redan bevakad fond, med förifylld kurs från senast kända NAV, samt ta bort en felregistrerad transaktion (bekräftelsedialog). |
 | ÖV-4 | Appen ska räkna ut **nuvarande värde** utifrån transaktioner och senast kända kurs (issue #6). Historisk värdeutveckling i diagram är fortfarande *(planerad)*. |
-| ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram** — kurshistorik senaste året i Fonddetalj (issue #7). |
+| ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram** — kurshistorik sedan det första köpet i Fonddetalj, inte bara senaste året (issue #7, utökat i #7-uppföljning via ISIN-baserad historik, TP-14). |
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
 | ÖV-8 | Användaren ska kunna **importera befintliga fondinnehav** från Handelsbankens Excel-export ("Innehav Fonder") — automatisk fondmatchning och uppskattat inköpsdatum, med manuell bekräftelse/korrigering innan import (issue #8). |
@@ -40,6 +40,7 @@
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
 | TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), med fondbolagets **kärnnamn** (början av fondbolagsnamnet, via `FundCompanyMatcher.coreBrandName`) som ledtråd — kandidater vars namn inleds med samma varumärke får ett litet försprång vid annars jämna träffar — inte ISIN. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
+| TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. |
 
 ---
 
@@ -59,7 +60,7 @@
 | ID | Krav |
 |----|------|
 | NAV-1 | Toppnivå med navigeringsrad: **Portfölj**, **Transaktioner**, **Inställningar**. |
-| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik senaste året i diagram (`FundLineChart`, `ui/diagram/`) och tabell (datum + kurs), med tomt-tillstånd om ingen historik finns än. |
+| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik sedan första köpet i diagram (`FundLineChart`, `ui/diagram/`) och tabell (datum + kurs), med tomt-tillstånd om ingen historik finns än. Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt med ett namnbaserat förslag om ett hittades), se TP-14. |
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp**. |
@@ -156,3 +157,13 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   "Handelsbanken Fonder AB" → "Handelsbanken") direkt mot början av kandidatens fondnamn —
   eftersom både export- och katalogfondnamn normalt inleds med varumärket. Ger ett
   tillförlitligt försprång åt rätt bolags fonder (TP-13).
+- **Kurshistorik via ISIN, sedan första köpet (#7-uppföljning):** ÖV-5/NAV-2 utökat —
+  Fonddetalj visar nu hela historiken sedan fondens första köp, inte bara senaste året.
+  `PurchaseDateEstimator`s kända begränsning (Handelsbankens 5-årscache räcker inte för
+  äldre köp) löstes genom ett nytt, valfritt `isin`-fält på `Fund` (Room-migrering 2→3,
+  TP-14) och en ISIN-baserad källkedja (`FundPriceRepository.refreshSince`/`suggestIsin`,
+  i dag bara Avanzas odokumenterade fond-API — Nordnet/Morningstar undersöktes men
+  saknade en bekräftat inloggningsfri sökväg från ISIN och är inte implementerade).
+  Fonder från import får ISIN direkt från exportfilen (TP-13); fonder från fondsök
+  föreslås ett ISIN via namnsökning i Fonddetalj, men det sparas först när användaren
+  bekräftar/rättar det (samma "föreslå men kräv bekräftelse"-princip som IMP-2).

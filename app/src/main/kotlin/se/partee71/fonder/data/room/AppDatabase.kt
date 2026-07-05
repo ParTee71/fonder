@@ -13,7 +13,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
     entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -52,6 +52,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2)
+        /**
+         * Version 2 → 3: lägger till `isin` (nullable) på `funds` — nytt attribut för att
+         * hämta full kurshistorik sedan köpdatum från ISIN-baserade källor (Avanza m.fl.,
+         * se KRAVLISTA TP-14), utöver Handelsbankens FundId-baserade källa. Nullable eftersom
+         * fonder tillagda via fondsök saknar ISIN tills det bekräftats i Fonddetalj.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `funds` ADD COLUMN `isin` TEXT")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

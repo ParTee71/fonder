@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.HandelsbankenHtmlParser
+import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.domain.model.FundCatalog
@@ -34,6 +35,17 @@ interface FundPriceRepository {
     /** Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
     suspend fun refresh(fundId: String)
 
+    /**
+     * Hämtar kurshistorik för [isin] sedan [since] och cachar den under [fundId] — kompletterar
+     * [refresh] (Handelsbankens fasta 5-årsfönster, ingen ISIN) med en ISIN-baserad källkedja
+     * som klarar godtyckligt gamla köp (se KRAVLISTA TP-14). Provar källorna i prioritetsordning,
+     * går vidare vid fel/tomt resultat. Fel loggas, kraschar aldrig, cache behålls.
+     */
+    suspend fun refreshSince(fundId: String, isin: String, since: LocalDate)
+
+    /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
+    suspend fun suggestIsin(fundName: String): String?
+
     /** Alla fondbolag + hela fondkatalogen (en hämtning) för fondsök-UI. */
     suspend fun fetchFundCatalog(): FundCatalog
 }
@@ -42,6 +54,7 @@ interface FundPriceRepository {
 class HandelsbankenFundPriceRepository @Inject constructor(
     private val client: FondlistaHtmlSource,
     private val dao: FundPriceDao,
+    private val isinSources: List<@JvmSuppressWildcards IsinPriceHistorySource>,
 ) : FundPriceRepository {
 
     override suspend fun latestPrice(fundId: String): FundPrice? =
@@ -73,6 +86,30 @@ class HandelsbankenFundPriceRepository @Inject constructor(
             // krascha aldrig UI:t. Se riskavsnittet i issue #2/#3.
             Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
         }
+    }
+
+    override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {
+        val to = LocalDate.now()
+        for (source in isinSources) {
+            val points = runCatching { source.fetchHistory(isin, since, to) }
+                .onFailure { e -> Log.w(TAG, "ISIN-källa gav fel för $isin, provar nästa i kedjan", e) }
+                .getOrNull()
+            if (!points.isNullOrEmpty()) {
+                dao.upsertAll(points.map { FundPriceEntity(fundId = fundId, epochDay = it.epochDay, nav = it.nav, currency = it.currency) })
+                return
+            }
+        }
+        Log.w(TAG, "Ingen ISIN-källa kunde ge historik för $isin, behåller cache")
+    }
+
+    override suspend fun suggestIsin(fundName: String): String? {
+        for (source in isinSources) {
+            val isin = runCatching { source.suggestIsin(fundName) }
+                .onFailure { e -> Log.w(TAG, "ISIN-förslag misslyckades för \"$fundName\", provar nästa i kedjan", e) }
+                .getOrNull()
+            if (isin != null) return isin
+        }
+        return null
     }
 
     override suspend fun fetchFundCatalog(): FundCatalog =
