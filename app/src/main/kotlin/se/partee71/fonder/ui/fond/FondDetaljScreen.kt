@@ -8,11 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -29,7 +35,11 @@ import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-/** Fonddetalj — kurshistorik senaste året i diagram och tabell (issue #7). */
+/**
+ * Fonddetalj — kurshistorik sedan första köpet i diagram och tabell (issue #7,
+ * #7-uppföljning). Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt
+ * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14.
+ */
 @Composable
 fun FondDetaljScreen(
     modifier: Modifier = Modifier,
@@ -52,12 +62,55 @@ fun FondDetaljScreen(
                         points = state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav },
                         modifier = Modifier.padding(top = 16.dp),
                     )
+                    if (state.isin == null) {
+                        IsinInput(
+                            suggestedIsin = state.suggestedIsin,
+                            onConfirm = viewModel::onIsinConfirmed,
+                            modifier = Modifier.padding(top = 16.dp),
+                        )
+                    }
                 }
                 HorizontalDivider()
             }
             items(state.prices, key = { it.epochDay }) { price ->
                 PriceRow(price)
             }
+        }
+    }
+}
+
+@Composable
+private fun IsinInput(
+    suggestedIsin: String?,
+    onConfirm: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember { mutableStateOf(suggestedIsin.orEmpty()) }
+    LaunchedEffect(suggestedIsin) {
+        if (text.isEmpty()) text = suggestedIsin.orEmpty()
+    }
+
+    Column(modifier = modifier) {
+        Text(
+            text = stringResource(
+                if (suggestedIsin != null) R.string.fond_isin_suggested_body else R.string.fond_isin_missing_body,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text(stringResource(R.string.fond_isin_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        Button(
+            onClick = { onConfirm(text) },
+            enabled = text.isNotBlank(),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Text(stringResource(R.string.save))
         }
     }
 }

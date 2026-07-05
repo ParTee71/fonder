@@ -9,11 +9,12 @@ data class FundEntity(
     @PrimaryKey val fundId: String,
     val name: String,
     val currency: String,
+    val isin: String? = null,
 ) {
-    fun toDomain() = Fund(fundId = fundId, name = name, currency = currency)
+    fun toDomain() = Fund(fundId = fundId, name = name, currency = currency, isin = isin)
 
     companion object {
         fun fromDomain(fund: Fund) =
-            FundEntity(fundId = fund.fundId, name = fund.name, currency = fund.currency)
+            FundEntity(fundId = fund.fundId, name = fund.name, currency = fund.currency, isin = fund.isin)
     }
 }
