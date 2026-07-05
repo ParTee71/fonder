@@ -89,4 +89,23 @@ class AvanzaPriceSourceTest {
 
         assertNull(source.suggestIsin("Okänd fond"))
     }
+
+    @Test
+    fun `findFund returnerar namn och valuta for ett kant isin`() = runTest {
+        val source = AvanzaPriceSource(
+            FakeAvanzaSource(searchResponse = { searchHit }, guideResponse = """{"currency":"USD"}"""),
+        )
+
+        val info = source.findFund(isin)
+
+        assertEquals("Spiltan Aktiefond Investmentbolag", info?.name)
+        assertEquals("USD", info?.currency)
+    }
+
+    @Test
+    fun `findFund ar null om isin inte hittas`() = runTest {
+        val source = AvanzaPriceSource(FakeAvanzaSource())
+
+        assertNull(source.findFund(isin))
+    }
 }

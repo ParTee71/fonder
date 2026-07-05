@@ -77,6 +77,7 @@ class FondDetaljViewModelTest {
             suggestIsinCalledWith = fundName
             return suggestIsinReturn
         }
+        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 

@@ -1,13 +1,14 @@
 package se.partee71.fonder.data.network
 
+import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
 import java.time.LocalDate
 
 /**
  * Källa för kurshistorik nyckelbar på **ISIN** — i motsats till [FondlistaHtmlSource], som
  * nycklas på Handelsbankens FundId (se KRAVLISTA TP-9). Flera implementationer kan provas i
- * fallback-ordning av `FundPriceRepository.refreshSince`/`suggestIsin` (idag bara
- * [AvanzaPriceSource] — Nordnet/Morningstar undersöktes men saknade en bekräftat
+ * fallback-ordning av `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` (idag
+ * bara [AvanzaPriceSource] — Nordnet/Morningstar undersöktes men saknade en bekräftat
  * inloggningsfri sökväg från ISIN, se KRAVLISTA TP-14 för riskavsnitt).
  */
 interface IsinPriceHistorySource {
@@ -16,4 +17,7 @@ interface IsinPriceHistorySource {
 
     /** Bästa ISIN-gissning för en fond med namnet [fundName], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
+
+    /** Namn + valuta för ett exakt känt [isin], eller null om källan inte har fonden (används för att slå upp fonder som saknas i Handelsbankens katalog, se KRAVLISTA TP-13/TP-14). */
+    suspend fun findFund(isin: String): IsinFundInfo?
 }

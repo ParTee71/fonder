@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.8.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.8.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -39,8 +39,8 @@
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond saknar maskinläsbar koppling i källan; appens **`FundCompanyMatcher`** approximerar kopplingen (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix). Ungefärligt — se KDoc i koden. |
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
-| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9); matchas mot katalogen på fondnamn (`FundNameMatcher`), med fondbolagets **kärnnamn** (början av fondbolagsnamnet, via `FundCompanyMatcher.coreBrandName`) som ledtråd — kandidater vars namn inleds med samma varumärke får ett litet försprång vid annars jämna träffar — inte ISIN. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
-| TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. |
+| TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9). Fondmatchning sker i prioritetsordning (#8-uppföljning): (1) redan bevakad fond med samma ISIN, (2) exakt ISIN-träff via `FundPriceRepository.findFundByIsin` (TP-14 — täcker fondbolag som saknas i Handelsbankens katalog, t.ex. AMF/Amundi/Franklin Templeton/Nordea, och undviker fel andelsklass), (3) `FundNameMatcher` mot Handelsbankens katalog på fondnamn som sista utväg, med fondbolagets **kärnnamn** (`FundCompanyMatcher.coreBrandName`) som ledtråd. Inköpsdatum uppskattas mot fem års kurshistorik (`refresh()`/`refreshSince()`); saknas en tillförlitlig träff antas datumet vara fem år tillbaka i tiden i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
+| TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. `findFundByIsin` slår upp en fond exakt via ISIN och ger den `Fund.fundId == isin` (inget Handelsbanken-FundId finns) — används av importflödet (TP-13) för fonder som saknas i Handelsbankens katalog. |
 
 ---
 
@@ -167,3 +167,14 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   Fonder från import får ISIN direkt från exportfilen (TP-13); fonder från fondsök
   föreslås ett ISIN via namnsökning i Fonddetalj, men det sparas först när användaren
   bekräftar/rättar det (samma "föreslå men kräv bekräftelse"-princip som IMP-2).
+- **Fondmatchning via ISIN vid import, bredare täckning (#8-uppföljning):** verifierat mot
+  en riktig export att `FundNameMatcher` bara hittade 1 av 7 rader — Handelsbankens
+  fondlista-katalog (TP-9) innehåller i praktiken bara Handelsbankens egna fonder/XACT, inte
+  AMF/Amundi/Franklin Templeton/Nordea m.fl., och den enda träffen matchade dessutom fel
+  andelsklass (A10 i stället för radens A1). Ny `FundPriceRepository.findFundByIsin` (TP-14)
+  slår upp fonden exakt via ISIN i samma källkedja som kurshistoriken (Avanza) — testat mot
+  samma exportfil gav 6 av 6 unika ISIN en exakt träff, med rätt andelsklass. Importets
+  matchningsordning är nu: (1) redan bevakad fond med samma ISIN, (2) exakt ISIN-träff via
+  `findFundByIsin`, (3) `FundNameMatcher` mot Handelsbankens katalog som sista utväg. Fonder
+  som bara hittas via ISIN saknar Handelsbanken-FundId — deras `Fund.fundId` blir ISIN:et
+  självt, och kurshistorik hämtas alltid via `refreshSince` (aldrig `refresh()`).

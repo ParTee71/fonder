@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.imports.HoldingsImportParser
@@ -103,27 +104,51 @@ class ImportHoldingsViewModel @Inject constructor(
             }
 
             val catalog = fundPriceRepository.fetchFundCatalog()
-            val rowStates = parsedRows.map { row -> buildRowState(row, catalog) }
+            val trackedFunds = transactionRepository.observeFunds().first()
+            val rowStates = parsedRows.map { row -> buildRowState(row, catalog, trackedFunds) }
             _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }
         }
     }
 
-    private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog): ImportRowUiState {
-        val fund = FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName)
+    /**
+     * Matchningsordning (issue #8-uppföljning, KRAVLISTA TP-13/TP-14):
+     * 1. Redan bevakad fond med samma ISIN — undviker dubbletter vid upprepad import eller
+     *    om fonden redan bekräftats manuellt i Fonddetalj.
+     * 2. Exakt ISIN-träff via [FundPriceRepository.findFundByIsin] (Avanza m.fl.) — täcker
+     *    fonder som saknas i Handelsbankens katalog (t.ex. andra fondbolag) och undviker fel
+     *    andelsklass som ren namnmatchning kan råka ut för.
+     * 3. [FundNameMatcher] mot Handelsbankens katalog, som sista utväg om inte ens Avanza
+     *    känner till ISIN:et.
+     */
+    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? {
+        trackedFunds.firstOrNull { it.isin == row.isin }?.let { return FundNameMatcher.Match(it, 1.0) }
+        fundPriceRepository.findFundByIsin(row.isin)?.let { return FundNameMatcher.Match(it, 1.0) }
+        return FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName)
+    }
+
+    private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): ImportRowUiState {
+        val match = matchFund(row, catalog, trackedFunds)
         // Utan en tillförlitlig datumuppskattning (inget kurshistorik-fynd) antas ett gammalt
         // innehav hellre ha köpts för länge sedan än "idag" — samma gräns som kurshistoriken
         // (PRICE_HISTORY_YEARS) söks inom, så gissningen aldrig hamnar utanför sökfönstret.
         var date = LocalDate.now().minusYears(PRICE_HISTORY_YEARS)
         var dateConfident = false
 
-        if (fund != null) {
+        if (match != null) {
+            val fund = match.fund
+            val to = LocalDate.now()
             // Uppdatera alltid hela kurshistoriken vid import — även om fonden redan bevakas
             // sedan tidigare och har en cachad kurs — så att både inköpsdatum-uppskattningen
             // nedan och den historiska värdeutvecklingen (#7) baseras på fullständig data,
             // inte bara de dagar som råkat cachas via den dagliga bakgrundsuppdateringen.
-            fundPriceRepository.refresh(fund.fund.fundId)
-            val to = LocalDate.now()
-            val history = fundPriceRepository.priceHistory(fund.fund.fundId, to.minusYears(PRICE_HISTORY_YEARS).toEpochDay(), to.toEpochDay())
+            // Fonder utan Handelsbanken-FundId (matchade via ISIN, TP-14) har inget att hämta
+            // via refresh() — deras historik kommer alltid via den ISIN-baserade källkedjan.
+            if (fund.isin != null) {
+                fundPriceRepository.refreshSince(fund.fundId, fund.isin, to.minusYears(PRICE_HISTORY_YEARS))
+            } else {
+                fundPriceRepository.refresh(fund.fundId)
+            }
+            val history = fundPriceRepository.priceHistory(fund.fundId, to.minusYears(PRICE_HISTORY_YEARS).toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->
                 date = LocalDate.ofEpochDay(estimate.epochDay)
                 dateConfident = estimate.confident
@@ -132,8 +157,8 @@ class ImportHoldingsViewModel @Inject constructor(
 
         return ImportRowUiState(
             row = row,
-            matchedFund = fund?.fund,
-            matchConfidence = fund?.confidence,
+            matchedFund = match?.fund,
+            matchConfidence = match?.confidence,
             occasions = listOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
         )
     }
