@@ -162,8 +162,9 @@ class ImportHoldingsViewModelTest {
             assertEquals(avanzaFund, state.rows.first().matchedFund)
             assertEquals(1.0, state.rows.first().matchConfidence)
             // Fonden saknar Handelsbanken-FundId (isin != null) — historik ska hämtas via
-            // refreshSince (ISIN-kedjan), inte refresh() (Handelsbankens FundId-källa).
-            assertEquals(Triple("LU0496367417", "LU0496367417", LocalDate.now().minusYears(5)), refreshSinceCall)
+            // refreshSince (ISIN-kedjan, 30 års sökfönster i stället för Handelsbankens 5,
+            // eftersom Avanza normalt har mycket längre historik, TP-14), inte refresh().
+            assertEquals(Triple("LU0496367417", "LU0496367417", LocalDate.now().minusYears(30)), refreshSinceCall)
             assertNull(refreshedFundId)
             cancelAndIgnoreRemainingEvents()
         }

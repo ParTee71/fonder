@@ -29,6 +29,16 @@ private const val SHARES_MATCH_TOLERANCE = 1e-6
 private const val PRICE_HISTORY_YEARS = 5L
 
 /**
+ * Som [PRICE_HISTORY_YEARS], men för fonder matchade via ISIN (TP-14): Avanza har normalt
+ * historik betydligt längre tillbaka än Handelsbankens fasta femårsfönster (verifierat mot
+ * en riktig export, se KRAVLISTA-changelog — en fond hade data ända sedan 1994), vilket ger
+ * `PurchaseDateEstimator` en reell chans att hitta äldre köp i stället för att falla tillbaka
+ * på en gissning. Upplösningen trappas ner ju längre tillbaka man ber om (dagligt, veckovis,
+ * till slut månadsvis) — fortfarande bättre än att inte kunna hitta datumet alls.
+ */
+private const val ISIN_PRICE_HISTORY_YEARS = 30L
+
+/**
  * Ett enskilt inköpstillfälle för en importerad rad (issue #8-uppföljning: en rad i
  * exporten är ofta en aggregerad post byggd av flera köp vid olika tillfällen — hela
  * innehavet behöver därför kunna delas upp i flera transaktioner med egna datum/antal,
@@ -128,15 +138,20 @@ class ImportHoldingsViewModel @Inject constructor(
 
     private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): ImportRowUiState {
         val match = matchFund(row, catalog, trackedFunds)
+        val to = LocalDate.now()
+        // Fonder matchade via ISIN kan sökas mycket längre tillbaka (ISIN_PRICE_HISTORY_YEARS)
+        // eftersom Avanza normalt har historik långt bortom Handelsbankens femårsfönster (TP-14).
+        val searchYears = if (match?.fund?.isin != null) ISIN_PRICE_HISTORY_YEARS else PRICE_HISTORY_YEARS
+        val since = to.minusYears(searchYears)
+
         // Utan en tillförlitlig datumuppskattning (inget kurshistorik-fynd) antas ett gammalt
         // innehav hellre ha köpts för länge sedan än "idag" — samma gräns som kurshistoriken
-        // (PRICE_HISTORY_YEARS) söks inom, så gissningen aldrig hamnar utanför sökfönstret.
-        var date = LocalDate.now().minusYears(PRICE_HISTORY_YEARS)
+        // söks inom, så gissningen aldrig hamnar utanför sökfönstret.
+        var date = since
         var dateConfident = false
 
         if (match != null) {
             val fund = match.fund
-            val to = LocalDate.now()
             // Uppdatera alltid hela kurshistoriken vid import — även om fonden redan bevakas
             // sedan tidigare och har en cachad kurs — så att både inköpsdatum-uppskattningen
             // nedan och den historiska värdeutvecklingen (#7) baseras på fullständig data,
@@ -144,11 +159,11 @@ class ImportHoldingsViewModel @Inject constructor(
             // Fonder utan Handelsbanken-FundId (matchade via ISIN, TP-14) har inget att hämta
             // via refresh() — deras historik kommer alltid via den ISIN-baserade källkedjan.
             if (fund.isin != null) {
-                fundPriceRepository.refreshSince(fund.fundId, fund.isin, to.minusYears(PRICE_HISTORY_YEARS))
+                fundPriceRepository.refreshSince(fund.fundId, fund.isin, since)
             } else {
                 fundPriceRepository.refresh(fund.fundId)
             }
-            val history = fundPriceRepository.priceHistory(fund.fundId, to.minusYears(PRICE_HISTORY_YEARS).toEpochDay(), to.toEpochDay())
+            val history = fundPriceRepository.priceHistory(fund.fundId, since.toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->
                 date = LocalDate.ofEpochDay(estimate.epochDay)
                 dateConfident = estimate.confident
