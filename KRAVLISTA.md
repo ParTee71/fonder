@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.9.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.9.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -78,6 +78,7 @@
 | IMP-5 | Från Inställningar kan man öppna **Importera avräkningsnotor**: väljer en eller flera PDF-filer samtidigt (SAF-filväljare med flerval), varje fil tolkas till en eller flera exakta transaktioner (datum, kurs, antal andelar — inget uppskattat), granskar/korrigerar föreslagen fondmatchning per transaktion, och importerar de bekräftade transaktionerna (ÖV-9). |
 | IMP-6 | Filer som inte kan tolkas alls (t.ex. inte en avräkningsnota) räknas upp tydligt i stället för att tystas ner eller krascha importet — övriga filers transaktioner importeras ändå. |
 | IMP-7 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. |
+| SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
 
 ---
 
@@ -202,3 +203,11 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   regel 4) och importerar exakta transaktioner utan uppskattning (IMP-5–IMP-7). PDF-
   textextraktion via PdfBox-Android (TP-15), samma "isolerad + odokumenterat format"-princip
   som övriga källor i appen (TP-10/TP-13/TP-14).
+- **Töm databasen (SET-1):** en "farozon"-sektion i Inställningar låter användaren rensa
+  all bevakad data i ett steg (fonder, transaktioner, cachade kurser) — användbart för att
+  börja om från scratch under den här tidiga fasen, innan molnbackup (TP-7) finns att
+  återställa från. `TransactionRepository.clearAll()` rensar alla tre tabeller atomiskt
+  (`AppDatabase.withTransaction`) så en avbruten körning aldrig lämnar databasen i ett
+  inkonsekvent tillstånd (t.ex. transaktioner kvar utan sin fond). Kräver bekräftelse i en
+  dialog (samma mönster som transaktionsradering, TRX-2) eftersom åtgärden är permanent och
+  irreversibel.

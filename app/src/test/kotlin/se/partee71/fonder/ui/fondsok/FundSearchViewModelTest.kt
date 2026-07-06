@@ -61,6 +61,7 @@ class FundSearchViewModelTest {
         override suspend fun upsertFund(fund: Fund) { addedFunds.add(fund) }
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)

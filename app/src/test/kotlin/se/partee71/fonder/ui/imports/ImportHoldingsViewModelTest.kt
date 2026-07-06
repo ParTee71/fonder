@@ -55,6 +55,7 @@ class ImportHoldingsViewModelTest {
             return 1
         }
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     private val fakePriceRepo = object : FundPriceRepository {

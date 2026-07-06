@@ -23,6 +23,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
 - [x] Kurshistorik via ISIN sedan första köpet, utöver Handelsbankens 5-årsfönster (#7-uppföljning)
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
+- [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -116,8 +117,9 @@ varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städat
   fejkad via `PdfTextExtractor` så testerna slipper PDF-biblioteket),
   `data/repository/` (cache/fallback-logik med fejkade HTTP-källor) och ViewModels
   (Turbine).
-- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, samt
-  migreringstester (`Migration12Test`, `Migration23Test`).
+- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, migreringstester
+  (`Migration12Test`, `Migration23Test`) samt `RoomTransactionRepositoryTest` (`clearAll`
+  töms atomiskt över alla tre tabeller, SET-1).
 
 > Formell `MigrationTestHelper`-baserad migreringstest saknas (ingen schema-snapshot i
 > `app/schemas/` finns i repot ännu) — migreringstesterna bygger i stället schemat för

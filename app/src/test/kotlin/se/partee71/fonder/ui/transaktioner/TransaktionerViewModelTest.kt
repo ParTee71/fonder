@@ -38,6 +38,7 @@ class TransaktionerViewModelTest {
         override suspend fun deleteTransaction(id: Long) {
             deletedIds.add(id)
         }
+        override suspend fun clearAll() {}
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)

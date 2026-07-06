@@ -111,4 +111,12 @@
     <string name="import_order_shares_label">Antal andelar</string>
     <string name="import_order_price_label">Kurs/andel</string>
     <string name="import_orders_commit_button">Importera %d transaktioner</string>
+
+    <!-- Töm databas (farozon i Inställningar) -->
+    <string name="settings_danger_section">Farozon</string>
+    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — molnbackup finns ännu inte.</string>
+    <string name="settings_clear_database_button">Töm databasen</string>
+    <string name="settings_clear_database_success">Databasen har tömts.</string>
+    <string name="clear_database_confirm_title">Töm databasen?</string>
+    <string name="clear_database_confirm_body">Alla fonder, transaktioner och cachade kurser raderas permanent. Detta går inte att ångra.</string>
 </resources>
