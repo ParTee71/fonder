@@ -106,7 +106,7 @@
     <string name="import_orders_loading_title">Läser PDF-filer…</string>
     <string name="import_orders_loading_body">Tolkar avräkningsnotor och matchar fonder. Det kan ta en liten stund.</string>
     <string name="import_orders_error_none_parsed">Kunde inte läsa någon transaktion ur de valda filerna. Kontrollera att det är Handelsbankens avräkningsnotor (PDF).</string>
-    <string name="format_import_orders_unparsed">%d fil(er) kunde inte tolkas: %s</string>
+    <string name="format_import_orders_unparsed">%1$d fil(er) kunde inte tolkas: %2$s</string>
     <string name="format_import_order_isin">ISIN: %1$s · %2$s</string>
     <string name="import_order_shares_label">Antal andelar</string>
     <string name="import_order_price_label">Kurs/andel</string>
