@@ -27,6 +27,7 @@ import se.partee71.fonder.data.datastore.ThemeMode
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     onImportHoldings: () -> Unit = {},
+    onImportOrders: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -67,6 +68,19 @@ fun SettingsScreen(
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
                 Button(onClick = onImportHoldings) { Text(stringResource(R.string.settings_import_button)) }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_import_orders_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_import_orders_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                Button(onClick = onImportOrders) { Text(stringResource(R.string.settings_import_orders_button)) }
             }
         }
     }

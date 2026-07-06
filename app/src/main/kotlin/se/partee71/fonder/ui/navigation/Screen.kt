@@ -30,4 +30,7 @@ object Routes {
 
     /** Importera befintliga innehav från en Handelsbanken-Excel-export, se issue #8. */
     const val IMPORT_HOLDINGS = "import-holdings"
+
+    /** Importera exakta transaktioner från Handelsbanken-PDF-avräkningsnotor, se issue #8-uppföljning. */
+    const val IMPORT_ORDERS = "import-orders"
 }

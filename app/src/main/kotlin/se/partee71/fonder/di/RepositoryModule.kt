@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.StubAuthRepository
+import se.partee71.fonder.data.imports.PdfBoxTextExtractor
+import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.network.AvanzaClient
 import se.partee71.fonder.data.network.AvanzaPriceSource
 import se.partee71.fonder.data.network.AvanzaSource
@@ -36,6 +38,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAvanzaSource(impl: AvanzaClient): AvanzaSource
+
+    @Binds
+    abstract fun bindPdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
 
     @Binds
     abstract fun bindBackupRepository(impl: StubBackupRepository): BackupRepository

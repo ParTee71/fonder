@@ -18,6 +18,7 @@ import se.partee71.fonder.domain.model.ImportedHoldingRow
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundNameMatcher
+import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
 import java.time.LocalDate
 import javax.inject.Inject
@@ -120,21 +121,16 @@ class ImportHoldingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Matchningsordning (issue #8-uppföljning, KRAVLISTA TP-13/TP-14):
-     * 1. Redan bevakad fond med samma ISIN — undviker dubbletter vid upprepad import eller
-     *    om fonden redan bekräftats manuellt i Fonddetalj.
-     * 2. Exakt ISIN-träff via [FundPriceRepository.findFundByIsin] (Avanza m.fl.) — täcker
-     *    fonder som saknas i Handelsbankens katalog (t.ex. andra fondbolag) och undviker fel
-     *    andelsklass som ren namnmatchning kan råka ut för.
-     * 3. [FundNameMatcher] mot Handelsbankens katalog, som sista utväg om inte ens Avanza
-     *    känner till ISIN:et.
-     */
-    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? {
-        trackedFunds.firstOrNull { it.isin == row.isin }?.let { return FundNameMatcher.Match(it, 1.0) }
-        fundPriceRepository.findFundByIsin(row.isin)?.let { return FundNameMatcher.Match(it, 1.0) }
-        return FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName)
-    }
+    /** Matchningsordning delad med [se.partee71.fonder.ui.imports.ImportOrdersViewModel] — se [ImportFundMatcher]. */
+    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? =
+        ImportFundMatcher.match(
+            isin = row.isin,
+            fundName = row.fundName,
+            fundCompanyName = row.fundCompanyName,
+            catalogFunds = catalog.funds,
+            trackedFunds = trackedFunds,
+            findFundByIsin = fundPriceRepository::findFundByIsin,
+        )
 
     private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): ImportRowUiState {
         val match = matchFund(row, catalog, trackedFunds)

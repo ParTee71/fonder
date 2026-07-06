@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.8.2 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.9.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -20,6 +20,7 @@
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
 | ÖV-8 | Användaren ska kunna **importera befintliga fondinnehav** från Handelsbankens Excel-export ("Innehav Fonder") — automatisk fondmatchning och uppskattat inköpsdatum, med manuell bekräftelse/korrigering innan import (issue #8). |
+| ÖV-9 | Användaren ska kunna **importera exakta fondtransaktioner** från Handelsbankens PDF-avräkningsnotor (orderbekräftelser) — en eller flera samtidigt. Till skillnad från ÖV-8 (aggregerad innehavssnapshot, uppskattat datum) är datum/kurs/antal här redan exakta; bara fondmatchningen kan behöva bekräftas (issue #8-uppföljning). |
 
 ---
 
@@ -41,6 +42,7 @@
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
 | TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9). Fondmatchning sker i prioritetsordning (#8-uppföljning): (1) redan bevakad fond med samma ISIN, (2) exakt ISIN-träff via `FundPriceRepository.findFundByIsin` (TP-14 — täcker fondbolag som saknas i Handelsbankens katalog, t.ex. AMF/Amundi/Franklin Templeton/Nordea, och undviker fel andelsklass), (3) `FundNameMatcher` mot Handelsbankens katalog på fondnamn som sista utväg, med fondbolagets **kärnnamn** (`FundCompanyMatcher.coreBrandName`) som ledtråd. Inköpsdatum uppskattas mot kurshistorik (`refresh()`/`refreshSince()`) — fem år tillbaka för fonder utan ISIN (Handelsbankens fasta fönster), men **30 år** för ISIN-matchade fonder (Avanza har normalt betydligt längre historik, se TP-14; upplösningen trappas ner ju längre tillbaka — dagligt/veckovis/månadsvis — men ger ändå en reell chans att hitta äldre köp). Saknas en tillförlitlig träff antas datumet vara sökfönstrets början i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 | TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. `findFundByIsin` slår upp en fond exakt via ISIN och ger den `Fund.fundId == isin` (inget Handelsbanken-FundId finns) — används av importflödet (TP-13) för fonder som saknas i Handelsbankens katalog. |
+| TP-15 | PDF-textextraktion via **PdfBox-Android** (`com.tom-roush:pdfbox-android`, Apache 2.0-licens) — kräver `PDFBoxResourceLoader.init(context)` (körs i `FonderApp.onCreate`). Abstraherat bakom `PdfTextExtractor` (`data/imports/`) så `AvrakningsnotaPdfParser` (ren textparsning, samma isoleringsprincip som TP-10/TP-13) kan enhetstestas med fixturer utan PDF-biblioteket. Layouten är odokumenterad och kan ändras — parsern matchar rader som börjar med "In"/"Ut" följt av datum och fyra tal (belopp, kurs, andelar, saldo), verifierat mot en riktig avräkningsnota (se changelog), men PdfBox-Androids egen radbrytning i praktiken kan avvika något. Fondmatchning återanvänder samma prioritetsordning som TP-13 via den delade `ImportFundMatcher` (regel 4). |
 
 ---
 
@@ -73,6 +75,9 @@
 | IMP-2 | Rader med osäker fondmatchning eller osäkert uppskattat inköpsdatum markeras tydligt (text, inte enbart färg) — användaren väljer fond/datum manuellt (samma delade komponenter som transaktionsformuläret, regel 4). |
 | IMP-3 | En importrad kan delas upp i **flera inköpstillfällen** (eget datum + antal andelar per tillfälle) eftersom en exportrad ofta är ett aggregerat innehav byggt av flera köp — varje tillfälle blir en egen transaktion vid import. Summan av tillfällenas andelar måste matcha radens totala antal (tydlig felmarkering annars) innan raden går att importera. |
 | IMP-4 | Under fondmatchning och kursuppdatering (kan ta en stund) visas en overlay-modal ("Importerar…") som inte kan avfärdas förrän steget är klart — ingen tom eller ointeraktiv vy under tiden. |
+| IMP-5 | Från Inställningar kan man öppna **Importera avräkningsnotor**: väljer en eller flera PDF-filer samtidigt (SAF-filväljare med flerval), varje fil tolkas till en eller flera exakta transaktioner (datum, kurs, antal andelar — inget uppskattat), granskar/korrigerar föreslagen fondmatchning per transaktion, och importerar de bekräftade transaktionerna (ÖV-9). |
+| IMP-6 | Filer som inte kan tolkas alls (t.ex. inte en avräkningsnota) räknas upp tydligt i stället för att tystas ner eller krascha importet — övriga filers transaktioner importeras ändå. |
+| IMP-7 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. |
 
 ---
 
@@ -187,3 +192,13 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   med känt ISIN (TP-13) hittade i simuleringen ett annat, äldre datum för 2 av 7 rader — där
   femårsfönstret antingen missade helt eller gav en osäker träff. Fonder utan ISIN
   (Handelsbankens FundId-källa) söker fortfarande bara fem år tillbaka, oförändrat.
+- **Import av PDF-avräkningsnotor, flera samtidigt (#8-uppföljning, ÖV-9):** en riktig
+  avräkningsnota (Handelsbankens PDF-orderbekräftelse) gav exakt datum/kurs/antal andelar
+  för en transaktion som `PurchaseDateEstimator` bara kunnat gissa på tidigare (samma fond
+  som i det vidgade sökfönstret ovan — verklig köpdag visade sig vara 2020-03-13, inte
+  gissningen 2019-12-31/2022-08-31). Ny `AvrakningsnotaPdfParser` (TP-15) läser en eller
+  flera valda PDF-filer samtidigt (SAF-flerval), matchar varje transaktion mot en fond via
+  samma prioritetsordning som Excel-importet (nu utbruten till delad `ImportFundMatcher`,
+  regel 4) och importerar exakta transaktioner utan uppskattning (IMP-5–IMP-7). PDF-
+  textextraktion via PdfBox-Android (TP-15), samma "isolerad + odokumenterat format"-princip
+  som övriga källor i appen (TP-10/TP-13/TP-14).

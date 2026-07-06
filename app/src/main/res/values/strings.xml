@@ -95,4 +95,20 @@
     <string name="import_commit_button">Importera %d poster</string>
     <string name="import_success_title">Import klar</string>
     <string name="import_success_body">Innehaven har importerats som transaktioner.</string>
+
+    <!-- Importera avräkningsnotor (issue #8-uppföljning) -->
+    <string name="settings_import_orders_section">Importera avräkningsnotor</string>
+    <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
+    <string name="settings_import_orders_button">Importera avräkningsnotor</string>
+    <string name="import_orders_title">Importera avräkningsnotor</string>
+    <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>
+    <string name="import_orders_pick_files_button">Välj PDF-filer</string>
+    <string name="import_orders_loading_title">Läser PDF-filer…</string>
+    <string name="import_orders_loading_body">Tolkar avräkningsnotor och matchar fonder. Det kan ta en liten stund.</string>
+    <string name="import_orders_error_none_parsed">Kunde inte läsa någon transaktion ur de valda filerna. Kontrollera att det är Handelsbankens avräkningsnotor (PDF).</string>
+    <string name="format_import_orders_unparsed">%d fil(er) kunde inte tolkas: %s</string>
+    <string name="format_import_order_isin">ISIN: %1$s · %2$s</string>
+    <string name="import_order_shares_label">Antal andelar</string>
+    <string name="import_order_price_label">Kurs/andel</string>
+    <string name="import_orders_commit_button">Importera %d transaktioner</string>
 </resources>
