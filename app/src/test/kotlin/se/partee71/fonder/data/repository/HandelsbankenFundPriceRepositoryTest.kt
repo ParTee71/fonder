@@ -46,6 +46,10 @@ private class FakeFundPriceDao : FundPriceDao {
             stored.add(new)
         }
     }
+
+    override suspend fun deleteAll() {
+        stored.clear()
+    }
 }
 
 class HandelsbankenFundPriceRepositoryTest {
