@@ -22,6 +22,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Historisk värdeutveckling i tabell och diagram (#7)
 - [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
 - [x] Kurshistorik via ISIN sedan första köpet, utöver Handelsbankens 5-årsfönster (#7-uppföljning)
+- [x] Sålda fonder: realiserat resultat med FIFO-matchning och egen vy (#10)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
