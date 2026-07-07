@@ -37,6 +37,10 @@ data class ImportOccasion(
     val date: LocalDate,
     val dateConfident: Boolean,
     val sharesText: String,
+    // Standard Köp — exportens innehav är i praktiken alltid köpta andelar, men en importrad
+    // kan sättas till Sälj (t.ex. en manuellt tillagd rad för en avyttring) i stället för att
+    // alltid hårdkodas till köp (issue #10, KRAVLISTA IMP-5).
+    val type: TransactionType = TransactionType.KOP,
 ) {
     val shares: Double? get() = sharesText.trim().replace(",", ".").toDoubleOrNull()
 }
@@ -154,6 +158,10 @@ class ImportHoldingsViewModel @Inject constructor(
         updateOccasion(row, index) { it.copy(sharesText = sharesText) }
     }
 
+    fun onOccasionTypeChange(row: ImportedHoldingRow, index: Int, type: TransactionType) {
+        updateOccasion(row, index) { it.copy(type = type) }
+    }
+
     /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
     fun onAddOccasion(row: ImportedHoldingRow) {
         updateRow(row) { it.copy(occasions = it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")) }
@@ -192,7 +200,7 @@ class ImportHoldingsViewModel @Inject constructor(
                         transactionRepository.addTransaction(
                             Transaction(
                                 fundId = fund.fundId,
-                                type = TransactionType.KOP,
+                                type = occasion.type,
                                 epochDay = occasion.date.toEpochDay(),
                                 shares = requireNotNull(occasion.shares),
                                 pricePerShare = rowState.row.averageCostPerShare,

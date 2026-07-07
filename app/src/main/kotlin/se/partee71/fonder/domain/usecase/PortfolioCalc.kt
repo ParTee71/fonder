@@ -12,21 +12,22 @@ import se.partee71.fonder.domain.model.TransactionType
  */
 object PortfolioCalc {
 
-    /** Räknar ut nettoinnehav per fond. Fonder utan transaktioner utelämnas. */
+    /**
+     * Räknar ut nettoinnehav per fond. Fonder utan transaktioner utelämnas.
+     *
+     * `netInvested` är det kvarvarande (ej sålda) andelarnas verkliga anskaffningsvärde,
+     * matchat med FIFO ([FifoResultCalc]) — inte kassaflödet (köp minus säljintäkter). Det
+     * gör orealiserat resultat korrekt även efter en delförsäljning (issue #10).
+     */
     fun computeHoldings(funds: List<Fund>, transactions: List<Transaction>): List<Holding> {
         val byFundId = funds.associateBy { it.fundId }
         return transactions
             .groupBy { it.fundId }
             .mapNotNull { (fundId, txs) ->
                 val fund = byFundId[fundId] ?: return@mapNotNull null
-                var netShares = 0.0
-                var netInvested = 0.0
-                for (tx in txs) {
-                    val sign = if (tx.type == TransactionType.KOP) 1.0 else -1.0
-                    netShares += sign * tx.shares
-                    netInvested += sign * tx.amount
-                }
-                Holding(fund = fund, netShares = netShares, netInvested = netInvested)
+                val netShares = txs.sumOf { if (it.type == TransactionType.KOP) it.shares else -it.shares }
+                val fifo = FifoResultCalc.remainingCostBasis(txs)
+                Holding(fund = fund, netShares = netShares, netInvested = fifo.remainingCostBasis)
             }
             .sortedBy { it.fund.name.lowercase() }
     }

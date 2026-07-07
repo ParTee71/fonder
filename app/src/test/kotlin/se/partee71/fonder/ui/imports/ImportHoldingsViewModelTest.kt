@@ -25,6 +25,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import java.time.LocalDate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -438,6 +439,30 @@ class ImportHoldingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(0, addedTransactions.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `inkopstillfalle markerat som salj skapar en saljtransaktion vid import`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            val row = state.rows.first().row
+
+            vm.onOccasionTypeChange(row, 0, TransactionType.SALJ)
+            state = awaitItem()
+            assertEquals(TransactionType.SALJ, state.rows.first().occasions.first().type)
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(1, addedTransactions.size)
+            assertEquals(TransactionType.SALJ, addedTransactions.first().type)
             cancelAndIgnoreRemainingEvents()
         }
     }

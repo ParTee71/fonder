@@ -17,6 +17,7 @@
     <!-- Navigation / skärmar -->
     <string name="nav_portfolj">Portfölj</string>
     <string name="nav_transaktioner">Transaktioner</string>
+    <string name="nav_salda">Sålda</string>
     <string name="nav_fond">Fond</string>
     <string name="nav_settings">Inställningar</string>
 
@@ -43,6 +44,13 @@
     <string name="transaktionsform_price_label">Kurs per andel</string>
     <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
+
+    <!-- Sålda fonder (issue #10) -->
+    <string name="salda_title">Sålda</string>
+    <string name="salda_empty_title">Inga sålda fonder ännu</string>
+    <string name="salda_empty_body">Fonder du har sålt andelar i visas här, med realiserat resultat beräknat på äldsta köpet (FIFO).</string>
+    <string name="format_salda_shares_sold">%1$s andelar sålda</string>
+    <string name="salda_result_unknown">Resultat kan inte beräknas</string>
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>

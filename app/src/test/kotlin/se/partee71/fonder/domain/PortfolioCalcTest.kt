@@ -26,7 +26,25 @@ class PortfolioCalcTest {
 
         assertEquals(1, holdings.size)
         assertEquals(6.0, holdings.first().netShares, 1e-9)
-        assertEquals(1000.0 - 480.0, holdings.first().netInvested, 1e-9)
+        // netInvested är FIFO-kvarvarande anskaffningsvärde (6 kvarvarande andelar à
+        // ursprungliga 100 kr), inte kassaflödet (1000 − 480) — issue #10.
+        assertEquals(600.0, holdings.first().netInvested, 1e-9)
+    }
+
+    @Test
+    fun `netInvested anvander FIFO aven med flera inkopspriser`() {
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 5.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 2, shares = 5.0, pricePerShare = 200.0),
+            // Säljer 6 andelar — äldsta lotten (5 à 100) konsumeras helt, plus 1 av den nya (à 200).
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 3, shares = 6.0, pricePerShare = 150.0),
+        )
+
+        val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
+
+        assertEquals(4.0, holdings.first().netShares, 1e-9)
+        // Kvarvarande 4 andelar ur den andra lotten à 200 kr = 800 kr.
+        assertEquals(800.0, holdings.first().netInvested, 1e-9)
     }
 
     @Test
