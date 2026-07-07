@@ -56,6 +56,7 @@ class FondDetaljViewModelTest {
         }
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     private val fakePriceRepo = object : FundPriceRepository {
@@ -77,6 +78,7 @@ class FondDetaljViewModelTest {
             suggestIsinCalledWith = fundName
             return suggestIsinReturn
         }
+        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 

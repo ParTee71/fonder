@@ -40,6 +40,7 @@ class PortfoljViewModelTest {
         override suspend fun upsertFund(fund: Fund) {}
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
@@ -52,6 +53,7 @@ class PortfoljViewModelTest {
         override suspend fun refresh(fundId: String) {}
         override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
         override suspend fun suggestIsin(fundName: String): String? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 

@@ -24,6 +24,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.imports.ImportHoldingsScreen
+import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.salda.SaldaFonderScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
@@ -93,7 +94,10 @@ fun AppNavigation() {
                 SaldaFonderScreen()
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) })
+                SettingsScreen(
+                    onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
+                    onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
+                )
             }
             composable(
                 route = Routes.FOND,
@@ -109,6 +113,9 @@ fun AppNavigation() {
             }
             composable(Routes.IMPORT_HOLDINGS) {
                 ImportHoldingsScreen()
+            }
+            composable(Routes.IMPORT_ORDERS) {
+                ImportOrdersScreen()
             }
         }
     }

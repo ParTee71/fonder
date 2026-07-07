@@ -23,6 +23,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
 - [x] Kurshistorik via ISIN sedan första köpet, utöver Handelsbankens 5-årsfönster (#7-uppföljning)
 - [x] Sålda fonder: realiserat resultat med FIFO-matchning och egen vy (#10)
+- [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
+- [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -67,17 +69,23 @@ data/
 ├── datastore/    PreferencesRepository (tema m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning)
+├── imports/      HoldingsImportParser (Excel-innehav, #8) · AvrakningsnotaPdfParser + PdfTextExtractor
+│                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) · BackupRepository (stub)
 └── room/         AppDatabase (v3) · entities · daos
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction · FundPrice · IsinPricePoint · Holding
-└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · TransactionFormValidator
+├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction · FundPrice · IsinPricePoint ·
+│                 ImportedHoldingRow · ImportedOrderTransaction · Holding
+└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
+                  ImportFundMatcher (delad matchningsordning, regel 4) · TransactionFormValidator
 ui/
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj)
 ├── fond/         FondDetaljScreen (diagram-placeholder)
 ├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
+├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
+│                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField …)
@@ -106,10 +114,13 @@ varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städat
 
 - **Enhet (JVM):** `domain/` (PortfolioCalc, MoneyFormat), `data/network/`
   (HTML-/JSON-parsning mot verkliga sid-/API-fixturer, inkl. Avanzas fond-API),
+  `data/imports/` (Excel- och PDF-parsning mot verkliga fixturer, PDF-textextraktionen
+  fejkad via `PdfTextExtractor` så testerna slipper PDF-biblioteket),
   `data/repository/` (cache/fallback-logik med fejkade HTTP-källor) och ViewModels
   (Turbine).
-- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, samt
-  migreringstester (`Migration12Test`, `Migration23Test`).
+- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, migreringstester
+  (`Migration12Test`, `Migration23Test`) samt `RoomTransactionRepositoryTest` (`clearAll`
+  töms atomiskt över alla tre tabeller, SET-1).
 
 > Formell `MigrationTestHelper`-baserad migreringstest saknas (ingen schema-snapshot i
 > `app/schemas/` finns i repot ännu) — migreringstesterna bygger i stället schemat för

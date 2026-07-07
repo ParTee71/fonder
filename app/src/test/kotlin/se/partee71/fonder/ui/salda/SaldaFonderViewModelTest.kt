@@ -35,6 +35,7 @@ class SaldaFonderViewModelTest {
         override suspend fun upsertFund(fund: Fund) {}
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
