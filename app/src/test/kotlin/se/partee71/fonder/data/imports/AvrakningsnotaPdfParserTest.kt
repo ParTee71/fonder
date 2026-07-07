@@ -41,6 +41,45 @@ private val REAL_AVRAKNINGSNOTA = """
     Marknadsvärde 2020-03-16 5 558.73 327.25 16.9862
 """.trimIndent()
 
+/**
+ * Textextraktion från en riktig avräkningsnota för en FULLSTÄNDIG FÖRSÄLJNING (verifierad
+ * av användaren 2026-07-07 — se issue #10). Skiljer sig från köp-fixturen ovan på två sätt
+ * som inte var kända förrän nu: transaktionsraden börjar med "Avslut" i stället för "Ut",
+ * och belopp/andelar är negativa (minskar saldot till 0.0000). Innehåller också extra
+ * rader (Utbetalt belopp/Omkostnadsbelopp/Kapitalvinst) som saknas på en köp-nota.
+ */
+private val REAL_AVRAKNINGSNOTA_SALJ = """
+    Karlskrona
+    Box 285
+    371 24 Karlskrona
+    Mats Nilsson
+    Skepparegatan 7 Lgh 1103
+    371 30 Karlskrona
+    2020-07-02
+    AVRÄKNINGSNOTA
+    1 (1)
+    Svenska Handelsbanken AB (pub) Postadress: Gatuadress: Telefon: Bankgiro:
+    Styrelsens säte: Stockholm Box 285 Skeppsbrokajen 8 +46 (0)455 36 74 00 861-3010
+    Organisationsnr: 502007-7862 371 24 Karlskrona Telefax:
+    Clearing nr: 6741 karlskrona@handelsbanken.se ()
+    www.handelsbanken.se/karlskrona
+    Handelsbanken Fonder AB
+    Handelsbanken USA Ind Cri A1 SEK
+    ISIN: SE0004139780
+    Ingår i Investeringssparkonto 2 020 387 301
+    Fondkontonr : 864 848 765
+    Kundnummer : 710108-2910
+    Text Belopp Kurs Andelar Saldo andelar
+    Ingående saldo 2020-07-02 6.8291
+    Avslut Självbetjän 2020-07-02 -3 103.28 454.42 -6.8291 0.0000
+    Utbetalt belopp -3 103.28
+    Insatt på konto: 596 961 901
+    Omkostnadsbelopp 3 000.00
+    Kapitalvinst 103.28
+    Fondorder mottagen 2020-07-01 kl. 19:52
+    Marknadsvärde 2020-07-02 0.00 454.42 0.0000
+""".trimIndent()
+
 class AvrakningsnotaPdfParserTest {
 
     @Test
@@ -107,5 +146,31 @@ class AvrakningsnotaPdfParserTest {
     fun `ingen ISIN i texten ger tom lista`() {
         val transactions = AvrakningsnotaPdfParser.parse("Detta är inte en avräkningsnota.", sourceFileName = "fel.pdf")
         assertTrue(transactions.isEmpty())
+    }
+
+    @Test
+    fun `parsar en riktig fullstandig-forsaljning (Avslut-prefix, negativa tal)`() {
+        val transactions = AvrakningsnotaPdfParser.parse(REAL_AVRAKNINGSNOTA_SALJ, sourceFileName = "salj.pdf")
+
+        assertEquals(1, transactions.size)
+        val tx = transactions.first()
+        assertEquals("SE0004139780", tx.isin)
+        assertEquals("Handelsbanken Fonder AB", tx.fundCompanyName)
+        assertEquals("Handelsbanken USA Ind Cri A1 SEK", tx.fundName)
+        assertEquals(TransactionType.SALJ, tx.type)
+        assertEquals(LocalDate.of(2020, 7, 2).toEpochDay(), tx.epochDay)
+        // Käll-noten visar negativt belopp/andelar — parsern sparar magnituden, type bär riktningen.
+        assertEquals(6.8291, tx.shares, 1e-9)
+        assertEquals(454.42, tx.pricePerShare, 1e-9)
+        assertEquals(3103.28, tx.amount, 1e-9)
+        assertEquals("salj.pdf", tx.sourceFileName)
+    }
+
+    @Test
+    fun `omkostnadsbelopp, kapitalvinst och utbetalt belopp tolkas inte som transaktioner`() {
+        // REAL_AVRAKNINGSNOTA_SALJ innehåller flera extra rader unika för en sälj-nota —
+        // bara den enda "Avslut"-raden ska ge en transaktion.
+        val transactions = AvrakningsnotaPdfParser.parse(REAL_AVRAKNINGSNOTA_SALJ, sourceFileName = "salj.pdf")
+        assertEquals(1, transactions.size)
     }
 }

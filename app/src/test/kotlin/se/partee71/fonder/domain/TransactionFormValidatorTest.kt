@@ -38,4 +38,21 @@ class TransactionFormValidatorTest {
         assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, -5.0, date))
         assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, null, date))
     }
+
+    @Test
+    fun `giltig med noll avgift (default) eller ospecificerad avgift`() {
+        assertTrue(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = 0.0))
+        assertTrue(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date))
+    }
+
+    @Test
+    fun `giltig med positiv avgift`() {
+        assertTrue(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = 25.0))
+    }
+
+    @Test
+    fun `ogiltig med negativ eller okand avgift`() {
+        assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = -1.0))
+        assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = null))
+    }
 }

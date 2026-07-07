@@ -104,6 +104,15 @@ fun TransactionFormScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
+        OutlinedTextField(
+            value = state.feeText,
+            onValueChange = viewModel::onFeeTextChange,
+            label = { Text(stringResource(R.string.transaktionsform_fee_label)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+
         Button(
             onClick = viewModel::save,
             enabled = state.valid,

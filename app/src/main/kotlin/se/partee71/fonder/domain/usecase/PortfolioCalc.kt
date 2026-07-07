@@ -4,7 +4,6 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
-import se.partee71.fonder.domain.model.TransactionType
 
 /**
  * Ren, testbar sammanräkning av innehav ur fonder + transaktioner, samt värdering mot
@@ -13,21 +12,25 @@ import se.partee71.fonder.domain.model.TransactionType
 object PortfolioCalc {
 
     /**
-     * Räknar ut nettoinnehav per fond. Fonder utan transaktioner utelämnas.
+     * Räknar ut nettoinnehav per fond. Fonder utan transaktioner **eller helt avsålda**
+     * (nettoandelar ≈ 0) utelämnas — en stängd position är inte längre ett innehav och
+     * ska inte synas i portföljen (se [RealizedGainCalculator] för dess realiserade
+     * resultat i stället, issue #10).
      *
-     * `netInvested` är det kvarvarande (ej sålda) andelarnas verkliga anskaffningsvärde,
-     * matchat med FIFO ([FifoResultCalc]) — inte kassaflödet (köp minus säljintäkter). Det
-     * gör orealiserat resultat korrekt även efter en delförsäljning (issue #10).
+     * `netInvested` är de kvarvarande (ej sålda) andelarnas verkliga anskaffningsvärde,
+     * matchat med FIFO ([RealizedGainCalculator.remainingPositions]) — inte kassaflödet
+     * (köp minus säljintäkter). Det gör orealiserat resultat korrekt även efter en
+     * delförsäljning, och även när andelarna köpts till olika pris vid olika tillfällen.
      */
     fun computeHoldings(funds: List<Fund>, transactions: List<Transaction>): List<Holding> {
         val byFundId = funds.associateBy { it.fundId }
+        val positions = RealizedGainCalculator.remainingPositions(transactions)
         return transactions
             .groupBy { it.fundId }
-            .mapNotNull { (fundId, txs) ->
+            .mapNotNull { (fundId, _) ->
                 val fund = byFundId[fundId] ?: return@mapNotNull null
-                val netShares = txs.sumOf { if (it.type == TransactionType.KOP) it.shares else -it.shares }
-                val fifo = FifoResultCalc.remainingCostBasis(txs)
-                Holding(fund = fund, netShares = netShares, netInvested = fifo.remainingCostBasis)
+                val position = positions[fundId] ?: return@mapNotNull null
+                Holding(fund = fund, netShares = position.shares, netInvested = position.costBasis)
             }
             .sortedBy { it.fund.name.lowercase() }
     }

@@ -13,7 +13,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
     entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -64,6 +64,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        /**
+         * Version 3 → 4: lägger till `fee` (avgift, NOT NULL DEFAULT 0.0) på `transactions`
+         * — nytt attribut för realisationsberäkning av sälj-transaktioner (FIFO, se
+         * `RealizedGainCalculator`, issue #10). Befintliga rader får 0.0, dvs. ingen känd
+         * avgift — oförändrat beteende för all historisk data.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `fee` REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     }
 }
