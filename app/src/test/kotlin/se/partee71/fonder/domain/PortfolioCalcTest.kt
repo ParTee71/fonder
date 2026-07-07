@@ -62,8 +62,8 @@ class PortfolioCalcTest {
         assertEquals(600.0, holding.netInvested, 1e-9)
 
         val sale = RealizedGainCalculator.compute(txs).first()
-        assertEquals(480.0, sale.costBasis, 1e-9)
-        assertEquals(460.0, sale.realizedGain, 1e-9) // 480 sålt - 20 avgift - 400 anskaffning.
+        assertEquals(400.0, sale.costBasis, 1e-9)
+        assertEquals(60.0, sale.realizedGain, 1e-9) // 480 sålt - 20 avgift - 400 anskaffning.
     }
 
     @Test
