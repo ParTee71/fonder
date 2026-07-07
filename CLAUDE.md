@@ -93,3 +93,8 @@ Generella Android/Kotlin-skills är kopierade från Dagboken: `android-dev`,
 `android-data-layer`, `android-gradle-logic`, `compose-expert`, `kotlin-coroutines`,
 `kotlin-flows`. Projektspecifika skills (backup, kravlista, tester, delade komponenter)
 tas in från Dagboken och anpassas när respektive feature byggs.
+
+| Skill | När |
+|---|---|
+| `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt de fyra reglerna). |
+| `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt de fyra reglerna. |
