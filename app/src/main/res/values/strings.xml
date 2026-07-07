@@ -15,11 +15,23 @@
     <string name="sign_out">Logga ut</string>
 
     <!-- Navigation / skärmar -->
+    <string name="nav_hem">Hem</string>
     <string name="nav_portfolj">Portfölj</string>
     <string name="nav_transaktioner">Transaktioner</string>
     <string name="nav_salda">Sålda</string>
     <string name="nav_fond">Fond</string>
     <string name="nav_settings">Inställningar</string>
+
+    <!-- Hem (dashboard, issue #14) -->
+    <string name="hem_empty_title">Ingen portfölj ännu</string>
+    <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
+
+    <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
+    <string name="period_day">Idag</string>
+    <string name="period_week">Senaste veckan</string>
+    <string name="period_month">Senaste månaden</string>
+    <string name="period_insufficient_data">Otillräcklig data</string>
+    <string name="period_partial_data">Delvis osäker — någon fond saknar historik</string>
 
     <!-- Portfölj -->
     <string name="portfolj_title">Portfölj</string>
