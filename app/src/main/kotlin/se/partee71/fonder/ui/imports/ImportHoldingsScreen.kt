@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
@@ -111,6 +113,7 @@ fun ImportHoldingsScreen(
                         onIncludedChange = { included -> viewModel.onIncludedChange(rowState.row, included) },
                         onOccasionDateChange = { index, date -> viewModel.onOccasionDateChange(rowState.row, index, date) },
                         onOccasionSharesChange = { index, text -> viewModel.onOccasionSharesChange(rowState.row, index, text) },
+                        onOccasionTypeChange = { index, type -> viewModel.onOccasionTypeChange(rowState.row, index, type) },
                         onAddOccasion = { viewModel.onAddOccasion(rowState.row) },
                         onRemoveOccasion = { index -> viewModel.onRemoveOccasion(rowState.row, index) },
                     )
@@ -168,6 +171,7 @@ private fun ImportRowCard(
     onIncludedChange: (Boolean) -> Unit,
     onOccasionDateChange: (Int, LocalDate) -> Unit,
     onOccasionSharesChange: (Int, String) -> Unit,
+    onOccasionTypeChange: (Int, TransactionType) -> Unit,
     onAddOccasion: () -> Unit,
     onRemoveOccasion: (Int) -> Unit,
 ) {
@@ -219,10 +223,23 @@ private fun ImportRowCard(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = occasion.type == TransactionType.KOP,
+                                onClick = { onOccasionTypeChange(index, TransactionType.KOP) },
+                                label = { Text(stringResource(R.string.transaktion_kop)) },
+                            )
+                            FilterChip(
+                                selected = occasion.type == TransactionType.SALJ,
+                                onClick = { onOccasionTypeChange(index, TransactionType.SALJ) },
+                                label = { Text(stringResource(R.string.transaktion_salj)) },
+                            )
+                        }
                         DateField(
                             label = stringResource(R.string.import_date_label),
                             date = occasion.date,
                             onDateChange = { date -> onOccasionDateChange(index, date) },
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                         OutlinedTextField(
                             value = occasion.sharesText,
