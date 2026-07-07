@@ -23,6 +23,7 @@ import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
+import se.partee71.fonder.ui.hem.HemScreen
 import se.partee71.fonder.ui.imports.ImportHoldingsScreen
 import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
@@ -84,6 +85,9 @@ fun AppNavigation() {
             startDestination = Screen.START.route,
             modifier = Modifier.padding(innerPadding),
         ) {
+            composable(Screen.Hem.route) {
+                HemScreen()
+            }
             composable(Screen.Portfolj.route) {
                 PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
             }

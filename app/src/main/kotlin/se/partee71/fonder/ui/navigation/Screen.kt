@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.Settings
@@ -9,13 +10,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /** Toppnivåskärmar som visas i navigeringsraden. */
 enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
+    Hem("hem", Icons.Outlined.Home, se.partee71.fonder.R.string.nav_hem),
     Portfolj("portfolj", Icons.Outlined.PieChart, se.partee71.fonder.R.string.nav_portfolj),
     Transaktioner("transaktioner", Icons.Outlined.SwapVert, se.partee71.fonder.R.string.nav_transaktioner),
     Salda("salda", Icons.Outlined.Sell, se.partee71.fonder.R.string.nav_salda),
     Settings("settings", Icons.Outlined.Settings, se.partee71.fonder.R.string.nav_settings);
 
     companion object {
-        val START = Portfolj
+        val START = Hem
     }
 }
 
