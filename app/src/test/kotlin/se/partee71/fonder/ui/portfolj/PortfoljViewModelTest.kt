@@ -44,11 +44,13 @@ class PortfoljViewModelTest {
     }
 
     private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
+    private var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
 
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
+            priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String) {}
         override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
@@ -132,6 +134,31 @@ class PortfoljViewModelTest {
             val updated = awaitItem()
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `performance per innehav rakans ut fran kurshistorik (POR-5)`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        priceHistoryByFundId = mapOf(
+            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0)),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            val performance = state.performance[fond.fundId]!!
+            assertEquals(100.0, performance.day!!.amount, 1e-9) // 1200 - 10*110
+            assertNull(performance.week) // ingen kurs 7 dagar bak i historiken
             cancelAndIgnoreRemainingEvents()
         }
     }

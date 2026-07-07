@@ -16,6 +16,8 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class PortfoljUiState(
@@ -25,6 +27,8 @@ data class PortfoljUiState(
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
     val totalGainLossFraction: Double? = null,
+    /** Dag/vecka/månads-förändring per fond, se issue #14 (POR-5). Nyckel: `Fund.fundId`. */
+    val performance: Map<String, PortfolioPerformanceCalc.HoldingPerformance> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
@@ -46,6 +50,15 @@ class PortfoljViewModel @Inject constructor(
             val fundIds = holdings.map { it.fund.fundId }
             fundPriceRepository.observeLatestPrices(fundIds).map { prices ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
+                val today = LocalDate.now()
+                val performance = enriched.associate { holding ->
+                    val history = fundPriceRepository.priceHistory(
+                        fundId = holding.fund.fundId,
+                        fromEpochDay = today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS).toEpochDay(),
+                        toEpochDay = today.toEpochDay(),
+                    )
+                    holding.fund.fundId to PortfolioPerformanceCalc.holdingPerformance(holding, today, history)
+                }
                 PortfoljUiState(
                     loading = false,
                     holdings = enriched,
@@ -53,6 +66,7 @@ class PortfoljViewModel @Inject constructor(
                     totalValue = PortfolioCalc.totalValue(enriched),
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
+                    performance = performance,
                 )
             }
         }.stateIn(
