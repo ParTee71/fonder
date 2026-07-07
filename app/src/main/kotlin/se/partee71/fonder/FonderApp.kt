@@ -9,6 +9,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import se.partee71.fonder.worker.FundPriceUpdateWorker
 import java.util.concurrent.TimeUnit
@@ -27,6 +28,9 @@ class FonderApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Krävs av PdfBox-Android (se PdfBoxTextExtractor, import av avräkningsnotor) innan
+        // några PDF-anrop görs.
+        PDFBoxResourceLoader.init(applicationContext)
         scheduleDailyFundPriceUpdate()
     }
 

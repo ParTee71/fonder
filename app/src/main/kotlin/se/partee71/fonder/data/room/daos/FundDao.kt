@@ -24,4 +24,7 @@ interface FundDao {
 
     @Query("SELECT * FROM funds")
     suspend fun getAll(): List<FundEntity>
+
+    @Query("DELETE FROM funds")
+    suspend fun deleteAll()
 }

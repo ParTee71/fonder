@@ -1,8 +1,11 @@
 package se.partee71.fonder.data.repository
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
+import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
@@ -19,12 +22,17 @@ interface TransactionRepository {
     suspend fun upsertFund(fund: Fund)
     suspend fun addTransaction(tx: Transaction): Long
     suspend fun deleteTransaction(id: Long)
+
+    /** Tömmer all bevakad data (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1. */
+    suspend fun clearAll()
 }
 
 @Singleton
 class RoomTransactionRepository @Inject constructor(
+    private val database: AppDatabase,
     private val fundDao: FundDao,
     private val transactionDao: TransactionDao,
+    private val fundPriceDao: FundPriceDao,
 ) : TransactionRepository {
 
     override fun observeFunds(): Flow<List<Fund>> =
@@ -44,4 +52,12 @@ class RoomTransactionRepository @Inject constructor(
 
     override suspend fun deleteTransaction(id: Long) =
         transactionDao.deleteById(id)
+
+    override suspend fun clearAll() {
+        database.withTransaction {
+            transactionDao.deleteAll()
+            fundPriceDao.deleteAll()
+            fundDao.deleteAll()
+        }
+    }
 }

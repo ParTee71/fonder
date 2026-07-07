@@ -50,6 +50,7 @@ class FundSearchViewModelTest {
         override suspend fun refresh(fundId: String) {}
         override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
         override suspend fun suggestIsin(fundName: String): String? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -60,6 +61,7 @@ class FundSearchViewModelTest {
         override suspend fun upsertFund(fund: Fund) { addedFunds.add(fund) }
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)

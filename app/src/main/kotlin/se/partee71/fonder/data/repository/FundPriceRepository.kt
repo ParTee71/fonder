@@ -9,6 +9,7 @@ import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import java.time.LocalDate
@@ -45,6 +46,15 @@ interface FundPriceRepository {
 
     /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
+
+    /**
+     * Slår upp en fond **exakt** via [isin] i samma källkedja som [refreshSince] — ingen
+     * fuzzy namnmatchning. Används för fonder som saknas i Handelsbankens katalog (TP-9),
+     * t.ex. vid import av innehav från andra fondbolag (se KRAVLISTA TP-13/TP-14). Fondens
+     * identitet blir ISIN:et självt (`Fund.fundId == isin`) eftersom källan inte har något
+     * Handelsbanken-FundId. Null om ingen källa känner till ISIN:et.
+     */
+    suspend fun findFundByIsin(isin: String): Fund?
 
     /** Alla fondbolag + hela fondkatalogen (en hämtning) för fondsök-UI. */
     suspend fun fetchFundCatalog(): FundCatalog
@@ -108,6 +118,18 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 .onFailure { e -> Log.w(TAG, "ISIN-förslag misslyckades för \"$fundName\", provar nästa i kedjan", e) }
                 .getOrNull()
             if (isin != null) return isin
+        }
+        return null
+    }
+
+    override suspend fun findFundByIsin(isin: String): Fund? {
+        for (source in isinSources) {
+            val info = runCatching { source.findFund(isin) }
+                .onFailure { e -> Log.w(TAG, "ISIN-uppslag misslyckades för $isin, provar nästa i kedjan", e) }
+                .getOrNull()
+            if (info != null) {
+                return Fund(fundId = isin, name = info.name, currency = info.currency, isin = isin)
+            }
         }
         return null
     }
