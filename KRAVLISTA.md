@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.10.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.10.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -14,13 +14,13 @@
 | ÖV-1 | Appen ska låta användaren **bevaka fonder** och se innehav samlat i en portfölj. |
 | ÖV-2 | Appen ska hämta **fondkurser (NAV) från Handelsbanken utan inloggning**, från `handelsbanken.fondlista.se` (beslutad i spike #2, implementerad i #3), cachat lokalt och uppdaterat dagligen. |
 | ÖV-2b | Användaren ska kunna **söka bland fonder på namn och lägga till dem** i sin bevakning, filtrerat på valt **fondbolag** (dropdown, förvalt Handelsbanken). |
-| ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj) mot en redan bevakad fond, med förifylld kurs från senast kända NAV, samt ta bort en felregistrerad transaktion (bekräftelsedialog). |
+| ÖV-3 | Appen ska låta användaren **registrera fondtransaktioner** (köp/sälj) mot en redan bevakad fond, med förifylld kurs från senast kända NAV, valfri **avgift** (kr, default 0), samt ta bort en felregistrerad transaktion (bekräftelsedialog). |
 | ÖV-4 | Appen ska räkna ut **nuvarande värde** utifrån transaktioner och senast kända kurs (issue #6). Historisk värdeutveckling i diagram är fortfarande *(planerad)*. |
 | ÖV-5 | Appen ska visa fonders **utveckling i tabell och diagram** — kurshistorik sedan det första köpet i Fonddetalj, inte bara senaste året (issue #7, utökat i #7-uppföljning via ISIN-baserad historik, TP-14). |
 | ÖV-6 | Appen ska fungera **offline-först**; data lagras lokalt och backas upp till molnet. |
 | ÖV-7 | Hela gränssnittet ska vara på **svenska**. |
 | ÖV-8 | Användaren ska kunna **importera befintliga fondinnehav** från Handelsbankens Excel-export ("Innehav Fonder") — automatisk fondmatchning och uppskattat inköpsdatum, med manuell bekräftelse/korrigering innan import (issue #8). |
-| ÖV-9 | Appen ska räkna ut **realiserat resultat** vid försäljning av fondandelar (manuell eller importerad), med anskaffningskostnad matchad enligt **FIFO** (äldsta köpet säljs först), och visa det i en egen vy för sålda fonder (issue #10). |
+| ÖV-9 | Appen ska räkna ut **realiserat resultat per säljtransaktion** (manuell eller importerad), med anskaffningskostnad matchad enligt **FIFO** (äldsta köpet säljs först, en delförsäljning kan konsumera flera köp-lotter) och en eventuell **avgift** på säljtransaktionen avdragen, och visa det i en egen vy för sålda fonder (issue #10). |
 | ÖV-10 | Användaren ska kunna **importera exakta fondtransaktioner** från Handelsbankens PDF-avräkningsnotor (orderbekräftelser) — en eller flera samtidigt. Till skillnad från ÖV-8 (aggregerad innehavssnapshot, uppskattat datum) är datum/kurs/antal här redan exakta; bara fondmatchningen kan behöva bekräftas (issue #8-uppföljning). |
 
 ---
@@ -43,8 +43,8 @@
 | TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). |
 | TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9). Fondmatchning sker i prioritetsordning (#8-uppföljning): (1) redan bevakad fond med samma ISIN, (2) exakt ISIN-träff via `FundPriceRepository.findFundByIsin` (TP-14 — täcker fondbolag som saknas i Handelsbankens katalog, t.ex. AMF/Amundi/Franklin Templeton/Nordea, och undviker fel andelsklass), (3) `FundNameMatcher` mot Handelsbankens katalog på fondnamn som sista utväg, med fondbolagets **kärnnamn** (`FundCompanyMatcher.coreBrandName`) som ledtråd. Inköpsdatum uppskattas mot kurshistorik (`refresh()`/`refreshSince()`) — fem år tillbaka för fonder utan ISIN (Handelsbankens fasta fönster), men **30 år** för ISIN-matchade fonder (Avanza har normalt betydligt längre historik, se TP-14; upplösningen trappas ner ju längre tillbaka — dagligt/veckovis/månadsvis — men ger ändå en reell chans att hitta äldre köp). Saknas en tillförlitlig träff antas datumet vara sökfönstrets början i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 | TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. `findFundByIsin` slår upp en fond exakt via ISIN och ger den `Fund.fundId == isin` (inget Handelsbanken-FundId finns) — används av importflödet (TP-13) för fonder som saknas i Handelsbankens katalog. |
-| TP-15 | Realiserat resultat vid försäljning beräknas av **`FifoResultCalc`** (`domain/usecase/`), en ren/testbar enhet som matchar sälj mot köp i tidsordning (äldsta köpet säljs först). Kräver fullständig köphistorik i appen för ett exakt resultat — räcker inte den (t.ex. sälj utan tillräckligt registrerade köp) flaggas resultatet som okänt i stället för att gissa (SLD-2). Samma motor ger kvarvarande FIFO-anskaffningsvärde för ej sålda andelar (POR-1). |
-| TP-16 | PDF-textextraktion via **PdfBox-Android** (`com.tom-roush:pdfbox-android`, Apache 2.0-licens) — kräver `PDFBoxResourceLoader.init(context)` (körs i `FonderApp.onCreate`). Abstraherat bakom `PdfTextExtractor` (`data/imports/`) så `AvrakningsnotaPdfParser` (ren textparsning, samma isoleringsprincip som TP-10/TP-13) kan enhetstestas med fixturer utan PDF-biblioteket. Layouten är odokumenterad och kan ändras — parsern matchar rader som börjar med "In"/"Ut" följt av datum och fyra tal (belopp, kurs, andelar, saldo), verifierat mot en riktig avräkningsnota (se changelog), men PdfBox-Androids egen radbrytning i praktiken kan avvika något. Fondmatchning återanvänder samma prioritetsordning som TP-13 via den delade `ImportFundMatcher` (regel 4). |
+| TP-15 | Realiserat resultat vid försäljning beräknas av **`RealizedGainCalculator`** (`domain/usecase/`), en ren/testbar FIFO-motor (äldsta köp-lott konsumeras först) som delas mellan "Sålda fonder"-vyn (`compute`, en post per säljtransaktion) och portföljens kvarvarande anskaffningsvärde (`remainingPositions`, POR-1) — samma sanning på båda ställena. `Transaction` har ett fält **`fee`** (avgift i kr, default 0.0, Room-migrering 3→4) som dras av från säljtransaktionens eget resultat; avgift på köp räknas **inte** in i anskaffningsvärdet (medvetet avgränsat till sälj-sidan). Säljs fler andelar än historiken visar köpta flaggas den delen som `uncoveredShares` — resultatet visas ändå, men markerat som osäkert (SLD-2), i stället för att tystas ner eller gissas. |
+| TP-16 | PDF-textextraktion via **PdfBox-Android** (`com.tom-roush:pdfbox-android`, Apache 2.0-licens) — kräver `PDFBoxResourceLoader.init(context)` (körs i `FonderApp.onCreate`). Abstraherat bakom `PdfTextExtractor` (`data/imports/`) så `AvrakningsnotaPdfParser` (ren textparsning, samma isoleringsprincip som TP-10/TP-13) kan enhetstestas med fixturer utan PDF-biblioteket. Layouten är odokumenterad och kan ändras — parsern matchar rader som börjar med **"In" (köp) eller "Ut"/"Avslut" (sälj)** följt av datum och fyra tal (belopp, kurs, andelar, saldo), verifierat mot en riktig köp- **och** en riktig sälj-avräkningsnota (se changelog). En sälj-rad har negativa belopp/andelar (minskar saldot) — parsern sparar magnituden, `type` bär riktningen. PdfBox-Androids egen radbrytning i praktiken kan ändå avvika något. Fondmatchning återanvänder samma prioritetsordning som TP-13 via den delade `ImportFundMatcher` (regel 4). |
 
 ---
 
@@ -68,7 +68,7 @@
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | NAV-5 | En egen flik **Sålda** i toppnavigeringen öppnar vyn över sålda fonder (se avsnitt 6, SLD-1). |
-| POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp** — nettoinvesterat är det kvarvarande (ej sålda) anskaffningsvärdet enligt FIFO (SLD-1), inte kassaflödet. |
+| POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp** — nettoinvesterat är det kvarvarande (ej sålda) anskaffningsvärdet enligt FIFO (TP-15), inte kassaflödet. En fond vars nettoandelar är noll (**helt avsåld**) är inte längre ett innehav och visas inte — dess realiserade resultat finns i stället i "Sålda fonder" (SLD-1). |
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
@@ -100,8 +100,8 @@
 
 | ID | Krav |
 |----|------|
-| SLD-1 | Vyn **Sålda fonder** (NAV-5) visar en rad per fond som haft minst en säljtransaktion (manuell eller importerad, IMP-5) — oavsett om fonden fortfarande delvis innehas eller är helt avyttrad — med totalt sålt antal andelar och ackumulerat **realiserat resultat** (kr + %, semantisk färg) beräknat med FIFO (TP-15): äldsta köpet matchas mot sälj i tidsordning. |
-| SLD-2 | Räcker inte känd köphistorik för att fullt ut matcha en sälj visas resultatet som **"Resultat kan inte beräknas"** i stället för ett felaktigt tal eller en krasch (samma princip som POR-3:s "Kurs saknas ännu"). |
+| SLD-1 | Vyn **Sålda fonder** (NAV-5) visar **en rad per säljtransaktion** (manuell eller importerad, IMP-5) — oavsett om fonden fortfarande delvis innehas eller är helt avyttrad — med datum, sålt antal andelar, belopp, avgift, anskaffningsvärde och **realiserat resultat** (kr + %, semantisk färg) beräknat med FIFO (TP-15): äldsta köpet matchas mot sälj i tidsordning. |
+| SLD-2 | Räcker inte känd köphistorik för att fullt ut matcha en sälj visas resultatet ändå, men **tydligt markerat som osäkert** (text, inte enbart färg) i stället för att tystas ner eller krascha — samma princip som IMP-2/POR-3. |
 
 ---
 
@@ -187,17 +187,34 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   föreslås ett ISIN via namnsökning i Fonddetalj, men det sparas först när användaren
   bekräftar/rättar det (samma "föreslå men kräv bekräftelse"-princip som IMP-2).
 - **Sålda fonder och realiserat resultat (#10):** ÖV-9 klar — ny flik **Sålda** (NAV-5)
-  visar en rad per fond med minst en säljtransaktion och dess ackumulerade realiserade
-  resultat (SLD-1), beräknat av den nya `FifoResultCalc` (TP-15): äldsta köpet matchas mot
-  sälj i tidsordning. Räcker inte köphistoriken till för en sälj visas "Resultat kan inte
-  beräknas" (SLD-2) i stället för ett felaktigt tal. Samma motor rättade en bugg i
-  `PortfolioCalc`: kvarvarande `netInvested` för ett innehav byggde tidigare på kassaflödet
-  (köp minus säljintäkter till säljpris) i stället för de kvarvarande andelarnas verkliga
-  anskaffningskostnad — det gjorde orealiserad vinst/förlust (POR-3) missvisande efter en
-  delförsäljning; nu används samma FIFO-kvarvarande anskaffningsvärde för båda (POR-1).
-  Importflödet (#8) kan nu även skapa säljtransaktioner: varje inköpstillfälle i en
-  importrad kan sättas till Köp eller Sälj (IMP-5) i stället för att alltid antas vara ett
-  köp. Ingen ny persisterad data — resultatet härleds alltid ur befintliga transaktioner.
+  visar realiserat resultat, beräknat med FIFO (äldsta köpet säljs först). Importflödet
+  (#8) kan nu även skapa säljtransaktioner: varje inköpstillfälle i en importrad kan
+  sättas till Köp eller Sälj (IMP-5) i stället för att alltid antas vara ett köp. En bugg i
+  `PortfolioCalc` rättades samtidigt: kvarvarande `netInvested` för ett innehav byggde
+  tidigare på kassaflödet (köp minus säljintäkter till säljpris) i stället för de
+  kvarvarande andelarnas verkliga anskaffningskostnad — det gjorde orealiserad
+  vinst/förlust (POR-3) missvisande efter en delförsäljning, särskilt med flera olika
+  inköpspriser. Ingen ny persisterad data för resultatberäkningen — den härleds alltid ur
+  befintliga transaktioner.
+- **Sammanslagning av två parallella implementationer av #10 (#10-uppföljning):** samma
+  feature byggdes oberoende av varandra i två sessioner samtidigt och landade båda i
+  `master` innan de upptäcktes — en aggregerad per-fond-vy (`SaldaFonderScreen`,
+  `FifoResultCalc`, ingen avgift) och en per-transaktion-vy med avgiftsstöd
+  (`SoldFundsScreen`, `RealizedGainCalculator`) verifierad mot en riktig
+  Handelsbanken-sälj-avräkningsnota. Efter avstämning med användaren behölls
+  per-transaktion-vyn (mer detaljerad, stödjer avgift), men den aggregerade versionens
+  bättre FIFO-modell för `PortfolioCalc.computeHoldings` (sant kvarvarande
+  anskaffningsvärde via lot-tracking, i stället för ett kassaflödesbaserat närmevärde som
+  gav fel resultat vid flera olika inköpspriser för samma fond) togs över och slogs samman
+  med `RealizedGainCalculator` till en enda delad FIFO-motor (`compute` +
+  `remainingPositions`) — så portföljens orealiserade resultat och "Sålda fonder"s
+  realiserade resultat alltid bygger på samma sanning. Den verifierade
+  `AvrakningsnotaPdfParser`-fixen (sälj-rader börjar med "Avslut", inte "Ut", och har
+  negativa belopp/andelar) och avgiftsfältet (`Transaction.fee`, Room-migrering 3→4) togs
+  med från per-transaktion-versionen, eftersom den aggregerade versionen saknade båda.
+  `ui/salda/SaldaFonderScreen`/`SaldaFonderViewModel`/`FifoResultCalc`/`SoldFundResult`
+  togs bort som redundanta. Portföljens "helt avsålda fonder visas inte"-fix (också
+  byggd oberoende i samma session) bevarades ovanpå den sammanslagna motorn.
 - **Fondmatchning via ISIN vid import, bredare täckning (#8-uppföljning):** verifierat mot
   en riktig export att `FundNameMatcher` bara hittade 1 av 7 rader — Handelsbankens
   fondlista-katalog (TP-9) innehåller i praktiken bara Handelsbankens egna fonder/XACT, inte

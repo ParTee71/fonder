@@ -27,6 +27,7 @@ data class TransactionFormUiState(
     val date: LocalDate = LocalDate.now(),
     val sharesText: String = "",
     val priceText: String = "",
+    val feeText: String = "",
     val valid: Boolean = false,
     val saved: Boolean = false,
 )
@@ -37,6 +38,7 @@ private data class FormFields(
     val date: LocalDate,
     val sharesText: String,
     val priceText: String,
+    val feeText: String,
 )
 
 /** Formulär för att registrera en fondtransaktion mot en redan bevakad fond (issue #4). */
@@ -52,16 +54,21 @@ class TransactionFormViewModel @Inject constructor(
     private val date = MutableStateFlow(LocalDate.now())
     private val sharesText = MutableStateFlow("")
     private val priceText = MutableStateFlow("")
+    private val feeText = MutableStateFlow("")
     private val saved = MutableStateFlow(false)
 
-    private val formFields = combine(selectedFund, type, date, sharesText, priceText) { fund, type, date, shares, price ->
-        FormFields(fund, type, date, shares, price)
+    // combine() saknar en 6-parametersvariant — kombinerar därför i två steg.
+    private val baseFields = combine(selectedFund, type, date) { fund, type, date -> Triple(fund, type, date) }
+    private val amountFields = combine(sharesText, priceText, feeText) { shares, price, fee -> Triple(shares, price, fee) }
+    private val formFields = combine(baseFields, amountFields) { (fund, type, date), (shares, price, fee) ->
+        FormFields(fund, type, date, shares, price, fee)
     }
 
     val uiState: StateFlow<TransactionFormUiState> =
         combine(funds, formFields, saved) { funds, fields, saved ->
             val shares = fields.sharesText.toDoubleOrNull()
             val price = fields.priceText.toDoubleOrNull()
+            val fee = parseFee(fields.feeText)
             TransactionFormUiState(
                 funds = funds,
                 selectedFund = fields.fund,
@@ -69,7 +76,8 @@ class TransactionFormViewModel @Inject constructor(
                 date = fields.date,
                 sharesText = fields.sharesText,
                 priceText = fields.priceText,
-                valid = TransactionFormValidator.isValid(fields.fund?.fundId, shares, price, fields.date),
+                feeText = fields.feeText,
+                valid = TransactionFormValidator.isValid(fields.fund?.fundId, shares, price, fields.date, fee),
                 saved = saved,
             )
         }.stateIn(
@@ -105,11 +113,16 @@ class TransactionFormViewModel @Inject constructor(
         priceText.value = text
     }
 
+    fun onFeeTextChange(text: String) {
+        feeText.value = text
+    }
+
     fun save() {
         val fund = selectedFund.value ?: return
         val shares = sharesText.value.toDoubleOrNull() ?: return
         val price = priceText.value.toDoubleOrNull() ?: return
-        if (!TransactionFormValidator.isValid(fund.fundId, shares, price, date.value)) return
+        val fee = parseFee(feeText.value) ?: return
+        if (!TransactionFormValidator.isValid(fund.fundId, shares, price, date.value, fee)) return
         viewModelScope.launch {
             transactionRepository.addTransaction(
                 Transaction(
@@ -118,9 +131,13 @@ class TransactionFormViewModel @Inject constructor(
                     epochDay = date.value.toEpochDay(),
                     shares = shares,
                     pricePerShare = price,
+                    fee = fee,
                 ),
             )
             saved.value = true
         }
     }
+
+    /** Tomt avgiftsfält tolkas som 0.0 (ingen känd avgift) — annars måste texten vara ett giltigt tal. */
+    private fun parseFee(text: String): Double? = if (text.isBlank()) 0.0 else text.toDoubleOrNull()
 }

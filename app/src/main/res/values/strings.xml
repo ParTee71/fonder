@@ -42,15 +42,16 @@
     <string name="transaktionsform_date_label">Datum</string>
     <string name="transaktionsform_shares_label">Antal andelar</string>
     <string name="transaktionsform_price_label">Kurs per andel</string>
+    <string name="transaktionsform_fee_label">Avgift (kr, valfritt)</string>
     <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
 
-    <!-- Sålda fonder (issue #10) -->
-    <string name="salda_title">Sålda</string>
-    <string name="salda_empty_title">Inga sålda fonder ännu</string>
-    <string name="salda_empty_body">Fonder du har sålt andelar i visas här, med realiserat resultat beräknat på äldsta köpet (FIFO).</string>
-    <string name="format_salda_shares_sold">%1$s andelar sålda</string>
-    <string name="salda_result_unknown">Resultat kan inte beräknas</string>
+    <!-- Sålda fonder — realiserat resultat (issue #10) -->
+    <string name="sold_funds_empty_title">Inga sälj ännu</string>
+    <string name="sold_funds_empty_body">Realiserat resultat visas här när du säljer andelar i en fond.</string>
+    <string name="format_sold_fund_shares">%1$s andelar sålda %2$s</string>
+    <string name="format_sold_fund_detail">Belopp %1$s · Avgift %2$s · Anskaffningsvärde %3$s</string>
+    <string name="sold_fund_uncovered_warning">Osäkert resultat — sålda andelar saknar matchande köp i historiken.</string>
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>

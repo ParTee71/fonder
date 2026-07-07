@@ -17,6 +17,7 @@ data class TransactionEntity(
     val epochDay: Long,
     val shares: Double,
     val pricePerShare: Double,
+    val fee: Double = 0.0,
 ) {
     fun toDomain() = Transaction(
         id = id,
@@ -25,6 +26,7 @@ data class TransactionEntity(
         epochDay = epochDay,
         shares = shares,
         pricePerShare = pricePerShare,
+        fee = fee,
     )
 
     companion object {
@@ -35,6 +37,7 @@ data class TransactionEntity(
             epochDay = tx.epochDay,
             shares = tx.shares,
             pricePerShare = tx.pricePerShare,
+            fee = tx.fee,
         )
     }
 }

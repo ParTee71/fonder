@@ -121,6 +121,79 @@ class TransactionFormViewModelTest {
             assertEquals(fund.fundId, addedTransactions.first().fundId)
             assertEquals(2.0, addedTransactions.first().shares, 1e-9)
             assertEquals(150.0, addedTransactions.first().pricePerShare, 1e-9)
+            assertEquals(0.0, addedTransactions.first().fee, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `tomt avgiftsfalt sparas som 0 avgift`() = runTest(dispatcher) {
+        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.funds.isEmpty()) state = awaitItem()
+
+            vm.onFundSelected(fund)
+            state = awaitItem()
+            vm.onSharesTextChange("2")
+            state = awaitItem()
+            vm.onPriceTextChange("150")
+            state = awaitItem()
+            assertTrue(state.valid)
+
+            vm.save()
+            state = awaitItem()
+            while (!state.saved) state = awaitItem()
+
+            assertEquals(0.0, addedTransactions.first().fee, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ifylld avgift sparas med transaktionen`() = runTest(dispatcher) {
+        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.funds.isEmpty()) state = awaitItem()
+
+            vm.onFundSelected(fund)
+            state = awaitItem()
+            vm.onSharesTextChange("2")
+            state = awaitItem()
+            vm.onPriceTextChange("150")
+            state = awaitItem()
+            vm.onFeeTextChange("25")
+            state = awaitItem()
+            assertTrue(state.valid)
+
+            vm.save()
+            state = awaitItem()
+            while (!state.saved) state = awaitItem()
+
+            assertEquals(25.0, addedTransactions.first().fee, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `negativ avgift gor formularet ogiltigt`() = runTest(dispatcher) {
+        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.funds.isEmpty()) state = awaitItem()
+
+            vm.onFundSelected(fund)
+            state = awaitItem()
+            vm.onSharesTextChange("2")
+            state = awaitItem()
+            vm.onPriceTextChange("150")
+            state = awaitItem()
+            assertTrue(state.valid)
+
+            vm.onFeeTextChange("-10")
+            state = awaitItem()
+            assertFalse(state.valid)
             cancelAndIgnoreRemainingEvents()
         }
     }

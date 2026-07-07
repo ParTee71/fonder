@@ -96,6 +96,24 @@ class PortfoljViewModelTest {
     }
 
     @Test
+    fun `helt avsald fond visas inte i portfoljen`() = runTest(dispatcher) {
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0),
+        )
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.isEmpty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `holdings uppdateras reaktivt nar en ny kurs blir kand`() = runTest(dispatcher) {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)

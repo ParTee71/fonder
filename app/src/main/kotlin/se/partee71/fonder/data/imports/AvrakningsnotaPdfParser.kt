@@ -3,6 +3,7 @@ package se.partee71.fonder.data.imports
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
+import kotlin.math.abs
 
 /**
  * Parsar Handelsbankens "Avräkningsnota" — en PDF-orderbekräftelse för en enskild
@@ -13,21 +14,26 @@ import se.partee71.fonder.domain.usecase.SwedishNumberFormat
  * Tar emot redan extraherad text (se [PdfTextExtractor]) i stället för råa PDF-bytes, så
  * parsningslogiken kan enhetstestas med fixturer utan det tunga PDF-biblioteket.
  *
- * Antaganden om layouten (verifierat mot en riktig avräkningsnota):
+ * Antaganden om layouten (verifierat mot en riktig köp- OCH en riktig sälj-avräkningsnota,
+ * se issue #10):
  * - Fondbolag och fondnamn står på de två raderna direkt före "ISIN: ...".
- * - Varje transaktionsrad börjar med "In" (köp) eller "Ut" (sälj), följt av valfri text,
- *   ett datum (ÅÅÅÅ-MM-DD), och fyra tal (belopp, kurs, andelar, saldo andelar).
- * - Rader som "Ingående saldo" eller "Marknadsvärde" saknar "In"/"Ut"-prefixet och
- *   matchar därför aldrig — de är balanser, inte transaktioner.
+ * - Varje transaktionsrad börjar med "In" (köp), eller "Ut"/"Avslut" (sälj), följt av
+ *   valfri text, ett datum (ÅÅÅÅ-MM-DD), och fyra tal (belopp, kurs, andelar, saldo
+ *   andelar). En riktig sälj-nota visade att belopp och andelar då är **negativa**
+ *   (t.ex. `Avslut Självbetjän 2020-07-02 -3 103.28 454.42 -6.8291 0.0000`) — tecknet
+ *   ignoreras vid parsning, `type` bär riktningen (abs-värde sparas).
+ * - En sälj-nota kan innehålla extra rader utan transaktionsprefix (`Utbetalt belopp`,
+ *   `Omkostnadsbelopp`, `Kapitalvinst`) — matchar aldrig transaktionsradens mönster och
+ *   ignoreras därför automatiskt, precis som `Ingående saldo`/`Marknadsvärde`.
  * - En fil kan innehålla flera transaktionsrader (t.ex. flera delleveranser av en order),
  *   men antas gälla en enda fond (första ISIN i filen).
  */
 object AvrakningsnotaPdfParser {
 
     private val isinRegex = Regex("""ISIN:\s*([A-Z]{2}[A-Z0-9]{9}\d)""")
-    private const val NUMBER = """[0-9][0-9\s ]*[.,]\d{2,4}"""
+    private const val NUMBER = """-?[0-9][0-9\s ]*[.,]\d{2,4}"""
     private val transactionLineRegex = Regex(
-        """^(In|Ut)\s+.+?\s+(\d{4}-\d{2}-\d{2})\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s*$""",
+        """^(In|Ut|Avslut)\s+.+?\s+(\d{4}-\d{2}-\d{2})\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s*$""",
     )
 
     /** Tomt om ingen ISIN hittas i texten alls — inget att importera från filen. */
@@ -57,13 +63,15 @@ object AvrakningsnotaPdfParser {
 
         val type = when (typeToken) {
             "In" -> TransactionType.KOP
-            "Ut" -> TransactionType.SALJ
+            "Ut", "Avslut" -> TransactionType.SALJ
             else -> return null
         }
         val epochDay = runCatching { java.time.LocalDate.parse(dateRaw).toEpochDay() }.getOrNull() ?: return null
-        val amount = SwedishNumberFormat.parse(amountRaw) ?: return null
-        val price = SwedishNumberFormat.parse(priceRaw) ?: return null
-        val shares = SwedishNumberFormat.parse(sharesRaw) ?: return null
+        // Sälj-rader har negativt belopp/andelar (minskar saldot) — beloppen sparas som
+        // magnitud, riktningen bärs redan av `type`.
+        val amount = SwedishNumberFormat.parse(amountRaw)?.let(::abs) ?: return null
+        val price = SwedishNumberFormat.parse(priceRaw)?.let(::abs) ?: return null
+        val shares = SwedishNumberFormat.parse(sharesRaw)?.let(::abs) ?: return null
         if (shares <= 0.0 || price <= 0.0) return null
 
         return ImportedOrderTransaction(

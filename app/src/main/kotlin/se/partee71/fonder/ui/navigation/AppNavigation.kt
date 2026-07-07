@@ -26,8 +26,8 @@ import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.imports.ImportHoldingsScreen
 import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
-import se.partee71.fonder.ui.salda.SaldaFonderScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
+import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 
@@ -91,7 +91,7 @@ fun AppNavigation() {
                 TransaktionerScreen()
             }
             composable(Screen.Salda.route) {
-                SaldaFonderScreen()
+                SoldFundsScreen()
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
