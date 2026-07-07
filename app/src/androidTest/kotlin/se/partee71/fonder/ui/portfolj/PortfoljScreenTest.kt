@@ -56,9 +56,11 @@ class PortfoljScreenTest {
 
         composeRule.onNodeWithText("Fond A").assertExists()
         composeRule.onNodeWithText("+3,0 % · 30,00 kr", substring = true).assertExists()
-        // Vecka och månad saknar historik -> två "otillräcklig data"-rader (onNodeWithText
-        // kräver exakt en träff, därför onAllNodesWithText här).
-        composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(2)
+        // Vecka och månad saknar historik -> två "otillräcklig data"-rader. Card slår ihop
+        // sina barns semantik till en enda nod (mergeDescendants), så både onNodeWithText
+        // (kräver exakt en träff) och en oskyddad onAllNodesWithText skulle bara se en
+        // sammanslagen nod — useUnmergedTree=true krävs för att räkna raderna var för sig.
+        composeRule.onAllNodesWithText("Otillräcklig data", useUnmergedTree = true).assertCountEquals(2)
     }
 
     @Test
@@ -70,6 +72,6 @@ class PortfoljScreenTest {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
         }
 
-        composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(3)
+        composeRule.onAllNodesWithText("Otillräcklig data", useUnmergedTree = true).assertCountEquals(3)
     }
 }
