@@ -1,4 +1,4 @@
-package se.partee71.fonder.ui.portfolj
+package se.partee71.fonder.ui.hem
 
 import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
@@ -24,9 +24,10 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class PortfoljViewModelTest {
+class HemViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -53,7 +54,7 @@ class PortfoljViewModelTest {
             priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
@@ -63,12 +64,10 @@ class PortfoljViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun `tomt tillstand nar inga transaktioner finns`() = runTest(dispatcher) {
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+    fun `tomt tillstand nar ingen portfolj finns`() = runTest(dispatcher) {
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
         vm.uiState.test {
-            // Initialt: laddar
             assertTrue(awaitItem().loading)
-            // Efter combine: tomt och inte laddar
             val loaded = awaitItem()
             assertFalse(loaded.loading)
             assertTrue(loaded.isEmpty)
@@ -77,88 +76,62 @@ class PortfoljViewModelTest {
     }
 
     @Test
-    fun `holdings utan kand kurs visar netInvested och null gainLoss`() = runTest(dispatcher) {
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
-        )
-
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertEquals(1, state.holdings.size)
-            assertEquals(300.0, state.totalInvested, 1e-9)
-            assertEquals(0.0, state.totalValue, 1e-9)
-            assertNull(state.totalGainLossFraction)
-            assertNull(state.holdings.first().currentValue)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `helt avsald fond visas inte i portfoljen`() = runTest(dispatcher) {
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
-            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0),
-        )
-
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertTrue(state.isEmpty)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `holdings uppdateras reaktivt nar en ny kurs blir kand`() = runTest(dispatcher) {
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
-        )
-
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertNull(state.holdings.first().currentValue)
-
-            latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = 5, nav = 200.0))
-
-            val updated = awaitItem()
-            assertEquals(400.0, updated.totalValue, 1e-9)
-            assertEquals(100.0, updated.totalGainLoss, 1e-9)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `performance per innehav rakans ut fran kurshistorik (POR-5)`() = runTest(dispatcher) {
-        val today = java.time.LocalDate.now()
+    fun `visar total varde vinst och dag vecka manad`() = runTest(dispatcher) {
+        val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
         )
         priceHistoryByFundId = mapOf(
-            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0)),
+            fond.fundId to listOf(
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(7).toEpochDay(), nav = 100.0),
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 80.0),
+            ),
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertFalse(state.isEmpty) // innehavet finns, bara kursen saknas ännu (samma fallback som POR-3)
+            assertNull(state.performance.day) // ingen kand kurs an -> ingen periodberakning
+
+            latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+            val updated = awaitItem()
+            assertFalse(updated.isEmpty)
+            assertEquals(1200.0, updated.totalValue, 1e-9)
+            assertEquals(200.0, updated.totalGainLoss, 1e-9)
+            assertEquals(100.0, updated.performance.day!!.amount, 1e-9)
+            assertEquals(200.0, updated.performance.week!!.amount, 1e-9)
+            assertEquals(400.0, updated.performance.month!!.amount, 1e-9)
+            assertFalse(updated.performance.day!!.partial)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `nyligen tillagd fond utan tillrackligt historik ger null for vecka och manad`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        priceHistoryByFundId = mapOf(
+            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(2).toEpochDay(), nav = 100.0)),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 105.0))
+
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            val performance = state.performance[fond.fundId]!!
-            assertEquals(100.0, performance.day!!.amount, 1e-9) // 1200 - 10*110
-            assertNull(performance.week) // ingen kurs 7 dagar bak i historiken
+            assertNull(state.performance.week)
+            assertNull(state.performance.month)
             cancelAndIgnoreRemainingEvents()
         }
     }

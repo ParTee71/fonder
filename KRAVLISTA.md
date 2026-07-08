@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.10.1 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.11.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -63,7 +63,7 @@
 
 | ID | Krav |
 |----|------|
-| NAV-1 | Toppnivå med navigeringsrad: **Portfölj**, **Transaktioner**, **Sålda**, **Inställningar**. |
+| NAV-1 | Toppnivå med navigeringsrad: **Hem**, **Portfölj**, **Transaktioner**, **Sålda**, **Inställningar**. Hem är startskärmen (issue #14). |
 | NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik sedan första köpet i diagram (`FundLineChart`, `ui/diagram/`) och tabell (datum + kurs), med tomt-tillstånd om ingen historik finns än. Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt med ett namnbaserat förslag om ett hittades), se TP-14. |
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
@@ -72,6 +72,7 @@
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
+| POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Räcker inte kurshistoriken tillbaka till periodens start (t.ex. nytillagd fond) markeras just den perioden som otillräcklig data i stället för ett gissat värde (issue #14). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
@@ -102,6 +103,16 @@
 |----|------|
 | SLD-1 | Vyn **Sålda fonder** (NAV-5) visar **en rad per säljtransaktion** (manuell eller importerad, IMP-5) — oavsett om fonden fortfarande delvis innehas eller är helt avyttrad — med datum, sålt antal andelar, belopp, avgift, anskaffningsvärde och **realiserat resultat** (kr + %, semantisk färg) beräknat med FIFO (TP-15): äldsta köpet matchas mot sälj i tidsordning. |
 | SLD-2 | Räcker inte känd köphistorik för att fullt ut matcha en sälj visas resultatet ändå, men **tydligt markerat som osäkert** (text, inte enbart färg) i stället för att tystas ner eller krascha — samma princip som IMP-2/POR-3. |
+
+---
+
+## 7. Hem (dashboard)
+
+| ID | Krav |
+|----|------|
+| HEM-1 | Hem (ny startskärm, NAV-1) visar portföljens totala värde, vinst/förlust (kr + %) samt förändring **idag, senaste veckan och senaste månaden** för hela portföljen (issue #14). |
+| HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. |
+| HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
 
 ---
 
@@ -253,3 +264,18 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   inkonsekvent tillstånd (t.ex. transaktioner kvar utan sin fond). Kräver bekräftelse i en
   dialog (samma mönster som transaktionsradering, TRX-2) eftersom åtgärden är permanent och
   irreversibel.
+- **Hem — ny startskärm med dag/vecka/månadsresultat (#14):** ny toppnivåflik **Hem** (NAV-1,
+  först i bottennavigeringen) blir appens startskärm och visar portföljens totala
+  värde/vinst/procent (samma beräkning som Portfölj) plus förändring **idag, senaste veckan
+  och senaste månaden** (HEM-1). Ny domänberäkning `PortfolioPerformanceCalc`
+  (`domain/usecase/`) jämför nuvarande värde mot vad *dagens* antal andelar var värda vid
+  periodens start (senaste kända NAV på eller före det datumet) — ett enkelt
+  marknadsvärde-mått, inte en kassaflödesjusterad avkastning (TWR/MWR); köp/sälj inom
+  perioden påverkar alltså inte beräkningen. Räcker inte ett innehavs kurshistorik tillbaka
+  till periodens start markeras just den perioden som otillräcklig data (samma princip som
+  POR-3/SLD-2/IMP-2); saknar något men inte alla innehav historik markeras portföljens total
+  som delvis osäker i stället för att exkludera den helt eller låtsas att alla fonder är med
+  (HEM-2). Samma beräkning utökar även Portföljens innehavsrader med dag/vecka/månad per fond
+  (POR-5). Ny delad komponent `PeriodRow` (`ui/components/`, regel 4) återanvänds mellan Hem
+  och Portföljs innehavsrader. Ingen ny persisterad data — förändringen härleds vid läsning
+  ur befintlig kurshistorik/transaktioner, precis som `PortfolioCalc`.

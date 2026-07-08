@@ -20,7 +20,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 
@@ -31,7 +33,16 @@ fun PortfoljScreen(
     viewModel: PortfoljViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    PortfoljContent(state = state, onFundClick = onFundClick, modifier = modifier)
+}
 
+/** Tillståndsdriven, testbar del av [PortfoljScreen] — inget ViewModel/Hilt-beroende (issue #14). */
+@Composable
+fun PortfoljContent(
+    state: PortfoljUiState,
+    onFundClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     when {
         state.isEmpty -> EmptyState(
             title = stringResource(R.string.portfolj_empty_title),
@@ -43,7 +54,11 @@ fun PortfoljScreen(
             TotalCard(state = state)
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.holdings, key = { it.fund.fundId }) { holding ->
-                    HoldingRow(holding = holding, onClick = { onFundClick(holding.fund.fundId) })
+                    HoldingRow(
+                        holding = holding,
+                        performance = state.performance[holding.fund.fundId],
+                        onClick = { onFundClick(holding.fund.fundId) },
+                    )
                 }
             }
         }
@@ -77,7 +92,11 @@ private fun TotalCard(state: PortfoljUiState) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HoldingRow(holding: Holding, onClick: () -> Unit) {
+private fun HoldingRow(
+    holding: Holding,
+    performance: PortfolioPerformanceCalc.HoldingPerformance?,
+    onClick: () -> Unit,
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -98,6 +117,22 @@ private fun HoldingRow(holding: Holding, onClick: () -> Unit) {
                         color = ReturnColors.forAmount(holding.gainLoss ?: 0.0),
                     )
                 }
+                PeriodRow(
+                    label = stringResource(R.string.period_day),
+                    amount = performance?.day?.amount,
+                    fraction = performance?.day?.fraction,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                PeriodRow(
+                    label = stringResource(R.string.period_week),
+                    amount = performance?.week?.amount,
+                    fraction = performance?.week?.fraction,
+                )
+                PeriodRow(
+                    label = stringResource(R.string.period_month),
+                    amount = performance?.month?.amount,
+                    fraction = performance?.month?.fraction,
+                )
             } else {
                 Text(
                     MoneyFormat.kr(holding.netInvested),
