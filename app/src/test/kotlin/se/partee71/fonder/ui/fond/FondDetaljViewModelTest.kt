@@ -24,6 +24,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -34,7 +35,10 @@ class FondDetaljViewModelTest {
     private val fund = Fund(fundId = "SHB0000442", name = "Fond A")
     private val funds = MutableStateFlow(listOf(fund))
     private val transactionsForFund = MutableStateFlow<List<Transaction>>(emptyList())
+    /** Alla transaktioner (alla fonder) — [FundAnalysisCalc] behöver portföljvida holdings, issue #16. */
+    private val allTransactions = MutableStateFlow<List<Transaction>>(emptyList())
     private val history = MutableStateFlow<List<FundPrice>>(emptyList())
+    private val latestPricesFlow = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
     private var latestPriceValue: FundPrice? = null
     private var refreshCalledFor: String? = null
     private var refreshSinceCall: Triple<String, String, LocalDate>? = null
@@ -48,7 +52,7 @@ class FondDetaljViewModelTest {
 
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
+        override fun observeTransactions(): Flow<List<Transaction>> = allTransactions
         override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactionsForFund
         override suspend fun upsertFund(fund: Fund) {
             upsertedFund = fund
@@ -61,8 +65,7 @@ class FondDetaljViewModelTest {
 
     private val fakePriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPriceValue
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> =
-            MutableStateFlow(emptyMap())
+        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPricesFlow
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = history.value
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> {
             capturedFromEpochDay = fromEpochDay
@@ -207,5 +210,43 @@ class FondDetaljViewModelTest {
         advanceUntilIdle()
 
         assertNull(upsertedFund)
+    }
+
+    @Test
+    fun `bygger analys for ett kvarvarande innehav`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+        // Flat kurshistorik varannan vecka i två år — inga signaler ska triggas.
+        history.value = (0..730L step 14).map { daysAgo -> FundPrice(fundId = fund.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) }
+        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(FundAnalysisCalc.SignalLevel.GRON, state.analysis?.status)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `analys ar null om fonden ar helt avsald`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val buy = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        val sell = Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = today.minusMonths(1).toEpochDay(), shares = 10.0, pricePerShare = 110.0)
+        transactionsForFund.value = listOf(buy, sell)
+        allTransactions.value = listOf(buy, sell)
+        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 110.0))
+        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 110.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull(state.analysis)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
