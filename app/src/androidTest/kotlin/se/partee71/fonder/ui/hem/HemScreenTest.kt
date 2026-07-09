@@ -2,10 +2,14 @@ package se.partee71.fonder.ui.hem
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -77,4 +81,54 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("Delvis osäker — någon fond saknar historik").assertExists()
     }
+
+    @Test
+    fun analys_summeringskort_visar_tomt_tillstand_utan_flaggade_fonder() {
+        composeRule.setContent {
+            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true)) }
+        }
+
+        composeRule.onNodeWithText("Inga fonder flaggade").assertExists()
+    }
+
+    @Test
+    fun analys_summeringskort_visar_flaggad_fond_och_navigerar_vid_klick() {
+        val fund = Fund(fundId = "SHB0000442", name = "Flaggad Fond")
+        val analysis = sampleAnalysis(FundAnalysisCalc.SignalLevel.GUL)
+        var clickedFundId: String? = null
+
+        composeRule.setContent {
+            FonderTheme {
+                HemContent(
+                    state = HemUiState(
+                        loading = false,
+                        hasHoldings = true,
+                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = listOf(FlaggedHolding(fund, analysis))),
+                    ),
+                    onFundClick = { clickedFundId = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Flaggad Fond").assertExists()
+        composeRule.onNodeWithText("Under 200-dagars snitt").assertExists()
+
+        composeRule.onNodeWithText("Flaggad Fond").performClick()
+        assertEquals("SHB0000442", clickedFundId)
+    }
+
+    private fun sampleAnalysis(status: FundAnalysisCalc.SignalLevel) = FundAnalysisCalc.Analysis(
+        keyFigures = FundAnalysisCalc.KeyFigures(
+            periodReturns = FundAnalysisCalc.Period.entries.map { FundAnalysisCalc.PeriodReturn(it, null, null) },
+            cagr = null,
+            currentNav = 100.0,
+            gavPerShare = 100.0,
+            gavFraction = 0.0,
+            portfolioShareFraction = null,
+        ),
+        distanceFromHigh = null,
+        trend = FundAnalysisCalc.TrendSignal(status),
+        momentum = null,
+        status = status,
+    )
 }

@@ -4,7 +4,9 @@ package se.partee71.fonder.domain.model
  * Ett sammanräknat innehav i en fond, härlett ur transaktioner.
  *
  * @param netShares antal andelar netto (köp − sälj).
- * @param netInvested nettoinvesterat belopp (köp − sälj), i fondens valuta.
+ * @param netInvested de kvarvarande (ej sålda) andelarnas verkliga anskaffningsvärde,
+ *   matchat med FIFO ([se.partee71.fonder.domain.usecase.RealizedGainCalculator.remainingPositions])
+ *   — inte kassaflödet (köp minus säljintäkter), se POR-1.
  * @param currentValue nuvarande värde (netShares × senaste NAV), eller null om ingen
  *   kurs finns cachad än (se issue #6 — visa "kurs saknas" i UI, krascha aldrig).
  */

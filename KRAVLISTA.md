@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.11.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.12.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -91,7 +91,7 @@
 
 | ID | Krav |
 |----|------|
-| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. *(backup planerad)* |
+| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Androids inbyggda **Auto Backup** (Google-kontots molnlagring) är påslaget som interimistiskt skydd (`allowBackup="true"`) tills en egen, testbar Drive-backup (TP-7) finns — täcker en förlorad/nollställd enhet, men är inte en app-styrd rundtur. *(fullständig Drive-backup planerad)* |
 | NFR-2 | Ingen beteendeändring utan **tester** på berörd nivå (enhet/instrument/migrering). |
 | NFR-3 | Room-schemaändring kräver **migrering** utan dataförlust. |
 
@@ -113,6 +113,18 @@
 | HEM-1 | Hem (ny startskärm, NAV-1) visar portföljens totala värde, vinst/förlust (kr + %) samt förändring **idag, senaste veckan och senaste månaden** för hela portföljen (issue #14). |
 | HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. |
 | HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
+| HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
+
+---
+
+## 8. Analys — nyckeltal och säljsignaler
+
+| ID | Krav |
+|----|------|
+| ANA-1 | Fonddetalj visar en **Analys**-sektion för fonder som är kvarvarande innehav, med nyckeltal: prisutveckling **i år, 3 månader, 1 år, 3 år och sedan första köp** (kr + %), **CAGR** (årlig snittavkastning sedan första köpet, bara om innehavet är minst ett år gammalt), **GAV** (kvarvarande FIFO-anskaffningsvärde per andel, TP-15) jämfört med aktuell NAV (kr + %), samt **andel av portföljens totala värde** (%). Räcker inte kurshistoriken för ett nyckeltal markeras just det tydligt som otillräcklig data i stället för att gissas (samma princip som POR-3/POR-5/HEM-2). |
+| ANA-2 | Tre säljindikatorer beräknas per innehav, med fasta trösklar (dokumenterade i `FundAnalysisCalc`): **S1** avstånd från högsta NAV senaste 52 veckorna (−10 % gul, −20 % röd), **S2** NAV under 200-dagars glidande medelvärde (gul), **S3** innehavets 3-månadersutveckling minst 5 procentenheter sämre än snittet för övriga innehav (gul). Räcker inte historiken för en enskild indikator markeras den som otillräcklig data och ingår inte i statussummeringen (ANA-4). |
+| ANA-3 | Indikatorerna (ANA-2) summeras till en **status** — röd om någon indikator är röd eller minst två är gula, gul om minst en är gul, annars grön — visad som en statusbanner (färg + rubrik + triggertexter, aldrig färg ensam, jfr UI-3) ovanför kurshistoriken i Fonddetalj. Språket är alltid neutralt ("värt att se över"/"bör ses över") — appen ger aldrig finansiell rådgivning ("sälj"). |
+| ANA-4 | En indikator (ANA-2) eller ett nyckeltal (ANA-1) utan tillräcklig kurshistorik markeras tydligt som otillräcklig data och exkluderas ur statussummeringen (ANA-3) i stället för att tystas ner eller gissas — samma princip som HEM-2/POR-5/IMP-2/SLD-2. Saknar *alla* tre indikatorer data visas en neutral "otillräcklig kurshistorik"-text i stället för en färgad banner. |
 
 ---
 
@@ -279,3 +291,41 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   (POR-5). Ny delad komponent `PeriodRow` (`ui/components/`, regel 4) återanvänds mellan Hem
   och Portföljs innehavsrader. Ingen ny persisterad data — förändringen härleds vid läsning
   ur befintlig kurshistorik/transaktioner, precis som `PortfolioCalc`.
+- **Kodgranskning — daglig uppdatering, talformat och datasäkerhet:** en fullständig
+  genomgång av projektet hittade att fonder matchade via ISIN (`findFundByIsin`, TP-14 —
+  t.ex. AMF/Amundi/Nordea) aldrig fick sin dagliga kursuppdatering: `FundPriceUpdateWorker`
+  och `PortfoljViewModel`s engångsuppdatering anropade alltid `refresh()`, som nycklas på
+  Handelsbankens `FundId` och därför aldrig träffar sådana fonder. Båda använder nu samma
+  gren som `FondDetaljViewModel`/`ImportHoldingsViewModel` redan hade (`refreshSince` när
+  `Fund.isin != null`, med senaste kända köpdatum eller fem år tillbaka som sökfönster).
+  `FundPriceRepository.refresh`/`refreshSince` returnerar nu om hämtningen lyckades, så
+  `FundPriceUpdateWorker` kan be WorkManager köra om jobbet (`Result.retry()`) om samtliga
+  fonder misslyckades i stället för att tyst vänta ett helt dygn. Vidare: `SwedishNumberFormat`
+  (delad talparsning, regel 4) används nu konsekvent i transaktionsformuläret och båda
+  importflödena — tidigare accepterade bara ett av inmatningsfälten svenskt decimalkomma,
+  vilket kunde göra formuläret tyst ogiltigt på ett svenskt tangentbord (`KeyboardType.Decimal`
+  ger ofta bara komma). Samma funktion hade också av misstag två identiska ersättningar av
+  vanligt mellanslag i stället för att även hantera hårt mellanslag (U+00A0, vanligt i
+  talformatering från webbsidor) — rättat. Androids **Auto Backup** aktiverat
+  (`allowBackup="true"`) som interimistiskt skydd mot dataförlust tills Drive-backupen
+  (TP-7) är byggd, se NFR-1. `HoldingsImportParser`s XML-tolkning härdad mot XXE. Inga
+  synliga beteendeändringar i UI:t utöver att fler fonder nu faktiskt får uppdaterade
+  kurser och fler giltiga inmatningar accepteras — inga nya krav-ID:n.
+- **Analys — nyckeltal och säljsignaler (#16):** ny sektion **Analys** (avsnitt 8) i
+  Fonddetalj för kvarvarande innehav — periodavkastning (YTD/3 mån/1 år/3 år/sedan köp),
+  CAGR, GAV vs aktuell NAV och portföljandel (ANA-1), samt tre säljindikatorer (avstånd från
+  52-veckorshögsta, NAV vs 200-dagars glidande medelvärde, 3-månadersmomentum mot övriga
+  portföljen) summerade till en grön/gul/röd status med neutral triggertext, aldrig
+  rådgivning (ANA-2/ANA-3). Otillräcklig kurshistorik markeras per nyckeltal/indikator i
+  stället för att gissas (ANA-4). Ny domänberäkning `FundAnalysisCalc` (`domain/usecase/`) —
+  ren, testbar, återanvänder `Holding.netInvested` (redan FIFO-korrekt, TP-15) för GAV i
+  stället för en egen anskaffningsberäkning. Hem visar ett nytt summeringskort (HEM-4) med
+  antal fonder per status och en klickbar lista över gul-/rödflaggade fonder som öppnar
+  Fonddetalj. Delad `PeriodRow` (`ui/components/`, regel 4) utökad med ett procent-utan-kr-läge
+  (CAGR/portföljandel har inget kr-belopp) i stället för en ny komponent; ny delad
+  `AnalysisStatus.kt` (statusfärg/-titel/-triggertexter, `StatusDot`, `AnalysisStatusBanner`)
+  återanvänds mellan Fonddetalj och Hem. `StatusColors` (`ui/theme/`) återanvänder befintlig
+  grön/röd (`ReturnColors`) och den befintliga mässings-/guldaccenten för gul — ingen ny
+  hårdkodad färg, fast palett bevarad (UI-1). Ingen ny persisterad data — allt härleds ur
+  befintlig kurshistorik/transaktioner vid läsning, precis som `PortfolioCalc`/
+  `PortfolioPerformanceCalc`.

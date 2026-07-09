@@ -3,6 +3,8 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
+> Version: 0.12.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
 > **Bidrar du (eller en AI-assistent) med kod?** Läs [CLAUDE.md](CLAUDE.md) först — den
@@ -25,6 +27,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
 - [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
 - [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
+- [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
+- [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -77,22 +81,27 @@ di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding
-└── usecase/      PortfolioCalc · RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
-                  MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
-                  ImportFundMatcher (delad matchningsordning, regel 4) · TransactionFormValidator
+└── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
+                  FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
+                  RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
+                  MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
+                  PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
+                  TransactionFormValidator
 ui/
+├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
-├── fond/         FondDetaljScreen (diagram-placeholder)
+├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
+│                 Analys-sektion med nyckeltal/säljsignaler, #16)
 ├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
-├── components/   Delade komponenter (EmptyState, SelectField, DateField …)
-├── diagram/      Delade diagram (FundLineChart — tillkommer)
-└── theme/        Grön petrol-tema, Space Grotesk-typografi
+├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot …)
+├── diagram/      Delade diagram (FundLineChart)
+└── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering)
 ```
 
@@ -115,7 +124,8 @@ varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städat
 ## Tester
 
 - **Enhet (JVM):** `domain/` (PortfolioCalc, RealizedGainCalculator — FIFO inkl.
-  delförsäljning över flera lotter och avgift, MoneyFormat), `data/network/`
+  delförsäljning över flera lotter och avgift, FundAnalysisCalc — periodavkastning, CAGR,
+  GAV, portföljandel och säljsignalerna S1–S3 kring sina trösklar, MoneyFormat), `data/network/`
   (HTML-/JSON-parsning mot verkliga sid-/API-fixturer, inkl. Avanzas fond-API),
   `data/imports/` (Excel- och PDF-parsning mot verkliga fixturer — köp- **och**
   sälj-avräkningsnota, PDF-textextraktionen fejkad via `PdfTextExtractor` så testerna

@@ -20,6 +20,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
+import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.math.abs
@@ -54,7 +55,7 @@ data class ImportOccasion(
     // alltid hårdkodas till köp (issue #10, KRAVLISTA IMP-5).
     val type: TransactionType = TransactionType.KOP,
 ) {
-    val shares: Double? get() = sharesText.trim().replace(",", ".").toDoubleOrNull()
+    val shares: Double? get() = SwedishNumberFormat.parse(sharesText)
 }
 
 /** En importerad rad + användarens (eventuellt korrigerade) matchning/inköpstillfällen (issue #8). */

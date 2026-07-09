@@ -17,12 +17,14 @@ import se.partee71.fonder.ui.theme.ReturnColors
 
 /**
  * Delad rad för att visa en periods värdeförändring (kr + %), t.ex. "Idag" eller "Senaste
- * veckan" (issue #14). Återanvänds mellan Hem och Portfölj (regel 4) — komponenten känner
- * inte till domänmodeller, bara primitiver, så den är oberoende av var förändringen kommer
- * ifrån.
+ * veckan" (issue #14), eller ett rent procentuellt nyckeltal utan kr-belopp (t.ex. CAGR eller
+ * portföljandel, issue #16 — sätt [amount] till null och [fraction] till ett värde). Återanvänds
+ * mellan Hem, Portfölj och Fonddetalj (regel 4) — komponenten känner inte till domänmodeller,
+ * bara primitiver, så den är oberoende av var förändringen/nyckeltalet kommer ifrån.
  *
- * @param amount kr-förändring, eller null om historiken inte räcker tillbaka (visas som
- *   otillräcklig data i stället för ett gissat eller felaktigt värde).
+ * @param amount kr-förändring, eller null om det saknas — antingen för att historiken inte
+ *   räcker tillbaka (otillräcklig data, om [fraction] också är null), eller för att nyckeltalet
+ *   aldrig har ett kr-belopp (rent procentuellt, om [fraction] är satt).
  * @param partial sant om totalen är delvis osäker (något innehav saknade historik men andra
  *   kunde beräknas) — irrelevant för ett enskilt innehavs rad.
  */
@@ -39,7 +41,7 @@ fun PeriodRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
-        if (amount == null) {
+        if (amount == null && fraction == null) {
             Text(
                 stringResource(R.string.period_insufficient_data),
                 style = MaterialTheme.typography.bodySmall,
@@ -47,15 +49,15 @@ fun PeriodRow(
             )
         } else {
             Column(horizontalAlignment = Alignment.End) {
-                val text = if (fraction != null) {
-                    "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(amount)}"
-                } else {
-                    MoneyFormat.kr(amount)
+                val text = when {
+                    amount != null && fraction != null -> "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(amount)}"
+                    amount != null -> MoneyFormat.kr(amount)
+                    else -> MoneyFormat.percentSigned(fraction!!)
                 }
                 Text(
                     text,
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                    color = ReturnColors.forAmount(amount),
+                    color = ReturnColors.forAmount(amount ?: fraction!!),
                 )
                 if (partial) {
                     Text(

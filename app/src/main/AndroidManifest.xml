@@ -4,9 +4,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Androids inbyggda Auto Backup (Google-kontots molnlagring) som interimistiskt
+         skydd tills Drive-backupen (TP-7, NFR-1) är byggd — annars finns i dag inget sätt
+         att återställa data efter en förlorad/nollställd enhet. fonder.db är litet, långt
+         under 25 MB-kvoten. Ingen känslig auth-data att exkludera ännu (StubAuthRepository). -->
     <application
         android:name=".FonderApp"
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

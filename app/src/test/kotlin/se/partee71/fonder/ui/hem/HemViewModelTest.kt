@@ -24,6 +24,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -53,8 +54,8 @@ class HemViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
+        override suspend fun refresh(fundId: String) = true
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
@@ -132,6 +133,57 @@ class HemViewModelTest {
 
             assertNull(state.performance.week)
             assertNull(state.performance.month)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `analysis-summering ar tom nar inga fonder ar flaggade`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        // Flat kurshistorik — inga signaler triggade.
+        priceHistoryByFundId = mapOf(
+            fond.fundId to (0..730L step 14).map { daysAgo -> FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) },
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(1, state.analysisSummary.gronCount)
+            assertTrue(state.analysisSummary.flagged.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `flaggar en fond som ligger under 200-dagars snitt`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under både
+        // 52-veckorstoppen och 200-dagarssnittet (samma fixturprincip som FundAnalysisCalcTest).
+        priceHistoryByFundId = mapOf(
+            fond.fundId to (0..730L step 5).map { daysAgo ->
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
+            },
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(1, state.analysisSummary.flagged.size)
+            assertEquals(fond.fundId, state.analysisSummary.flagged.first().fund.fundId)
             cancelAndIgnoreRemainingEvents()
         }
     }

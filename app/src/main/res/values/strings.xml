@@ -26,6 +26,10 @@
     <string name="hem_empty_title">Ingen portfölj ännu</string>
     <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
 
+    <!-- Hem — analys-summering (issue #16, HEM-4) -->
+    <string name="hem_analysis_title">Att se över</string>
+    <string name="hem_analysis_empty">Inga fonder flaggade</string>
+
     <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
     <string name="period_day">Idag</string>
     <string name="period_week">Senaste veckan</string>
@@ -71,6 +75,24 @@
     <string name="fond_isin_label">ISIN</string>
     <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
+
+    <!-- Analys — nyckeltal och säljsignaler (issue #16, ANA-1–ANA-4) -->
+    <string name="analys_section_title">Analys</string>
+    <string name="analys_period_ytd">I år</string>
+    <string name="analys_period_3man">3 månader</string>
+    <string name="analys_period_1ar">1 år</string>
+    <string name="analys_period_3ar">3 år</string>
+    <string name="analys_period_sedan_kop">Sedan köp</string>
+    <string name="analys_cagr_label">Årlig snittavkastning (CAGR)</string>
+    <string name="analys_gav_label">GAV</string>
+    <string name="analys_portfolio_share_label">Andel av portföljen</string>
+    <string name="analys_status_gron">Inga signaler</string>
+    <string name="analys_status_gul">Värt att se över</string>
+    <string name="analys_status_rod">Bör ses över</string>
+    <string name="analys_status_insufficient">Otillräcklig kurshistorik för säljsignal ännu</string>
+    <string name="format_analys_signal_distance">%1$s från toppen (52 veckor)</string>
+    <string name="analys_signal_trend">Under 200-dagars snitt</string>
+    <string name="analys_signal_momentum">Svagare än portföljsnittet senaste 3 månaderna</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>

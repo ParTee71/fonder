@@ -17,7 +17,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.PortfolioCalc
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -27,9 +31,21 @@ data class FondDetaljUiState(
     val isin: String? = null,
     val suggestedIsin: String? = null,
     val prices: List<FundPrice> = emptyList(),
+    /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
+    val analysis: FundAnalysisCalc.Analysis? = null,
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
 }
+
+private data class Snapshot(
+    val funds: List<Fund>,
+    val transactions: List<Transaction>,
+    val since: LocalDate?,
+    val suggestedIsin: String?,
+)
+
+/** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
+private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
 
 /**
  * Fonddetalj — kurshistorik sedan första köpet (i diagram och tabell), inte bara senaste
@@ -38,6 +54,11 @@ data class FondDetaljUiState(
  * fasta 5-årsfönster, eftersom äldre köp annars aldrig kan täckas fullt ut. Saknas ISIN
  * föreslås ett via namnsökning — användaren bekräftar/rättar innan det sparas (samma
  * "föreslå men kräv bekräftelse"-princip som importflödet, IMP-2).
+ *
+ * Bygger även [FundAnalysisCalc]-nyckeltal/säljsignaler (issue #16) — kräver, utöver den
+ * redan reaktivt laddade kurshistoriken för den här fonden, portföljens totala värde (för
+ * portföljandelen) och övriga innehavs tremånadershistorik (för momentum-signalen S3), som
+ * hämtas ur den lokala cachen (ingen extra nätverksuppdatering).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -56,28 +77,76 @@ class FondDetaljViewModel @Inject constructor(
 
     val uiState: StateFlow<FondDetaljUiState> = combine(
         transactionRepository.observeFunds(),
+        transactionRepository.observeTransactions(),
         earliestPurchase,
         suggestedIsin,
-    ) { funds, since, suggested -> Triple(funds.firstOrNull { it.fundId == fundId }, since, suggested) }
-        .flatMapLatest { (fund, since, suggested) ->
-            fundPriceRepository.observePriceHistory(
+    ) { funds, transactions, since, suggested -> Snapshot(funds, transactions, since, suggested) }
+        .flatMapLatest { snapshot ->
+            val fundIds = snapshot.funds.map { it.fundId }
+            val priceHistoryFlow = fundPriceRepository.observePriceHistory(
                 fundId = fundId,
-                fromEpochDay = (since ?: LocalDate.now().minusYears(1)).toEpochDay(),
+                fromEpochDay = (snapshot.since ?: LocalDate.now().minusYears(1)).toEpochDay(),
                 toEpochDay = LocalDate.now().toEpochDay(),
-            ).map { prices ->
-                FondDetaljUiState(
-                    loading = false,
-                    fundName = fund?.name,
-                    isin = fund?.isin,
-                    suggestedIsin = suggested,
-                    prices = prices.sortedByDescending { it.epochDay },
-                )
+            )
+            combine(fundPriceRepository.observeLatestPrices(fundIds), priceHistoryFlow) { latestPrices, history ->
+                Triple(snapshot, latestPrices, history)
             }
+        }
+        .map { (snapshot, latestPrices, history) ->
+            val fund = snapshot.funds.firstOrNull { it.fundId == fundId }
+            FondDetaljUiState(
+                loading = false,
+                fundName = fund?.name,
+                isin = fund?.isin,
+                suggestedIsin = snapshot.suggestedIsin,
+                prices = history.sortedByDescending { it.epochDay },
+                analysis = buildAnalysis(snapshot.funds, snapshot.transactions, latestPrices, history),
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = FondDetaljUiState(),
         )
+
+    /**
+     * Bygger [FundAnalysisCalc.Analysis] för den visade fonden. Null om fonden inte är ett
+     * kvarvarande innehav (inga andelar kvar, eller aldrig köpt — bara bevakad). Övriga
+     * innehavs tremånadershistorik läses ur den lokala kurscachen (Room), ingen ny
+     * nätverksuppdatering — samma princip som POR-5/HEM-1 (`fundPriceRepository.priceHistory`).
+     */
+    private suspend fun buildAnalysis(
+        funds: List<Fund>,
+        transactions: List<Transaction>,
+        latestPrices: Map<String, FundPrice>,
+        thisFundHistory: List<FundPrice>,
+    ): FundAnalysisCalc.Analysis? {
+        val holdings = PortfolioCalc.computeHoldings(funds, transactions)
+        val holding = holdings.firstOrNull { it.fund.fundId == fundId } ?: return null
+        val firstPurchase = transactions
+            .filter { it.fundId == fundId }
+            .minOfOrNull { it.epochDay }
+            ?.let(LocalDate::ofEpochDay)
+            ?: return null
+
+        val portfolioTotalValue = PortfolioCalc.totalValue(PortfolioCalc.withCurrentValue(holdings, latestPrices))
+
+        val today = LocalDate.now()
+        val since = today.minusMonths(OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS)
+        val otherHistories = holdings
+            .map { it.fund.fundId }
+            .filter { it != fundId }
+            .associateWith { otherId -> fundPriceRepository.priceHistory(otherId, since.toEpochDay(), today.toEpochDay()) }
+        val otherAverage = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
+
+        return FundAnalysisCalc.analyze(
+            today = today,
+            holding = holding,
+            priceHistory = thisFundHistory,
+            firstPurchaseDate = firstPurchase,
+            portfolioTotalValue = portfolioTotalValue,
+            otherHoldingsAverageThreeMonthReturn = otherAverage,
+        )
+    }
 
     // Engångsuppdatering per öppning av skärmen — samma "inte en ny bakgrundsjobb"-princip
     // som PortfoljViewModel (issue #6): har fonden ISIN, hämta hela historiken sedan första

@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.network.FondlistaHtmlSource
@@ -71,8 +73,9 @@ class HandelsbankenFundPriceRepositoryTest {
         val html = historyHtml(fundId = "SHB0000442", nav = "150,00", currency = "SEK", date = "2026-07-01")
         val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> html }, dao = dao, isinSources = emptyList())
 
-        repo.refresh("SHB0000442")
+        val success = repo.refresh("SHB0000442")
 
+        assertTrue(success)
         val latest = repo.latestPrice("SHB0000442")
         assertEquals(150.0, latest?.nav ?: -1.0, 1e-9)
         assertEquals("SEK", latest?.currency)
@@ -102,8 +105,9 @@ class HandelsbankenFundPriceRepositoryTest {
         val failingClient = FondlistaHtmlSource { _, _, _ -> throw IOException("nätverksfel") }
         val repo = HandelsbankenFundPriceRepository(client = failingClient, dao = dao, isinSources = emptyList())
 
-        repo.refresh("SHB0000442")
+        val success = repo.refresh("SHB0000442")
 
+        assertFalse(success)
         val latest = repo.latestPrice("SHB0000442")
         assertEquals(140.0, latest?.nav ?: -1.0, 1e-9)
     }
@@ -178,8 +182,9 @@ class HandelsbankenFundPriceRepositoryTest {
         })
         val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> "" }, dao = dao, isinSources = listOf(source))
 
-        repo.refreshSince("SHB0000442", "SE0004297927", since)
+        val success = repo.refreshSince("SHB0000442", "SE0004297927", since)
 
+        assertTrue(success)
         assertEquals("SE0004297927", source.lastHistoryCall?.first)
         assertEquals(123.45, repo.latestPrice("SHB0000442")?.nav ?: -1.0, 1e-9)
     }
@@ -212,8 +217,9 @@ class HandelsbankenFundPriceRepositoryTest {
             isinSources = listOf(FailingIsinSource(), FakeIsinSource()),
         )
 
-        repo.refreshSince("SHB0000442", "SE0004297927", LocalDate.of(2020, 1, 1))
+        val success = repo.refreshSince("SHB0000442", "SE0004297927", LocalDate.of(2020, 1, 1))
 
+        assertFalse(success)
         assertEquals(140.0, repo.latestPrice("SHB0000442")?.nav ?: -1.0, 1e-9)
     }
 

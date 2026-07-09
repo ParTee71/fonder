@@ -58,6 +58,19 @@ class PeriodRowTest {
     }
 
     @Test
+    fun visar_bara_procent_utan_kr_belopp_nar_amount_ar_null_men_fraction_finns() {
+        // issue #16 (ANA-1): CAGR/portföljandel har inget kr-belopp, bara en procent.
+        composeRule.setContent {
+            FonderTheme {
+                PeriodRow(label = "CAGR", amount = null, fraction = 0.082)
+            }
+        }
+
+        composeRule.onNodeWithText("CAGR").assertExists()
+        composeRule.onNodeWithText("+8,2 %").assertExists()
+    }
+
+    @Test
     fun visar_delvis_osaker_markering_nar_partial_ar_sant() {
         composeRule.setContent {
             FonderTheme {

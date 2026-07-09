@@ -86,7 +86,7 @@ fun AppNavigation() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Screen.Hem.route) {
-                HemScreen()
+                HemScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
             }
             composable(Screen.Portfolj.route) {
                 PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
