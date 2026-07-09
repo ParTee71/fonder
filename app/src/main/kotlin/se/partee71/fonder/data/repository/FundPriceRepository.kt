@@ -33,16 +33,22 @@ interface FundPriceRepository {
     /** Som [priceHistory], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
     fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>>
 
-    /** Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
-    suspend fun refresh(fundId: String)
+    /**
+     * Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig.
+     * @return true om hämtningen mot källan lyckades (oavsett om den gav nya priser), false
+     *   vid fel — används av [se.partee71.fonder.worker.FundPriceUpdateWorker] för att avgöra
+     *   om jobbet bör köras om.
+     */
+    suspend fun refresh(fundId: String): Boolean
 
     /**
      * Hämtar kurshistorik för [isin] sedan [since] och cachar den under [fundId] — kompletterar
      * [refresh] (Handelsbankens fasta 5-årsfönster, ingen ISIN) med en ISIN-baserad källkedja
      * som klarar godtyckligt gamla köp (se KRAVLISTA TP-14). Provar källorna i prioritetsordning,
      * går vidare vid fel/tomt resultat. Fel loggas, kraschar aldrig, cache behålls.
+     * @return true om någon källa i kedjan gav historik, false om alla misslyckades/var tomma.
      */
-    suspend fun refreshSince(fundId: String, isin: String, since: LocalDate)
+    suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
 
     /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
@@ -81,13 +87,14 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> =
         dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun refresh(fundId: String) {
-        runCatching {
+    override suspend fun refresh(fundId: String): Boolean {
+        val result = runCatching {
             val to = LocalDate.now()
             val from = to.minusYears(5)
             val html = client.fetchHistoryPage(fundId, from, to)
             HandelsbankenHtmlParser.parseHistory(html, fundId)
-        }.onSuccess { prices ->
+        }
+        result.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
             }
@@ -96,9 +103,10 @@ class HandelsbankenFundPriceRepository @Inject constructor(
             // krascha aldrig UI:t. Se riskavsnittet i issue #2/#3.
             Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
         }
+        return result.isSuccess
     }
 
-    override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {
+    override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
         val to = LocalDate.now()
         for (source in isinSources) {
             val points = runCatching { source.fetchHistory(isin, since, to) }
@@ -106,10 +114,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 .getOrNull()
             if (!points.isNullOrEmpty()) {
                 dao.upsertAll(points.map { FundPriceEntity(fundId = fundId, epochDay = it.epochDay, nav = it.nav, currency = it.currency) })
-                return
+                return true
             }
         }
         Log.w(TAG, "Ingen ISIN-källa kunde ge historik för $isin, behåller cache")
+        return false
     }
 
     override suspend fun suggestIsin(fundName: String): String? {

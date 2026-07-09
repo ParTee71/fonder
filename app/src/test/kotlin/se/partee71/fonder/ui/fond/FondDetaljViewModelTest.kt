@@ -68,11 +68,13 @@ class FondDetaljViewModelTest {
             capturedFromEpochDay = fromEpochDay
             return history
         }
-        override suspend fun refresh(fundId: String) {
+        override suspend fun refresh(fundId: String): Boolean {
             refreshCalledFor = fundId
+            return true
         }
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
             refreshSinceCall = Triple(fundId, isin, since)
+            return true
         }
         override suspend fun suggestIsin(fundName: String): String? {
             suggestIsinCalledWith = fundName

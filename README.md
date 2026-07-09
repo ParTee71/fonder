@@ -3,6 +3,8 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
+> Version: 0.11.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
 > **Bidrar du (eller en AI-assistent) med kod?** Läs [CLAUDE.md](CLAUDE.md) först — den
@@ -25,6 +27,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
 - [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
 - [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
+- [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -77,21 +80,24 @@ di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding
-└── usecase/      PortfolioCalc · RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
-                  MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
-                  ImportFundMatcher (delad matchningsordning, regel 4) · TransactionFormValidator
+└── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
+                  RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
+                  MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
+                  PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
+                  TransactionFormValidator
 ui/
+├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, #14)
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
-├── fond/         FondDetaljScreen (diagram-placeholder)
+├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7)
 ├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
-├── components/   Delade komponenter (EmptyState, SelectField, DateField …)
-├── diagram/      Delade diagram (FundLineChart — tillkommer)
+├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow …)
+├── diagram/      Delade diagram (FundLineChart)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi
 worker/           FundPriceUpdateWorker (daglig kursuppdatering)
 ```

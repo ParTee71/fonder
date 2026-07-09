@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -85,7 +86,20 @@ class PortfoljViewModel @Inject constructor(
             transactionRepository.observeFunds().collect { funds ->
                 funds.forEach { fund ->
                     if (refreshedFundIds.add(fund.fundId) && fundPriceRepository.latestPrice(fund.fundId) == null) {
-                        fundPriceRepository.refresh(fund.fundId)
+                        // Fonder med känt ISIN (t.ex. matchade via findFundByIsin, TP-14)
+                        // saknar Handelsbanken-FundId — refresh() hittar dem aldrig eftersom
+                        // den nycklas på FundId. Samma gren som FondDetaljViewModel/
+                        // ImportHoldingsViewModel använder.
+                        val isin = fund.isin
+                        if (isin != null) {
+                            val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
+                                .minOfOrNull { it.epochDay }
+                                ?.let(LocalDate::ofEpochDay)
+                                ?: LocalDate.now().minusYears(5)
+                            fundPriceRepository.refreshSince(fund.fundId, isin, since)
+                        } else {
+                            fundPriceRepository.refresh(fund.fundId)
+                        }
                     }
                 }
             }

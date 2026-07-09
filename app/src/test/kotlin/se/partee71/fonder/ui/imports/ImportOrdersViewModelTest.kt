@@ -65,8 +65,8 @@ class ImportOrdersViewModelTest {
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
+        override suspend fun refresh(fundId: String) = true
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
@@ -165,6 +165,34 @@ class ImportOrdersViewModelTest {
             assertEquals(2, state.rows.size)
             assertEquals(listOf("unparsable.pdf"), state.unparsedFileNames)
             assertNull(state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `manuellt rattad andel med svenskt decimalkomma importeras korrekt`() = runTest(dispatcher) {
+        // Regression: fälten redigeras med KeyboardType.Decimal, som på ett svenskt
+        // tangentbord ofta bara erbjuder komma — en rättelse med komma ska inte tyst göra
+        // raden ej importerbar.
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            val transaction = state.rows.first().transaction
+            vm.onSharesTextChange(transaction, "16,9862")
+            state = awaitItem()
+            assertTrue(state.rows.first().readyToImport)
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(16.9862, addedTransactions.first().shares, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }

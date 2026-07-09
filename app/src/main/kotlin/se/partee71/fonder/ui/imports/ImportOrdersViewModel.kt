@@ -18,6 +18,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
+import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -32,7 +33,8 @@ data class ImportOrderRowUiState(
     val included: Boolean = true,
 ) {
     val readyToImport: Boolean
-        get() = included && matchedFund != null && sharesText.toDoubleOrNull() != null && priceText.toDoubleOrNull() != null
+        get() = included && matchedFund != null &&
+            SwedishNumberFormat.parse(sharesText) != null && SwedishNumberFormat.parse(priceText) != null
 }
 
 enum class ImportOrdersError { NONE_PARSED }
@@ -156,8 +158,8 @@ class ImportOrdersViewModel @Inject constructor(
                             fundId = fund.fundId,
                             type = rowState.transaction.type,
                             epochDay = rowState.date.toEpochDay(),
-                            shares = requireNotNull(rowState.sharesText.toDoubleOrNull()),
-                            pricePerShare = requireNotNull(rowState.priceText.toDoubleOrNull()),
+                            shares = requireNotNull(SwedishNumberFormat.parse(rowState.sharesText)),
+                            pricePerShare = requireNotNull(SwedishNumberFormat.parse(rowState.priceText)),
                         ),
                     )
                 }

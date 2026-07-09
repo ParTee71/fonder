@@ -16,6 +16,7 @@ import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import se.partee71.fonder.domain.usecase.TransactionFormValidator
 import java.time.LocalDate
 import javax.inject.Inject
@@ -66,8 +67,8 @@ class TransactionFormViewModel @Inject constructor(
 
     val uiState: StateFlow<TransactionFormUiState> =
         combine(funds, formFields, saved) { funds, fields, saved ->
-            val shares = fields.sharesText.toDoubleOrNull()
-            val price = fields.priceText.toDoubleOrNull()
+            val shares = SwedishNumberFormat.parse(fields.sharesText)
+            val price = SwedishNumberFormat.parse(fields.priceText)
             val fee = parseFee(fields.feeText)
             TransactionFormUiState(
                 funds = funds,
@@ -119,8 +120,8 @@ class TransactionFormViewModel @Inject constructor(
 
     fun save() {
         val fund = selectedFund.value ?: return
-        val shares = sharesText.value.toDoubleOrNull() ?: return
-        val price = priceText.value.toDoubleOrNull() ?: return
+        val shares = SwedishNumberFormat.parse(sharesText.value) ?: return
+        val price = SwedishNumberFormat.parse(priceText.value) ?: return
         val fee = parseFee(feeText.value) ?: return
         if (!TransactionFormValidator.isValid(fund.fundId, shares, price, date.value, fee)) return
         viewModelScope.launch {
@@ -139,5 +140,5 @@ class TransactionFormViewModel @Inject constructor(
     }
 
     /** Tomt avgiftsfält tolkas som 0.0 (ingen känd avgift) — annars måste texten vara ett giltigt tal. */
-    private fun parseFee(text: String): Double? = if (text.isBlank()) 0.0 else text.toDoubleOrNull()
+    private fun parseFee(text: String): Double? = if (text.isBlank()) 0.0 else SwedishNumberFormat.parse(text)
 }

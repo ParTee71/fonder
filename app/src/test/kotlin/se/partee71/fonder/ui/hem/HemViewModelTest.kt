@@ -53,8 +53,8 @@ class HemViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
+        override suspend fun refresh(fundId: String) = true
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())

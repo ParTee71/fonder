@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -45,6 +46,8 @@ class PortfoljViewModelTest {
 
     private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
     private var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
+    private val refreshedFundIds = mutableListOf<String>()
+    private val refreshSinceCalls = mutableListOf<Triple<String, String, java.time.LocalDate>>()
 
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
@@ -52,8 +55,14 @@ class PortfoljViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
+        override suspend fun refresh(fundId: String): Boolean {
+            refreshedFundIds.add(fundId)
+            return true
+        }
+        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate): Boolean {
+            refreshSinceCalls.add(Triple(fundId, isin, since))
+            return true
+        }
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
@@ -161,5 +170,25 @@ class PortfoljViewModelTest {
             assertNull(performance.week) // ingen kurs 7 dagar bak i historiken
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `engangsuppdatering anvander refreshSince for fond med isin, inte refresh`() = runTest(dispatcher) {
+        // Fonder matchade via ISIN (t.ex. findFundByIsin, TP-14) saknar Handelsbanken-FundId
+        // — refresh() nycklas på FundId och hittar dem aldrig. Regression för buggen där
+        // sådana fonder aldrig fick sin engångsuppdatering vid första öppning av Portfölj.
+        val since = java.time.LocalDate.of(2020, 1, 1)
+        val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+        )
+        funds.value = listOf(fond)
+
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        advanceUntilIdle()
+
+        assertTrue(refreshedFundIds.isEmpty())
+        assertEquals(1, refreshSinceCalls.size)
+        assertEquals(Triple(fond.fundId, fond.isin, since), refreshSinceCalls.first())
     }
 }

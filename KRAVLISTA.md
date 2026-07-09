@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.11.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.11.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -91,7 +91,7 @@
 
 | ID | Krav |
 |----|------|
-| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. *(backup planerad)* |
+| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Androids inbyggda **Auto Backup** (Google-kontots molnlagring) är påslaget som interimistiskt skydd (`allowBackup="true"`) tills en egen, testbar Drive-backup (TP-7) finns — täcker en förlorad/nollställd enhet, men är inte en app-styrd rundtur. *(fullständig Drive-backup planerad)* |
 | NFR-2 | Ingen beteendeändring utan **tester** på berörd nivå (enhet/instrument/migrering). |
 | NFR-3 | Room-schemaändring kräver **migrering** utan dataförlust. |
 
@@ -279,3 +279,23 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   (POR-5). Ny delad komponent `PeriodRow` (`ui/components/`, regel 4) återanvänds mellan Hem
   och Portföljs innehavsrader. Ingen ny persisterad data — förändringen härleds vid läsning
   ur befintlig kurshistorik/transaktioner, precis som `PortfolioCalc`.
+- **Kodgranskning — daglig uppdatering, talformat och datasäkerhet:** en fullständig
+  genomgång av projektet hittade att fonder matchade via ISIN (`findFundByIsin`, TP-14 —
+  t.ex. AMF/Amundi/Nordea) aldrig fick sin dagliga kursuppdatering: `FundPriceUpdateWorker`
+  och `PortfoljViewModel`s engångsuppdatering anropade alltid `refresh()`, som nycklas på
+  Handelsbankens `FundId` och därför aldrig träffar sådana fonder. Båda använder nu samma
+  gren som `FondDetaljViewModel`/`ImportHoldingsViewModel` redan hade (`refreshSince` när
+  `Fund.isin != null`, med senaste kända köpdatum eller fem år tillbaka som sökfönster).
+  `FundPriceRepository.refresh`/`refreshSince` returnerar nu om hämtningen lyckades, så
+  `FundPriceUpdateWorker` kan be WorkManager köra om jobbet (`Result.retry()`) om samtliga
+  fonder misslyckades i stället för att tyst vänta ett helt dygn. Vidare: `SwedishNumberFormat`
+  (delad talparsning, regel 4) används nu konsekvent i transaktionsformuläret och båda
+  importflödena — tidigare accepterade bara ett av inmatningsfälten svenskt decimalkomma,
+  vilket kunde göra formuläret tyst ogiltigt på ett svenskt tangentbord (`KeyboardType.Decimal`
+  ger ofta bara komma). Samma funktion hade också av misstag två identiska ersättningar av
+  vanligt mellanslag i stället för att även hantera hårt mellanslag (U+00A0, vanligt i
+  talformatering från webbsidor) — rättat. Androids **Auto Backup** aktiverat
+  (`allowBackup="true"`) som interimistiskt skydd mot dataförlust tills Drive-backupen
+  (TP-7) är byggd, se NFR-1. `HoldingsImportParser`s XML-tolkning härdad mot XXE. Inga
+  synliga beteendeändringar i UI:t utöver att fler fonder nu faktiskt får uppdaterade
+  kurser och fler giltiga inmatningar accepteras — inga nya krav-ID:n.

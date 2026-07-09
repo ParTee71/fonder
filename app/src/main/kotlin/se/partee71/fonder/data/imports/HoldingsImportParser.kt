@@ -61,9 +61,19 @@ object HoldingsImportParser {
         return parseSheetXml(xml, sharedStrings)
     }
 
+    /**
+     * XML-tolkning härdad mot XXE (external entities/DTD) — filen kommer från en
+     * användarvald exportfil, inte en betrodd källa. `disallow-doctype-decl` räcker för att
+     * stänga av både externa entiteter och DTD-baserade "billion laughs"-attacker.
+     */
+    private fun secureDocumentBuilder() =
+        DocumentBuilderFactory.newInstance().apply {
+            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+            isExpandEntityReferences = false
+        }.newDocumentBuilder()
+
     internal fun parseSharedStrings(xml: String): List<String> {
-        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            .parse(xml.byteInputStream(Charsets.UTF_8))
+        val doc = secureDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8))
         val items = doc.getElementsByTagName("si")
         return (0 until items.length).map { i ->
             val si = items.item(i) as Element
@@ -73,8 +83,7 @@ object HoldingsImportParser {
     }
 
     internal fun parseSheetXml(xml: String, sharedStrings: List<String>): List<ImportedHoldingRow> {
-        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            .parse(xml.byteInputStream(Charsets.UTF_8))
+        val doc = secureDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8))
         val rowNodes = doc.getElementsByTagName("row")
 
         val rows = (0 until rowNodes.length).map { i -> parseRow(rowNodes.item(i) as Element, sharedStrings) }
