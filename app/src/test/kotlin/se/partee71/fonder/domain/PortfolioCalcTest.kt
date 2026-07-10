@@ -9,6 +9,7 @@ import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 
 class PortfolioCalcTest {
 
@@ -26,7 +27,43 @@ class PortfolioCalcTest {
 
         assertEquals(1, holdings.size)
         assertEquals(6.0, holdings.first().netShares, 1e-9)
-        assertEquals(1000.0 - 480.0, holdings.first().netInvested, 1e-9)
+        // netInvested är FIFO-kvarvarande anskaffningsvärde (6 kvarvarande andelar à
+        // ursprungliga 100 kr), inte kassaflödet (1000 − 480) — issue #10.
+        assertEquals(600.0, holdings.first().netInvested, 1e-9)
+    }
+
+    @Test
+    fun `netInvested anvander FIFO aven med flera inkopspriser`() {
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 5.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 2, shares = 5.0, pricePerShare = 200.0),
+            // Säljer 6 andelar — äldsta lotten (5 à 100) konsumeras helt, plus 1 av den nya (à 200).
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 3, shares = 6.0, pricePerShare = 150.0),
+        )
+
+        val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
+
+        assertEquals(4.0, holdings.first().netShares, 1e-9)
+        // Kvarvarande 4 andelar ur den andra lotten à 200 kr = 800 kr.
+        assertEquals(800.0, holdings.first().netInvested, 1e-9)
+    }
+
+    @Test
+    fun `avgift pa en delforsaljning paverkar inte kvarvarande nettoinvesterat`() {
+        // Avgiften hör till det realiserade resultatet för själva säljtransaktionen
+        // (RealizedGainCalculator) — den ändrar inte anskaffningsvärdet för andelarna
+        // som fortfarande innehas.
+        val txs = listOf(
+            Transaction(id = 1, fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
+            Transaction(id = 2, fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0, fee = 20.0),
+        )
+
+        val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
+        assertEquals(600.0, holding.netInvested, 1e-9)
+
+        val sale = RealizedGainCalculator.compute(txs).first()
+        assertEquals(400.0, sale.costBasis, 1e-9)
+        assertEquals(60.0, sale.realizedGain, 1e-9) // 480 sålt - 20 avgift - 400 anskaffning.
     }
 
     @Test
@@ -48,6 +85,30 @@ class PortfolioCalcTest {
             Transaction(fundId = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0),
         )
         assertEquals(0, PortfolioCalc.computeHoldings(listOf(fondA), txs).size)
+    }
+
+    @Test
+    fun `helt avsald fond (netto noll andelar) utelamnas ur portfoljen`() {
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 10.0, pricePerShare = 120.0, fee = 20.0),
+        )
+        // Fees dras av från det realiserade resultatet (RealizedGainCalculator), inte från
+        // portföljens kvarvarande anskaffningsvärde — här är fonden helt avsåld oavsett.
+        assertEquals(0, PortfolioCalc.computeHoldings(listOf(fondA), txs).size)
+    }
+
+    @Test
+    fun `firstPurchaseEpochDay ar den tidigaste transaktionens epochDay, oavsett ordning (POR-6)`() {
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 1.0, pricePerShare = 90.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 60, shares = 1.0, pricePerShare = 110.0),
+        )
+
+        val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
+
+        assertEquals(10L, holding.firstPurchaseEpochDay)
     }
 
     @Test

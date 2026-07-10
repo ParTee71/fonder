@@ -25,6 +25,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import java.time.LocalDate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -37,6 +38,8 @@ class ImportHoldingsViewModelTest {
     private val addedFunds = mutableListOf<Fund>()
     private val addedTransactions = mutableListOf<Transaction>()
     private var refreshedFundId: String? = null
+    private var refreshSinceCall: Triple<String, String, LocalDate>? = null
+    private var findFundByIsinResult: Fund? = null
 
     private val handelsbankenFund = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige (A1 SEK)")
     private val catalog = FundCatalog(companies = emptyList(), funds = listOf(handelsbankenFund))
@@ -53,6 +56,7 @@ class ImportHoldingsViewModelTest {
             return 1
         }
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     private val fakePriceRepo = object : FundPriceRepository {
@@ -61,11 +65,16 @@ class ImportHoldingsViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             listOf(FundPrice(fundId = fundId, epochDay = fromEpochDay, nav = 950.0, currency = "SEK"))
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {
+        override suspend fun refresh(fundId: String): Boolean {
             refreshedFundId = fundId
+            return true
         }
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {}
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
+            refreshSinceCall = Triple(fundId, isin, since)
+            return true
+        }
         override suspend fun suggestIsin(fundName: String): String? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -110,15 +119,88 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `alla dagars kurser hamtas vid import aven om en kurs redan ar cachad`() = runTest(dispatcher) {
-        // Fonden är redan bevakad (har en cachad kurs sedan tidigare) — refresh() ska
-        // ändå anropas vid import, så att hela kurshistoriken finns för både
-        // inköpsdatum-uppskattningen och den historiska värdeutvecklingen (#7).
-        val priceRepoMedCachadKurs = object : FundPriceRepository by fakePriceRepo {
+    fun `matchar mot redan bevakad fond via ISIN, fore fondnamnsmatchning`() = runTest(dispatcher) {
+        // Radens ISIN (SE0000582033) motsvarar redan en bevakad fond under ett annat
+        // fundId/namn än katalogens "handelsbankenFund" — den bevakade fonden ska vinna
+        // (undviker dubbletter vid upprepad import, KRAVLISTA TP-13/TP-14).
+        val trackedFund = Fund(fundId = "SE0000582033", name = "Min egen Handelsbanken-fond", currency = "SEK", isin = "SE0000582033")
+        val transactionRepoMedBevakadFond = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeFunds(): Flow<List<Fund>> = MutableStateFlow(listOf(trackedFund))
+        }
+        val vm = ImportHoldingsViewModel(transactionRepoMedBevakadFond, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(trackedFund, state.rows.first().matchedFund)
+            assertEquals(1.0, state.rows.first().matchConfidence)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `matchar exakt via Avanza-ISIN nar Handelsbankens katalog saknar fonden`() = runTest(dispatcher) {
+        val franklinSheetXml = """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                <sheetData>
+                <row r="5"><c r="A5" t="inlineStr"><is><t>ISIN</t></is></c></row>
+                <row r="6"><c r="A6" t="inlineStr"><is><t>LU0496367417</t></is></c><c r="B6" t="inlineStr"><is><t>Franklin Templeton</t></is></c><c r="C6" t="inlineStr"><is><t>Franklin Templeton Franklin Gold and Precious Metals Fund</t></is></c><c r="D6" t="inlineStr"><is><t>116,2080</t></is></c><c r="E6"><v>175.12</v></c><c r="F6" t="inlineStr"><is><t>SEK</t></is></c><c r="G6" t="inlineStr"><is><t>2026-07-02</t></is></c><c r="H6"><v>20350.34</v></c><c r="I6"><v>15000.0</v></c></row>
+                </sheetData>
+            </worksheet>
+        """.trimIndent()
+        // Handelsbankens katalog (fakePriceRepo.fetchFundCatalog) innehåller bara
+        // handelsbankenFund — namnmatchningen skulle ge INGEN träff för Franklin Templeton.
+        // Avanza (findFundByIsin) känner däremot till fonden exakt.
+        val avanzaFund = Fund(fundId = "LU0496367417", name = "Franklin Gold and Prec Mtls A(acc)USD", currency = "USD", isin = "LU0496367417")
+        findFundByIsinResult = avanzaFund
+
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(franklinSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(avanzaFund, state.rows.first().matchedFund)
+            assertEquals(1.0, state.rows.first().matchConfidence)
+            // Fonden saknar Handelsbanken-FundId (isin != null) — historik ska hämtas via
+            // refreshSince (ISIN-kedjan, 30 års sökfönster i stället för Handelsbankens 5,
+            // eftersom Avanza normalt har mycket längre historik, TP-14), inte refresh().
+            assertEquals(Triple("LU0496367417", "LU0496367417", LocalDate.now().minusYears(30)), refreshSinceCall)
+            assertNull(refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hoppar over kursuppdatering nar fonden redan har en aktuell cachad kurs`() = runTest(dispatcher) {
+        // Regression för issue #19: en fond som redan bevakas och har en färsk (dagens)
+        // cachad kurs ska inte trigga en ny, långsam nätverksuppdatering av hela historiken
+        // vid import — annars blir import onödigt långsamt för redan bevakade fonder.
+        val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
             override suspend fun latestPrice(fundId: String): FundPrice =
                 FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedCachadKurs)
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedFarskKurs)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertNull(refreshedFundId)
+            assertNull(refreshSinceCall)
+            assertFalse(state.rows.first().priceFetchFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hamtar kurs nar fonden helt saknar cachad kurs`() = runTest(dispatcher) {
+        // fakePriceRepo.latestPrice returnerar null som standard — helt obevakad fond.
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -126,6 +208,44 @@ class ImportHoldingsViewModelTest {
             while (state.loading) state = awaitItem()
 
             assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hamtar kurs nar cachad kurs ar aldre an idag`() = runTest(dispatcher) {
+        val priceRepoMedInaktuellKurs = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun latestPrice(fundId: String): FundPrice =
+                FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(1).toEpochDay(), nav = 950.0, currency = "SEK")
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedInaktuellKurs)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `misslyckad kurshamtning markerar raden i stallet for att tystas ner`() = runTest(dispatcher) {
+        val priceRepoMedMisslyckadHamtning = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun refresh(fundId: String): Boolean {
+                refreshedFundId = fundId
+                return false
+            }
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedMisslyckadHamtning)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertTrue(state.rows.first().priceFetchFailed)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -438,6 +558,30 @@ class ImportHoldingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(0, addedTransactions.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `inkopstillfalle markerat som salj skapar en saljtransaktion vid import`() = runTest(dispatcher) {
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            val row = state.rows.first().row
+
+            vm.onOccasionTypeChange(row, 0, TransactionType.SALJ)
+            state = awaitItem()
+            assertEquals(TransactionType.SALJ, state.rows.first().occasions.first().type)
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(1, addedTransactions.size)
+            assertEquals(TransactionType.SALJ, addedTransactions.first().type)
             cancelAndIgnoreRemainingEvents()
         }
     }

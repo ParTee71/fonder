@@ -9,6 +9,7 @@ import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import java.time.LocalDate
@@ -32,22 +33,61 @@ interface FundPriceRepository {
     /** Som [priceHistory], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
     fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>>
 
-    /** Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig. */
-    suspend fun refresh(fundId: String)
+    /**
+     * Hämtar senaste fem årens kurser från källan och cachar dem. Fel loggas, kraschar aldrig.
+     * @return true om hämtningen mot källan lyckades (oavsett om den gav nya priser), false
+     *   vid fel — används av [se.partee71.fonder.worker.FundPriceUpdateWorker] för att avgöra
+     *   om jobbet bör köras om.
+     */
+    suspend fun refresh(fundId: String): Boolean
 
     /**
      * Hämtar kurshistorik för [isin] sedan [since] och cachar den under [fundId] — kompletterar
      * [refresh] (Handelsbankens fasta 5-årsfönster, ingen ISIN) med en ISIN-baserad källkedja
      * som klarar godtyckligt gamla köp (se KRAVLISTA TP-14). Provar källorna i prioritetsordning,
      * går vidare vid fel/tomt resultat. Fel loggas, kraschar aldrig, cache behålls.
+     * @return true om någon källa i kedjan gav historik, false om alla misslyckades/var tomma.
      */
-    suspend fun refreshSince(fundId: String, isin: String, since: LocalDate)
+    suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
 
     /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
 
+    /**
+     * Slår upp en fond **exakt** via [isin] i samma källkedja som [refreshSince] — ingen
+     * fuzzy namnmatchning. Används för fonder som saknas i Handelsbankens katalog (TP-9),
+     * t.ex. vid import av innehav från andra fondbolag (se KRAVLISTA TP-13/TP-14). Fondens
+     * identitet blir ISIN:et självt (`Fund.fundId == isin`) eftersom källan inte har något
+     * Handelsbanken-FundId. Null om ingen källa känner till ISIN:et.
+     */
+    suspend fun findFundByIsin(isin: String): Fund?
+
     /** Alla fondbolag + hela fondkatalogen (en hämtning) för fondsök-UI. */
     suspend fun fetchFundCatalog(): FundCatalog
+}
+
+/**
+ * Uppdaterar en fonds kurscache via rätt källa: den ISIN-baserade källkedjan ([refreshSince])
+ * om fonden har ett känt ISIN (t.ex. matchad via [FundPriceRepository.findFundByIsin] eller
+ * import, TP-14 — sådana fonder saknar Handelsbanken-FundId och [refresh] hittar dem aldrig),
+ * annars Handelsbankens fasta femårsfönster ([refresh]). Samma gren behövdes tidigare separat
+ * i flera ViewModels (Portfölj, båda importflödena) — samlad här för att undvika ytterligare
+ * en kopia (regel 4, issue #19). [se.partee71.fonder.ui.fond.FondDetaljViewModel] har en
+ * egen variant med en extra gate (bara om fonden faktiskt köpts) och lämnas orörd.
+ */
+suspend fun FundPriceRepository.refreshFund(fund: Fund, since: LocalDate): Boolean {
+    val isin = fund.isin
+    return if (isin != null) refreshSince(fund.fundId, isin, since) else refresh(fund.fundId)
+}
+
+/**
+ * Sant om [fundId] saknar cachad kurs helt, eller om senaste kända kurs är äldre än [today]
+ * (issue #18/#19) — samma "engångsuppdatering bara vid faktiskt inaktuell cache"-princip
+ * återanvänd mellan Portfölj och båda importflödena i stället för en egen kopia var (regel 4).
+ */
+suspend fun FundPriceRepository.isPriceStale(fundId: String, today: LocalDate = LocalDate.now()): Boolean {
+    val latest = latestPrice(fundId)
+    return latest == null || latest.epochDay < today.toEpochDay()
 }
 
 @Singleton
@@ -71,13 +111,14 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> =
         dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun refresh(fundId: String) {
-        runCatching {
+    override suspend fun refresh(fundId: String): Boolean {
+        val result = runCatching {
             val to = LocalDate.now()
             val from = to.minusYears(5)
             val html = client.fetchHistoryPage(fundId, from, to)
             HandelsbankenHtmlParser.parseHistory(html, fundId)
-        }.onSuccess { prices ->
+        }
+        result.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
             }
@@ -86,9 +127,10 @@ class HandelsbankenFundPriceRepository @Inject constructor(
             // krascha aldrig UI:t. Se riskavsnittet i issue #2/#3.
             Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
         }
+        return result.isSuccess
     }
 
-    override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) {
+    override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
         val to = LocalDate.now()
         for (source in isinSources) {
             val points = runCatching { source.fetchHistory(isin, since, to) }
@@ -96,10 +138,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 .getOrNull()
             if (!points.isNullOrEmpty()) {
                 dao.upsertAll(points.map { FundPriceEntity(fundId = fundId, epochDay = it.epochDay, nav = it.nav, currency = it.currency) })
-                return
+                return true
             }
         }
         Log.w(TAG, "Ingen ISIN-källa kunde ge historik för $isin, behåller cache")
+        return false
     }
 
     override suspend fun suggestIsin(fundName: String): String? {
@@ -108,6 +151,18 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 .onFailure { e -> Log.w(TAG, "ISIN-förslag misslyckades för \"$fundName\", provar nästa i kedjan", e) }
                 .getOrNull()
             if (isin != null) return isin
+        }
+        return null
+    }
+
+    override suspend fun findFundByIsin(isin: String): Fund? {
+        for (source in isinSources) {
+            val info = runCatching { source.findFund(isin) }
+                .onFailure { e -> Log.w(TAG, "ISIN-uppslag misslyckades för $isin, provar nästa i kedjan", e) }
+                .getOrNull()
+            if (info != null) {
+                return Fund(fundId = isin, name = info.name, currency = info.currency, isin = isin)
+            }
         }
         return null
     }

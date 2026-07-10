@@ -37,4 +37,7 @@ interface FundPriceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(prices: List<FundPriceEntity>)
+
+    @Query("DELETE FROM fund_prices")
+    suspend fun deleteAll()
 }

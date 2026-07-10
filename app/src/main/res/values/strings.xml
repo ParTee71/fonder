@@ -7,6 +7,7 @@
     <string name="save">Spara</string>
     <string name="delete">Ta bort</string>
     <string name="cancel">Avbryt</string>
+    <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
     <string name="ok">OK</string>
@@ -15,10 +16,28 @@
     <string name="sign_out">Logga ut</string>
 
     <!-- Navigation / skärmar -->
+    <string name="nav_hem">Hem</string>
     <string name="nav_portfolj">Portfölj</string>
     <string name="nav_transaktioner">Transaktioner</string>
+    <string name="nav_salda">Sålda</string>
     <string name="nav_fond">Fond</string>
     <string name="nav_settings">Inställningar</string>
+
+    <!-- Hem (dashboard, issue #14) -->
+    <string name="hem_empty_title">Ingen portfölj ännu</string>
+    <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
+
+    <!-- Hem — analys-summering (issue #16, HEM-4) -->
+    <string name="hem_analysis_title">Att se över</string>
+    <string name="hem_analysis_empty">Inga fonder flaggade</string>
+
+    <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
+    <string name="period_day">Idag</string>
+    <string name="period_week">Senaste veckan</string>
+    <string name="period_month">Senaste månaden</string>
+    <string name="period_insufficient_data">Otillräcklig data</string>
+    <string name="period_stale_price">Kurs ej uppdaterad</string>
+    <string name="period_partial_data">Delvis osäker — någon fond saknar historik</string>
 
     <!-- Portfölj -->
     <string name="portfolj_title">Portfölj</string>
@@ -26,6 +45,7 @@
     <string name="portfolj_empty_body">Lägg till din första fondtransaktion för att se värde och utveckling.</string>
     <string name="portfolj_total_value">Totalt värde</string>
     <string name="portfolj_price_missing">Kurs saknas ännu</string>
+    <string name="format_holding_first_purchase">Första köp %1$s · Inköpsvärde %2$s</string>
 
     <!-- Transaktioner -->
     <string name="transaktioner_title">Transaktioner</string>
@@ -41,8 +61,16 @@
     <string name="transaktionsform_date_label">Datum</string>
     <string name="transaktionsform_shares_label">Antal andelar</string>
     <string name="transaktionsform_price_label">Kurs per andel</string>
+    <string name="transaktionsform_fee_label">Avgift (kr, valfritt)</string>
     <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
+
+    <!-- Sålda fonder — realiserat resultat (issue #10) -->
+    <string name="sold_funds_empty_title">Inga sälj ännu</string>
+    <string name="sold_funds_empty_body">Realiserat resultat visas här när du säljer andelar i en fond.</string>
+    <string name="format_sold_fund_shares">%1$s andelar sålda %2$s</string>
+    <string name="format_sold_fund_detail">Belopp %1$s · Avgift %2$s · Anskaffningsvärde %3$s</string>
+    <string name="sold_fund_uncovered_warning">Osäkert resultat — sålda andelar saknar matchande köp i historiken.</string>
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>
@@ -50,6 +78,24 @@
     <string name="fond_isin_label">ISIN</string>
     <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
+
+    <!-- Analys — nyckeltal och säljsignaler (issue #16, ANA-1–ANA-4) -->
+    <string name="analys_section_title">Analys</string>
+    <string name="analys_period_ytd">I år</string>
+    <string name="analys_period_3man">3 månader</string>
+    <string name="analys_period_1ar">1 år</string>
+    <string name="analys_period_3ar">3 år</string>
+    <string name="analys_period_sedan_kop">Sedan köp</string>
+    <string name="analys_cagr_label">Årlig snittavkastning (CAGR)</string>
+    <string name="analys_gav_label">GAV</string>
+    <string name="analys_portfolio_share_label">Andel av portföljen</string>
+    <string name="analys_status_gron">Inga signaler</string>
+    <string name="analys_status_gul">Värt att se över</string>
+    <string name="analys_status_rod">Bör ses över</string>
+    <string name="analys_status_insufficient">Otillräcklig kurshistorik för säljsignal ännu</string>
+    <string name="format_analys_signal_distance">%1$s från toppen (52 veckor)</string>
+    <string name="analys_signal_trend">Under 200-dagars snitt</string>
+    <string name="analys_signal_momentum">Svagare än portföljsnittet senaste 3 månaderna</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>
@@ -85,6 +131,7 @@
     <string name="import_match_label">Matchad fond</string>
     <string name="import_match_none">Ingen fond vald</string>
     <string name="import_match_uncertain">Osäker matchning – kontrollera</string>
+    <string name="import_price_fetch_failed">Kurs kunde inte hämtas – kontrollera</string>
     <string name="import_date_label">Uppskattat inköpsdatum</string>
     <string name="import_date_uncertain">Osäkert datum – kurshistoriken räcker inte tillbaka, kontrollera</string>
     <string name="import_occasions_label">Inköpstillfällen</string>
@@ -94,5 +141,29 @@
     <string name="format_import_shares_mismatch">Summan av andelar (%1$s) matchar inte totalt antal (%2$s)</string>
     <string name="import_commit_button">Importera %d poster</string>
     <string name="import_success_title">Import klar</string>
-    <string name="import_success_body">Innehaven har importerats som transaktioner.</string>
+    <string name="format_import_success_body">%d poster har importerats som transaktioner.</string>
+
+    <!-- Importera avräkningsnotor (issue #8-uppföljning) -->
+    <string name="settings_import_orders_section">Importera avräkningsnotor</string>
+    <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
+    <string name="settings_import_orders_button">Importera avräkningsnotor</string>
+    <string name="import_orders_title">Importera avräkningsnotor</string>
+    <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>
+    <string name="import_orders_pick_files_button">Välj PDF-filer</string>
+    <string name="import_orders_loading_title">Läser PDF-filer…</string>
+    <string name="import_orders_loading_body">Tolkar avräkningsnotor och matchar fonder. Det kan ta en liten stund.</string>
+    <string name="import_orders_error_none_parsed">Kunde inte läsa någon transaktion ur de valda filerna. Kontrollera att det är Handelsbankens avräkningsnotor (PDF).</string>
+    <string name="format_import_orders_unparsed">%1$d fil(er) kunde inte tolkas: %2$s</string>
+    <string name="format_import_order_isin">ISIN: %1$s · %2$s</string>
+    <string name="import_order_shares_label">Antal andelar</string>
+    <string name="import_order_price_label">Kurs/andel</string>
+    <string name="import_orders_commit_button">Importera %d transaktioner</string>
+
+    <!-- Töm databas (farozon i Inställningar) -->
+    <string name="settings_danger_section">Farozon</string>
+    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — molnbackup finns ännu inte.</string>
+    <string name="settings_clear_database_button">Töm databasen</string>
+    <string name="settings_clear_database_success">Databasen har tömts.</string>
+    <string name="clear_database_confirm_title">Töm databasen?</string>
+    <string name="clear_database_confirm_body">Alla fonder, transaktioner och cachade kurser raderas permanent. Detta går inte att ångra.</string>
 </resources>

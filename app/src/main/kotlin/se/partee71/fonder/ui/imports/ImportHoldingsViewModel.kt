@@ -6,18 +6,23 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.imports.HoldingsImportParser
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedHoldingRow
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundNameMatcher
+import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
+import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.math.abs
@@ -26,6 +31,16 @@ private const val SHARES_MATCH_TOLERANCE = 1e-6
 
 /** Hur långt tillbaka kurshistoriken hämtas/söks vid import — se KRAVLISTA (TP-13). */
 private const val PRICE_HISTORY_YEARS = 5L
+
+/**
+ * Som [PRICE_HISTORY_YEARS], men för fonder matchade via ISIN (TP-14): Avanza har normalt
+ * historik betydligt längre tillbaka än Handelsbankens fasta femårsfönster (verifierat mot
+ * en riktig export, se KRAVLISTA-changelog — en fond hade data ända sedan 1994), vilket ger
+ * `PurchaseDateEstimator` en reell chans att hitta äldre köp i stället för att falla tillbaka
+ * på en gissning. Upplösningen trappas ner ju längre tillbaka man ber om (dagligt, veckovis,
+ * till slut månadsvis) — fortfarande bättre än att inte kunna hitta datumet alls.
+ */
+private const val ISIN_PRICE_HISTORY_YEARS = 30L
 
 /**
  * Ett enskilt inköpstillfälle för en importerad rad (issue #8-uppföljning: en rad i
@@ -37,8 +52,12 @@ data class ImportOccasion(
     val date: LocalDate,
     val dateConfident: Boolean,
     val sharesText: String,
+    // Standard Köp — exportens innehav är i praktiken alltid köpta andelar, men en importrad
+    // kan sättas till Sälj (t.ex. en manuellt tillagd rad för en avyttring) i stället för att
+    // alltid hårdkodas till köp (issue #10, KRAVLISTA IMP-5).
+    val type: TransactionType = TransactionType.KOP,
 ) {
-    val shares: Double? get() = sharesText.trim().replace(",", ".").toDoubleOrNull()
+    val shares: Double? get() = SwedishNumberFormat.parse(sharesText)
 }
 
 /** En importerad rad + användarens (eventuellt korrigerade) matchning/inköpstillfällen (issue #8). */
@@ -48,6 +67,8 @@ data class ImportRowUiState(
     val matchConfidence: Double?,
     val occasions: List<ImportOccasion>,
     val included: Boolean = true,
+    /** Sant om ett försök att uppdatera fondens kurscache under import misslyckades (issue #19) — importen fortsätter ändå, men markerad, inte tyst. */
+    val priceFetchFailed: Boolean = false,
 ) {
     val occasionSharesTotal: Double get() = occasions.sumOf { it.shares ?: 0.0 }
     val sharesMismatch: Boolean get() = abs(occasionSharesTotal - row.shares) > SHARES_MATCH_TOLERANCE
@@ -103,27 +124,48 @@ class ImportHoldingsViewModel @Inject constructor(
             }
 
             val catalog = fundPriceRepository.fetchFundCatalog()
-            val rowStates = parsedRows.map { row -> buildRowState(row, catalog) }
+            val trackedFunds = transactionRepository.observeFunds().first()
+            val rowStates = parsedRows.map { row -> buildRowState(row, catalog, trackedFunds) }
             _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }
         }
     }
 
-    private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog): ImportRowUiState {
-        val fund = FundNameMatcher.bestMatch(row.fundName, catalog.funds, row.fundCompanyName)
+    /** Matchningsordning delad med [se.partee71.fonder.ui.imports.ImportOrdersViewModel] — se [ImportFundMatcher]. */
+    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? =
+        ImportFundMatcher.match(
+            isin = row.isin,
+            fundName = row.fundName,
+            fundCompanyName = row.fundCompanyName,
+            catalogFunds = catalog.funds,
+            trackedFunds = trackedFunds,
+            findFundByIsin = fundPriceRepository::findFundByIsin,
+        )
+
+    private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): ImportRowUiState {
+        val match = matchFund(row, catalog, trackedFunds)
+        val to = LocalDate.now()
+        // Fonder matchade via ISIN kan sökas mycket längre tillbaka (ISIN_PRICE_HISTORY_YEARS)
+        // eftersom Avanza normalt har historik långt bortom Handelsbankens femårsfönster (TP-14).
+        val searchYears = if (match?.fund?.isin != null) ISIN_PRICE_HISTORY_YEARS else PRICE_HISTORY_YEARS
+        val since = to.minusYears(searchYears)
+
         // Utan en tillförlitlig datumuppskattning (inget kurshistorik-fynd) antas ett gammalt
         // innehav hellre ha köpts för länge sedan än "idag" — samma gräns som kurshistoriken
-        // (PRICE_HISTORY_YEARS) söks inom, så gissningen aldrig hamnar utanför sökfönstret.
-        var date = LocalDate.now().minusYears(PRICE_HISTORY_YEARS)
+        // söks inom, så gissningen aldrig hamnar utanför sökfönstret.
+        var date = since
         var dateConfident = false
+        var priceFetchFailed = false
 
-        if (fund != null) {
-            // Uppdatera alltid hela kurshistoriken vid import — även om fonden redan bevakas
-            // sedan tidigare och har en cachad kurs — så att både inköpsdatum-uppskattningen
-            // nedan och den historiska värdeutvecklingen (#7) baseras på fullständig data,
-            // inte bara de dagar som råkat cachas via den dagliga bakgrundsuppdateringen.
-            fundPriceRepository.refresh(fund.fund.fundId)
-            val to = LocalDate.now()
-            val history = fundPriceRepository.priceHistory(fund.fund.fundId, to.minusYears(PRICE_HISTORY_YEARS).toEpochDay(), to.toEpochDay())
+        if (match != null) {
+            val fund = match.fund
+            // Hämta bara om kurscachen faktiskt är inaktuell (samma "senaste NAV < 1 dag
+            // gammal"-princip som #18) — en redan bevakad fond med färsk kurs har normalt
+            // redan full historik cachad sedan tidigare, så en ny hämtning bara gör importet
+            // onödigt långsamt utan att ge mer data (issue #19).
+            if (fundPriceRepository.isPriceStale(fund.fundId)) {
+                priceFetchFailed = !fundPriceRepository.refreshFund(fund, since)
+            }
+            val history = fundPriceRepository.priceHistory(fund.fundId, since.toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->
                 date = LocalDate.ofEpochDay(estimate.epochDay)
                 dateConfident = estimate.confident
@@ -132,9 +174,10 @@ class ImportHoldingsViewModel @Inject constructor(
 
         return ImportRowUiState(
             row = row,
-            matchedFund = fund?.fund,
-            matchConfidence = fund?.confidence,
+            matchedFund = match?.fund,
+            matchConfidence = match?.confidence,
             occasions = listOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
+            priceFetchFailed = priceFetchFailed,
         )
     }
 
@@ -152,6 +195,10 @@ class ImportHoldingsViewModel @Inject constructor(
 
     fun onOccasionSharesChange(row: ImportedHoldingRow, index: Int, sharesText: String) {
         updateOccasion(row, index) { it.copy(sharesText = sharesText) }
+    }
+
+    fun onOccasionTypeChange(row: ImportedHoldingRow, index: Int, type: TransactionType) {
+        updateOccasion(row, index) { it.copy(type = type) }
     }
 
     /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
@@ -192,7 +239,7 @@ class ImportHoldingsViewModel @Inject constructor(
                         transactionRepository.addTransaction(
                             Transaction(
                                 fundId = fund.fundId,
-                                type = TransactionType.KOP,
+                                type = occasion.type,
                                 epochDay = occasion.date.toEpochDay(),
                                 shares = requireNotNull(occasion.shares),
                                 pricePerShare = rowState.row.averageCostPerShare,

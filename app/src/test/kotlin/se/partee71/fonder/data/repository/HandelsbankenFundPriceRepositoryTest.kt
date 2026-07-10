@@ -9,13 +9,16 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
 import java.io.IOException
 import java.time.LocalDate
@@ -45,6 +48,10 @@ private class FakeFundPriceDao : FundPriceDao {
             stored.add(new)
         }
     }
+
+    override suspend fun deleteAll() {
+        stored.clear()
+    }
 }
 
 class HandelsbankenFundPriceRepositoryTest {
@@ -66,8 +73,9 @@ class HandelsbankenFundPriceRepositoryTest {
         val html = historyHtml(fundId = "SHB0000442", nav = "150,00", currency = "SEK", date = "2026-07-01")
         val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> html }, dao = dao, isinSources = emptyList())
 
-        repo.refresh("SHB0000442")
+        val success = repo.refresh("SHB0000442")
 
+        assertTrue(success)
         val latest = repo.latestPrice("SHB0000442")
         assertEquals(150.0, latest?.nav ?: -1.0, 1e-9)
         assertEquals("SEK", latest?.currency)
@@ -97,8 +105,9 @@ class HandelsbankenFundPriceRepositoryTest {
         val failingClient = FondlistaHtmlSource { _, _, _ -> throw IOException("nätverksfel") }
         val repo = HandelsbankenFundPriceRepository(client = failingClient, dao = dao, isinSources = emptyList())
 
-        repo.refresh("SHB0000442")
+        val success = repo.refresh("SHB0000442")
 
+        assertFalse(success)
         val latest = repo.latestPrice("SHB0000442")
         assertEquals(140.0, latest?.nav ?: -1.0, 1e-9)
     }
@@ -145,6 +154,7 @@ class HandelsbankenFundPriceRepositoryTest {
     private class FakeIsinSource(
         private val history: (String, LocalDate, LocalDate) -> List<IsinPricePoint> = { _, _, _ -> emptyList() },
         private val suggestion: (String) -> String? = { null },
+        private val fundInfo: (String) -> IsinFundInfo? = { null },
     ) : IsinPriceHistorySource {
         var lastHistoryCall: Triple<String, LocalDate, LocalDate>? = null
         override suspend fun fetchHistory(isin: String, from: LocalDate, to: LocalDate): List<IsinPricePoint> {
@@ -152,12 +162,15 @@ class HandelsbankenFundPriceRepositoryTest {
             return history(isin, from, to)
         }
         override suspend fun suggestIsin(fundName: String): String? = suggestion(fundName)
+        override suspend fun findFund(isin: String): IsinFundInfo? = fundInfo(isin)
     }
 
     private class FailingIsinSource : IsinPriceHistorySource {
         override suspend fun fetchHistory(isin: String, from: LocalDate, to: LocalDate): List<IsinPricePoint> =
             throw IOException("nätverksfel")
         override suspend fun suggestIsin(fundName: String): String? =
+            throw IOException("nätverksfel")
+        override suspend fun findFund(isin: String): IsinFundInfo? =
             throw IOException("nätverksfel")
     }
 
@@ -169,8 +182,9 @@ class HandelsbankenFundPriceRepositoryTest {
         })
         val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> "" }, dao = dao, isinSources = listOf(source))
 
-        repo.refreshSince("SHB0000442", "SE0004297927", since)
+        val success = repo.refreshSince("SHB0000442", "SE0004297927", since)
 
+        assertTrue(success)
         assertEquals("SE0004297927", source.lastHistoryCall?.first)
         assertEquals(123.45, repo.latestPrice("SHB0000442")?.nav ?: -1.0, 1e-9)
     }
@@ -203,8 +217,9 @@ class HandelsbankenFundPriceRepositoryTest {
             isinSources = listOf(FailingIsinSource(), FakeIsinSource()),
         )
 
-        repo.refreshSince("SHB0000442", "SE0004297927", LocalDate.of(2020, 1, 1))
+        val success = repo.refreshSince("SHB0000442", "SE0004297927", LocalDate.of(2020, 1, 1))
 
+        assertFalse(success)
         assertEquals(140.0, repo.latestPrice("SHB0000442")?.nav ?: -1.0, 1e-9)
     }
 
@@ -228,6 +243,46 @@ class HandelsbankenFundPriceRepositoryTest {
         )
 
         assertNull(repo.suggestIsin("Okänd fond"))
+    }
+
+    @Test
+    fun `findFundByIsin bygger en Fund med isin som fundId fran forsta kallan som ger traff`() = runTest {
+        val source = FakeIsinSource(fundInfo = { isin ->
+            if (isin == "LU0496367417") IsinFundInfo(name = "Franklin Gold and Prec Mtls A(acc)USD", currency = "USD") else null
+        })
+        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> "" }, dao = dao, isinSources = listOf(source))
+
+        val fund = repo.findFundByIsin("LU0496367417")
+
+        assertEquals("LU0496367417", fund?.fundId)
+        assertEquals("LU0496367417", fund?.isin)
+        assertEquals("Franklin Gold and Prec Mtls A(acc)USD", fund?.name)
+        assertEquals("USD", fund?.currency)
+    }
+
+    @Test
+    fun `findFundByIsin provar nasta kalla om forsta ger fel`() = runTest {
+        val working = FakeIsinSource(fundInfo = { IsinFundInfo(name = "Nordea Småbolagsfond Norden", currency = "SEK") })
+        val repo = HandelsbankenFundPriceRepository(
+            client = FondlistaHtmlSource { _, _, _ -> "" },
+            dao = dao,
+            isinSources = listOf(FailingIsinSource(), working),
+        )
+
+        val fund = repo.findFundByIsin("FI0008813365")
+
+        assertEquals("Nordea Småbolagsfond Norden", fund?.name)
+    }
+
+    @Test
+    fun `findFundByIsin ar null om ingen kalla kanner till isin`() = runTest {
+        val repo = HandelsbankenFundPriceRepository(
+            client = FondlistaHtmlSource { _, _, _ -> "" },
+            dao = dao,
+            isinSources = listOf(FakeIsinSource()),
+        )
+
+        assertNull(repo.findFundByIsin("SE0000000000"))
     }
 
     private fun historyHtml(fundId: String, nav: String, currency: String, date: String) = """

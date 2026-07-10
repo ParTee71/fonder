@@ -58,10 +58,10 @@ class Migration12Test {
             db.version = 1
         }
 
-        // Appens kompilerade schema är nu v3 (se AppDatabase.MIGRATIONS) — hela vägen
-        // 1→2→3 måste registreras, annars saknar Room en migreringsväg vid öppning.
+        // Appens kompilerade schema är nu v4 (se AppDatabase.MIGRATIONS) — hela vägen
+        // 1→2→3→4 måste registreras, annars saknar Room en migreringsväg vid öppning.
         val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
 
         // Öppnar (och migrerar) — kastar om det resulterande schemat inte matchar entiteterna.

@@ -8,6 +8,10 @@ Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, fö
 ändringar, oavsett storlek. De detaljerade reglerna ligger som skills i
 `.claude/skills/` — den här filen är kontraktet som binder ihop dem.
 
+**Svarslängd:** håll chattsvar minimala. Inga sammanfattningar, ingen upprepning av vad
+som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
+skrivs normalt.
+
 Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #C9A227), rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
@@ -26,13 +30,16 @@ fält/en entitet ska det in i hela backup-kedjan *och* täckas av rundturstest.
 ### 2. Tester på alla nivåer
 Ingen beteendeändring utan att tester läggs till eller uppdateras på rätt nivå
 (enhet / instrument / migrering). Befintliga tester som påverkas ska uppdateras,
-aldrig tas bort för att "bli gröna".
+aldrig tas bort för att "bli gröna". **Flaky tester är inte tillåtna** — kör aldrig
+bara om ett test som ibland faller för att få grönt. Hitta grundorsaken och åtgärda
+den så att testet blir deterministiskt. Ett test som ibland faller är en bugg som
+ska fixas, inte ignoreras.
 → Skill: **testing-strategy**.
 
 ### 3. Kraven hålls aktuella
 Ändrar du synligt beteende ska [KRAVLISTA.md](KRAVLISTA.md) uppdateras i samma
 ändring — nytt krav läggs till, borttaget beteende stryks med
-`~~…~~ *(borttaget)*`. Versionen i README och `versionName` följer med.
+`~~…~~ *(borttaget)*`. Versionstabellen i README och `versionName` följer med.
 → Skill: **requirements-kravlista**.
 
 ### 4. Återanvänd generiska komponenter
@@ -45,19 +52,21 @@ variant av något som redan finns; utöka den delade komponenten i stället.
 
 ## Innan du skriver ny kod (snabb checklista)
 
-1. **Sök efter befintligt mönster** — sibling-ViewModel, delad komponent eller
-   repository-metod som visar hur projektet gör. `Grep`/läs grannfiler först.
-2. **Följ arkitekturen**: MVVM, `StateFlow<UiState>`, Repository som single source of
-   truth, Hilt-DI, fel mappas i repository-lagret.
-3. **Svenska** i allt användarvänt (UI-strängar i `strings.xml`); kod/identifierare på
-   engelska enligt befintlig stil.
+1. **Sök efter befintligt mönster.** Det finns nästan alltid en sibling-ViewModel,
+   en delad komponent eller en repository-metod som visar hur projektet gör.
+   `Grep`/läs grannfiler först (se skill `android-dev`).
+2. **Följ arkitekturen** även om en genväg vore enklare: MVVM, `StateFlow<UiState>`,
+   Repository som single source of truth, Hilt-DI, fel mappas i repository-lagret.
+3. **Svenska** i allt användarvänt: UI-strängar (i `strings.xml`), commit-meddelanden
+   får vara svenska, kod/identifierare på engelska enligt befintlig stil.
 
 ## Innan du anser dig klar (slutkontroll)
 
 - [ ] **Datasäkerhet:** nya/ändrade persisterade fält finns i backup-kedjan och har rundturstest. (regel 1)
-- [ ] **Tester:** lagt till/uppdaterat på alla berörda nivåer. (regel 2)
+- [ ] **Tester:** lagt till/uppdaterat på alla berörda nivåer; allt grönt lokalt. (regel 2)
 - [ ] **Krav:** KRAVLISTA.md (och ev. README/version) speglar ändringen. (regel 3)
 - [ ] **Återbruk:** ingen ny komponent som dubblerar en befintlig delad. (regel 4)
+- [ ] **Arkitektur:** följer projektets etablerade mönster (skill `android-dev`).
 
 ---
 
@@ -89,7 +98,19 @@ Detaljer i [README.md](README.md).
 
 ## Skills i detta repo (`.claude/skills/`)
 
-Generella Android/Kotlin-skills är kopierade från Dagboken: `android-dev`,
-`android-data-layer`, `android-gradle-logic`, `compose-expert`, `kotlin-coroutines`,
-`kotlin-flows`. Projektspecifika skills (backup, kravlista, tester, delade komponenter)
-tas in från Dagboken och anpassas när respektive feature byggs.
+Generella Android/Kotlin-skills är kopierade från Dagboken. Projektspecifika skills
+(backup, kravlista, tester, delade komponenter) tas in från Dagboken och anpassas när
+respektive feature byggs.
+
+| Skill | När |
+|---|---|
+| `android-dev` | Baslinje för all Android/Kotlin-utveckling (ladda alltid). |
+| `android-data-layer` | Repository/Room/DAO/offline-först. |
+| `compose-expert` · `kotlin-coroutines` · `kotlin-flows` | Compose-, coroutine- och flow-detaljer. |
+| `android-gradle-logic` | Gradle/version catalogs/build-konfiguration. |
+| `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt de fyra reglerna). |
+| `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt de fyra reglerna. |
+
+> Reglerna gäller både i Claude Android-appen och i Claude inuti Android Studio —
+> båda läser denna fil och `.claude/`. Skill-filerna är vanlig Markdown och kan läsas
+> direkt.

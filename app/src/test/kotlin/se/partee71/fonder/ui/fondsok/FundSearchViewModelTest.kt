@@ -47,9 +47,10 @@ class FundSearchViewModelTest {
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) {}
-        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) {}
+        override suspend fun refresh(fundId: String) = true
+        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) = true
         override suspend fun suggestIsin(fundName: String): String? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -60,6 +61,7 @@ class FundSearchViewModelTest {
         override suspend fun upsertFund(fund: Fund) { addedFunds.add(fund) }
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
+        override suspend fun clearAll() {}
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)

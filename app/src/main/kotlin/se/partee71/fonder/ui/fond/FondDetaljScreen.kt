@@ -26,8 +26,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
@@ -38,7 +41,9 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 /**
  * Fonddetalj — kurshistorik sedan första köpet i diagram och tabell (issue #7,
  * #7-uppföljning). Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt
- * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14.
+ * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14. Innehåller även en
+ * Analys-sektion med nyckeltal och säljsignal-status (issue #16, ANA-1–ANA-3) för fonder
+ * som är kvarvarande innehav.
  */
 @Composable
 fun FondDetaljScreen(
@@ -46,7 +51,16 @@ fun FondDetaljScreen(
     viewModel: FondDetaljViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    FondDetaljContent(state = state, onIsinConfirmed = viewModel::onIsinConfirmed, modifier = modifier)
+}
 
+/** Tillståndsdriven, testbar del av [FondDetaljScreen] — inget ViewModel/Hilt-beroende (issue #16). */
+@Composable
+fun FondDetaljContent(
+    state: FondDetaljUiState,
+    onIsinConfirmed: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     when {
         state.isEmpty -> EmptyState(
             title = state.fundName ?: stringResource(R.string.fond_title),
@@ -58,6 +72,23 @@ fun FondDetaljScreen(
             item {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(state.fundName ?: "", style = MaterialTheme.typography.titleLarge)
+                    val firstPurchaseEpochDay = state.firstPurchaseEpochDay
+                    val netInvested = state.netInvested
+                    if (firstPurchaseEpochDay != null && netInvested != null) {
+                        Text(
+                            stringResource(
+                                R.string.format_holding_first_purchase,
+                                LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
+                                MoneyFormat.kr(netInvested),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    if (state.analysis != null) {
+                        AnalysisSection(analysis = state.analysis!!, modifier = Modifier.padding(top = 16.dp))
+                    }
                     FundLineChart(
                         points = state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav },
                         modifier = Modifier.padding(top = 16.dp),
@@ -65,7 +96,7 @@ fun FondDetaljScreen(
                     if (state.isin == null) {
                         IsinInput(
                             suggestedIsin = state.suggestedIsin,
-                            onConfirm = viewModel::onIsinConfirmed,
+                            onConfirm = onIsinConfirmed,
                             modifier = Modifier.padding(top = 16.dp),
                         )
                     }
@@ -77,6 +108,51 @@ fun FondDetaljScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(stringResource(R.string.analys_section_title), style = MaterialTheme.typography.titleMedium)
+        AnalysisStatusBanner(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
+        Column(modifier = Modifier.padding(top = 8.dp)) {
+            analysis.keyFigures.periodReturns.forEach { periodReturn ->
+                PeriodRow(
+                    label = periodLabel(periodReturn.period),
+                    amount = periodReturn.amount,
+                    fraction = periodReturn.fraction,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+            }
+            PeriodRow(
+                label = stringResource(R.string.analys_cagr_label),
+                amount = null,
+                fraction = analysis.keyFigures.cagr,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+            PeriodRow(
+                label = stringResource(R.string.analys_gav_label),
+                amount = analysis.keyFigures.gavPerShare,
+                fraction = analysis.keyFigures.gavFraction,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+            PeriodRow(
+                label = stringResource(R.string.analys_portfolio_share_label),
+                amount = null,
+                fraction = analysis.keyFigures.portfolioShareFraction,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun periodLabel(period: FundAnalysisCalc.Period): String = when (period) {
+    FundAnalysisCalc.Period.YTD -> stringResource(R.string.analys_period_ytd)
+    FundAnalysisCalc.Period.TRE_MANADER -> stringResource(R.string.analys_period_3man)
+    FundAnalysisCalc.Period.ETT_AR -> stringResource(R.string.analys_period_1ar)
+    FundAnalysisCalc.Period.TRE_AR -> stringResource(R.string.analys_period_3ar)
+    FundAnalysisCalc.Period.SEDAN_KOP -> stringResource(R.string.analys_period_sedan_kop)
 }
 
 @Composable

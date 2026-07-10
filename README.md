@@ -3,6 +3,8 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
+> Version: 0.14.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
 > **Bidrar du (eller en AI-assistent) med kod?** Läs [CLAUDE.md](CLAUDE.md) först — den
@@ -22,6 +24,11 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Historisk värdeutveckling i tabell och diagram (#7)
 - [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
 - [x] Kurshistorik via ISIN sedan första köpet, utöver Handelsbankens 5-årsfönster (#7-uppföljning)
+- [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
+- [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
+- [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
+- [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
+- [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -66,22 +73,35 @@ data/
 ├── datastore/    PreferencesRepository (tema m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning)
+├── imports/      HoldingsImportParser (Excel-innehav, #8) · AvrakningsnotaPdfParser + PdfTextExtractor
+│                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) · BackupRepository (stub)
-└── room/         AppDatabase (v3) · entities · daos
+└── room/         AppDatabase (v4) · entities · daos
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction · FundPrice · IsinPricePoint · Holding
-└── usecase/      PortfolioCalc · MoneyFormat · FundCompanyMatcher (fond ↔ fondbolag) · TransactionFormValidator
+├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
+│                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding
+└── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
+                  FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
+                  RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
+                  MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
+                  PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
+                  TransactionFormValidator
 ui/
+├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel
-├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj)
-├── fond/         FondDetaljScreen (diagram-placeholder)
+├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
+│                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
+├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
+│                 Analys-sektion med nyckeltal/säljsignaler, #16)
 ├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
+├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
+│                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
-├── components/   Delade komponenter (EmptyState, SelectField, DateField …)
-├── diagram/      Delade diagram (FundLineChart — tillkommer)
-└── theme/        Grön petrol-tema, Space Grotesk-typografi
+├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot …)
+├── diagram/      Delade diagram (FundLineChart)
+└── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering)
 ```
 
@@ -103,12 +123,17 @@ varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städat
 
 ## Tester
 
-- **Enhet (JVM):** `domain/` (PortfolioCalc, MoneyFormat), `data/network/`
+- **Enhet (JVM):** `domain/` (PortfolioCalc, RealizedGainCalculator — FIFO inkl.
+  delförsäljning över flera lotter och avgift, FundAnalysisCalc — periodavkastning, CAGR,
+  GAV, portföljandel och säljsignalerna S1–S3 kring sina trösklar, MoneyFormat), `data/network/`
   (HTML-/JSON-parsning mot verkliga sid-/API-fixturer, inkl. Avanzas fond-API),
-  `data/repository/` (cache/fallback-logik med fejkade HTTP-källor) och ViewModels
-  (Turbine).
-- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, samt
-  migreringstester (`Migration12Test`, `Migration23Test`).
+  `data/imports/` (Excel- och PDF-parsning mot verkliga fixturer — köp- **och**
+  sälj-avräkningsnota, PDF-textextraktionen fejkad via `PdfTextExtractor` så testerna
+  slipper PDF-biblioteket), `data/repository/` (cache/fallback-logik med fejkade
+  HTTP-källor) och ViewModels (Turbine).
+- **Instrument:** Room DAO-rundtur (`androidTest`), inklusive `FundPriceDao`, migreringstester
+  (`Migration12Test`, `Migration23Test`, `Migration34Test`) samt `RoomTransactionRepositoryTest`
+  (`clearAll` töms atomiskt över alla tre tabeller, SET-1).
 
 > Formell `MigrationTestHelper`-baserad migreringstest saknas (ingen schema-snapshot i
 > `app/schemas/` finns i repot ännu) — migreringstesterna bygger i stället schemat för

@@ -23,9 +23,12 @@ import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
+import se.partee71.fonder.ui.hem.HemScreen
 import se.partee71.fonder.ui.imports.ImportHoldingsScreen
+import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
+import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 
@@ -82,14 +85,23 @@ fun AppNavigation() {
             startDestination = Screen.START.route,
             modifier = Modifier.padding(innerPadding),
         ) {
+            composable(Screen.Hem.route) {
+                HemScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
+            }
             composable(Screen.Portfolj.route) {
                 PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
             }
             composable(Screen.Transaktioner.route) {
                 TransaktionerScreen()
             }
+            composable(Screen.Salda.route) {
+                SoldFundsScreen()
+            }
             composable(Screen.Settings.route) {
-                SettingsScreen(onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) })
+                SettingsScreen(
+                    onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
+                    onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
+                )
             }
             composable(
                 route = Routes.FOND,
@@ -104,7 +116,10 @@ fun AppNavigation() {
                 TransactionFormScreen(onSaved = { navController.popBackStack() })
             }
             composable(Routes.IMPORT_HOLDINGS) {
-                ImportHoldingsScreen()
+                ImportHoldingsScreen(onDone = { navController.popBackStack() })
+            }
+            composable(Routes.IMPORT_ORDERS) {
+                ImportOrdersScreen(onDone = { navController.popBackStack() })
             }
         }
     }

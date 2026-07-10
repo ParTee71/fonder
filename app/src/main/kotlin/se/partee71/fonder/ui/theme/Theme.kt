@@ -36,3 +36,22 @@ object ReturnColors {
     @Composable @ReadOnlyComposable
     fun forAmount(amount: Double): Color = if (amount >= 0.0) gain else loss
 }
+
+/**
+ * Grön/gul/röd statusfärger för säljsignaler (issue #16, ANA-3) — samma fasta palett som
+ * övriga appen (UI-1): grön/röd återanvänder [ReturnColors], gul återanvänder den befintliga
+ * mässings-/guldaccenten i stället för en ny hårdkodad färg.
+ */
+object StatusColors {
+    val gron: Color
+        @Composable @ReadOnlyComposable
+        get() = ReturnColors.gain
+
+    val gul: Color
+        @Composable @ReadOnlyComposable
+        get() = if (isSystemInDarkTheme()) BrassBright else Brass
+
+    val rod: Color
+        @Composable @ReadOnlyComposable
+        get() = ReturnColors.loss
+}
