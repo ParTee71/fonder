@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -28,9 +29,12 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
@@ -42,8 +46,9 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
  * Fonddetalj — kurshistorik sedan första köpet i diagram och tabell (issue #7,
  * #7-uppföljning). Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt
  * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14. Innehåller även en
- * Analys-sektion med nyckeltal och säljsignal-status (issue #16, ANA-1–ANA-3) för fonder
- * som är kvarvarande innehav.
+ * Analys-sektion med nyckeltal och säljsignal-status (issue #16, ANA-1–ANA-4) för fonder
+ * som är kvarvarande innehav, plus ett pedagogiskt lager med utfällbara förklaringar,
+ * neutral kontext och en ordlista (issue #22, ANA-5–ANA-6).
  */
 @Composable
 fun FondDetaljScreen(
@@ -115,33 +120,100 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
     Column(modifier = modifier) {
         Text(stringResource(R.string.analys_section_title), style = MaterialTheme.typography.titleMedium)
         AnalysisStatusBanner(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
+        AnalysisGuidanceCard(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
+        SignalExplanations(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
         Column(modifier = Modifier.padding(top = 8.dp)) {
             analysis.keyFigures.periodReturns.forEach { periodReturn ->
+                ExpandableInfoRow(explanation = stringResource(R.string.analys_period_explain)) {
+                    PeriodRow(
+                        label = periodLabel(periodReturn.period),
+                        amount = periodReturn.amount,
+                        fraction = periodReturn.fraction,
+                    )
+                }
+            }
+            ExpandableInfoRow(explanation = stringResource(R.string.analys_cagr_explain)) {
+                PeriodRow(label = stringResource(R.string.analys_cagr_label), amount = null, fraction = analysis.keyFigures.cagr)
+            }
+            ExpandableInfoRow(explanation = stringResource(R.string.analys_gav_explain)) {
                 PeriodRow(
-                    label = periodLabel(periodReturn.period),
-                    amount = periodReturn.amount,
-                    fraction = periodReturn.fraction,
-                    modifier = Modifier.padding(vertical = 4.dp),
+                    label = stringResource(R.string.analys_gav_label),
+                    amount = analysis.keyFigures.gavPerShare,
+                    fraction = analysis.keyFigures.gavFraction,
                 )
             }
-            PeriodRow(
-                label = stringResource(R.string.analys_cagr_label),
-                amount = null,
-                fraction = analysis.keyFigures.cagr,
-                modifier = Modifier.padding(vertical = 4.dp),
+            ExpandableInfoRow(explanation = stringResource(R.string.analys_portfolio_share_explain)) {
+                PeriodRow(
+                    label = stringResource(R.string.analys_portfolio_share_label),
+                    amount = null,
+                    fraction = analysis.keyFigures.portfolioShareFraction,
+                )
+            }
+        }
+        AnalysisGlossary(modifier = Modifier.padding(top = 16.dp))
+    }
+}
+
+/**
+ * Utfällbara förklaringar per beräknad säljsignal (ANA-5) — färgprick visar nivån, texten
+ * förklarar vad måttet betyder och uttryckligen inte betyder (aldrig ett säljbud, ANA-3).
+ * Bara signaler med tillräcklig data (icke-null) visas — otillräckliga utelämnas (ANA-4).
+ */
+@Composable
+private fun SignalExplanations(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        analysis.distanceFromHigh?.let { signal ->
+            SignalRow(
+                level = signal.level,
+                label = stringResource(R.string.analys_signal_distance_label),
+                explanation = stringResource(R.string.analys_signal_distance_explain),
             )
-            PeriodRow(
-                label = stringResource(R.string.analys_gav_label),
-                amount = analysis.keyFigures.gavPerShare,
-                fraction = analysis.keyFigures.gavFraction,
-                modifier = Modifier.padding(vertical = 4.dp),
+        }
+        analysis.trend?.let { signal ->
+            SignalRow(
+                level = signal.level,
+                label = stringResource(R.string.analys_signal_trend_label),
+                explanation = stringResource(R.string.analys_signal_trend_explain),
             )
-            PeriodRow(
-                label = stringResource(R.string.analys_portfolio_share_label),
-                amount = null,
-                fraction = analysis.keyFigures.portfolioShareFraction,
-                modifier = Modifier.padding(vertical = 4.dp),
+        }
+        analysis.momentum?.let { signal ->
+            SignalRow(
+                level = signal.level,
+                label = stringResource(R.string.analys_signal_momentum_label),
+                explanation = stringResource(R.string.analys_signal_momentum_explain),
             )
+        }
+    }
+}
+
+@Composable
+private fun SignalRow(level: FundAnalysisCalc.SignalLevel, label: String, explanation: String) {
+    ExpandableInfoRow(explanation = explanation) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusDot(level, modifier = Modifier.padding(end = 8.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** Kort "Så funkar analysen"-ordlista (ANA-6) — de begrepp appen faktiskt visar, var och en utfällbar. */
+@Composable
+private fun AnalysisGlossary(modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(stringResource(R.string.analys_glossary_title), style = MaterialTheme.typography.titleSmall)
+        val terms = listOf(
+            R.string.analys_glossary_nav_term to R.string.analys_glossary_nav_def,
+            R.string.analys_glossary_gav_term to R.string.analys_glossary_gav_def,
+            R.string.analys_glossary_cagr_term to R.string.analys_glossary_cagr_def,
+            R.string.analys_glossary_sma_term to R.string.analys_glossary_sma_def,
+            R.string.analys_glossary_topp_term to R.string.analys_glossary_topp_def,
+            R.string.analys_glossary_horisont_term to R.string.analys_glossary_horisont_def,
+            R.string.analys_glossary_ranta_term to R.string.analys_glossary_ranta_def,
+        )
+        terms.forEach { (termRes, defRes) ->
+            ExpandableInfoRow(explanation = stringResource(defRes)) {
+                Text(stringResource(termRes), style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

@@ -2,6 +2,8 @@ package se.partee71.fonder.ui.fond
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -157,5 +159,91 @@ class FondDetaljScreenTest {
         }
 
         composeRule.onNodeWithText("Första köp", substring = true).assertDoesNotExist()
+    }
+
+    // --- Pedagogiskt lager (issue #22, ANA-5/ANA-6) ---
+
+    @Test
+    fun visar_kontextkort_nar_under_toppen_men_plus_mot_gav() {
+        // Gul avståndssignal men fortfarande plus mot GAV → uppmuntrande kontext (ANA-6).
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures().copy(gavFraction = 0.06),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GUL, -0.12),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GUL,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        composeRule.onNodeWithText("fortfarande i plus mot ditt snittpris", substring = true).assertExists()
+    }
+
+    @Test
+    fun kan_falla_ut_forklaring_for_en_signal() {
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(),
+            distanceFromHigh = null,
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GUL,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        // Förklaringen är dold tills raden fälls ut.
+        composeRule.onNodeWithText("svaghetstecken på medellång sikt", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Kurs mot 200-dagars snitt").performClick()
+        composeRule.onNodeWithText("svaghetstecken på medellång sikt", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_ordlista_och_kan_falla_ut_en_term() {
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GRON,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        composeRule.onNodeWithText("Så funkar analysen").assertExists()
+        composeRule.onNodeWithText("ränta-på-ränta", substring = true).assertDoesNotExist()
+        // Ordlistan ligger längst ned — scrolla in raden innan den kan klickas/fällas ut.
+        composeRule.onNodeWithText("CAGR (årlig snittavkastning)").performScrollTo().performClick()
+        composeRule.onNodeWithText("jämna årstakt", substring = true).assertExists()
+    }
+
+    @Test
+    fun kontexttexterna_ger_aldrig_ett_direkt_saljbud() {
+        // ANA-3-vakt: språket är neutralt/förklarande, aldrig en imperativ "sälj nu"/"köp mer nu".
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures().copy(gavFraction = -0.1),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.ROD, -0.25),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
+            momentum = FundAnalysisCalc.MomentumSignal(FundAnalysisCalc.SignalLevel.GUL, -7.0),
+            status = FundAnalysisCalc.SignalLevel.ROD,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        composeRule.onNodeWithText("Sälj nu", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Köp mer nu", substring = true).assertDoesNotExist()
+        // Kontextkortet ska däremot finnas och vara neutralt formulerat.
+        composeRule.onNodeWithText("kan det vara läge att låta tiden verka", substring = true).assertExists()
     }
 }

@@ -127,6 +127,8 @@
 | ANA-2 | Tre säljindikatorer beräknas per innehav, med fasta trösklar (dokumenterade i `FundAnalysisCalc`): **S1** avstånd från högsta NAV senaste 52 veckorna (−10 % gul, −20 % röd), **S2** NAV under 200-dagars glidande medelvärde (gul), **S3** innehavets 3-månadersutveckling minst 5 procentenheter sämre än snittet för övriga innehav (gul). Räcker inte historiken för en enskild indikator markeras den som otillräcklig data och ingår inte i statussummeringen (ANA-4). |
 | ANA-3 | Indikatorerna (ANA-2) summeras till en **status** — röd om någon indikator är röd eller minst två är gula, gul om minst en är gul, annars grön — visad som en statusbanner (färg + rubrik + triggertexter, aldrig färg ensam, jfr UI-3) ovanför kurshistoriken i Fonddetalj. Språket är alltid neutralt ("värt att se över"/"bör ses över") — appen ger aldrig finansiell rådgivning ("sälj"). |
 | ANA-4 | En indikator (ANA-2) eller ett nyckeltal (ANA-1) utan tillräcklig kurshistorik markeras tydligt som otillräcklig data och exkluderas ur statussummeringen (ANA-3) i stället för att tystas ner eller gissas — samma princip som HEM-2/POR-5/IMP-2/SLD-2. Saknar *alla* tre indikatorer data visas en neutral "otillräcklig kurshistorik"-text i stället för en färgad banner. |
+| ANA-5 | Varje beräknad säljindikator (ANA-2) och varje nyckeltal (ANA-1) i Analys kan **fällas ut** med en klartextförklaring på svenska av vad måttet betyder och uttryckligen vad det *inte* betyder (t.ex. att ett fall från toppen inte i sig är ett skäl att sälja). Delas via den återanvändbara `ExpandableInfoRow` (`ui/components/`, regel 4). Bara indikatorer med tillräcklig data visas (ANA-4). Språket är aldrig ett köp-/säljråd (jfr ANA-3). |
+| ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. Språket är alltid förklarande, aldrig rådgivande (ANA-3). |
 
 ---
 
@@ -137,6 +139,15 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
 
 ## Historik
 
+- **Pedagogiskt analyslager (#22):** Analys-sektionen fick förklaringar och kontext för
+  nybörjare (ANA-5, ANA-6) utan nya råa indikatorer. Varje säljsignal och nyckeltal kan
+  fällas ut med en klartextförklaring (vad måttet betyder och vad det *inte* betyder) via
+  den nya delade `ExpandableInfoRow` (`ui/components/`, regel 4). Ett neutralt kontextkort
+  härlett ur `AnalysisGuidance` (nytt rent domänlager, `domain/usecase/`) sätter signalerna
+  i sammanhang — t.ex. "under toppen men fortfarande plus mot GAV" eller att en djup nedgång
+  kan tala för att låta tiden verka snarare än att sälja i botten — plus en kort ordlista
+  ("Så funkar analysen"). Ingen persisterad data, ingen migrering; språket är genomgående
+  förklarande, aldrig ett köp-/säljråd (ANA-3).
 - **Kurskälla (#2, #3):** Handelsbankens fondkurser hämtas från `handelsbanken.fondlista.se`
   (offentlig, ingen inloggning). Identitet: plattformens `FundId`, inte ISIN — se TP-9.
   Cache i Room, daglig uppdatering via WorkManager (TP-5), fondsök i UI (NAV-3, ÖV-2b).
