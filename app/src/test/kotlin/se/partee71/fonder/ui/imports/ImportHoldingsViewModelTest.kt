@@ -175,15 +175,32 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `alla dagars kurser hamtas vid import aven om en kurs redan ar cachad`() = runTest(dispatcher) {
-        // Fonden är redan bevakad (har en cachad kurs sedan tidigare) — refresh() ska
-        // ändå anropas vid import, så att hela kurshistoriken finns för både
-        // inköpsdatum-uppskattningen och den historiska värdeutvecklingen (#7).
-        val priceRepoMedCachadKurs = object : FundPriceRepository by fakePriceRepo {
+    fun `hoppar over kursuppdatering nar fonden redan har en aktuell cachad kurs`() = runTest(dispatcher) {
+        // Regression för issue #19: en fond som redan bevakas och har en färsk (dagens)
+        // cachad kurs ska inte trigga en ny, långsam nätverksuppdatering av hela historiken
+        // vid import — annars blir import onödigt långsamt för redan bevakade fonder.
+        val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
             override suspend fun latestPrice(fundId: String): FundPrice =
                 FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedCachadKurs)
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedFarskKurs)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertNull(refreshedFundId)
+            assertNull(refreshSinceCall)
+            assertFalse(state.rows.first().priceFetchFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hamtar kurs nar fonden helt saknar cachad kurs`() = runTest(dispatcher) {
+        // fakePriceRepo.latestPrice returnerar null som standard — helt obevakad fond.
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -191,6 +208,44 @@ class ImportHoldingsViewModelTest {
             while (state.loading) state = awaitItem()
 
             assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hamtar kurs nar cachad kurs ar aldre an idag`() = runTest(dispatcher) {
+        val priceRepoMedInaktuellKurs = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun latestPrice(fundId: String): FundPrice =
+                FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(1).toEpochDay(), nav = 950.0, currency = "SEK")
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedInaktuellKurs)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `misslyckad kurshamtning markerar raden i stallet for att tystas ner`() = runTest(dispatcher) {
+        val priceRepoMedMisslyckadHamtning = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun refresh(fundId: String): Boolean {
+                refreshedFundId = fundId
+                return false
+            }
+        }
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedMisslyckadHamtning)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertTrue(state.rows.first().priceFetchFailed)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -40,12 +40,14 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
 @Composable
 fun ImportOrdersScreen(
+    onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ImportOrdersViewModel = hiltViewModel(),
 ) {
@@ -61,12 +63,12 @@ fun ImportOrdersScreen(
         }
     }
 
+    if (state.imported) {
+        ImportCompleteDialog(importedCount = state.rows.count { it.readyToImport }, onDismiss = onDone)
+    }
+
     when {
-        state.imported -> EmptyState(
-            title = stringResource(R.string.import_success_title),
-            body = stringResource(R.string.import_success_body),
-            modifier = modifier,
-        )
+        state.imported -> Unit
 
         !state.filesSelected -> Column(
             modifier = modifier.fillMaxSize().padding(24.dp),
@@ -210,6 +212,13 @@ private fun ImportOrderRowCard(
             if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
                 Text(
                     stringResource(R.string.import_match_uncertain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            if (rowState.priceFetchFailed) {
+                Text(
+                    stringResource(R.string.import_price_fetch_failed),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

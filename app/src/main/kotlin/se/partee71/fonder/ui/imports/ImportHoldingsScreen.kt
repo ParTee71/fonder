@@ -45,6 +45,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
@@ -61,6 +62,7 @@ private val IMPORT_MIME_TYPES = arrayOf(
 /** Importera befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export (issue #8). */
 @Composable
 fun ImportHoldingsScreen(
+    onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ImportHoldingsViewModel = hiltViewModel(),
 ) {
@@ -76,12 +78,12 @@ fun ImportHoldingsScreen(
         }
     }
 
+    if (state.imported) {
+        ImportCompleteDialog(importedCount = state.rows.count { it.readyToImport }, onDismiss = onDone)
+    }
+
     when {
-        state.imported -> EmptyState(
-            title = stringResource(R.string.import_success_title),
-            body = stringResource(R.string.import_success_body),
-            modifier = modifier,
-        )
+        state.imported -> Unit
 
         !state.fileSelected -> Column(
             modifier = modifier.fillMaxSize().padding(24.dp),
@@ -207,6 +209,13 @@ private fun ImportRowCard(
             if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
                 Text(
                     stringResource(R.string.import_match_uncertain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            if (rowState.priceFetchFailed) {
+                Text(
+                    stringResource(R.string.import_price_fetch_failed),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

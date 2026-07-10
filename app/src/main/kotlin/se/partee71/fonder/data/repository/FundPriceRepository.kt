@@ -66,6 +66,30 @@ interface FundPriceRepository {
     suspend fun fetchFundCatalog(): FundCatalog
 }
 
+/**
+ * Uppdaterar en fonds kurscache via rätt källa: den ISIN-baserade källkedjan ([refreshSince])
+ * om fonden har ett känt ISIN (t.ex. matchad via [FundPriceRepository.findFundByIsin] eller
+ * import, TP-14 — sådana fonder saknar Handelsbanken-FundId och [refresh] hittar dem aldrig),
+ * annars Handelsbankens fasta femårsfönster ([refresh]). Samma gren behövdes tidigare separat
+ * i flera ViewModels (Portfölj, båda importflödena) — samlad här för att undvika ytterligare
+ * en kopia (regel 4, issue #19). [se.partee71.fonder.ui.fond.FondDetaljViewModel] har en
+ * egen variant med en extra gate (bara om fonden faktiskt köpts) och lämnas orörd.
+ */
+suspend fun FundPriceRepository.refreshFund(fund: Fund, since: LocalDate): Boolean {
+    val isin = fund.isin
+    return if (isin != null) refreshSince(fund.fundId, isin, since) else refresh(fund.fundId)
+}
+
+/**
+ * Sant om [fundId] saknar cachad kurs helt, eller om senaste kända kurs är äldre än [today]
+ * (issue #18/#19) — samma "engångsuppdatering bara vid faktiskt inaktuell cache"-princip
+ * återanvänd mellan Portfölj och båda importflödena i stället för en egen kopia var (regel 4).
+ */
+suspend fun FundPriceRepository.isPriceStale(fundId: String, today: LocalDate = LocalDate.now()): Boolean {
+    val latest = latestPrice(fundId)
+    return latest == null || latest.epochDay < today.toEpochDay()
+}
+
 @Singleton
 class HandelsbankenFundPriceRepository @Inject constructor(
     private val client: FondlistaHtmlSource,
