@@ -1,10 +1,12 @@
 package se.partee71.fonder.ui.fond
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +32,8 @@ class FondDetaljScreenTest {
     private fun keyFigures(
         cagr: Double? = 0.05,
         portfolioShareFraction: Double? = 0.25,
+        annualizedVolatility: Double? = 0.18,
+        sharpeRatio: Double? = 0.8,
     ) = FundAnalysisCalc.KeyFigures(
         periodReturns = FundAnalysisCalc.Period.entries.map { FundAnalysisCalc.PeriodReturn(it, amount = 10.0, fraction = 0.05) },
         cagr = cagr,
@@ -37,6 +41,8 @@ class FondDetaljScreenTest {
         gavPerShare = 100.0,
         gavFraction = 0.2,
         portfolioShareFraction = portfolioShareFraction,
+        annualizedVolatility = annualizedVolatility,
+        sharpeRatio = sharpeRatio,
     )
 
     @Test
@@ -245,5 +251,47 @@ class FondDetaljScreenTest {
         composeRule.onNodeWithText("Köp mer nu", substring = true).assertDoesNotExist()
         // Kontextkortet ska däremot finnas och vara neutralt formulerat.
         composeRule.onNodeWithText("kan det vara läge att låta tiden verka", substring = true).assertExists()
+    }
+
+    // --- Riskmått (issue #24, ANA-7) ---
+
+    @Test
+    fun visar_volatilitet_och_sharpe_nar_historiken_racker() {
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GRON,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
+        composeRule.onNodeWithText("18,0 %").assertExists()
+        composeRule.onNodeWithText("0,80").assertExists()
+    }
+
+    @Test
+    fun visar_otillrackligt_data_for_riskmatt_utan_tillracklig_historik() {
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(annualizedVolatility = null, sharpeRatio = null),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GRON,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
+        // Båda riskmåtten saknar värde → markeras som otillräcklig data (ANA-4), inget gissat 0.
+        assertTrue(composeRule.onAllNodesWithText("Otillräcklig data").fetchSemanticsNodes().size >= 2)
     }
 }

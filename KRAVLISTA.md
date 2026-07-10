@@ -128,7 +128,8 @@
 | ANA-3 | Indikatorerna (ANA-2) summeras till en **status** — röd om någon indikator är röd eller minst två är gula, gul om minst en är gul, annars grön — visad som en statusbanner (färg + rubrik + triggertexter, aldrig färg ensam, jfr UI-3) ovanför kurshistoriken i Fonddetalj. Språket är alltid neutralt ("värt att se över"/"bör ses över") — appen ger aldrig finansiell rådgivning ("sälj"). |
 | ANA-4 | En indikator (ANA-2) eller ett nyckeltal (ANA-1) utan tillräcklig kurshistorik markeras tydligt som otillräcklig data och exkluderas ur statussummeringen (ANA-3) i stället för att tystas ner eller gissas — samma princip som HEM-2/POR-5/IMP-2/SLD-2. Saknar *alla* tre indikatorer data visas en neutral "otillräcklig kurshistorik"-text i stället för en färgad banner. |
 | ANA-5 | Varje beräknad säljindikator (ANA-2) och varje nyckeltal (ANA-1) i Analys kan **fällas ut** med en klartextförklaring på svenska av vad måttet betyder och uttryckligen vad det *inte* betyder (t.ex. att ett fall från toppen inte i sig är ett skäl att sälja). Delas via den återanvändbara `ExpandableInfoRow` (`ui/components/`, regel 4). Bara indikatorer med tillräcklig data visas (ANA-4). Språket är aldrig ett köp-/säljråd (jfr ANA-3). |
-| ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. Språket är alltid förklarande, aldrig rådgivande (ANA-3). |
+| ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta, volatilitet, Sharpe-kvot). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. Språket är alltid förklarande, aldrig rådgivande (ANA-3). |
+| ANA-7 | Analys visar två **riskmått** per innehav, beräknade ur NAV-historiken med fasta konstanter (dokumenterade i `FundAnalysisCalc`): **volatilitet** (annualiserad standardavvikelse på dagsavkastningar, ×√252) och **Sharpe-kvot** ((annualiserad avkastning − fast riskfri ränta 0 %) / volatilitet). Räcker inte historiken (färre än ~60 dagsavkastningar) markeras måttet som otillräcklig data i stället för att gissas (ANA-4); är volatiliteten 0 saknas Sharpe (ingen division med noll). Måtten visas via delade `PeriodRow`/`ExpandableInfoRow` med utfällbar förklaring och ordlisttermer (ANA-5/ANA-6). Neutralt språk, aldrig rådgivning (ANA-3). Inget nytt persisterat fält (härlett ur befintlig kurshistorik). |
 
 ---
 
@@ -138,6 +139,15 @@ Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnit
 implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
 
 ## Historik
+
+- **Volatilitet och Sharpe-kvot (#24):** Analys-sektionen fick två riskmått (ANA-7) beräknade
+  ur befintlig NAV-historik utan tredjepartsbibliotek — annualiserad volatilitet
+  (standardavvikelse på dagsavkastningar ×√252) och Sharpe-kvot (annualiserad avkastning delat
+  på volatilitet, riskfri ränta 0 %). Ren domänlogik i `FundAnalysisCalc` (nya `KeyFigures`-fält,
+  inget persisterat), otillräcklig historik och nollvolatilitet ger null i stället för gissning
+  (ANA-4). UI återanvänder delade `PeriodRow` (utökad med förformaterat, neutralfärgat `valueText`)
+  och `ExpandableInfoRow` från #22, plus två ordlisttermer. Nya format­hjälpmedel
+  `MoneyFormat.percent`/`decimal`.
 
 - **Pedagogiskt analyslager (#22):** Analys-sektionen fick förklaringar och kontext för
   nybörjare (ANA-5, ANA-6) utan nya råa indikatorer. Varje säljsignal och nyckeltal kan

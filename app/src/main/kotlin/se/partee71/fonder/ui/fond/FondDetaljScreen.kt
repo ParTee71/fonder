@@ -149,6 +149,22 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     fraction = analysis.keyFigures.portfolioShareFraction,
                 )
             }
+            ExpandableInfoRow(explanation = stringResource(R.string.analys_volatility_explain)) {
+                PeriodRow(
+                    label = stringResource(R.string.analys_volatility_label),
+                    amount = null,
+                    fraction = null,
+                    valueText = analysis.keyFigures.annualizedVolatility?.let { MoneyFormat.percent(it) },
+                )
+            }
+            ExpandableInfoRow(explanation = stringResource(R.string.analys_sharpe_explain)) {
+                PeriodRow(
+                    label = stringResource(R.string.analys_sharpe_label),
+                    amount = null,
+                    fraction = null,
+                    valueText = analysis.keyFigures.sharpeRatio?.let { MoneyFormat.decimal(it) },
+                )
+            }
         }
         AnalysisGlossary(modifier = Modifier.padding(top = 16.dp))
     }
@@ -209,6 +225,8 @@ private fun AnalysisGlossary(modifier: Modifier = Modifier) {
             R.string.analys_glossary_topp_term to R.string.analys_glossary_topp_def,
             R.string.analys_glossary_horisont_term to R.string.analys_glossary_horisont_def,
             R.string.analys_glossary_ranta_term to R.string.analys_glossary_ranta_def,
+            R.string.analys_glossary_volatilitet_term to R.string.analys_glossary_volatilitet_def,
+            R.string.analys_glossary_sharpe_term to R.string.analys_glossary_sharpe_def,
         )
         terms.forEach { (termRes, defRes) ->
             ExpandableInfoRow(explanation = stringResource(defRes)) {

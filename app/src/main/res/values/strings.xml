@@ -119,6 +119,11 @@
     <string name="analys_cagr_explain">Genomsnittlig årlig avkastning sedan ditt första köp, utjämnad över åren (ränta-på-ränta). Visas först när du ägt fonden minst ett år, så siffran blir meningsfull.</string>
     <string name="analys_gav_explain">Ditt genomsnittliga anskaffningsvärde per andel (GAV) jämfört med dagens kurs. Plus betyder att du ligger över vad du betalat i snitt, minus under — oavsett var toppen låg.</string>
     <string name="analys_portfolio_share_explain">Hur stor del av portföljens totala värde den här fonden utgör. En hög andel betyder att mycket av ditt sparande hänger på en enda fond (lägre spridning).</string>
+    <!-- Riskmått (issue #24, ANA-7) -->
+    <string name="analys_volatility_label">Volatilitet (årlig)</string>
+    <string name="analys_sharpe_label">Sharpe-kvot</string>
+    <string name="analys_volatility_explain">Hur mycket fondens kurs svänger, uttryckt som årlig standardavvikelse. Högre värde = större gungor upp och ner. Säger inget om riktningen — bara hur skakig resan varit. Kräver minst ~3 månaders historik.</string>
+    <string name="analys_sharpe_explain">Avkastning i förhållande till risken (svängningarna). Högre är bättre — du har fått mer betalt per enhet risk. Under 0 betyder att fonden gått back under perioden. Ett jämförelsetal mellan fonder, inte ett betyg på om du ska sälja.</string>
     <!-- Ordlista "Så funkar analysen" -->
     <string name="analys_glossary_title">Så funkar analysen</string>
     <string name="analys_glossary_nav_term">NAV (fondkurs)</string>
@@ -135,6 +140,10 @@
     <string name="analys_glossary_horisont_def">Hur länge du tänker behålla pengarna. Ju längre horisont, desto mindre betyder enskilda nedgångar — du hinner vänta ut dem.</string>
     <string name="analys_glossary_ranta_term">Ränta-på-ränta</string>
     <string name="analys_glossary_ranta_def">Att avkastning i sin tur ger avkastning. Effekten växer med tiden och gynnar den som stannar kvar i stället för att hoppa in och ut.</string>
+    <string name="analys_glossary_volatilitet_term">Volatilitet</string>
+    <string name="analys_glossary_volatilitet_def">Ett mått på hur mycket kursen svänger (standardavvikelsen på avkastningen), omräknat per år. Hög volatilitet = större svängningar, vilket ofta upplevs som högre risk.</string>
+    <string name="analys_glossary_sharpe_term">Sharpe-kvot</string>
+    <string name="analys_glossary_sharpe_def">Avkastningen delad på volatiliteten — hur mycket avkastning fonden gett per enhet risk. Högre är bättre; gör det möjligt att jämföra fonder med olika svängningar rättvist.</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>

@@ -31,6 +31,12 @@ object FundAnalysisCalc {
     private const val CAGR_MIN_DAYS = 365L
     private const val DAYS_PER_YEAR = 365.2425
 
+    /** Riskmått (ANA-7, issue #24) — fasta konstanter, ej konfigurerbara i v1. */
+    private const val TRADING_DAYS_PER_YEAR = 252.0
+    private const val RISK_FREE_RATE = 0.0
+    /** Minsta antal dagsavkastningar för att volatilitet/Sharpe ska beräknas (~3 mån handel). */
+    private const val MIN_RETURN_SAMPLES = 60
+
     enum class Period { YTD, TRE_MANADER, ETT_AR, TRE_AR, SEDAN_KOP }
 
     /** [amount]/[fraction] null = otillräcklig kurshistorik för perioden (ANA-1/ANA-4), aldrig gissat. */
@@ -56,6 +62,10 @@ object FundAnalysisCalc {
         val gavFraction: Double?,
         /** Null om portföljens totala värde är 0/okänt. */
         val portfolioShareFraction: Double?,
+        /** Annualiserad standardavvikelse på dagsavkastningar (ANA-7). Null = för kort historik (ANA-4). */
+        val annualizedVolatility: Double?,
+        /** Riskjusterad avkastning, [annualizedVolatility] i nämnaren (ANA-7). Null = för kort historik eller nollvolatilitet. */
+        val sharpeRatio: Double?,
     )
 
     /**
@@ -118,6 +128,10 @@ object FundAnalysisCalc {
         val threeMonthReturn = periodReturns.first { it.period == Period.TRE_MANADER }.fraction
         val momentum = momentumSignal(threeMonthReturn, otherHoldingsAverageThreeMonthReturn)
 
+        val dailyReturns = dailyReturns(priceHistory)
+        val annualizedVolatility = annualizedVolatility(dailyReturns)
+        val sharpeRatio = sharpeRatio(dailyReturns, annualizedVolatility)
+
         return Analysis(
             keyFigures = KeyFigures(
                 periodReturns = periodReturns,
@@ -126,6 +140,8 @@ object FundAnalysisCalc {
                 gavPerShare = gavPerShare,
                 gavFraction = gavFraction,
                 portfolioShareFraction = portfolioShareFraction,
+                annualizedVolatility = annualizedVolatility,
+                sharpeRatio = sharpeRatio,
             ),
             distanceFromHigh = distanceFromHigh,
             trend = trend,
@@ -177,6 +193,41 @@ object FundAnalysisCalc {
         if (holdingDays < CAGR_MIN_DAYS || sincePurchaseFraction == null) return null
         val years = holdingDays / DAYS_PER_YEAR
         return (1.0 + sincePurchaseFraction).pow(1.0 / years) - 1.0
+    }
+
+    /**
+     * Enkla dagsavkastningar (`nav_t / nav_{t-1} − 1`) mellan på varandra följande kända
+     * kurspunkter, i tidsordning (ANA-7). NAV-serien har luckor (helger/röda dagar saknas) —
+     * varje par av tillgängliga punkter räknas som en "dag", en godtagbar approximation för ett
+     * vägledande riskmått. Punkter med NAV ≤ 0 hoppas över så att kvoten aldrig blir ogiltig.
+     */
+    private fun dailyReturns(priceHistory: List<FundPrice>): List<Double> {
+        val navs = priceHistory.sortedBy { it.epochDay }.map { it.nav }.filter { it > 0.0 }
+        if (navs.size < 2) return emptyList()
+        return navs.zipWithNext { prev, next -> (next - prev) / prev }
+    }
+
+    /**
+     * Annualiserad standardavvikelse (ANA-7) — dagsavkastningarnas spridning × √252. Null om
+     * färre än [MIN_RETURN_SAMPLES] avkastningar finns (för kort historik, ANA-4) i stället för
+     * ett osäkert/gissat värde. Använder urvalsstandardavvikelse (n−1 i nämnaren).
+     */
+    private fun annualizedVolatility(dailyReturns: List<Double>): Double? {
+        if (dailyReturns.size < MIN_RETURN_SAMPLES) return null
+        val mean = dailyReturns.average()
+        val variance = dailyReturns.sumOf { (it - mean).pow(2) } / (dailyReturns.size - 1)
+        return kotlin.math.sqrt(variance) * kotlin.math.sqrt(TRADING_DAYS_PER_YEAR)
+    }
+
+    /**
+     * Sharpe-kvot (ANA-7) — (annualiserad medelavkastning − [RISK_FREE_RATE]) / [annualizedVolatility].
+     * Riskfri ränta är 0 % i v1. Null om volatiliteten saknas (för kort historik) eller är 0
+     * (ingen risk att dividera med — ett meningslöst/oändligt tal undviks, ANA-4-principen).
+     */
+    private fun sharpeRatio(dailyReturns: List<Double>, annualizedVolatility: Double?): Double? {
+        if (annualizedVolatility == null || annualizedVolatility <= 0.0) return null
+        val annualizedReturn = dailyReturns.average() * TRADING_DAYS_PER_YEAR
+        return (annualizedReturn - RISK_FREE_RATE) / annualizedVolatility
     }
 
     /** S1 — avstånd från högsta NAV senaste 52 veckorna. Null om historiken inte når 52 veckor tillbaka. */
