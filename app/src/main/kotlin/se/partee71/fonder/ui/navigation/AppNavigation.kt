@@ -116,10 +116,10 @@ fun AppNavigation() {
                 TransactionFormScreen(onSaved = { navController.popBackStack() })
             }
             composable(Routes.IMPORT_HOLDINGS) {
-                ImportHoldingsScreen()
+                ImportHoldingsScreen(onDone = { navController.popBackStack() })
             }
             composable(Routes.IMPORT_ORDERS) {
-                ImportOrdersScreen()
+                ImportOrdersScreen(onDone = { navController.popBackStack() })
             }
         }
     }

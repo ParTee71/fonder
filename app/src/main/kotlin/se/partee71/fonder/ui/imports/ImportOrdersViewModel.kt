@@ -13,6 +13,8 @@ import se.partee71.fonder.data.imports.AvrakningsnotaPdfParser
 import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
@@ -31,6 +33,8 @@ data class ImportOrderRowUiState(
     val sharesText: String,
     val priceText: String,
     val included: Boolean = true,
+    /** Sant om ett försök att uppdatera fondens kurscache under import misslyckades (issue #19) — importen fortsätter ändå, men markerad, inte tyst. */
+    val priceFetchFailed: Boolean = false,
 ) {
     val readyToImport: Boolean
         get() = included && matchedFund != null &&
@@ -110,6 +114,18 @@ class ImportOrdersViewModel @Inject constructor(
             trackedFunds = trackedFunds,
             findFundByIsin = fundPriceRepository::findFundByIsin,
         )
+
+        // Till skillnad från ImportHoldingsViewModel hämtade det här flödet tidigare aldrig
+        // någon kurs alls vid import (issue #19) — en importerad fond saknade därför cachad
+        // kurs helt tills något annat (Fonddetaljs init-block, eller nästa dagliga
+        // FundPriceUpdateWorker-körning) råkade hämta den, så Portfölj/Hem inte visade något
+        // förrän fonden öppnats separat. Samma "bara om inaktuell"-princip och käll-gren
+        // (ISIN vs Handelsbanken-FundId) som Excel-flödet nu använder.
+        var priceFetchFailed = false
+        if (match != null && fundPriceRepository.isPriceStale(match.fund.fundId)) {
+            priceFetchFailed = !fundPriceRepository.refreshFund(match.fund, LocalDate.ofEpochDay(transaction.epochDay))
+        }
+
         return ImportOrderRowUiState(
             transaction = transaction,
             matchedFund = match?.fund,
@@ -117,6 +133,7 @@ class ImportOrdersViewModel @Inject constructor(
             date = LocalDate.ofEpochDay(transaction.epochDay),
             sharesText = transaction.shares.toString(),
             priceText = transaction.pricePerShare.toString(),
+            priceFetchFailed = priceFetchFailed,
         )
     }
 

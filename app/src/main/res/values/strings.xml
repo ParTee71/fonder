@@ -7,6 +7,7 @@
     <string name="save">Spara</string>
     <string name="delete">Ta bort</string>
     <string name="cancel">Avbryt</string>
+    <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
     <string name="ok">OK</string>
@@ -130,6 +131,7 @@
     <string name="import_match_label">Matchad fond</string>
     <string name="import_match_none">Ingen fond vald</string>
     <string name="import_match_uncertain">Osäker matchning – kontrollera</string>
+    <string name="import_price_fetch_failed">Kurs kunde inte hämtas – kontrollera</string>
     <string name="import_date_label">Uppskattat inköpsdatum</string>
     <string name="import_date_uncertain">Osäkert datum – kurshistoriken räcker inte tillbaka, kontrollera</string>
     <string name="import_occasions_label">Inköpstillfällen</string>
@@ -139,7 +141,7 @@
     <string name="format_import_shares_mismatch">Summan av andelar (%1$s) matchar inte totalt antal (%2$s)</string>
     <string name="import_commit_button">Importera %d poster</string>
     <string name="import_success_title">Import klar</string>
-    <string name="import_success_body">Innehaven har importerats som transaktioner.</string>
+    <string name="format_import_success_body">%d poster har importerats som transaktioner.</string>
 
     <!-- Importera avräkningsnotor (issue #8-uppföljning) -->
     <string name="settings_import_orders_section">Importera avräkningsnotor</string>

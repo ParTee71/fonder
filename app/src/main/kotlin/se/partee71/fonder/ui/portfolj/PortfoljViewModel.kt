@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
@@ -87,23 +89,12 @@ class PortfoljViewModel @Inject constructor(
         viewModelScope.launch {
             transactionRepository.observeFunds().collect { funds ->
                 funds.forEach { fund ->
-                    val latest = fundPriceRepository.latestPrice(fund.fundId)
-                    val isStale = latest == null || latest.epochDay < LocalDate.now().toEpochDay()
-                    if (refreshedFundIds.add(fund.fundId) && isStale) {
-                        // Fonder med känt ISIN (t.ex. matchade via findFundByIsin, TP-14)
-                        // saknar Handelsbanken-FundId — refresh() hittar dem aldrig eftersom
-                        // den nycklas på FundId. Samma gren som FondDetaljViewModel/
-                        // ImportHoldingsViewModel använder.
-                        val isin = fund.isin
-                        if (isin != null) {
-                            val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
-                                .minOfOrNull { it.epochDay }
-                                ?.let(LocalDate::ofEpochDay)
-                                ?: LocalDate.now().minusYears(5)
-                            fundPriceRepository.refreshSince(fund.fundId, isin, since)
-                        } else {
-                            fundPriceRepository.refresh(fund.fundId)
-                        }
+                    if (refreshedFundIds.add(fund.fundId) && fundPriceRepository.isPriceStale(fund.fundId)) {
+                        val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
+                            .minOfOrNull { it.epochDay }
+                            ?.let(LocalDate::ofEpochDay)
+                            ?: LocalDate.now().minusYears(5)
+                        fundPriceRepository.refreshFund(fund, since)
                     }
                 }
             }

@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.13.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.14.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -79,11 +79,12 @@
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
 | IMP-2 | Rader med osäker fondmatchning eller osäkert uppskattat inköpsdatum markeras tydligt (text, inte enbart färg) — användaren väljer fond/datum manuellt (samma delade komponenter som transaktionsformuläret, regel 4). |
 | IMP-3 | En importrad kan delas upp i **flera inköpstillfällen** (eget datum + antal andelar per tillfälle) eftersom en exportrad ofta är ett aggregerat innehav byggt av flera köp — varje tillfälle blir en egen transaktion vid import. Summan av tillfällenas andelar måste matcha radens totala antal (tydlig felmarkering annars) innan raden går att importera. |
-| IMP-4 | Under fondmatchning och kursuppdatering (kan ta en stund) visas en overlay-modal ("Importerar…") som inte kan avfärdas förrän steget är klart — ingen tom eller ointeraktiv vy under tiden. |
+| IMP-4 | Under fondmatchning och kursuppdatering (kan ta en stund) visas en overlay-modal ("Importerar…") som inte kan avfärdas förrän steget är klart — ingen tom eller ointeraktiv vy under tiden. Kursuppdatering hämtas bara för en fond vars cachade kurs faktiskt är inaktuell (samma princip som POR-4/POR-5, issue #19) — en redan bevakad fond med färsk kurs gör importet snabbare i stället för att hämta om hela historiken i onödan. |
 | IMP-5 | Varje inköpstillfälle i en importrad kan sättas till **Köp** eller **Sälj** (samma val som transaktionsformuläret) i stället för att alltid antas vara ett köp. |
 | IMP-6 | Från Inställningar kan man öppna **Importera avräkningsnotor**: väljer en eller flera PDF-filer samtidigt (SAF-filväljare med flerval), varje fil tolkas till en eller flera exakta transaktioner (datum, kurs, antal andelar — inget uppskattat), granskar/korrigerar föreslagen fondmatchning per transaktion, och importerar de bekräftade transaktionerna (ÖV-10). |
 | IMP-7 | Filer som inte kan tolkas alls (t.ex. inte en avräkningsnota) räknas upp tydligt i stället för att tystas ner eller krascha importet — övriga filers transaktioner importeras ändå. |
-| IMP-8 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. |
+| IMP-8 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. Matchade transaktioner triggar nu även en kursuppdatering för fonden (samma "bara om inaktuell"-princip som IMP-4) — misslyckas den markeras raden ("Kurs kunde inte hämtas") i stället för att tystas ner (issue #19). |
+| IMP-9 | När import är klar visas en stängbar modal (titel + antal importerade poster + en tydlig **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy — stängning återgår till Inställningar. Gäller båda importflödena (issue #19). |
 | SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
 
 ---
@@ -349,3 +350,23 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   transaktioner (`PortfolioCalc.computeHoldings`), ingen ny persisterad data. Delad
   `PeriodRow` (regel 4) utökad med `unavailableReason`-parametern i stället för en ny
   komponent.
+- **Import: långsam/redundant kurshämtning, PDF-flödet hämtade ingen kurs alls, "Import
+  klar" utan stängknapp (#19):** Excel-importflödet (`ImportHoldingsViewModel`) hämtade
+  tidigare om hela kurshistoriken (5 år, 30 för ISIN-matchade fonder) för **varje** rad vid
+  import, även för fonder som redan hade en aktuell cachad kurs — nu hoppas hämtningen över
+  när fonden redan har en färsk kurs (samma "senaste NAV < 1 dag gammal"-princip som #18,
+  IMP-4). PDF-avräkningsnota-flödet (`ImportOrdersViewModel`) hämtade tidigare **ingen** kurs
+  alls vid import — en nyimporterad fond fick därför ingen cachad kurs förrän något annat
+  (Fonddetaljs eget init-block, eller nästa dagliga `FundPriceUpdateWorker`-körning) råkade
+  hämta den, vilket gjorde att Portfölj/Hem inte visade dag/vecka/månad förrän fonden
+  öppnats separat — flödet triggar nu samma kursuppdatering som Excel-flödet (IMP-8). Båda
+  flödena använder nu `refreshFund`/`isPriceStale`, två delade hjälpfunktioner på
+  `FundPriceRepository` (regel 4) som samlar den ISIN- vs Handelsbanken-FundId-gren som
+  tidigare fanns separat i flera ViewModels — `PortfoljViewModel` omfaktorerad till samma
+  hjälpfunktioner. En misslyckad kursuppdatering markerar nu raden ("Kurs kunde inte
+  hämtas") i stället för att tystas ner, samma princip som IMP-2/POR-5/SLD-2. "Import
+  klar" är nu en stängbar dialog (ny delad `ImportCompleteDialog`, regel 4, med antal
+  importerade poster + en **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy vars
+  enda väg ut var systemets bakåtknapp (IMP-9) — `AppNavigation.kt` trådar in
+  `onDone = { navController.popBackStack() }` till båda importskärmarna, samma mönster som
+  `TransactionFormScreen(onSaved = ...)`. Ingen ny/ändrad persisterad data.

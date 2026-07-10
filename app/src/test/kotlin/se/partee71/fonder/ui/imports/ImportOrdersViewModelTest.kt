@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -44,6 +45,8 @@ class ImportOrdersViewModelTest {
     private val handelsbankenFund = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige (A1 SEK)")
     private val catalog = FundCatalog(companies = emptyList(), funds = listOf(handelsbankenFund))
     private var findFundByIsinResult: Fund? = null
+    private var refreshedFundId: String? = null
+    private var refreshSinceCall: Triple<String, String, LocalDate>? = null
 
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = MutableStateFlow(emptyList())
@@ -65,8 +68,14 @@ class ImportOrdersViewModelTest {
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
+        override suspend fun refresh(fundId: String): Boolean {
+            refreshedFundId = fundId
+            return true
+        }
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
+            refreshSinceCall = Triple(fundId, isin, since)
+            return true
+        }
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
@@ -220,6 +229,94 @@ class ImportOrdersViewModelTest {
             assertEquals(16.9862, tx.shares, 1e-9)
             assertEquals(294.36, tx.pricePerShare, 1e-9)
             assertEquals(LocalDate.of(2020, 3, 13).toEpochDay(), tx.epochDay)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `matchad rad via ISIN triggar refreshSince, inte refresh`() = runTest(dispatcher) {
+        // Regression för issue #19: till skillnad från ImportHoldingsViewModel hämtade det
+        // här flödet tidigare aldrig någon kurs alls — en importerad fond fick ingen cachad
+        // kurs förrän något annat råkade hämta den. fakePriceRepo.latestPrice returnerar
+        // null som standard, dvs. fonden har ingen kurs sedan tidigare.
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(Triple("SE0003653302", "SE0003653302", LocalDate.of(2020, 3, 13)), refreshSinceCall)
+            assertNull(refreshedFundId)
+            assertFalse(state.rows.first().priceFetchFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `matchad rad via Handelsbanken-katalogen triggar refresh, inte refreshSince`() = runTest(dispatcher) {
+        val text = """
+            Handelsbanken Fonder AB
+            Handelsbanken Sverige (A1 SEK)
+            ISIN: SE0000582033
+            Text Belopp Kurs Andelar Saldo andelar
+            In Självbetjäning 2020-03-13 5 000.00 294.36 16.9862 16.9862
+        """.trimIndent()
+        val vm = viewModel(PdfTextExtractor { text })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(handelsbankenFund.fundId, refreshedFundId)
+            assertNull(refreshSinceCall)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hoppar over kursuppdatering nar fonden redan har en aktuell cachad kurs`() = runTest(dispatcher) {
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun latestPrice(fundId: String): FundPrice =
+                FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 294.36, currency = "SEK")
+        }
+        val vm = ImportOrdersViewModel(fakeTransactionRepo, priceRepoMedFarskKurs, PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertNull(refreshedFundId)
+            assertNull(refreshSinceCall)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `misslyckad kurshamtning markerar raden`() = runTest(dispatcher) {
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val priceRepoMedMisslyckadHamtning = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
+                refreshSinceCall = Triple(fundId, isin, since)
+                return false
+            }
+        }
+        val vm = ImportOrdersViewModel(fakeTransactionRepo, priceRepoMedMisslyckadHamtning, PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertTrue(state.rows.first().priceFetchFailed)
             cancelAndIgnoreRemainingEvents()
         }
     }

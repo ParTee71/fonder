@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.imports.HoldingsImportParser
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedHoldingRow
@@ -65,6 +67,8 @@ data class ImportRowUiState(
     val matchConfidence: Double?,
     val occasions: List<ImportOccasion>,
     val included: Boolean = true,
+    /** Sant om ett försök att uppdatera fondens kurscache under import misslyckades (issue #19) — importen fortsätter ändå, men markerad, inte tyst. */
+    val priceFetchFailed: Boolean = false,
 ) {
     val occasionSharesTotal: Double get() = occasions.sumOf { it.shares ?: 0.0 }
     val sharesMismatch: Boolean get() = abs(occasionSharesTotal - row.shares) > SHARES_MATCH_TOLERANCE
@@ -150,19 +154,16 @@ class ImportHoldingsViewModel @Inject constructor(
         // söks inom, så gissningen aldrig hamnar utanför sökfönstret.
         var date = since
         var dateConfident = false
+        var priceFetchFailed = false
 
         if (match != null) {
             val fund = match.fund
-            // Uppdatera alltid hela kurshistoriken vid import — även om fonden redan bevakas
-            // sedan tidigare och har en cachad kurs — så att både inköpsdatum-uppskattningen
-            // nedan och den historiska värdeutvecklingen (#7) baseras på fullständig data,
-            // inte bara de dagar som råkat cachas via den dagliga bakgrundsuppdateringen.
-            // Fonder utan Handelsbanken-FundId (matchade via ISIN, TP-14) har inget att hämta
-            // via refresh() — deras historik kommer alltid via den ISIN-baserade källkedjan.
-            if (fund.isin != null) {
-                fundPriceRepository.refreshSince(fund.fundId, fund.isin, since)
-            } else {
-                fundPriceRepository.refresh(fund.fundId)
+            // Hämta bara om kurscachen faktiskt är inaktuell (samma "senaste NAV < 1 dag
+            // gammal"-princip som #18) — en redan bevakad fond med färsk kurs har normalt
+            // redan full historik cachad sedan tidigare, så en ny hämtning bara gör importet
+            // onödigt långsamt utan att ge mer data (issue #19).
+            if (fundPriceRepository.isPriceStale(fund.fundId)) {
+                priceFetchFailed = !fundPriceRepository.refreshFund(fund, since)
             }
             val history = fundPriceRepository.priceHistory(fund.fundId, since.toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->
@@ -176,6 +177,7 @@ class ImportHoldingsViewModel @Inject constructor(
             matchedFund = match?.fund,
             matchConfidence = match?.confidence,
             occasions = listOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
+            priceFetchFailed = priceFetchFailed,
         )
     }
 
