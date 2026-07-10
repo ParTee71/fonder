@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.fond
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -219,7 +220,8 @@ class FondDetaljScreenTest {
 
         composeRule.onNodeWithText("Så funkar analysen").assertExists()
         composeRule.onNodeWithText("ränta-på-ränta", substring = true).assertDoesNotExist()
-        composeRule.onNodeWithText("CAGR (årlig snittavkastning)").performClick()
+        // Ordlistan ligger längst ned — scrolla in raden innan den kan klickas/fällas ut.
+        composeRule.onNodeWithText("CAGR (årlig snittavkastning)").performScrollTo().performClick()
         composeRule.onNodeWithText("jämna årstakt", substring = true).assertExists()
     }
 
