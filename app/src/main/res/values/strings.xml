@@ -35,6 +35,7 @@
     <string name="period_week">Senaste veckan</string>
     <string name="period_month">Senaste månaden</string>
     <string name="period_insufficient_data">Otillräcklig data</string>
+    <string name="period_stale_price">Kurs ej uppdaterad</string>
     <string name="period_partial_data">Delvis osäker — någon fond saknar historik</string>
 
     <!-- Portfölj -->
@@ -43,6 +44,7 @@
     <string name="portfolj_empty_body">Lägg till din första fondtransaktion för att se värde och utveckling.</string>
     <string name="portfolj_total_value">Totalt värde</string>
     <string name="portfolj_price_missing">Kurs saknas ännu</string>
+    <string name="format_holding_first_purchase">Första köp %1$s · Inköpsvärde %2$s</string>
 
     <!-- Transaktioner -->
     <string name="transaktioner_title">Transaktioner</string>

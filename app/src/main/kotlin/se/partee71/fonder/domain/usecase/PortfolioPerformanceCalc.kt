@@ -18,36 +18,61 @@ object PortfolioPerformanceCalc {
     /** Hur långt tillbaka kurshistorik bör hämtas för att täcka [Period.MANAD] plus en buffert för helger/röda dagar utan NAV. */
     const val HISTORY_LOOKBACK_DAYS = 45L
 
-    /** Förändring för ett enskilt innehav under en period. */
-    data class Change(val amount: Double, val fraction: Double?)
-
     /**
-     * Förändring för hela portföljen under en period.
-     * [partial] = sant om något innehav med känd kurs saknade tillräcklig historik för
-     * perioden och därför uteslöts ur summan (se [totalChange]).
+     * Resultatet av [holdingChange] för ett enskilt innehav (issue #18):
+     * - [Available] — tillräckligt färsk och djup historik, kr + % beräknat.
+     * - [StalePrice] — vår senast kända kurs för fonden är äldre än periodens start; vi vet
+     *   alltså inte vad som hänt i perioden och gissar därför aldrig ett `0`.
+     * - [InsufficientHistory] — kursen är färsk nog, men historiken når inte tillbaka till
+     *   periodens start (t.ex. en nyligen tillagd fond).
      */
-    data class TotalChange(val amount: Double, val fraction: Double?, val partial: Boolean)
+    sealed interface PeriodResult {
+        data class Available(val amount: Double, val fraction: Double?) : PeriodResult
+        data object StalePrice : PeriodResult
+        data object InsufficientHistory : PeriodResult
+    }
 
-    /** Dag/vecka/månad-förändring för ett enskilt innehav, se [holdingChange]. */
-    data class HoldingPerformance(val day: Change?, val week: Change?, val month: Change?)
+    /** Som [PeriodResult], men för hela portföljens summerade förändring (issue #18). [Available.partial] = se [totalChange]. */
+    sealed interface PortfolioPeriodResult {
+        data class Available(val amount: Double, val fraction: Double?, val partial: Boolean) : PortfolioPeriodResult
+        data object StalePrice : PortfolioPeriodResult
+        data object InsufficientHistory : PortfolioPeriodResult
+    }
+
+    /** Dag/vecka/månad-förändring för ett enskilt innehav, se [holdingChange]. Null = innehavet saknar känd kurs helt (POR-3 äger den markeringen). */
+    data class HoldingPerformance(val day: PeriodResult?, val week: PeriodResult?, val month: PeriodResult?)
 
     /** Dag/vecka/månad-förändring för hela portföljen, se [totalChange]. */
-    data class PortfolioPerformance(val day: TotalChange?, val week: TotalChange?, val month: TotalChange?)
+    data class PortfolioPerformance(val day: PortfolioPeriodResult, val week: PortfolioPeriodResult, val month: PortfolioPeriodResult)
 
     /**
-     * Förändring för ett innehav sedan periodens start, eller null om historiken inte räcker
-     * tillbaka till det datumet (t.ex. nytillagd fond) eller om innehavet saknar känd kurs —
-     * markeras som otillräcklig data i UI:t i stället för att gissa (samma princip som
-     * POR-3/SLD-2/IMP-2).
+     * Förändring för ett innehav sedan periodens start.
+     *
+     * Null bara om innehavet helt saknar känd kurs ([Holding.currentValue] null) — samma
+     * "kurs saknas ännu"-markering äger den vyn redan (POR-3), perioden ska inte dubblera den.
+     *
+     * Annars [PeriodResult.StalePrice] om vår senast kända kurs (det yngsta priset i
+     * [history]) är **äldre än periodens start** — vi kan då inte veta om/hur mycket priset
+     * rört sig under perioden, och ska inte gissa ett missvisande `0` (issue #18: detta var
+     * tidigare bakvänt — `currentValue` och periodstartens pris blev av misstag samma,
+     * inaktuella, prisrad så `amount`/`fraction` alltid blev exakt 0). [PeriodResult.InsufficientHistory]
+     * om kursen är färsk nog men historiken inte når periodens start (t.ex. en nytillagd fond).
      */
-    fun holdingChange(holding: Holding, period: Period, today: LocalDate, history: List<FundPrice>): Change? {
+    fun holdingChange(holding: Holding, period: Period, today: LocalDate, history: List<FundPrice>): PeriodResult? {
         val currentValue = holding.currentValue ?: return null
         val targetDay = today.minusDays(period.days).toEpochDay()
-        val historicalNav = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay } ?: return null
-        val historicalValue = holding.netShares * historicalNav.nav
-        if (historicalValue == 0.0) return null
+
+        // Vårt senast kända pris för fonden — om det redan är äldre än periodens start vet vi
+        // inte vad som hänt sedan dess, och ska inte låtsas att inget hänt.
+        val latestKnownDay = history.maxOfOrNull { it.epochDay }
+        if (latestKnownDay == null || latestKnownDay <= targetDay) return PeriodResult.StalePrice
+
+        val historicalNav = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay }?.nav
+            ?: return PeriodResult.InsufficientHistory
+        val historicalValue = holding.netShares * historicalNav
+        if (historicalValue == 0.0) return PeriodResult.InsufficientHistory
         val amount = currentValue - historicalValue
-        return Change(amount = amount, fraction = amount / historicalValue)
+        return PeriodResult.Available(amount = amount, fraction = amount / historicalValue)
     }
 
     /** [holdingChange] för dag/vecka/månad i ett svep. */
@@ -60,39 +85,54 @@ object PortfolioPerformanceCalc {
 
     /**
      * Summerar [holdingChange] över hela portföljen. Innehav som saknar tillräcklig historik
-     * för perioden utesluts ur summan men gör att [TotalChange.partial] blir sant, i stället
-     * för att antingen exkludera hela totalen eller låtsas att alla fonder är med. Innehav
-     * utan känd kurs alls hoppas tyst över precis som i [PortfolioCalc] (POR-3 har redan en
-     * egen "kurs saknas"-markering för dem — perioden ska inte dubblera den varningen).
-     * Null returneras bara om *inget* innehav med känd kurs kunde beräknas för perioden.
+     * eller har en inaktuell kurs för perioden utesluts ur summan men gör att den (om minst
+     * ett innehav ändå kunde beräknas) markeras som [PortfolioPeriodResult.Available.partial],
+     * i stället för att antingen exkludera hela totalen eller låtsas att alla fonder är med.
+     * Innehav utan känd kurs alls hoppas tyst över precis som i [PortfolioCalc] (POR-3 har
+     * redan en egen "kurs saknas"-markering för dem — perioden ska inte dubblera den varningen).
+     *
+     * Om *inget* innehav kunde beräknas returneras [PortfolioPeriodResult.StalePrice] om
+     * samtliga uteslutna berodde på en inaktuell kurs, annars [PortfolioPeriodResult.InsufficientHistory].
      */
     fun totalChange(
         holdings: List<Holding>,
         period: Period,
         today: LocalDate,
         historyByFundId: Map<String, List<FundPrice>>,
-    ): TotalChange? {
+    ): PortfolioPeriodResult {
         var sumAmount = 0.0
         var sumHistoricalValue = 0.0
         var partial = false
         var anyComputed = false
+        var anyStale = false
+        var anyInsufficient = false
 
         for (holding in holdings) {
-            if (holding.currentValue == null) continue
+            val currentValue = holding.currentValue ?: continue
             val history = historyByFundId[holding.fund.fundId].orEmpty()
-            val change = holdingChange(holding, period, today, history)
-            if (change == null) {
-                partial = true
-                continue
+            when (val change = holdingChange(holding, period, today, history)) {
+                is PeriodResult.Available -> {
+                    anyComputed = true
+                    sumAmount += change.amount
+                    sumHistoricalValue += currentValue - change.amount
+                }
+                PeriodResult.StalePrice -> {
+                    partial = true
+                    anyStale = true
+                }
+                PeriodResult.InsufficientHistory -> {
+                    partial = true
+                    anyInsufficient = true
+                }
+                null -> Unit // ovnåbart — currentValue != null redan säkerställt ovan.
             }
-            anyComputed = true
-            sumAmount += change.amount
-            sumHistoricalValue += holding.currentValue - change.amount
         }
 
-        if (!anyComputed) return null
+        if (!anyComputed) {
+            return if (anyStale && !anyInsufficient) PortfolioPeriodResult.StalePrice else PortfolioPeriodResult.InsufficientHistory
+        }
         val fraction = if (sumHistoricalValue != 0.0) sumAmount / sumHistoricalValue else null
-        return TotalChange(amount = sumAmount, fraction = fraction, partial = partial)
+        return PortfolioPeriodResult.Available(amount = sumAmount, fraction = fraction, partial = partial)
     }
 
     /** [totalChange] för dag/vecka/månad i ett svep. */

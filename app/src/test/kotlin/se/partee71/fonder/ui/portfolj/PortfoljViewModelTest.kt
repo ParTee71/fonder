@@ -156,7 +156,10 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
         )
         priceHistoryByFundId = mapOf(
-            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0)),
+            fond.fundId to listOf(
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
+                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+            ),
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -166,8 +169,12 @@ class PortfoljViewModelTest {
             while (state.loading) state = awaitItem()
 
             val performance = state.performance[fond.fundId]!!
-            assertEquals(100.0, performance.day!!.amount, 1e-9) // 1200 - 10*110
-            assertNull(performance.week) // ingen kurs 7 dagar bak i historiken
+            val day = performance.day as se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc.PeriodResult.Available
+            assertEquals(100.0, day.amount, 1e-9) // 1200 - 10*110
+            assertEquals(
+                se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
+                performance.week,
+            ) // ingen kurs 7 dagar bak i historiken
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -190,5 +197,43 @@ class PortfoljViewModelTest {
         assertTrue(refreshedFundIds.isEmpty())
         assertEquals(1, refreshSinceCalls.size)
         assertEquals(Triple(fond.fundId, fond.isin, since), refreshSinceCalls.first())
+    }
+
+    @Test
+    fun `engangsuppdatering hoppar over fond vars cachade kurs redan ar fran idag`() = runTest(dispatcher) {
+        // Regression för issue #18: en redan färsk kurs ska inte trigga onödig nätverksrefresh.
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        funds.value = listOf(fond)
+
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        advanceUntilIdle()
+
+        assertTrue(refreshedFundIds.isEmpty())
+        assertTrue(refreshSinceCalls.isEmpty())
+    }
+
+    @Test
+    fun `engangsuppdatering hamtar ny kurs for fond vars cachade kurs ar aldre an idag`() = runTest(dispatcher) {
+        // Regression för issue #18: root-orsaken till det falska "0" var att en gårdagens
+        // cachade kurs aldrig hämtades om — engångsuppdateringen ska trigga refresh() även
+        // när fonden redan har en (inaktuell) cachad kurs.
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0))
+        funds.value = listOf(fond)
+
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        advanceUntilIdle()
+
+        assertEquals(1, refreshedFundIds.size)
+        assertEquals(fond.fundId, refreshedFundIds.first())
     }
 }

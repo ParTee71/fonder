@@ -76,16 +76,20 @@ class PortfoljViewModel @Inject constructor(
             initialValue = PortfoljUiState(),
         )
 
-    // Engångsuppdatering per fond utan cachad kurs (t.ex. nyss tillagd, ingen daglig
-    // WorkManager-körning har hunnit ännu). Håll enkel: ett refresh-anrop per fund och
-    // ViewModel-livstid, inte en ny bakgrundsjobb-mekanism (se issue #6).
+    // Engångsuppdatering per fond utan cachad kurs, eller vars cachade kurs är äldre än idag
+    // (issue #18 — annars visar dag/vecka en falsk "0" i stället för att bli färsk så snart
+    // källan har ett nyare pris; ingen daglig WorkManager-körning har nödvändigtvis hunnit
+    // ännu). Håll enkel: ett refresh-anrop per fund och ViewModel-livstid, inte en ny
+    // bakgrundsjobb-mekanism (se issue #6).
     private val refreshedFundIds = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
             transactionRepository.observeFunds().collect { funds ->
                 funds.forEach { fund ->
-                    if (refreshedFundIds.add(fund.fundId) && fundPriceRepository.latestPrice(fund.fundId) == null) {
+                    val latest = fundPriceRepository.latestPrice(fund.fundId)
+                    val isStale = latest == null || latest.epochDay < LocalDate.now().toEpochDay()
+                    if (refreshedFundIds.add(fund.fundId) && isStale) {
                         // Fonder med känt ISIN (t.ex. matchade via findFundByIsin, TP-14)
                         // saknar Handelsbanken-FundId — refresh() hittar dem aldrig eftersom
                         // den nycklas på FundId. Samma gren som FondDetaljViewModel/

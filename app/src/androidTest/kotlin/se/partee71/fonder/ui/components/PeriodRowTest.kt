@@ -71,6 +71,18 @@ class PeriodRowTest {
     }
 
     @Test
+    fun visar_kurs_ej_uppdaterad_nar_unavailableReason_ar_stale_price() {
+        // issue #18: inaktuell kurs ska aldrig se ut som "otillräcklig data" eller ett falskt 0.
+        composeRule.setContent {
+            FonderTheme {
+                PeriodRow(label = "Idag", amount = null, fraction = null, unavailableReason = UnavailableReason.STALE_PRICE)
+            }
+        }
+
+        composeRule.onNodeWithText("Kurs ej uppdaterad").assertExists()
+    }
+
+    @Test
     fun visar_delvis_osaker_markering_nar_partial_ar_sant() {
         composeRule.setContent {
             FonderTheme {

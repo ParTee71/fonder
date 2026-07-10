@@ -9,12 +9,15 @@ package se.partee71.fonder.domain.model
  *   — inte kassaflödet (köp minus säljintäkter), se POR-1.
  * @param currentValue nuvarande värde (netShares × senaste NAV), eller null om ingen
  *   kurs finns cachad än (se issue #6 — visa "kurs saknas" i UI, krascha aldrig).
+ * @param firstPurchaseEpochDay dagen för fondens tidigaste (ännu kvarvarande) köp, som
+ *   epoch-day — visas tillsammans med [netInvested] i Portfölj/Fonddetalj (POR-6, issue #18).
  */
 data class Holding(
     val fund: Fund,
     val netShares: Double,
     val netInvested: Double,
     val currentValue: Double? = null,
+    val firstPurchaseEpochDay: Long? = null,
 ) {
     /** Vinst/förlust i kr, eller null om [currentValue] är okänt. */
     val gainLoss: Double? get() = currentValue?.minus(netInvested)

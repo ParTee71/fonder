@@ -125,4 +125,37 @@ class FondDetaljScreenTest {
         composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").assertExists()
         composeRule.onNodeWithText("Otillräcklig data").assertExists()
     }
+
+    @Test
+    fun visar_forsta_kop_och_inkopsvarde_for_ett_kvarvarande_innehav() {
+        // POR-6, issue #18. netInvested < 1000 undviker tusentalsavgränsarens tvetydiga
+        // blanksteg (se MoneyFormatTest).
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(
+                        loading = false,
+                        fundName = "Fond A",
+                        prices = prices,
+                        firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
+                        netInvested = 500.0,
+                        analysis = null,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Första köp 2024-03-15 · Inköpsvärde 500,00 kr", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_ingen_forsta_kop_rad_utan_kvarvarande_innehav() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = null))
+            }
+        }
+
+        composeRule.onNodeWithText("Första köp", substring = true).assertDoesNotExist()
+    }
 }

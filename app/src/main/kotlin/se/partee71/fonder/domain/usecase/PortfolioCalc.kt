@@ -27,10 +27,15 @@ object PortfolioCalc {
         val positions = RealizedGainCalculator.remainingPositions(transactions)
         return transactions
             .groupBy { it.fundId }
-            .mapNotNull { (fundId, _) ->
+            .mapNotNull { (fundId, txsForFund) ->
                 val fund = byFundId[fundId] ?: return@mapNotNull null
                 val position = positions[fundId] ?: return@mapNotNull null
-                Holding(fund = fund, netShares = position.shares, netInvested = position.costBasis)
+                Holding(
+                    fund = fund,
+                    netShares = position.shares,
+                    netInvested = position.costBasis,
+                    firstPurchaseEpochDay = txsForFund.minOfOrNull { it.epochDay },
+                )
             }
             .sortedBy { it.fund.name.lowercase() }
     }

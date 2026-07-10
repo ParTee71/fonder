@@ -99,6 +99,19 @@ class PortfolioCalcTest {
     }
 
     @Test
+    fun `firstPurchaseEpochDay ar den tidigaste transaktionens epochDay, oavsett ordning (POR-6)`() {
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 1.0, pricePerShare = 90.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 60, shares = 1.0, pricePerShare = 110.0),
+        )
+
+        val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
+
+        assertEquals(10L, holding.firstPurchaseEpochDay)
+    }
+
+    @Test
     fun `withCurrentValue berakar varde for innehav med kand kurs`() {
         val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0)
         val prices = mapOf(fondA.fundId to FundPrice(fundId = fondA.fundId, epochDay = 5, nav = 120.0))

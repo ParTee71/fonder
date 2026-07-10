@@ -19,6 +19,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
@@ -31,6 +32,9 @@ data class FondDetaljUiState(
     val isin: String? = null,
     val suggestedIsin: String? = null,
     val prices: List<FundPrice> = emptyList(),
+    /** Första köp-datum och kvarvarande (FIFO) inköpsvärde — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
+    val firstPurchaseEpochDay: Long? = null,
+    val netInvested: Double? = null,
     /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
     val analysis: FundAnalysisCalc.Analysis? = null,
 ) {
@@ -94,13 +98,17 @@ class FondDetaljViewModel @Inject constructor(
         }
         .map { (snapshot, latestPrices, history) ->
             val fund = snapshot.funds.firstOrNull { it.fundId == fundId }
+            val holdings = PortfolioCalc.computeHoldings(snapshot.funds, snapshot.transactions)
+            val holding = holdings.firstOrNull { it.fund.fundId == fundId }
             FondDetaljUiState(
                 loading = false,
                 fundName = fund?.name,
                 isin = fund?.isin,
                 suggestedIsin = snapshot.suggestedIsin,
                 prices = history.sortedByDescending { it.epochDay },
-                analysis = buildAnalysis(snapshot.funds, snapshot.transactions, latestPrices, history),
+                firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
+                netInvested = holding?.netInvested,
+                analysis = buildAnalysis(holdings, holding, latestPrices, history),
             )
         }.stateIn(
             scope = viewModelScope,
@@ -115,18 +123,13 @@ class FondDetaljViewModel @Inject constructor(
      * nätverksuppdatering — samma princip som POR-5/HEM-1 (`fundPriceRepository.priceHistory`).
      */
     private suspend fun buildAnalysis(
-        funds: List<Fund>,
-        transactions: List<Transaction>,
+        holdings: List<Holding>,
+        holding: Holding?,
         latestPrices: Map<String, FundPrice>,
         thisFundHistory: List<FundPrice>,
     ): FundAnalysisCalc.Analysis? {
-        val holdings = PortfolioCalc.computeHoldings(funds, transactions)
-        val holding = holdings.firstOrNull { it.fund.fundId == fundId } ?: return null
-        val firstPurchase = transactions
-            .filter { it.fundId == fundId }
-            .minOfOrNull { it.epochDay }
-            ?.let(LocalDate::ofEpochDay)
-            ?: return null
+        if (holding == null) return null
+        val firstPurchase = holding.firstPurchaseEpochDay?.let(LocalDate::ofEpochDay) ?: return null
 
         val portfolioTotalValue = PortfolioCalc.totalValue(PortfolioCalc.withCurrentValue(holdings, latestPrices))
 

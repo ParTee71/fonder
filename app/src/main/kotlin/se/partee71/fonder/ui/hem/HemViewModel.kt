@@ -41,8 +41,11 @@ data class HemUiState(
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
     val totalGainLossFraction: Double? = null,
-    val performance: PortfolioPerformanceCalc.PortfolioPerformance =
-        PortfolioPerformanceCalc.PortfolioPerformance(day = null, week = null, month = null),
+    val performance: PortfolioPerformanceCalc.PortfolioPerformance = PortfolioPerformanceCalc.PortfolioPerformance(
+        day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+        week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+    ),
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings

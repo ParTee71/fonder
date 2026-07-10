@@ -13,7 +13,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +24,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -86,6 +86,7 @@ class HemViewModelTest {
         )
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
+                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(7).toEpochDay(), nav = 100.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 80.0),
@@ -97,7 +98,8 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertFalse(state.isEmpty) // innehavet finns, bara kursen saknas ännu (samma fallback som POR-3)
-            assertNull(state.performance.day) // ingen kand kurs an -> ingen periodberakning
+            // ingen kand kurs an -> ingen periodberakning möjlig för portföljen
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.day)
 
             latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -105,16 +107,19 @@ class HemViewModelTest {
             assertFalse(updated.isEmpty)
             assertEquals(1200.0, updated.totalValue, 1e-9)
             assertEquals(200.0, updated.totalGainLoss, 1e-9)
-            assertEquals(100.0, updated.performance.day!!.amount, 1e-9)
-            assertEquals(200.0, updated.performance.week!!.amount, 1e-9)
-            assertEquals(400.0, updated.performance.month!!.amount, 1e-9)
-            assertFalse(updated.performance.day!!.partial)
+            val day = updated.performance.day as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            val week = updated.performance.week as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            val month = updated.performance.month as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            assertEquals(100.0, day.amount, 1e-9)
+            assertEquals(200.0, week.amount, 1e-9)
+            assertEquals(400.0, month.amount, 1e-9)
+            assertFalse(day.partial)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `nyligen tillagd fond utan tillrackligt historik ger null for vecka och manad`() = runTest(dispatcher) {
+    fun `nyligen tillagd fond utan tillrackligt historik ger InsufficientHistory for vecka och manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
@@ -131,8 +136,8 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertNull(state.performance.week)
-            assertNull(state.performance.month)
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.week)
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.month)
             cancelAndIgnoreRemainingEvents()
         }
     }

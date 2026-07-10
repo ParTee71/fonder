@@ -43,7 +43,7 @@ class PortfoljScreenTest {
             holdings = listOf(holding),
             performance = mapOf(
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
-                    day = PortfolioPerformanceCalc.Change(amount = 30.0, fraction = 0.03),
+                    day = PortfolioPerformanceCalc.PeriodResult.Available(amount = 30.0, fraction = 0.03),
                     week = null,
                     month = null,
                 ),
@@ -73,5 +73,48 @@ class PortfoljScreenTest {
         }
 
         composeRule.onAllNodesWithText("Otillräcklig data", useUnmergedTree = true).assertCountEquals(3)
+    }
+
+    @Test
+    fun stale_price_visar_kurs_ej_uppdaterad_ist_for_falsk_noll() {
+        // Regression för issue #18: en inaktuell kurs ska aldrig se ut som "+0,0 % · 0,00 kr".
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            performance = mapOf(
+                fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
+                    day = PortfolioPerformanceCalc.PeriodResult.StalePrice,
+                    week = PortfolioPerformanceCalc.PeriodResult.StalePrice,
+                    month = null,
+                ),
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onAllNodesWithText("Kurs ej uppdaterad", useUnmergedTree = true).assertCountEquals(2)
+    }
+
+    @Test
+    fun forsta_kop_och_inkopsvarde_visas_for_innehav() {
+        // netInvested < 1000 undviker tusentalsavgränsarens tvetydiga blanksteg (vanligt vs
+        // hårt) i formaterad text — se MoneyFormatTest.
+        val holding = Holding(
+            fund = fond,
+            netShares = 10.0,
+            netInvested = 500.0,
+            currentValue = 1100.0,
+            firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
+        )
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding), performance = emptyMap())
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Första köp 2024-03-15 · Inköpsvärde 500,00 kr", substring = true).assertExists()
     }
 }

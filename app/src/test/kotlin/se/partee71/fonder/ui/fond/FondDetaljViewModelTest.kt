@@ -246,6 +246,28 @@ class FondDetaljViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertNull(state.analysis)
+            // Helt avsåld fond är inget innehav längre — inget första köp/inköpsvärde att visa (POR-6).
+            assertNull(state.firstPurchaseEpochDay)
+            assertNull(state.netInvested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `visar forsta kop och inkopsvarde for ett kvarvarande innehav (POR-6)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(today.minusYears(1).toEpochDay(), state.firstPurchaseEpochDay)
+            assertEquals(1000.0, state.netInvested)
             cancelAndIgnoreRemainingEvents()
         }
     }

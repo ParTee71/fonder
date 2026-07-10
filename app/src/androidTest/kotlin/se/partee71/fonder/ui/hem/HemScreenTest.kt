@@ -1,6 +1,8 @@
 package se.partee71.fonder.ui.hem
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,9 +46,9 @@ class HemScreenTest {
             totalGainLoss = 100.0,
             totalGainLossFraction = 0.2,
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.TotalChange(amount = 50.0, fraction = 0.05, partial = false),
-                week = PortfolioPerformanceCalc.TotalChange(amount = 90.0, fraction = 0.1, partial = false),
-                month = null,
+                day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 50.0, fraction = 0.05, partial = false),
+                week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
             ),
         )
 
@@ -61,6 +63,30 @@ class HemScreenTest {
     }
 
     @Test
+    fun inaktuell_kurs_visar_kurs_ej_uppdaterad_ist_for_falsk_noll() {
+        // Regression för issue #18.
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            totalValue = 500.0,
+            totalGainLoss = 100.0,
+            totalGainLossFraction = 0.2,
+            performance = PortfolioPerformanceCalc.PortfolioPerformance(
+                day = PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice,
+                week = PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice,
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onAllNodesWithText("Kurs ej uppdaterad").assertCountEquals(2)
+        composeRule.onNodeWithText("Otillräcklig data").assertExists()
+    }
+
+    @Test
     fun delvis_osaker_markering_visas_for_en_period() {
         val state = HemUiState(
             loading = false,
@@ -69,9 +95,9 @@ class HemScreenTest {
             totalGainLoss = 0.0,
             totalGainLossFraction = 0.0,
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.TotalChange(amount = 10.0, fraction = 0.01, partial = true),
-                week = null,
-                month = null,
+                day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 10.0, fraction = 0.01, partial = true),
+                week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
             ),
         )
 

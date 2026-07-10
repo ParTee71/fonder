@@ -72,6 +72,20 @@ fun FondDetaljContent(
             item {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(state.fundName ?: "", style = MaterialTheme.typography.titleLarge)
+                    val firstPurchaseEpochDay = state.firstPurchaseEpochDay
+                    val netInvested = state.netInvested
+                    if (firstPurchaseEpochDay != null && netInvested != null) {
+                        Text(
+                            stringResource(
+                                R.string.format_holding_first_purchase,
+                                LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
+                                MoneyFormat.kr(netInvested),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                     if (state.analysis != null) {
                         AnalysisSection(analysis = state.analysis!!, modifier = Modifier.padding(top = 16.dp))
                     }

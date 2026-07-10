@@ -23,8 +23,13 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.UnavailableReason
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
+private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
 @Composable
 fun PortfoljScreen(
@@ -103,6 +108,7 @@ private fun HoldingRow(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(holding.fund.name, style = MaterialTheme.typography.titleMedium)
+            FirstPurchaseRow(holding = holding, modifier = Modifier.padding(top = 2.dp))
             val value = holding.currentValue
             val fraction = holding.gainLossFraction
             if (value != null) {
@@ -117,21 +123,27 @@ private fun HoldingRow(
                         color = ReturnColors.forAmount(holding.gainLoss ?: 0.0),
                     )
                 }
+                val (dayAmount, dayFraction, dayReason) = performance?.day.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_day),
-                    amount = performance?.day?.amount,
-                    fraction = performance?.day?.fraction,
+                    amount = dayAmount,
+                    fraction = dayFraction,
+                    unavailableReason = dayReason,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                val (weekAmount, weekFraction, weekReason) = performance?.week.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_week),
-                    amount = performance?.week?.amount,
-                    fraction = performance?.week?.fraction,
+                    amount = weekAmount,
+                    fraction = weekFraction,
+                    unavailableReason = weekReason,
                 )
+                val (monthAmount, monthFraction, monthReason) = performance?.month.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_month),
-                    amount = performance?.month?.amount,
-                    fraction = performance?.month?.fraction,
+                    amount = monthAmount,
+                    fraction = monthFraction,
+                    unavailableReason = monthReason,
                 )
             } else {
                 Text(
@@ -147,4 +159,27 @@ private fun HoldingRow(
             }
         }
     }
+}
+
+/** Första köp-datum + kvarvarande inköpsvärde (FIFO) för innehavet (POR-6, issue #18). */
+@Composable
+private fun FirstPurchaseRow(holding: Holding, modifier: Modifier = Modifier) {
+    val firstPurchaseEpochDay = holding.firstPurchaseEpochDay ?: return
+    Text(
+        stringResource(
+            R.string.format_holding_first_purchase,
+            LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
+            MoneyFormat.kr(holding.netInvested),
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+/** Mappar [PortfolioPerformanceCalc.PeriodResult] till [PeriodRow]s primitiva parametrar (issue #18) — komponenten själv känner inte till domänmodeller (regel 4). */
+private fun PortfolioPerformanceCalc.PeriodResult?.toRowArgs(): Triple<Double?, Double?, UnavailableReason> = when (this) {
+    is PortfolioPerformanceCalc.PeriodResult.Available -> Triple(amount, fraction, UnavailableReason.INSUFFICIENT_DATA)
+    PortfolioPerformanceCalc.PeriodResult.StalePrice -> Triple(null, null, UnavailableReason.STALE_PRICE)
+    PortfolioPerformanceCalc.PeriodResult.InsufficientHistory, null -> Triple(null, null, UnavailableReason.INSUFFICIENT_DATA)
 }
