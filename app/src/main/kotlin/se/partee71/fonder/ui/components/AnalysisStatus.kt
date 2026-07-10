@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import se.partee71.fonder.R
+import se.partee71.fonder.domain.usecase.AnalysisGuidance
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.theme.StatusColors
@@ -43,6 +44,23 @@ fun statusTitle(level: FundAnalysisCalc.SignalLevel) = when (level) {
     FundAnalysisCalc.SignalLevel.GUL -> stringResource(R.string.analys_status_gul)
     FundAnalysisCalc.SignalLevel.ROD -> stringResource(R.string.analys_status_rod)
 }
+
+/**
+ * Svensk kontexttext för varje härledd [AnalysisGuidance.GuidanceKey] (issue #22, ANA-6) — sätter
+ * signalerna i sammanhang för en nybörjare. Domänlagret bär bara nycklarna, texten komponeras här
+ * (samma princip som [statusTriggerMessages]). Alltid förklarande, aldrig ett köp-/säljråd (ANA-3).
+ */
+@Composable
+fun guidanceMessages(analysis: FundAnalysisCalc.Analysis): List<String> =
+    AnalysisGuidance.guidanceFor(analysis).map { key ->
+        when (key) {
+            AnalysisGuidance.GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV -> stringResource(R.string.analys_guidance_plus_mot_gav)
+            AnalysisGuidance.GuidanceKey.DJUP_NEDGANG_TIDSHORISONT -> stringResource(R.string.analys_guidance_djup_nedgang)
+            AnalysisGuidance.GuidanceKey.UNDER_TREND_INTE_SALJBUD -> stringResource(R.string.analys_guidance_under_trend)
+            AnalysisGuidance.GuidanceKey.SVAG_MOT_PORTFOLJ -> stringResource(R.string.analys_guidance_svag_portfolj)
+            AnalysisGuidance.GuidanceKey.LUGNT_LAGE -> stringResource(R.string.analys_guidance_lugnt)
+        }
+    }
 
 /** Svensk text för varje triggad (icke-grön) signal i [analysis], i fast ordning (avstånd, trend, momentum). */
 @Composable
@@ -98,6 +116,30 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Neutralt kontextkort under statusbannern i Fonddetalj (ANA-6, issue #22) — förklarar för en
+ * nybörjare vad signalerna innebär i sammanhang (t.ex. att kursen ligger under toppen men
+ * fortfarande över GAV, eller att en nedgång inte i sig är ett säljläge). Visas inget om analysen
+ * saknar vägledning (otillräcklig data, ANA-4) — då renderas kortet inte alls. Aldrig rådgivande.
+ */
+@Composable
+fun AnalysisGuidanceCard(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
+    val messages = guidanceMessages(analysis)
+    if (messages.isEmpty()) return
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            messages.forEachIndexed { index, message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = if (index == 0) Modifier else Modifier.padding(top = 8.dp),
+                )
             }
         }
     }

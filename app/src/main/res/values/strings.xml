@@ -97,6 +97,45 @@
     <string name="analys_signal_trend">Under 200-dagars snitt</string>
     <string name="analys_signal_momentum">Svagare än portföljsnittet senaste 3 månaderna</string>
 
+    <!-- Pedagogiskt lager: förklaringar, kontext och ordlista (issue #22, ANA-5/ANA-6) -->
+    <string name="info_expand">Visa förklaring</string>
+    <string name="info_collapse">Dölj förklaring</string>
+    <!-- Neutral kontext härledd ur analysen (AnalysisGuidance) — aldrig ett köp-/säljråd (ANA-3) -->
+    <string name="analys_guidance_plus_mot_gav">Fonden ligger under sin topp, men du är fortfarande i plus mot ditt snittpris (GAV) — du har alltså inte förlorat pengar på innehavet, även om det tappat från toppen.</string>
+    <string name="analys_guidance_djup_nedgang">Fonden har fallit rejält från toppen. Att sälja nu gör nedgången verklig; för en långsiktig sparare kan det vara läge att låta tiden verka i stället för att agera på ett fall som redan skett.</string>
+    <string name="analys_guidance_under_trend">Kursen ligger under sin långa trend (200-dagarssnittet). Det är ett svaghetstecken att hålla ögonen på — inte ett besked om att sälja.</string>
+    <string name="analys_guidance_svag_portfolj">Fonden har gått svagare än dina övriga fonder de senaste 3 månaderna. En kort period säger lite på egen hand — värt att följa över tid.</string>
+    <string name="analys_guidance_lugnt">Inga signaler är aktiva just nu — ett lugnt läge som inte kräver någon åtgärd.</string>
+    <!-- Neutrala signaletiketter (färgpricken visar nivån) -->
+    <string name="analys_signal_distance_label">Avstånd från årshögsta</string>
+    <string name="analys_signal_trend_label">Kurs mot 200-dagars snitt</string>
+    <string name="analys_signal_momentum_label">Utveckling mot portföljsnittet (3 mån)</string>
+    <!-- Signalförklaringar — vad måttet betyder och vad det inte betyder -->
+    <string name="analys_signal_distance_explain">Hur långt under sin högsta kurs det senaste året fonden ligger nu. Ett stort avstånd betyder att fonden tappat sedan toppen — men det är inte i sig ett skäl att sälja. Säljer du efter ett fall gör du förlusten verklig; historiskt har breda fonder ofta hämtat igen nedgångar med tiden.</string>
+    <string name="analys_signal_trend_explain">Jämför dagens kurs med genomsnittet de senaste ~200 handelsdagarna. Ligger kursen under snittet är det ett svaghetstecken på medellång sikt — ett tecken att hålla koll, inte ett säljbud.</string>
+    <string name="analys_signal_momentum_explain">Hur den här fonden gått de senaste 3 månaderna jämfört med dina övriga fonder. Sämre än snittet kan vara helt tillfälligt — ett enskilt kvartal säger lite om en fond du äger långsiktigt.</string>
+    <!-- Nyckeltalsförklaringar -->
+    <string name="analys_period_explain">Hur mycket fondens värde har ändrats under perioden, i kronor och procent. Enskilda perioder svänger — se dem tillsammans, inte var för sig.</string>
+    <string name="analys_cagr_explain">Genomsnittlig årlig avkastning sedan ditt första köp, utjämnad över åren (ränta-på-ränta). Visas först när du ägt fonden minst ett år, så siffran blir meningsfull.</string>
+    <string name="analys_gav_explain">Ditt genomsnittliga anskaffningsvärde per andel (GAV) jämfört med dagens kurs. Plus betyder att du ligger över vad du betalat i snitt, minus under — oavsett var toppen låg.</string>
+    <string name="analys_portfolio_share_explain">Hur stor del av portföljens totala värde den här fonden utgör. En hög andel betyder att mycket av ditt sparande hänger på en enda fond (lägre spridning).</string>
+    <!-- Ordlista "Så funkar analysen" -->
+    <string name="analys_glossary_title">Så funkar analysen</string>
+    <string name="analys_glossary_nav_term">NAV (fondkurs)</string>
+    <string name="analys_glossary_nav_def">Fondandelens pris, som räknas fram en gång per handelsdag. All utveckling i appen bygger på hur NAV ändras över tid.</string>
+    <string name="analys_glossary_gav_term">GAV (anskaffningsvärde)</string>
+    <string name="analys_glossary_gav_def">Ditt genomsnittliga inköpspris per andel, uträknat på dina köp. Aktuell kurs över GAV = du ligger plus; under = minus.</string>
+    <string name="analys_glossary_cagr_term">CAGR (årlig snittavkastning)</string>
+    <string name="analys_glossary_cagr_def">Den jämna årstakt som skulle ge samma resultat som fonden faktiskt gett sedan ditt köp — ett sätt att jämföra avkastning över olika lång tid.</string>
+    <string name="analys_glossary_sma_term">Glidande medelvärde (200 dagar)</string>
+    <string name="analys_glossary_sma_def">Snittkursen de senaste ~200 handelsdagarna. Används för att se den underliggande trenden utan de dagliga svängningarna.</string>
+    <string name="analys_glossary_topp_term">Avstånd från topp</string>
+    <string name="analys_glossary_topp_def">Hur långt under sin högsta kurs det senaste året fonden ligger nu. Säger hur stor nedgången från toppen varit — inte om den kommer fortsätta.</string>
+    <string name="analys_glossary_horisont_term">Tidshorisont</string>
+    <string name="analys_glossary_horisont_def">Hur länge du tänker behålla pengarna. Ju längre horisont, desto mindre betyder enskilda nedgångar — du hinner vänta ut dem.</string>
+    <string name="analys_glossary_ranta_term">Ränta-på-ränta</string>
+    <string name="analys_glossary_ranta_def">Att avkastning i sin tur ger avkastning. Effekten växer med tiden och gynnar den som stannar kvar i stället för att hoppa in och ut.</string>
+
     <!-- Fondsök (lägg till fond i bevakningen) -->
     <string name="fondsok_label">Sök fond</string>
     <string name="fondsok_empty_title">Inga fonder hittades</string>
