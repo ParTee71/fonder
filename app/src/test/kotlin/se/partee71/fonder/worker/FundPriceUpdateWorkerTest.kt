@@ -33,6 +33,9 @@ class FundPriceUpdateWorkerTest {
     private var refreshResult = true
     private var refreshSinceResult = true
 
+    /** Cachad kurs per fundId — null (standard) = ingen cachad kurs alls, alltid inaktuellt. */
+    private val cachedPrices = mutableMapOf<String, FundPrice>()
+
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
         override fun observeTransactions(): Flow<List<Transaction>> = transactions
@@ -45,7 +48,7 @@ class FundPriceUpdateWorkerTest {
     }
 
     private val fakeFundPriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = null
+        override suspend fun latestPrice(fundId: String): FundPrice? = cachedPrices[fundId]
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
@@ -133,5 +136,49 @@ class FundPriceUpdateWorkerTest {
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 
         assertTrue(success)
+    }
+
+    // --- Handelsdagsmedveten gating (issue #27, TP-17) ---
+
+    @Test
+    fun `fond med redan aktuell kurs hoppas over utan nagon natverksaktivitet`() = runTest {
+        // En fond vars cachade kurs redan är aktuell enligt NavCalendar (dagens datum) ska
+        // inte trigga en onödig hämtning — gör den periodiska backstopen billig.
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+
+        val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
+
+        assertTrue(success)
+        assertTrue(refreshedFundIds.isEmpty())
+        assertTrue(refreshSinceCalls.isEmpty())
+    }
+
+    @Test
+    fun `bara inaktuella fonder uppdateras, farska fonder hoppas over`() = runTest {
+        val farsk = Fund(fundId = "SHB0000442", name = "Fond A")
+        val inaktuell = Fund(fundId = "SHB0000443", name = "Fond B")
+        funds.value = listOf(farsk, inaktuell)
+        cachedPrices[farsk.fundId] = FundPrice(fundId = farsk.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[inaktuell.fundId] = FundPrice(fundId = inaktuell.fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 100.0)
+
+        val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
+
+        assertTrue(success)
+        assertEquals(listOf(inaktuell.fundId), refreshedFundIds)
+    }
+
+    @Test
+    fun `force hamtar alla fonder aven de med redan aktuell kurs`() = runTest {
+        // Den manuella "Uppdatera nu"-knappen (SET-2) bypassar staleness-gaten.
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+
+        val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo, force = true)
+
+        assertTrue(success)
+        assertEquals(listOf(fond.fundId), refreshedFundIds)
     }
 }

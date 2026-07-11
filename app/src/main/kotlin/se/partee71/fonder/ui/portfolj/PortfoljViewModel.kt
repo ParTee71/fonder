@@ -32,6 +32,8 @@ data class PortfoljUiState(
     val totalGainLossFraction: Double? = null,
     /** Dag/vecka/månads-förändring per fond, se issue #14 (POR-5). Nyckel: `Fund.fundId`. */
     val performance: Map<String, PortfolioPerformanceCalc.HoldingPerformance> = emptyMap(),
+    /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
+    val navEpochDay: Long? = null,
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
@@ -70,6 +72,7 @@ class PortfoljViewModel @Inject constructor(
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     performance = performance,
+                    navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                 )
             }
         }.stateIn(

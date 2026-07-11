@@ -160,4 +160,48 @@ class PortfolioCalcTest {
 
         assertNull(PortfolioCalc.totalGainLossFraction(listOf(utanKurs)))
     }
+
+    @Test
+    fun `withCurrentValue satter navEpochDay till prisets datum (POR-7)`() {
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0)
+        val prices = mapOf(fondA.fundId to FundPrice(fundId = fondA.fundId, epochDay = 42, nav = 120.0))
+
+        val result = PortfolioCalc.withCurrentValue(listOf(holding), prices)
+
+        assertEquals(42L, result.first().navEpochDay)
+    }
+
+    @Test
+    fun `withCurrentValue lamnar navEpochDay null utan kand kurs`() {
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0)
+
+        val result = PortfolioCalc.withCurrentValue(listOf(holding), emptyMap())
+
+        assertNull(result.first().navEpochDay)
+    }
+
+    @Test
+    fun `oldestKnownNavEpochDay ar den aldsta bland innehav med kant varde (POR-7)`() {
+        val nyare = Holding(fund = fondA, netShares = 1.0, netInvested = 100.0, currentValue = 110.0, navEpochDay = 20)
+        val aldre = Holding(fund = fondB, netShares = 1.0, netInvested = 100.0, currentValue = 105.0, navEpochDay = 10)
+
+        assertEquals(10L, PortfolioCalc.oldestKnownNavEpochDay(listOf(nyare, aldre)))
+    }
+
+    @Test
+    fun `oldestKnownNavEpochDay ignorerar innehav utan kant varde`() {
+        val medVarde = Holding(fund = fondA, netShares = 1.0, netInvested = 100.0, currentValue = 110.0, navEpochDay = 20)
+        // navEpochDay null trots currentValue-lika-null — ska inte kunna hända i praktiken, men
+        // det är själva currentValue == null som avgör om innehavet räknas med (inte navEpochDay).
+        val utanVarde = Holding(fund = fondB, netShares = 1.0, netInvested = 100.0, navEpochDay = 5)
+
+        assertEquals(20L, PortfolioCalc.oldestKnownNavEpochDay(listOf(medVarde, utanVarde)))
+    }
+
+    @Test
+    fun `oldestKnownNavEpochDay ar null utan nagot innehav med kant varde`() {
+        val utanVarde = Holding(fund = fondA, netShares = 5.0, netInvested = 500.0)
+
+        assertNull(PortfolioCalc.oldestKnownNavEpochDay(listOf(utanVarde)))
+    }
 }

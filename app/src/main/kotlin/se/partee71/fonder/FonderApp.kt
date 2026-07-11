@@ -2,17 +2,10 @@ package se.partee71.fonder
 
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
-import androidx.work.BackoffPolicy
 import androidx.work.Configuration
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
-import se.partee71.fonder.worker.FundPriceUpdateWorker
-import java.util.concurrent.TimeUnit
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -20,6 +13,9 @@ class FonderApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var fundPriceRefreshScheduler: FundPriceRefreshScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -31,22 +27,10 @@ class FonderApp : Application(), Configuration.Provider {
         // Krävs av PdfBox-Android (se PdfBoxTextExtractor, import av avräkningsnotor) innan
         // några PDF-anrop görs.
         PDFBoxResourceLoader.init(applicationContext)
-        scheduleDailyFundPriceUpdate()
-    }
-
-    private fun scheduleDailyFundPriceUpdate() {
-        val request = PeriodicWorkRequestBuilder<FundPriceUpdateWorker>(24, TimeUnit.HOURS)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build(),
-            )
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "fonder_daily_price_update",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
+        // Handelsdagsmedveten kursuppdatering (issue #27, TP-17/TP-5) — launch-gate vid
+        // varje appstart plus en gles periodisk backstop, båda billiga tack vare
+        // FundPriceUpdateWorker.refreshAll:s egen staleness-gate.
+        fundPriceRefreshScheduler.scheduleOnLaunch()
+        fundPriceRefreshScheduler.scheduleBackstop()
     }
 }

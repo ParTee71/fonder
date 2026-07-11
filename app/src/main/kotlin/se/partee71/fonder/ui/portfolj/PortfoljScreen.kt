@@ -24,6 +24,7 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.UnavailableReason
+import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import java.time.LocalDate
@@ -83,6 +84,7 @@ private fun TotalCard(state: PortfoljUiState) {
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
                     color = ReturnColors.forAmount(state.totalGainLoss),
                 )
+                ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
             } else {
                 Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
                 Text(
@@ -123,6 +125,7 @@ private fun HoldingRow(
                         color = ReturnColors.forAmount(holding.gainLoss ?: 0.0),
                     )
                 }
+                ValueAsOfRow(navEpochDay = holding.navEpochDay, modifier = Modifier.padding(top = 2.dp))
                 val (dayAmount, dayFraction, dayReason) = performance?.day.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_day),

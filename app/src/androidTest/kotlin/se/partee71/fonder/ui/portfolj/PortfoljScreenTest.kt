@@ -117,4 +117,30 @@ class PortfoljScreenTest {
 
         composeRule.onNodeWithText("Första köp 2024-03-15 · Inköpsvärde 500,00 kr", substring = true).assertExists()
     }
+
+    @Test
+    fun visar_varde_per_nav_datum_for_total_och_innehav() {
+        // POR-7, issue #27 — en normal endagsförskjutning mot en extern källa (t.ex. banken)
+        // ska vara begriplig, inte se ut som ett fel.
+        val holding = Holding(
+            fund = fond,
+            netShares = 10.0,
+            netInvested = 1000.0,
+            currentValue = 1100.0,
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(),
+        )
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            totalValue = 1100.0,
+            totalGainLossFraction = 0.1,
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onAllNodesWithText("Värde per 2026-07-10", useUnmergedTree = true).assertCountEquals(2)
+    }
 }

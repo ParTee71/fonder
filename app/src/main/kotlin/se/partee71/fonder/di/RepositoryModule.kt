@@ -21,6 +21,8 @@ import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
 import se.partee71.fonder.data.repository.StubBackupRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.fonder.worker.WorkManagerFundPriceRefreshScheduler
 import javax.inject.Singleton
 
 @Module
@@ -47,6 +49,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAuthRepository(impl: StubAuthRepository): AuthRepository
+
+    @Binds
+    abstract fun bindFundPriceRefreshScheduler(impl: WorkManagerFundPriceRefreshScheduler): FundPriceRefreshScheduler
 
     companion object {
         /**

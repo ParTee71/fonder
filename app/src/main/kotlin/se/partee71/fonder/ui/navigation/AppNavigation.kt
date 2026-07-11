@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,6 +23,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import se.partee71.fonder.R
+import se.partee71.fonder.ui.components.WorkerStatusIcon
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.hem.HemScreen
@@ -46,7 +49,12 @@ fun AppNavigation() {
         topBar = {
             val title = topLevel.firstOrNull { it.route == currentRoute }?.labelRes
             if (title != null) {
-                TopAppBar(title = { Text(stringResource(title)) })
+                val workerStatusViewModel: WorkerStatusViewModel = hiltViewModel()
+                val isRunning by workerStatusViewModel.isRunning.collectAsStateWithLifecycle()
+                TopAppBar(
+                    title = { Text(stringResource(title)) },
+                    actions = { WorkerStatusIcon(isRunning = isRunning) },
+                )
             }
         },
         bottomBar = {

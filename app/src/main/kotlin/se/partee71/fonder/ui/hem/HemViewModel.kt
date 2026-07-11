@@ -47,6 +47,8 @@ data class HemUiState(
         month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
     ),
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
+    /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
+    val navEpochDay: Long? = null,
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -96,6 +98,7 @@ class HemViewModel @Inject constructor(
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
                     analysisSummary = buildAnalysisSummary(enriched, transactions, today),
+                    navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                 )
             }
         }.stateIn(

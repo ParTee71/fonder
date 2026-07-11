@@ -7,23 +7,37 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
 import java.time.LocalDate
 
-/** Uppdaterar kurser dagligen för alla fonder användaren bevakar (se issue #3). */
+/**
+ * Uppdaterar kurser för alla fonder användaren bevakar (se issue #3), handelsdagsmedvetet sedan
+ * issue #27/TP-17 — koalescerad av [se.partee71.fonder.worker.FundPriceRefreshScheduler] mellan
+ * appstart (launch-gate), en gles periodisk backstop och en manuell "Uppdatera nu"-knapp.
+ */
 @HiltWorker
 class FundPriceUpdateWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result =
-        if (refreshAll(transactionRepository, fundPriceRepository)) Result.success() else Result.retry()
+    override suspend fun doWork(): Result {
+        val force = inputData.getBoolean(KEY_FORCE, false)
+        val success = refreshAll(transactionRepository, fundPriceRepository, force)
+        if (success) preferencesRepository.setLastPriceSyncEpochMillis(System.currentTimeMillis())
+        return if (success) Result.success() else Result.retry()
+    }
 
     companion object {
+        /** Input-data-nyckel för att forcera en uppdatering, bypassar staleness-gaten (manuell knapp, SET-2). */
+        const val KEY_FORCE = "force"
+
         /**
          * Fem år tillbaka används som sökfönster för ISIN-baserade fonder utan känd
          * inköpshistorik (t.ex. bevakade men aldrig köpta) — samma fallback som
@@ -43,24 +57,32 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * — annars nås de aldrig av den dagliga uppdateringen (samma gren som
          * `FondDetaljViewModel`/`ImportHoldingsViewModel` redan använder).
          *
-         * @return true om det inte finns några bevakade fonder, eller om minst en fonds
-         *   uppdatering lyckades — false bara om samtliga fonder misslyckades (troligen ett
-         *   tillfälligt nätverksfel), så [CoroutineWorker.Result.retry] kan användas i stället
-         *   för att vänta ett helt dygn på nästa körning.
+         * @param force hoppar över [isPriceStale]-gaten och uppdaterar alla bevakade fonder,
+         *   oavsett om cachen redan är aktuell (TP-17, den manuella "Uppdatera nu"-knappen, SET-2).
+         *   Annars uppdateras bara fonder vars cachade kurs faktiskt är inaktuell — gör den
+         *   periodiska backstopen billig (inget nätverksanrop när kursen redan är färsk).
+         * @return true om det inte finns några bevakade fonder, om ingen fond var inaktuell, eller
+         *   om minst en fonds uppdatering lyckades — false bara om samtliga (inaktuella) fonder
+         *   misslyckades (troligen ett tillfälligt nätverksfel), så [CoroutineWorker.Result.retry]
+         *   kan användas i stället för att vänta på nästa schemalagda körning.
          */
         internal suspend fun refreshAll(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
+            force: Boolean = false,
         ): Boolean {
             val funds = transactionRepository.observeFunds().first()
             if (funds.isEmpty()) return true
+
+            val targets = if (force) funds else funds.filter { fundPriceRepository.isPriceStale(it.fundId) }
+            if (targets.isEmpty()) return true
 
             val earliestPurchaseByFund = transactionRepository.observeTransactions().first()
                 .groupBy { it.fundId }
                 .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
 
             var anySuccess = false
-            funds.forEach { fund ->
+            targets.forEach { fund ->
                 val isin = fund.isin
                 val success = if (isin != null) {
                     val since = earliestPurchaseByFund[fund.fundId]

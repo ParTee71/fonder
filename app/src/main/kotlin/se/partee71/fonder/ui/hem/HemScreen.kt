@@ -24,6 +24,7 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.UnavailableReason
+import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
@@ -69,6 +70,7 @@ private fun TotalCard(state: HemUiState) {
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
                     color = ReturnColors.forAmount(state.totalGainLoss),
                 )
+                ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
             } else {
                 Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
                 Text(

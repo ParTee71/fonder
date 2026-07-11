@@ -214,9 +214,11 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `hamtar kurs nar cachad kurs ar aldre an idag`() = runTest(dispatcher) {
+        // 10 dagar gammal är otvetydigt inaktuellt oavsett veckodag/klockslag (till skillnad
+        // från "igår", se NavCalendar, issue #27) — deterministiskt oavsett när CI kör testet.
         val priceRepoMedInaktuellKurs = object : FundPriceRepository by fakePriceRepo {
             override suspend fun latestPrice(fundId: String): FundPrice =
-                FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(1).toEpochDay(), nav = 950.0, currency = "SEK")
+                FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 950.0, currency = "SEK")
         }
         val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedInaktuellKurs)
         vm.uiState.test {
