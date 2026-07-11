@@ -143,6 +143,7 @@ class PortfoljViewModelTest {
             val updated = awaitItem()
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
+            assertEquals(5L, updated.navEpochDay) // POR-7, issue #27
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -219,15 +220,17 @@ class PortfoljViewModelTest {
 
     @Test
     fun `engangsuppdatering hamtar ny kurs for fond vars cachade kurs ar aldre an idag`() = runTest(dispatcher) {
-        // Regression för issue #18: root-orsaken till det falska "0" var att en gårdagens
-        // cachade kurs aldrig hämtades om — engångsuppdateringen ska trigga refresh() även
-        // när fonden redan har en (inaktuell) cachad kurs.
+        // Regression för issue #18: root-orsaken till det falska "0" var att en inaktuell
+        // cachad kurs aldrig hämtades om — engångsuppdateringen ska trigga refresh() även
+        // när fonden redan har en (inaktuell) cachad kurs. 10 dagar gammal är otvetydigt
+        // inaktuellt oavsett veckodag/klockslag (till skillnad från "igår", se NavCalendar,
+        // issue #27) — testet ska vara deterministiskt oavsett när CI kör det.
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         transactions.value = listOf(
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0))
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(10).toEpochDay(), nav = 110.0))
         funds.value = listOf(fond)
 
         PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)

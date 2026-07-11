@@ -12,7 +12,9 @@ import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.usecase.NavCalendar
 import java.time.LocalDate
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,13 +83,16 @@ suspend fun FundPriceRepository.refreshFund(fund: Fund, since: LocalDate): Boole
 }
 
 /**
- * Sant om [fundId] saknar cachad kurs helt, eller om senaste kända kurs är äldre än [today]
- * (issue #18/#19) — samma "engångsuppdatering bara vid faktiskt inaktuell cache"-princip
- * återanvänd mellan Portfölj och båda importflödena i stället för en egen kopia var (regel 4).
+ * Sant om [fundId] saknar cachad kurs helt, eller om senaste kända kurs är äldre än
+ * [NavCalendar.expectedLatestNavDay] (issue #18/#19, handelsdagsmedveten sedan issue #27/TP-17)
+ * — samma "uppdatera bara vid faktiskt inaktuell cache"-princip återanvänd mellan appstart,
+ * bakgrundsjobbet och båda importflödena i stället för en egen kopia var (regel 4). Ersätter
+ * den tidigare "senaste kurs < idag"-jämförelsen, som gav falska hämtningar på helger (fredagens
+ * NAV är redan det senaste som finns) och falskt "färskt" på kvällar (dagens NAV inte hämtad än).
  */
-suspend fun FundPriceRepository.isPriceStale(fundId: String, today: LocalDate = LocalDate.now()): Boolean {
+suspend fun FundPriceRepository.isPriceStale(fundId: String, now: LocalDateTime = LocalDateTime.now()): Boolean {
     val latest = latestPrice(fundId)
-    return latest == null || latest.epochDay < today.toEpochDay()
+    return latest == null || latest.epochDay < NavCalendar.expectedLatestNavDay(now).toEpochDay()
 }
 
 @Singleton

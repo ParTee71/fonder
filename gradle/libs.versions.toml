@@ -68,6 +68,8 @@ androidx-appcompat                   = { group = "androidx.appcompat",       nam
 work-runtime-ktx                     = { group = "androidx.work",            name = "work-runtime-ktx",               version.ref = "workManager" }
 hilt-work                            = { group = "androidx.hilt",            name = "hilt-work",                      version.ref = "hiltWork" }
 hilt-work-compiler                   = { group = "androidx.hilt",            name = "hilt-compiler",                  version.ref = "hiltWork" }
+# Instrumenttest av WorkManager-schemaläggning (FundPriceRefreshScheduler, issue #27)
+androidx-work-testing                = { group = "androidx.work",            name = "work-testing",                   version.ref = "workManager" }
 # Nätverk (FundPriceRepository, se issue #2/#3)
 okhttp                                = { group = "com.squareup.okhttp3",     name = "okhttp",                         version.ref = "okhttp" }
 jsoup                                 = { group = "org.jsoup",                name = "jsoup",                          version.ref = "jsoup" }
