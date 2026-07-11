@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -23,6 +24,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -32,6 +34,7 @@ class SettingsViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private var clearAllCalled = false
+    private var manualRefreshCalled = false
     private lateinit var dataStore: DataStore<Preferences>
 
     private val fakeTransactionRepo = object : TransactionRepository {
@@ -46,6 +49,15 @@ class SettingsViewModelTest {
         }
     }
 
+    private val fakeScheduler = object : FundPriceRefreshScheduler {
+        override fun scheduleOnLaunch() {}
+        override fun scheduleBackstop() {}
+        override fun triggerManualRefresh() {
+            manualRefreshCalled = true
+        }
+        override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
+    }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -57,7 +69,7 @@ class SettingsViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo)
+    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler)
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -73,5 +85,40 @@ class SettingsViewModelTest {
             assertTrue(clearAllCalled)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `lastPriceSyncEpochMillis ar null innan nagon uppdatering skett (SET-2)`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            assertEquals(null, awaitItem().lastPriceSyncEpochMillis)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `lastPriceSyncEpochMillis speglar preferences efter en uppdatering (SET-2)`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler)
+
+        vm.uiState.test {
+            awaitItem()
+            preferences.setLastPriceSyncEpochMillis(1_700_000_000_000L)
+            var state = awaitItem()
+            while (state.lastPriceSyncEpochMillis == null) state = awaitItem()
+
+            assertEquals(1_700_000_000_000L, state.lastPriceSyncEpochMillis)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `refreshPricesNow forcerar en manuell uppdatering via schedulern (SET-2)`() {
+        val vm = viewModel()
+
+        vm.refreshPricesNow()
+
+        assertTrue(manualRefreshCalled)
     }
 }
