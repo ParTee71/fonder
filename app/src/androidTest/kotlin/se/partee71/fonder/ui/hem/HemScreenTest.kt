@@ -50,6 +50,7 @@ class HemScreenTest {
                 week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
                 month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
             ),
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(), // POR-7, issue #27
         )
 
         composeRule.setContent {
@@ -60,6 +61,7 @@ class HemScreenTest {
         composeRule.onNodeWithText("+20,0 % · 100,00 kr", substring = true).assertExists()
         composeRule.onNodeWithText("+5,0 % · 50,00 kr", substring = true).assertExists()
         composeRule.onNodeWithText("Otillräcklig data").assertExists()
+        composeRule.onNodeWithText("Värde per 2026-07-10").assertExists()
     }
 
     @Test

@@ -119,6 +119,26 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `navEpochDay speglar prisets NAV-datum (POR-7)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 120.0))
+
+        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(today.minusDays(1).toEpochDay(), state.navEpochDay)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `nyligen tillagd fond utan tillrackligt historik ger InsufficientHistory for vecka och manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
