@@ -10,6 +10,8 @@
     <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
+    <!-- Bakgrundsindikator för pågående kursuppdatering (NAV-6, issue #27) -->
+    <string name="worker_status_running">Uppdaterar kurser i bakgrunden</string>
     <string name="ok">OK</string>
     <string name="settings">Inställningar</string>
     <string name="sign_in_with_google">Logga in med Google</string>
@@ -46,6 +48,8 @@
     <string name="portfolj_total_value">Totalt värde</string>
     <string name="portfolj_price_missing">Kurs saknas ännu</string>
     <string name="format_holding_first_purchase">Första köp %1$s · Inköpsvärde %2$s</string>
+    <!-- NAV-datum bredvid värde (POR-7, issue #27) — en normal endagsförskjutning mot en extern källa (t.ex. banken) blir begriplig i stället för att se ut som ett fel. -->
+    <string name="format_value_as_of">Värde per %1$s</string>
 
     <!-- Transaktioner -->
     <string name="transaktioner_title">Transaktioner</string>
@@ -162,6 +166,12 @@
     <string name="theme_auto">Auto</string>
     <string name="settings_account_section">Google-konto &amp; säkerhetskopiering</string>
     <string name="settings_account_body">Inloggning och molnbackup läggs till i en kommande version.</string>
+    <!-- Kursuppdatering (SET-2, issue #27) -->
+    <string name="settings_price_update_section">Kursuppdatering</string>
+    <string name="settings_price_update_body">Kurser uppdateras automatiskt i bakgrunden. Vill du inte vänta kan du uppdatera direkt.</string>
+    <string name="format_settings_last_price_sync">Senast uppdaterad: %1$s</string>
+    <string name="settings_last_price_sync_never">Aldrig uppdaterad</string>
+    <string name="settings_refresh_prices_button">Uppdatera nu</string>
     <string name="settings_import_section">Importera innehav</string>
     <string name="settings_import_body">Importera befintliga fondinnehav från Handelsbankens Excel-export (\"Innehav Fonder\").</string>
     <string name="settings_import_button">Importera innehav</string>
