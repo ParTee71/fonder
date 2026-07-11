@@ -33,7 +33,7 @@
 | TP-2 | UI byggt med **Jetpack Compose** + Material 3. |
 | TP-3 | Arkitektur: **MVVM** med Hilt (DI), Repository-mönster, ViewModels med `StateFlow`. |
 | TP-4 | Lokal lagring i **Room** (`exportSchema = true`); inställningar i **DataStore (Preferences)**. |
-| TP-5 | Bakgrundsjobb via **WorkManager** (Hilt-integrerad worker): daglig kursuppdatering för bevakade fonder. |
+| TP-5 | Bakgrundsjobb via **WorkManager** (Hilt-integrerad worker): handelsdagsmedveten kursuppdatering för bevakade fonder — en billig launch-gate vid appstart plus en gles periodisk backstop (12h), båda gated av staleness (se TP-17, issue #27; ersätter den tidigare fasta 24h-periodiken). |
 | TP-6 | Inloggning via **Firebase Auth + Google Credential Manager**. *(planerad)* |
 | TP-7 | Molnbackup via **Google Drive (appDataFolder)**. *(planerad)* |
 | TP-8 | Krävd behörighet: `INTERNET`. |
@@ -45,6 +45,7 @@
 | TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** — inte begränsat av Handelsbankens fasta 5-årsfönster. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true` för daglig NAV, godtyckligt datumintervall) — ingen inloggning krävs, verifierat live 2026-07-05. Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. `findFundByIsin` slår upp en fond exakt via ISIN och ger den `Fund.fundId == isin` (inget Handelsbanken-FundId finns) — används av importflödet (TP-13) för fonder som saknas i Handelsbankens katalog. |
 | TP-15 | Realiserat resultat vid försäljning beräknas av **`RealizedGainCalculator`** (`domain/usecase/`), en ren/testbar FIFO-motor (äldsta köp-lott konsumeras först) som delas mellan "Sålda fonder"-vyn (`compute`, en post per säljtransaktion) och portföljens kvarvarande anskaffningsvärde (`remainingPositions`, POR-1) — samma sanning på båda ställena. `Transaction` har ett fält **`fee`** (avgift i kr, default 0.0, Room-migrering 3→4) som dras av från säljtransaktionens eget resultat; avgift på köp räknas **inte** in i anskaffningsvärdet (medvetet avgränsat till sälj-sidan). Säljs fler andelar än historiken visar köpta flaggas den delen som `uncoveredShares` — resultatet visas ändå, men markerat som osäkert (SLD-2), i stället för att tystas ner eller gissas. |
 | TP-16 | PDF-textextraktion via **PdfBox-Android** (`com.tom-roush:pdfbox-android`, Apache 2.0-licens) — kräver `PDFBoxResourceLoader.init(context)` (körs i `FonderApp.onCreate`). Abstraherat bakom `PdfTextExtractor` (`data/imports/`) så `AvrakningsnotaPdfParser` (ren textparsning, samma isoleringsprincip som TP-10/TP-13) kan enhetstestas med fixturer utan PDF-biblioteket. Layouten är odokumenterad och kan ändras — parsern matchar rader som börjar med **"In" (köp) eller "Ut"/"Avslut" (sälj)** följt av datum och fyra tal (belopp, kurs, andelar, saldo), verifierat mot en riktig köp- **och** en riktig sälj-avräkningsnota (se changelog). En sälj-rad har negativa belopp/andelar (minskar saldot) — parsern sparar magnituden, `type` bär riktningen. PdfBox-Androids egen radbrytning i praktiken kan ändå avvika något. Fondmatchning återanvänder samma prioritetsordning som TP-13 via den delade `ImportFundMatcher` (regel 4). |
+| TP-17 | **`NavCalendar.expectedLatestNavDay`** (`domain/usecase/`, ren/testbar) avgör vilket datums NAV som borde vara känt — helg → senaste vardagen, vardag före kl. 18 → föregående vardag, annars dagens datum. Enda staleness-sanning (`FundPriceRepository.isPriceStale`, regel 4), ersätter den tidigare "senaste kurs < idag"-jämförelsen som gav falska hämtningar på helger och falskt "färskt" på kvällar. `FundPriceRefreshScheduler` (`worker/`) koalescerar tre triggers till samma `FundPriceUpdateWorker` via WorkManagers unika arbetsnamn: en launch-gate vid appstart (`KEEP`), en gles periodisk backstop (`UPDATE`, 12h, TP-5), och en manuell forcerad körning (`REPLACE`) från Inställningar (SET-2). `FundPriceUpdateWorker.refreshAll` hoppar över redan aktuella fonder om inte forcerad — gör backstopen och launch-gaten billiga (inget nätverksanrop när kursen redan är färsk). Senaste lyckade körning sparas som tidsstämpel i `PreferencesRepository` — ren cache-metadata, ingen persisterad användardata (NFR-1) och ingår därför medvetet inte i backup-kontraktet. |
 
 ---
 
@@ -68,12 +69,14 @@
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | NAV-5 | En egen flik **Sålda** i toppnavigeringen öppnar vyn över sålda fonder (se avsnitt 6, SLD-1). |
+| NAV-6 | Navigeringschromets `TopAppBar` visar en liten **bakgrundsindikator** (`WorkerStatusIcon`, `ui/components/`, regel 4) när en kursuppdatering pågår i bakgrunden (TP-5/TP-17, issue #27) — aldrig blockerande, döljs helt i vila. |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp** — nettoinvesterat är det kvarvarande (ej sålda) anskaffningsvärdet enligt FIFO (TP-15), inte kassaflödet. En fond vars nettoandelar är noll (**helt avsåld**) är inte längre ett innehav och visas inte — dess realiserade resultat finns i stället i "Sålda fonder" (SLD-1). |
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
 | POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Räcker inte kurshistoriken tillbaka till periodens start (t.ex. nytillagd fond) markeras just den perioden som otillräcklig data i stället för ett gissat värde (issue #14). Är fondens senast kända kurs **äldre än periodens start** (t.ex. innan dagens kursuppdatering hunnit köras) visas i stället texten "Kurs ej uppdaterad" — aldrig ett missvisande `0` (issue #18). |
 | POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
+| POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
@@ -86,6 +89,7 @@
 | IMP-8 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. Matchade transaktioner triggar nu även en kursuppdatering för fonden (samma "bara om inaktuell"-princip som IMP-4) — misslyckas den markeras raden ("Kurs kunde inte hämtas") i stället för att tystas ner (issue #19). |
 | IMP-9 | När import är klar visas en stängbar modal (titel + antal importerade poster + en tydlig **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy — stängning återgår till Inställningar. Gäller båda importflödena (issue #19). |
 | SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
+| SET-2 | Inställningar visar ett **kursuppdateringskort** med "Senast uppdaterad: \<tidsstämpel\>" (eller "Aldrig uppdaterad") och en **"Uppdatera nu"-knapp** som forcerar en kursuppdatering oavsett staleness-gate (TP-17, issue #27) — bypassar launch-gate/backstopens "bara om inaktuellt"-princip, för den som inte vill vänta. |
 
 ---
 
@@ -140,6 +144,25 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
 
 ## Historik
 
+- **Handelsdagsmedveten kursuppdatering, bakgrundsindikator och "Värde per datum" (#27):**
+  Kursuppdateringen räknas om kring handelsdagar i stället för fasta tidsintervall — ny ren
+  domänfunktion `NavCalendar.expectedLatestNavDay` (TP-17) avgör vilket datums NAV som borde
+  vara känt (helg → senaste vardagen, vardag före kl. 18 → föregående vardag), och
+  `FundPriceRepository.isPriceStale` jämför mot den i stället för den gamla "senaste kurs <
+  idag"-jämförelsen som gav falska hämtningar på helger och falskt "färskt" på kvällar. Ny
+  `FundPriceRefreshScheduler` (`worker/`) koalescerar tre triggers till samma
+  `FundPriceUpdateWorker` via WorkManagers unika arbetsnamn: launch-gate vid appstart (`KEEP`),
+  en gles periodisk backstop (`UPDATE`, 12h i stället för de gamla 24h, TP-5), och en manuell
+  forcerad körning (`REPLACE`) från Inställningar (SET-2, "Uppdatera nu" + "Senast
+  uppdaterad"). `FundPriceUpdateWorker.refreshAll` hoppar nu över redan aktuella fonder om
+  inte forcerad, vilket gör backstopen och launch-gaten billiga. En liten bakgrundsindikator
+  (`WorkerStatusIcon`, NAV-6) visas i navigeringschromet när en uppdatering pågår. Portfölj och
+  Hem visar dessutom "Värde per \<datum\>" (`ValueAsOfRow`, POR-7) bredvid värdet — `Holding`
+  fick fältet `navEpochDay`, totalens datum är det äldsta bland ingående innehav (samma
+  "svagaste länk"-princip som HEM-2) — så en normal endagsförskjutning mot en extern källa
+  (t.ex. banken) blir begriplig i stället för att se ut som ett fel. Ingen ny persisterad
+  användardata; senaste synk-tidsstämpeln i DataStore är ren cache-metadata utanför
+  backup-kontraktet.
 - **Volatilitet och Sharpe-kvot (#24):** Analys-sektionen fick två riskmått (ANA-7) beräknade
   ur befintlig NAV-historik utan tredjepartsbibliotek — annualiserad volatilitet
   (standardavvikelse på dagsavkastningar ×√252) och Sharpe-kvot (annualiserad avkastning delat
