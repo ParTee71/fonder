@@ -39,6 +39,10 @@ enum class UnavailableReason {
  * @param unavailableReason vilken text som visas när [amount] och [fraction] båda är null
  *   (issue #18) — skiljer en inaktuell kurs (aldrig ett vilseledande `0`) från äkta otillräcklig
  *   historik.
+ * @param valueText ett färdigformaterat, neutralfärgat värde att visa i stället för
+ *   kr/procent-formateringen (issue #24) — för nyckeltal som inte är avkastningar och därför
+ *   inte ska tecken-/färgkodas som vinst/förlust (t.ex. volatilitet, Sharpe-kvot). Är det null
+ *   markeras raden som otillräcklig data, samma som en saknad avkastning.
  */
 @Composable
 fun PeriodRow(
@@ -48,13 +52,19 @@ fun PeriodRow(
     modifier: Modifier = Modifier,
     partial: Boolean = false,
     unavailableReason: UnavailableReason = UnavailableReason.INSUFFICIENT_DATA,
+    valueText: String? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
-        if (amount == null && fraction == null) {
+        if (valueText != null) {
+            Text(
+                valueText,
+                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+            )
+        } else if (amount == null && fraction == null) {
             Text(
                 stringResource(
                     if (unavailableReason == UnavailableReason.STALE_PRICE) {

@@ -92,4 +92,20 @@ class PeriodRowTest {
 
         composeRule.onNodeWithText("Delvis osäker — någon fond saknar historik").assertExists()
     }
+
+    @Test
+    fun visar_forformaterat_valueText_i_stallet_for_avkastningsformatering() {
+        // issue #24 (ANA-7): riskmått (volatilitet/Sharpe) visas som ett neutralt, färdigformaterat
+        // värde — inte tecken-/färgkodat som en avkastning.
+        composeRule.setContent {
+            FonderTheme {
+                PeriodRow(label = "Volatilitet (årlig)", amount = null, fraction = null, valueText = "18,0 %")
+            }
+        }
+
+        composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
+        composeRule.onNodeWithText("18,0 %").assertExists()
+        // valueText har företräde — ingen "otillräcklig data"-text trots att amount/fraction är null.
+        composeRule.onNodeWithText("Otillräcklig data").assertDoesNotExist()
+    }
 }

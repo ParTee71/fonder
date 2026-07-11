@@ -284,4 +284,54 @@ class FundAnalysisCalcTest {
     fun `averageThreeMonthReturn ar null om ingen fond har tillrcklig historik`() {
         assertNull(FundAnalysisCalc.averageThreeMonthReturn(today, mapOf("A" to emptyList())))
     }
+
+    // --- Volatilitet och Sharpe (ANA-7, issue #24) ---
+
+    private val riskHolding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1200.0)
+
+    private fun analyzeWith(history: List<FundPrice>) = FundAnalysisCalc.analyze(
+        today = today,
+        holding = riskHolding,
+        priceHistory = history,
+        firstPurchaseDate = today.minusYears(1),
+        portfolioTotalValue = 1200.0,
+        otherHoldingsAverageThreeMonthReturn = null,
+    )!!
+
+    /** [nDays]+1 punkter med kurser som växlar mellan [low] och [high] varje dag. */
+    private fun alternating(nDays: Long, low: Double, high: Double) =
+        (0..nDays).map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) high else low) }
+
+    @Test
+    fun `platt kurshistorik ger nollvolatilitet och ingen Sharpe (ingen division med noll)`() {
+        val flat = (0..100L).map { price(it, nav = 100.0) }
+        val kf = analyzeWith(flat).keyFigures
+        assertEquals(0.0, kf.annualizedVolatility!!, 1e-9)
+        assertNull(kf.sharpeRatio) // vol = 0 → Sharpe odefinierad, null i stället för oändlig
+    }
+
+    @Test
+    fun `for kort historik ger null for bade volatilitet och Sharpe`() {
+        // 30 punkter → 29 dagsavkastningar, under minimigränsen (~60).
+        val short = (0..29L).map { price(it, nav = 100.0 + it) }
+        val kf = analyzeWith(short).keyFigures
+        assertNull(kf.annualizedVolatility)
+        assertNull(kf.sharpeRatio)
+    }
+
+    @Test
+    fun `storre svangningar ger hogre volatilitet`() {
+        val calm = analyzeWith(alternating(100, low = 99.0, high = 101.0)).keyFigures.annualizedVolatility!!
+        val wild = analyzeWith(alternating(100, low = 90.0, high = 110.0)).keyFigures.annualizedVolatility!!
+        assertTrue(wild > calm)
+    }
+
+    @Test
+    fun `stigande kurshistorik ger positiv Sharpe`() {
+        // Stadig uppgång — positiv medelavkastning och positiv (nollskild) volatilitet.
+        val rising = (0..120L).map { daysAgo -> price(daysAgo, nav = 120.0 - daysAgo * 0.2) }
+        val kf = analyzeWith(rising).keyFigures
+        assertTrue(kf.annualizedVolatility!! > 0.0)
+        assertTrue(kf.sharpeRatio!! > 0.0)
+    }
 }

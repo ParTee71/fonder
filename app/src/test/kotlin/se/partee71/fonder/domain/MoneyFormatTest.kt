@@ -25,4 +25,18 @@ class MoneyFormatTest {
     fun `percentSigned ger minustecken for negativ avkastning`() {
         assertTrue(MoneyFormat.percentSigned(-0.05).startsWith("−"))
     }
+
+    @Test
+    fun `percent ger osignerad procent med en decimal`() {
+        val out = MoneyFormat.percent(0.182)
+        assertTrue("fick: $out", out.contains("18,2"))
+        assertTrue("fick: $out", out.trim().endsWith("%"))
+        assertTrue("fick: $out", !out.startsWith("+")) // aldrig tecken (volatilitet är aldrig negativ)
+    }
+
+    @Test
+    fun `decimal ger tva decimaler och akta minustecken`() {
+        assertTrue("fick: ${MoneyFormat.decimal(0.8)}", MoneyFormat.decimal(0.8).contains("0,80"))
+        assertTrue(MoneyFormat.decimal(-0.4).startsWith("−"))
+    }
 }
