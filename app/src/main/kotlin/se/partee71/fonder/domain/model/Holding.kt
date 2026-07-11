@@ -11,6 +11,10 @@ package se.partee71.fonder.domain.model
  *   kurs finns cachad än (se issue #6 — visa "kurs saknas" i UI, krascha aldrig).
  * @param firstPurchaseEpochDay dagen för fondens tidigaste (ännu kvarvarande) köp, som
  *   epoch-day — visas tillsammans med [netInvested] i Portfölj/Fonddetalj (POR-6, issue #18).
+ * @param navEpochDay epoch-day för den NAV [currentValue] är räknad på, eller null om
+ *   [currentValue] är okänt — visas som "per <datum>" bredvid värdet (POR-7, issue #27) så
+ *   en normal endagsförskjutning mot en extern källa (t.ex. banken) blir begriplig i stället
+ *   för att se ut som ett fel.
  */
 data class Holding(
     val fund: Fund,
@@ -18,6 +22,7 @@ data class Holding(
     val netInvested: Double,
     val currentValue: Double? = null,
     val firstPurchaseEpochDay: Long? = null,
+    val navEpochDay: Long? = null,
 ) {
     /** Vinst/förlust i kr, eller null om [currentValue] är okänt. */
     val gainLoss: Double? get() = currentValue?.minus(netInvested)

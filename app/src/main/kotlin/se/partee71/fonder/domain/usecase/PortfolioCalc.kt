@@ -43,13 +43,22 @@ object PortfolioCalc {
     /**
      * Berikar innehav med nuvarande värde (netShares × senaste NAV) utifrån kända kurser.
      * Fonder utan kurs i [prices] behåller `currentValue = null` — visas som "kurs saknas"
-     * i UI:t, aldrig en krasch eller ett felaktigt värde.
+     * i UI:t, aldrig en krasch eller ett felaktigt värde. [Holding.navEpochDay] sätts till
+     * samma kurs NAV-datum, för "per <datum>"-visning (POR-7, issue #27).
      */
     fun withCurrentValue(holdings: List<Holding>, prices: Map<String, FundPrice>): List<Holding> =
         holdings.map { holding ->
-            val nav = prices[holding.fund.fundId]?.nav ?: return@map holding
-            holding.copy(currentValue = holding.netShares * nav)
+            val price = prices[holding.fund.fundId] ?: return@map holding
+            holding.copy(currentValue = holding.netShares * price.nav, navEpochDay = price.epochDay)
         }
+
+    /**
+     * Det äldsta NAV-datumet bland innehav med känt värde — totalens värde är aldrig färskare
+     * än sin svagaste länk, samma "svagaste länk"-princip som "delvis osäker" (HEM-2). Null om
+     * inget innehav har ett känt värde. Visas som "per <datum>" bredvid totalvärdet (POR-7).
+     */
+    fun oldestKnownNavEpochDay(holdings: List<Holding>): Long? =
+        holdings.mapNotNull { if (it.currentValue != null) it.navEpochDay else null }.minOrNull()
 
     /** Summa nettoinvesterat över alla innehav. */
     fun totalInvested(holdings: List<Holding>): Double =
