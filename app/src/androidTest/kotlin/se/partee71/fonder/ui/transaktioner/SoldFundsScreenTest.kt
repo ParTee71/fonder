@@ -44,11 +44,20 @@ class SoldFundsScreenTest {
 
     @Test
     fun totalkort_visar_summerat_realiserat_resultat() {
+        // Två skilda sälj vars summa (300,00 kr) skiljer sig från vardera radens eget
+        // resultat (90,00 kr respektive 210,00 kr) — annars skulle totalkortets text råka
+        // sammanfalla med en enskild rads text och göra träffen tvetydig.
         val state = SoldFundsUiState(
             loading = false,
-            rows = listOf(SoldFundRad(sale = sale(), fundName = "Fond A")),
-            totalRealizedGain = 90.0,
-            totalRealizedGainFraction = 0.18,
+            rows = listOf(
+                SoldFundRad(sale = sale(), fundName = "Fond A"),
+                SoldFundRad(
+                    sale = sale().copy(transactionId = 2, proceeds = 710.0, fee = 0.0, costBasis = 500.0),
+                    fundName = "Fond B",
+                ),
+            ),
+            totalRealizedGain = 300.0,
+            totalRealizedGainFraction = 0.3,
         )
 
         composeRule.setContent {
@@ -56,7 +65,7 @@ class SoldFundsScreenTest {
         }
 
         composeRule.onNodeWithText("Totalt realiserat resultat").assertExists()
-        composeRule.onNodeWithText("90,00 kr · +18,0 %", substring = true).assertExists()
+        composeRule.onNodeWithText("300,00 kr · +30,0 %", substring = true).assertExists()
     }
 
     @Test
