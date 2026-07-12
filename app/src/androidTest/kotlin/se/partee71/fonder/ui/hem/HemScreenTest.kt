@@ -160,5 +160,6 @@ class HemScreenTest {
         trend = FundAnalysisCalc.TrendSignal(status),
         momentum = null,
         status = status,
+        profitTake = null,
     )
 }

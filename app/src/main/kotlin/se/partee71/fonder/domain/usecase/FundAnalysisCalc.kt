@@ -37,6 +37,9 @@ object FundAnalysisCalc {
     /** Minsta antal dagsavkastningar för att volatilitet/Sharpe ska beräknas (~3 mån handel). */
     private const val MIN_RETURN_SAMPLES = 60
 
+    /** Vinstsignalens tröskel (ANA-8, issue #26) — fast för v1, samma princip som övriga trösklar. */
+    private const val PROFIT_TAKE_THRESHOLD = 0.50
+
     enum class Period { YTD, TRE_MANADER, ETT_AR, TRE_AR, SEDAN_KOP }
 
     /** [amount]/[fraction] null = otillräcklig kurshistorik för perioden (ANA-1/ANA-4), aldrig gissat. */
@@ -50,6 +53,15 @@ object FundAnalysisCalc {
 
     /** [differencePp] i procentenheter — negativ betyder sämre än portföljsnittet. */
     data class MomentumSignal(val level: SignalLevel, val differencePp: Double)
+
+    /**
+     * Vinstsignal (S4, ANA-8) — flaggar att innehavets orealiserade vinst mot GAV är stor nog
+     * att en vinsthemtagning kan vara värd att överväga. Till skillnad från S1–S3 är det
+     * ingen risksignal (fonden går inte dåligt) utan en möjlighet — deltar därför **inte** i
+     * [combineStatus]/[Analysis.status] och ska visas med en egen markering, inte samma
+     * grön/gul/röd-trafikljus som risksignalerna (se `ui/components/ProfitTakeBadge.kt`).
+     */
+    data class ProfitTakeSignal(val triggered: Boolean, val gainFraction: Double)
 
     data class KeyFigures(
         /** Fast ordning: YTD, TRE_MANADER, ETT_AR, TRE_AR, SEDAN_KOP. */
@@ -78,6 +90,8 @@ object FundAnalysisCalc {
         val trend: TrendSignal?,
         val momentum: MomentumSignal?,
         val status: SignalLevel?,
+        /** Null = otillräcklig data (samma [KeyFigures.gavFraction]-gate, ANA-4). Deltar inte i [status] (ANA-8). */
+        val profitTake: ProfitTakeSignal?,
     )
 
     /**
@@ -146,7 +160,9 @@ object FundAnalysisCalc {
             distanceFromHigh = distanceFromHigh,
             trend = trend,
             momentum = momentum,
+            // Deltar medvetet inte i combineStatus nedan (ANA-8) — se ProfitTakeSignal-docen.
             status = combineStatus(listOfNotNull(distanceFromHigh?.level, trend?.level, momentum?.level)),
+            profitTake = profitTakeSignal(gavFraction),
         )
     }
 
@@ -267,6 +283,12 @@ object FundAnalysisCalc {
         val differencePp = (thisReturn - othersAverage) * 100.0
         val level = if (differencePp <= MOMENTUM_YELLOW_PP) SignalLevel.GUL else SignalLevel.GRON
         return MomentumSignal(level, differencePp)
+    }
+
+    /** S4 — vinstsignal (ANA-8). Null om [gavFraction] är null (otillräcklig data, samma gate som [KeyFigures.gavFraction]). */
+    private fun profitTakeSignal(gavFraction: Double?): ProfitTakeSignal? {
+        if (gavFraction == null) return null
+        return ProfitTakeSignal(triggered = gavFraction >= PROFIT_TAKE_THRESHOLD, gainFraction = gavFraction)
     }
 
     /** Röd om någon röd signal eller minst två gula; gul om minst en gul; annars grön. Tom lista = null (ingen data alls). */

@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.portfolj
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -19,10 +21,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.ProfitTakeBadge
+import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.UnavailableReason
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
@@ -63,6 +68,7 @@ fun PortfoljContent(
                     HoldingRow(
                         holding = holding,
                         performance = state.performance[holding.fund.fundId],
+                        analysis = state.analysis[holding.fund.fundId],
                         onClick = { onFundClick(holding.fund.fundId) },
                     )
                 }
@@ -102,6 +108,7 @@ private fun TotalCard(state: PortfoljUiState) {
 private fun HoldingRow(
     holding: Holding,
     performance: PortfolioPerformanceCalc.HoldingPerformance?,
+    analysis: FundAnalysisCalc.Analysis?,
     onClick: () -> Unit,
 ) {
     Card(
@@ -109,7 +116,21 @@ private fun HoldingRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(holding.fund.name, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    holding.fund.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // Säljsignal-status (ANA-3) bredvid fondnamnet — samma StatusDot som Fonddetalj/
+                // Hem (regel 4), utan att behöva öppna Fonddetalj för att se den (POR-8, issue #26).
+                analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
+            }
+            // Vinstsignalen (S4, ANA-8) är ingen risk och visas därför separat från StatusDot
+            // ovan, inte som en del av samma rad/trafikljus (issue #26).
+            analysis?.profitTake?.takeIf { it.triggered }?.let { profitTake ->
+                ProfitTakeBadge(gainFraction = profitTake.gainFraction, modifier = Modifier.padding(top = 4.dp))
+            }
             FirstPurchaseRow(holding = holding, modifier = Modifier.padding(top = 2.dp))
             val value = holding.currentValue
             val fraction = holding.gainLossFraction

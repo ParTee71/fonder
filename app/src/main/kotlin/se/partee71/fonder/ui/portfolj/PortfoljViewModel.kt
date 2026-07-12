@@ -18,6 +18,8 @@ import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import java.time.LocalDate
@@ -34,9 +36,14 @@ data class PortfoljUiState(
     val performance: Map<String, PortfolioPerformanceCalc.HoldingPerformance> = emptyMap(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,
+    /** Säljsignal-status och ev. vinstsignal per innehav (ANA-3/ANA-8, POR-8, issue #26). Nyckel: `Fund.fundId`. */
+    val analysis: Map<String, FundAnalysisCalc.Analysis> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
+
+/** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #26) om inget köp finns (bör inte hända för ett verkligt innehav). Samma princip som `HemViewModel`. */
+private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -45,13 +52,13 @@ class PortfoljViewModel @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
 ) : ViewModel() {
 
-    private val baseHoldings: Flow<List<Holding>> =
+    private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
         combine(transactionRepository.observeFunds(), transactionRepository.observeTransactions()) { funds, transactions ->
-            PortfolioCalc.computeHoldings(funds, transactions)
+            PortfolioCalc.computeHoldings(funds, transactions) to transactions
         }
 
     val uiState: StateFlow<PortfoljUiState> =
-        baseHoldings.flatMapLatest { holdings ->
+        baseHoldings.flatMapLatest { (holdings, transactions) ->
             val fundIds = holdings.map { it.fund.fundId }
             fundPriceRepository.observeLatestPrices(fundIds).map { prices ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
@@ -73,6 +80,7 @@ class PortfoljViewModel @Inject constructor(
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     performance = performance,
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
+                    analysis = buildAnalysis(enriched, transactions, today),
                 )
             }
         }.stateIn(
@@ -80,6 +88,45 @@ class PortfoljViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = PortfoljUiState(),
         )
+
+    /**
+     * Analyserar varje innehav (ANA-3/ANA-8, POR-8, issue #26) — samma princip som
+     * [se.partee71.fonder.ui.hem.HemViewModel.buildAnalysisSummary], men returnerar hela
+     * analysen per innehav i stället för en summering, eftersom Portfölj visar signalen på
+     * varje enskild rad. Övrig kurshistorik hämtas ur den lokala cachen (Room), ingen ny
+     * nätverksuppdatering.
+     */
+    private suspend fun buildAnalysis(
+        enriched: List<Holding>,
+        transactions: List<Transaction>,
+        today: LocalDate,
+    ): Map<String, FundAnalysisCalc.Analysis> {
+        if (enriched.isEmpty()) return emptyMap()
+
+        val firstPurchaseByFund = transactions
+            .groupBy { it.fundId }
+            .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
+        val portfolioTotalValue = PortfolioCalc.totalValue(enriched)
+
+        val historyByFundId = enriched.associate { holding ->
+            val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
+            holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since.toEpochDay(), today.toEpochDay())
+        }
+
+        return enriched.mapNotNull { holding ->
+            val firstPurchase = firstPurchaseByFund[holding.fund.fundId] ?: return@mapNotNull null
+            val otherHistories = historyByFundId.filterKeys { it != holding.fund.fundId }
+            val analysis = FundAnalysisCalc.analyze(
+                today = today,
+                holding = holding,
+                priceHistory = historyByFundId[holding.fund.fundId].orEmpty(),
+                firstPurchaseDate = firstPurchase,
+                portfolioTotalValue = portfolioTotalValue,
+                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories),
+            ) ?: return@mapNotNull null
+            holding.fund.fundId to analysis
+        }.toMap()
+    }
 
     // Engångsuppdatering per fond utan cachad kurs, eller vars cachade kurs är äldre än idag
     // (issue #18 — annars visar dag/vecka en falsk "0" i stället för att bli färsk så snart

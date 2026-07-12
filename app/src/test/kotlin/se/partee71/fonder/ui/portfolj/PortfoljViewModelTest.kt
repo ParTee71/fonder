@@ -181,6 +181,59 @@ class PortfoljViewModelTest {
     }
 
     @Test
+    fun `analys berknas per innehav och flaggar en fond under 200-dagars snitt (POR-8)`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under 200-dagarssnittet
+        // (samma fixturprincip som FundAnalysisCalcTest/HemViewModelTest).
+        priceHistoryByFundId = mapOf(
+            fond.fundId to (0..730L step 5).map { daysAgo ->
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
+            },
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            val analysis = state.analysis[fond.fundId]!!
+            assertEquals(se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel.GUL, analysis.trend!!.level)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `analys innehaller vinstsignal vid plus 50 procent mot GAV, aven utan risksignaler (ANA-8)`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 80.0),
+        )
+        // Kort historik (en enda punkt) — S1/S2/S3 blir otillräcklig data (null), men
+        // vinstsignalen (S4) beror bara på GAV mot nuvarande NAV, inte historikens längd.
+        priceHistoryByFundId = mapOf(fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)))
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            val analysis = state.analysis[fond.fundId]!!
+            assertNull(analysis.status) // ingen risksignal kunde beräknas
+            assertTrue(analysis.profitTake!!.triggered) // (120-80)/80 = 0.5
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `engangsuppdatering anvander refreshSince for fond med isin, inte refresh`() = runTest(dispatcher) {
         // Fonder matchade via ISIN (t.ex. findFundByIsin, TP-14) saknar Handelsbanken-FundId
         // — refresh() nycklas på FundId och hittar dem aldrig. Regression för buggen där

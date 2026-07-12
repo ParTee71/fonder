@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -142,5 +143,65 @@ class PortfoljScreenTest {
         }
 
         composeRule.onAllNodesWithText("Värde per 2026-07-10", useUnmergedTree = true).assertCountEquals(2)
+    }
+
+    private fun keyFigures(gavFraction: Double? = 0.6) = FundAnalysisCalc.KeyFigures(
+        periodReturns = FundAnalysisCalc.Period.entries.map { FundAnalysisCalc.PeriodReturn(it, amount = null, fraction = null) },
+        cagr = null,
+        currentNav = 160.0,
+        gavPerShare = 100.0,
+        gavFraction = gavFraction,
+        portfolioShareFraction = null,
+        annualizedVolatility = null,
+        sharpeRatio = null,
+    )
+
+    @Test
+    fun vinstsignal_badge_visas_pa_kort_med_triggad_vinstsignal() {
+        // POR-8/ANA-8, issue #26.
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1600.0)
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(),
+            distanceFromHigh = null,
+            trend = null,
+            momentum = null,
+            status = null,
+            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = true, gainFraction = 0.6),
+        )
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            analysis = mapOf(fond.fundId to analysis),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Vinstläge", substring = true).assertExists()
+    }
+
+    @Test
+    fun vinstsignal_badge_visas_inte_utan_triggad_signal_eller_analys() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(gavFraction = 0.1),
+            distanceFromHigh = null,
+            trend = null,
+            momentum = null,
+            status = null,
+            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = false, gainFraction = 0.1),
+        )
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            analysis = mapOf(fond.fundId to analysis),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Vinstläge", substring = true).assertDoesNotExist()
     }
 }
