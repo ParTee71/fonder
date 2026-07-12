@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.18.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.19.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -110,6 +110,8 @@
 |----|------|
 | SLD-1 | Vyn **Sålda fonder** (NAV-5) visar **en rad per säljtransaktion** (manuell eller importerad, IMP-5) — oavsett om fonden fortfarande delvis innehas eller är helt avyttrad — med datum, sålt antal andelar, belopp, avgift, anskaffningsvärde och **realiserat resultat** (kr + %, semantisk färg) beräknat med FIFO (TP-15): äldsta köpet matchas mot sälj i tidsordning. |
 | SLD-2 | Räcker inte känd köphistorik för att fullt ut matcha en sälj visas resultatet ändå, men **tydligt markerat som osäkert** (text, inte enbart färg) i stället för att tystas ner eller krascha — samma princip som IMP-2/POR-3. |
+| SLD-3 | Sålda-skärmen visar en summeringsrad överst med **totalt realiserat resultat** (kr + %, semantisk färg) summerat över alla säljtransaktioner (issue #21). |
+| SLD-4 | Varje sälj-kort är **hopfällbart** — stängt som standard visas bara fondnamn och realiserat resultat; expanderat visas övriga detaljer (andelar, datum, belopp, avgift, anskaffningsvärde och en ev. osäkerhetsvarning, SLD-2), issue #21. |
 
 ---
 
@@ -416,6 +418,20 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   enda väg ut var systemets bakåtknapp (IMP-9) — `AppNavigation.kt` trådar in
   `onDone = { navController.popBackStack() }` till båda importskärmarna, samma mönster som
   `TransactionFormScreen(onSaved = ...)`. Ingen ny/ändrad persisterad data.
+- **Sålda: totalt realiserat resultat + hopfällbara kort (#21):** Sålda-skärmen visade
+  tidigare bara enskilda sälj-rader utan någon summering, och varje kort visade alltid all
+  detalj oavsett hur många säljtransaktioner som fanns. `SoldFundsUiState` har fått
+  `totalRealizedGain`/`totalRealizedGainFraction` (summerat över `RealizedSale.realizedGain`/
+  `costBasis`, samma "null om nämnaren är 0"-princip som `RealizedSale.realizedGainFraction`
+  själv), visat i ett nytt summeringskort överst (SLD-3). Varje sälj-kort är nu hopfällbart
+  (SLD-4) — stängt som standard visas bara fondnamn och realiserat resultat, expanderat
+  visas andelar/datum/belopp/avgift/anskaffningsvärde och en ev. osäkerhetsvarning (SLD-2).
+  Byggt som lokal state i `SoldFundsScreen` snarare än en delad `ui/components/`-variant —
+  den befintliga `ExpandableInfoRow` (issue #22) löser ett annat problem (en alltid synlig
+  rad med en utfällbar klartextförklaring), inte det här (en rad vars egna detaljer ska
+  döljas/visas). `SoldFundsScreen` fick samma Content-uppdelning
+  (`SoldFundsScreen`/`SoldFundsContent`) som Portfölj/Hem/Fonddetalj för testbarhet utan
+  Hilt. Ingen ny/ändrad persisterad data.
 - **Analys: vinstsignal + signal på varje portföljkort (#26):** de tre befintliga
   säljsignalerna (S1–S3, ANA-2) och den sammanslagna statusen (ANA-3) visades tidigare bara
   i Fonddetalj och som ett summeringskort på Hem — inte direkt på varje innehavsrad i

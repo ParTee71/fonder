@@ -21,6 +21,10 @@ data class SoldFundRad(
 data class SoldFundsUiState(
     val loading: Boolean = true,
     val rows: List<SoldFundRad> = emptyList(),
+    /** Summan av [RealizedSale.realizedGain] över alla rader (SLD-3, issue #21). */
+    val totalRealizedGain: Double = 0.0,
+    /** [totalRealizedGain] som andel av summerat [RealizedSale.costBasis], eller null om den summan är 0 (SLD-3). */
+    val totalRealizedGainFraction: Double? = null,
 ) {
     val isEmpty: Boolean get() = !loading && rows.isEmpty()
 }
@@ -37,10 +41,15 @@ class SoldFundsViewModel @Inject constructor(
     val uiState: StateFlow<SoldFundsUiState> =
         combine(repository.observeTransactions(), repository.observeFunds()) { transactions, funds ->
             val namesByFundId = funds.associateBy({ it.fundId }, { it.name })
-            val rows = RealizedGainCalculator.compute(transactions).map { sale ->
-                SoldFundRad(sale = sale, fundName = namesByFundId[sale.fundId] ?: sale.fundId)
-            }
-            SoldFundsUiState(loading = false, rows = rows)
+            val sales = RealizedGainCalculator.compute(transactions)
+            val rows = sales.map { sale -> SoldFundRad(sale = sale, fundName = namesByFundId[sale.fundId] ?: sale.fundId) }
+            val totalCostBasis = sales.sumOf { it.costBasis }
+            SoldFundsUiState(
+                loading = false,
+                rows = rows,
+                totalRealizedGain = sales.sumOf { it.realizedGain },
+                totalRealizedGainFraction = if (totalCostBasis == 0.0) null else sales.sumOf { it.realizedGain } / totalCostBasis,
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
