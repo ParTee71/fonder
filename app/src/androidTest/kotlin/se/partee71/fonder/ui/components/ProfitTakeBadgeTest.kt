@@ -1,10 +1,8 @@
 package se.partee71.fonder.ui.components
 
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNode
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +35,7 @@ class ProfitTakeBadgeTest {
         }
 
         composeRule
-            .onNode(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Orealiserad vinst +62,0 % mot GAV")))
+            .onNodeWithContentDescription("Orealiserad vinst +62,0 % mot GAV")
             .assertExists()
     }
 }
