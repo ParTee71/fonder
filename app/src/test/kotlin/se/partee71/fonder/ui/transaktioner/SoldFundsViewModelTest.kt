@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -47,6 +48,49 @@ class SoldFundsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertTrue(state.isEmpty)
+            assertEquals(0.0, state.totalRealizedGain, 1e-9)
+            assertNull(state.totalRealizedGainFraction)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `totalRealizedGain summerar over flera salj, aven i olika fonder (SLD-3)`() = runTest(dispatcher) {
+        val fondB = Fund(fundId = "SHB0000627", name = "Fond B")
+        funds.value = listOf(fund, fondB)
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = fund.fundId, type = TransactionType.KOP, epochDay = 100, shares = 10.0, pricePerShare = 100.0),
+            Transaction(id = 2, fundId = fund.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 10.0, pricePerShare = 150.0),
+            Transaction(id = 3, fundId = fondB.fundId, type = TransactionType.KOP, epochDay = 100, shares = 5.0, pricePerShare = 200.0),
+            Transaction(id = 4, fundId = fondB.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 190.0),
+        )
+        val vm = SoldFundsViewModel(fakeRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            // Fond A: 1500 - 1000 = 500. Fond B: 950 - 1000 = -50. Summa: 450.
+            assertEquals(450.0, state.totalRealizedGain, 1e-9)
+            // Summerat anskaffningsvärde: 1000 + 1000 = 2000.
+            assertEquals(450.0 / 2000.0, state.totalRealizedGainFraction!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `totalRealizedGainFraction ar null nar summerat anskaffningsvarde ar 0`() = runTest(dispatcher) {
+        // En sälj helt utan matchande köp — costBasis blir 0 (osäkert resultat, SLD-2).
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = fund.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 150.0),
+        )
+        val vm = SoldFundsViewModel(fakeRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertNull(state.totalRealizedGainFraction)
             cancelAndIgnoreRemainingEvents()
         }
     }

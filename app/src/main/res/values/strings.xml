@@ -72,9 +72,12 @@
     <!-- Sålda fonder — realiserat resultat (issue #10) -->
     <string name="sold_funds_empty_title">Inga sälj ännu</string>
     <string name="sold_funds_empty_body">Realiserat resultat visas här när du säljer andelar i en fond.</string>
+    <string name="sold_funds_total_title">Totalt realiserat resultat</string>
     <string name="format_sold_fund_shares">%1$s andelar sålda %2$s</string>
     <string name="format_sold_fund_detail">Belopp %1$s · Avgift %2$s · Anskaffningsvärde %3$s</string>
     <string name="sold_fund_uncovered_warning">Osäkert resultat — sålda andelar saknar matchande köp i historiken.</string>
+    <string name="sold_fund_expand">Visa detaljer</string>
+    <string name="sold_fund_collapse">Dölj detaljer</string>
 
     <!-- Fonddetalj / diagram -->
     <string name="fond_title">Fond</string>
