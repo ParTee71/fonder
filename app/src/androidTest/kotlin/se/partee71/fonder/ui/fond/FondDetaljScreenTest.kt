@@ -65,6 +65,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -84,6 +85,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.ROD,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -104,6 +106,7 @@ class FondDetaljScreenTest {
             trend = null,
             momentum = null,
             status = null,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -123,6 +126,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -178,6 +182,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GUL,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -196,6 +201,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GUL,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -217,6 +223,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -240,6 +247,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = FundAnalysisCalc.MomentumSignal(FundAnalysisCalc.SignalLevel.GUL, -7.0),
             status = FundAnalysisCalc.SignalLevel.ROD,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -263,6 +271,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {
@@ -283,6 +292,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
         )
         composeRule.setContent {
             FonderTheme {

@@ -35,6 +35,7 @@ class AnalysisGuidanceTest {
         trend = trendLevel?.let { TrendSignal(it) },
         momentum = momentumLevel?.let { MomentumSignal(it, -6.0) },
         status = status,
+        profitTake = null,
     )
 
     @Test

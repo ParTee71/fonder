@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.18.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.19.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -77,6 +77,7 @@
 | POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Räcker inte kurshistoriken tillbaka till periodens start (t.ex. nytillagd fond) markeras just den perioden som otillräcklig data i stället för ett gissat värde (issue #14). Är fondens senast kända kurs **äldre än periodens start** (t.ex. innan dagens kursuppdatering hunnit köras) visas i stället texten "Kurs ej uppdaterad" — aldrig ett missvisande `0` (issue #18). |
 | POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
 | POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
+| POR-8 | Varje innehavsrad i Portfölj visar den befintliga säljsignal-statusen (`StatusDot`, ANA-3) och en ev. triggad vinstsignal (ANA-8) direkt på kortet, utan att behöva öppna Fonddetalj (issue #26). Visas inget om analysen saknar tillräcklig data (ANA-4). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
@@ -136,6 +137,7 @@
 | ANA-5 | Varje beräknad säljindikator (ANA-2) och varje nyckeltal (ANA-1) i Analys kan **fällas ut** med en klartextförklaring på svenska av vad måttet betyder och uttryckligen vad det *inte* betyder (t.ex. att ett fall från toppen inte i sig är ett skäl att sälja). Delas via den återanvändbara `ExpandableInfoRow` (`ui/components/`, regel 4). Bara indikatorer med tillräcklig data visas (ANA-4). Språket är aldrig ett köp-/säljråd (jfr ANA-3). |
 | ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta, volatilitet, Sharpe-kvot). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. Språket är alltid förklarande, aldrig rådgivande (ANA-3). |
 | ANA-7 | Analys visar två **riskmått** per innehav, beräknade ur NAV-historiken med fasta konstanter (dokumenterade i `FundAnalysisCalc`): **volatilitet** (annualiserad standardavvikelse på dagsavkastningar, ×√252) och **Sharpe-kvot** ((annualiserad avkastning − fast riskfri ränta 0 %) / volatilitet). Räcker inte historiken (färre än ~60 dagsavkastningar) markeras måttet som otillräcklig data i stället för att gissas (ANA-4); är volatiliteten 0 saknas Sharpe (ingen division med noll). Måtten visas via delade `PeriodRow`/`ExpandableInfoRow` med utfällbar förklaring och ordlisttermer (ANA-5/ANA-6). Neutralt språk, aldrig rådgivning (ANA-3). Inget nytt persisterat fält (härlett ur befintlig kurshistorik). |
+| ANA-8 | En fjärde signal, **vinstsignal (S4)**, flaggar när ett innehavs orealiserade vinst mot GAV är minst **+50 %** (fast tröskel, dokumenterad i `FundAnalysisCalc`). Till skillnad från S1–S3 (ANA-2) är det ingen risksignal — den deltar **inte** i den sammanslagna statusen (ANA-3) och visas med en egen markering (`ProfitTakeBadge`, `ui/components/`, regel 4), skild från risk-trafikljuset, eftersom paletten (UI-1) redan har både den gula och gröna nivåfärgen upptagna. Otillräcklig data (samma gate som GAV-nyckeltalet, ANA-1) visar ingen signal (ANA-4). Aldrig ett köp-/säljråd (ANA-3), issue #26. |
 
 ---
 
@@ -430,3 +432,22 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   döljas/visas). `SoldFundsScreen` fick samma Content-uppdelning
   (`SoldFundsScreen`/`SoldFundsContent`) som Portfölj/Hem/Fonddetalj för testbarhet utan
   Hilt. Ingen ny/ändrad persisterad data.
+- **Analys: vinstsignal + signal på varje portföljkort (#26):** de tre befintliga
+  säljsignalerna (S1–S3, ANA-2) och den sammanslagna statusen (ANA-3) visades tidigare bara
+  i Fonddetalj och som ett summeringskort på Hem — inte direkt på varje innehavsrad i
+  Portfölj, appens primära lista för att bläddra innehav. `PortfoljViewModel` beräknar nu
+  samma `FundAnalysisCalc.Analysis` per innehav som `HemViewModel` redan gjorde för sin
+  summering (`PortfoljUiState.analysis`, samma princip som `performance`-kartan, POR-5) —
+  ingen ny nätverksuppdatering, bara den lokala kurscachen. `HoldingRow` visar den
+  återanvända `StatusDot` (regel 4) bredvid fondnamnet när tillräcklig data finns (POR-8).
+  Ny fjärde signal **S4 "vinstsignal"** (`FundAnalysisCalc.ProfitTakeSignal`, ANA-8) flaggar
+  när ett innehavs orealiserade vinst mot GAV (redan beräknad som `KeyFigures.gavFraction`)
+  är minst +50 % — till skillnad från S1–S3 är det ingen risksignal utan en möjlighet, och
+  deltar därför medvetet **inte** i `combineStatus`/`Analysis.status`. Den fasta paletten
+  (UI-1) har redan både den gula (`StatusColors.gul`) och gröna (`StatusColors.gron` /
+  `ReturnColors.gain`) nivåfärgen upptagna av risksignalerna, så vinstsignalen visas i
+  stället med en ny delad `ProfitTakeBadge` (`ui/components/`, regel 4) — ikon + kort
+  textetikett i stället för en färgad prick som skulle kunnat förväxlas med en befintlig
+  risknivå. Neutralt språk, aldrig ett köp-/säljråd (samma princip som ANA-3). Inget nytt
+  persisterat fält (härlett ur befintlig `Holding`/kurshistorik, precis som övriga
+  `FundAnalysisCalc`).

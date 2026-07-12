@@ -1,6 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -333,5 +334,51 @@ class FundAnalysisCalcTest {
         val kf = analyzeWith(rising).keyFigures
         assertTrue(kf.annualizedVolatility!! > 0.0)
         assertTrue(kf.sharpeRatio!! > 0.0)
+    }
+
+    // --- Vinstsignal (S4, ANA-8, issue #26) ---
+
+    @Test
+    fun `S4 vinstsignal triggas vid gavFraction minst plus 50 procent`() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 800.0, currentValue = 1200.0)
+        val analysis = FundAnalysisCalc.analyze(
+            today, holding, listOf(price(daysAgo = 0, nav = 120.0)), today.minusYears(2), 1200.0, null,
+        )!!
+
+        assertEquals(0.5, analysis.profitTake!!.gainFraction, 1e-9) // (120-80)/80
+        assertTrue(analysis.profitTake!!.triggered)
+    }
+
+    @Test
+    fun `S4 vinstsignal triggas inte strax under plus 50 procent`() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1490.0)
+        val analysis = FundAnalysisCalc.analyze(
+            today, holding, listOf(price(daysAgo = 0, nav = 149.0)), today.minusYears(2), 1490.0, null,
+        )!!
+
+        assertFalse(analysis.profitTake!!.triggered)
+    }
+
+    @Test
+    fun `S4 ar null nar gavFraction ar null (samma gate som nyckeltalet)`() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 0.0, currentValue = 500.0)
+        val analysis = FundAnalysisCalc.analyze(
+            today, holding, listOf(price(daysAgo = 0, nav = 50.0)), today.minusYears(2), 500.0, null,
+        )!!
+
+        assertNull(analysis.keyFigures.gavFraction)
+        assertNull(analysis.profitTake)
+    }
+
+    @Test
+    fun `S4 paverkar inte den sammanslagna statusen`() {
+        // Samma historik/portfölj-parametrar som "statussummering - noll gula ger gron", bara
+        // ett lägre netInvested så vinstsignalen (S4) också triggas — status ska ändå bli grön,
+        // eftersom S4 medvetet inte deltar i combineStatus.
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 400.0, currentValue = 1200.0)
+        val analysis = FundAnalysisCalc.analyze(today, holding, longHistory(), today.minusYears(4), 1200.0, 0.0)!!
+
+        assertTrue(analysis.profitTake!!.triggered)
+        assertEquals(FundAnalysisCalc.SignalLevel.GRON, analysis.status)
     }
 }

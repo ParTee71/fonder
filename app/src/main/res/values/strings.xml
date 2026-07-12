@@ -104,6 +104,10 @@
     <string name="analys_signal_trend">Under 200-dagars snitt</string>
     <string name="analys_signal_momentum">Svagare än portföljsnittet senaste 3 månaderna</string>
 
+    <!-- Vinstsignal (S4, ANA-8, issue #26) — skild från risksignalerna ovan, aldrig ett säljråd -->
+    <string name="analys_profit_take_badge">Vinstläge</string>
+    <string name="format_analys_profit_take_description">Orealiserad vinst %1$s mot GAV</string>
+
     <!-- Pedagogiskt lager: förklaringar, kontext och ordlista (issue #22, ANA-5/ANA-6) -->
     <string name="info_expand">Visa förklaring</string>
     <string name="info_collapse">Dölj förklaring</string>
