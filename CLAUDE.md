@@ -88,6 +88,12 @@ mot `master`** så kör Actions båda.
 > I fjärr-/telefonsessioner finns ingen Android SDK och Google Maven kan vara blockerad —
 > försök därför **inte** köra `./gradlew` där. Lita på CI.
 
+**En PR i taget.** Öppna/driv aldrig flera PR:ar mot `master` samtidigt — låt den första
+mergeas (eller stängas) innan nästa öppnas. Parallella PR:ar mot samma bas (särskilt när
+båda rör `KRAVLISTA.md`/`README.md`/`versionName`) ger nästan alltid en mergekonflikt på
+den andra när den första redan gått in. Vid flera issues: implementera, driv grönt och
+mergea ett i taget, sekventiellt.
+
 ## Arkitektur i korthet
 
 `Compose → ViewModel (StateFlow<UiState>) → Repository → Room/DataStore`.

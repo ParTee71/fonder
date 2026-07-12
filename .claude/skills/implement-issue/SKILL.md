@@ -132,6 +132,13 @@ Do **not** open a PR unless asked. When you do:
 Implement them **one at a time**, each its own focused commit set (and PR if requested).
 Don't batch unrelated changes into one branch — it muddies review and CI.
 
+**Only one open PR against `master` at a time.** If a PR was requested, get it merged (or
+closed) before opening the next one — don't have two PRs open against `master`
+simultaneously. Parallel PRs based on the same stale `master` almost always collide on
+`KRAVLISTA.md`/`README.md`/`versionName` (both bump the same next version number), causing
+an avoidable merge conflict on whichever merges second. Implementing on separate branches
+ahead of time is fine; just sequence the PR-open-through-merge step.
+
 ## Anti-patterns
 
 - Fixing a bug without a regression test.
