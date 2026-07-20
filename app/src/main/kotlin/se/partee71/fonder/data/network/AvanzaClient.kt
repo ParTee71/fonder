@@ -34,8 +34,7 @@ class AvanzaClient @Inject constructor(
 
     override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String =
         withContext(Dispatchers.IO) {
-            val url = "$CHART_URL/$orderbookId/${from.format(DATE_FORMAT)}/${to.format(DATE_FORMAT)}?raw=true"
-            execute(Request.Builder().url(url).build())
+            execute(Request.Builder().url(chartUrl(orderbookId, from, to)).build())
         }
 
     private fun execute(request: Request): String =
@@ -49,11 +48,30 @@ class AvanzaClient @Inject constructor(
     private fun jsonQuote(value: String): String =
         "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
-    private companion object {
+    internal companion object {
         const val SEARCH_URL = "https://www.avanza.se/_api/fund-guide/search"
         const val GUIDE_URL = "https://www.avanza.se/_api/fund-guide/guide"
         const val CHART_URL = "https://www.avanza.se/_api/fund-guide/chart"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+        /**
+         * Bygger chart-URL:en. **`resolution=DAY` är avgörande:** utan den nedsamplar Avanza
+         * långa datumintervall (t.ex. "sedan köp", ~13 mån) till **veckopunkter**, så den
+         * nyaste NAV:en appen får blir förra hela veckans — dagskurserna däremellan når aldrig
+         * cachen. Det visade sig som "Kurs ej uppdaterad" för dag/vecka (POR-5/HEM-2) trots att
+         * Avanza hade färskare dagsdata (senaste cachade blev alltid förra måndagens veckopunkt).
+         * Ett `to`-datum i framtiden ger dessutom `400 Bad Request` från Avanza, så det clampas
+         * aldrig förbi [today] (försvar mot en klocka/tidszon som ligger före serverns).
+         */
+        internal fun chartUrl(
+            orderbookId: String,
+            from: LocalDate,
+            to: LocalDate,
+            today: LocalDate = LocalDate.now(),
+        ): String {
+            val effectiveTo = if (to.isAfter(today)) today else to
+            return "$CHART_URL/$orderbookId/${from.format(DATE_FORMAT)}/${effectiveTo.format(DATE_FORMAT)}?raw=true&resolution=DAY"
+        }
     }
 }
