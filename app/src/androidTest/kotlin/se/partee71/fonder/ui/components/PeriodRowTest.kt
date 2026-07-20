@@ -23,11 +23,11 @@ class PeriodRowTest {
     fun visar_belopp_och_procent_for_positiv_forandring() {
         composeRule.setContent {
             FonderTheme {
-                PeriodRow(label = "Idag", amount = 120.0, fraction = 0.05)
+                PeriodRow(label = "En dag", amount = 120.0, fraction = 0.05)
             }
         }
 
-        composeRule.onNodeWithText("Idag").assertExists()
+        composeRule.onNodeWithText("En dag").assertExists()
         // "kr"-beloppets minustecken kan variera med JVM/lokal (se MoneyFormatTest) — matchar
         // därför bara den äkta minus-symbolen från percentSigned, plus beloppets siffror.
         composeRule.onNodeWithText("+5,0 % · ", substring = true).assertExists()
@@ -75,7 +75,7 @@ class PeriodRowTest {
         // issue #18: inaktuell kurs ska aldrig se ut som "otillräcklig data" eller ett falskt 0.
         composeRule.setContent {
             FonderTheme {
-                PeriodRow(label = "Idag", amount = null, fraction = null, unavailableReason = UnavailableReason.STALE_PRICE)
+                PeriodRow(label = "En dag", amount = null, fraction = null, unavailableReason = UnavailableReason.STALE_PRICE)
             }
         }
 

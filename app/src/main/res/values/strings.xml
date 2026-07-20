@@ -34,7 +34,7 @@
     <string name="hem_analysis_empty">Inga fonder flaggade</string>
 
     <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
-    <string name="period_day">Idag</string>
+    <string name="period_day">En dag</string>
     <string name="period_week">Senaste veckan</string>
     <string name="period_month">Senaste månaden</string>
     <string name="period_insufficient_data">Otillräcklig data</string>
