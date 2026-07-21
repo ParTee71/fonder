@@ -261,6 +261,28 @@ class FondDetaljScreenTest {
         composeRule.onNodeWithText("kan det vara läge att låta tiden verka", substring = true).assertExists()
     }
 
+    @Test
+    fun sedan_kop_har_egen_forklaring_som_skiljer_fondkurs_fran_egen_avkastning() {
+        val analysis = FundAnalysisCalc.Analysis(
+            keyFigures = keyFigures(),
+            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+            momentum = null,
+            status = FundAnalysisCalc.SignalLevel.GRON,
+            profitTake = null,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, analysis = analysis))
+            }
+        }
+
+        // Förklaringen är dold tills raden fälls ut, och förtydligar att talet inte är den egna avkastningen.
+        composeRule.onNodeWithText("inte din egen avkastning", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Sedan köp").performScrollTo().performClick()
+        composeRule.onNodeWithText("inte din egen avkastning", substring = true).assertExists()
+    }
+
     // --- Riskmått (issue #24, ANA-7) ---
 
     @Test

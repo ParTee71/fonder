@@ -126,7 +126,8 @@
     <string name="analys_signal_trend_explain">Jämför dagens kurs med genomsnittet de senaste ~200 handelsdagarna. Ligger kursen under snittet är det ett svaghetstecken på medellång sikt — ett tecken att hålla koll, inte ett säljbud.</string>
     <string name="analys_signal_momentum_explain">Hur den här fonden gått de senaste 3 månaderna jämfört med dina övriga fonder. Sämre än snittet kan vara helt tillfälligt — ett enskilt kvartal säger lite om en fond du äger långsiktigt.</string>
     <!-- Nyckeltalsförklaringar -->
-    <string name="analys_period_explain">Hur mycket fondens värde har ändrats under perioden, i kronor och procent. Enskilda perioder svänger — se dem tillsammans, inte var för sig.</string>
+    <string name="analys_period_explain">Hur mycket fondens kurs har ändrats under perioden, i kronor och procent. Enskilda perioder svänger — se dem tillsammans, inte var för sig.</string>
+    <string name="analys_period_sedan_kop_explain">Hur mycket fondens kurs rört sig sedan din första köpdag — inte din egen avkastning. Har du köpt fler andelar senare, till en annan kurs, skiljer sig detta från din faktiska vinst. Din vinst mot vad du betalat i snitt visas i stället på GAV-raden.</string>
     <string name="analys_cagr_explain">Genomsnittlig årlig avkastning sedan ditt första köp, utjämnad över åren (ränta-på-ränta). Visas först när du ägt fonden minst ett år, så siffran blir meningsfull.</string>
     <string name="analys_gav_explain">Ditt genomsnittliga anskaffningsvärde per andel (GAV) jämfört med dagens kurs. Plus betyder att du ligger över vad du betalat i snitt, minus under — oavsett var toppen låg.</string>
     <string name="analys_portfolio_share_explain">Hur stor del av portföljens totala värde den här fonden utgör. En hög andel betyder att mycket av ditt sparande hänger på en enda fond (lägre spridning).</string>

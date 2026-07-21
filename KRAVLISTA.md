@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.19.1 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.19.2 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -130,7 +130,7 @@
 
 | ID | Krav |
 |----|------|
-| ANA-1 | Fonddetalj visar en **Analys**-sektion för fonder som är kvarvarande innehav, med nyckeltal: prisutveckling **i år, 3 månader, 1 år, 3 år och sedan första köp** (kr + %), **CAGR** (årlig snittavkastning sedan första köpet, bara om innehavet är minst ett år gammalt), **GAV** (kvarvarande FIFO-anskaffningsvärde per andel, TP-15) jämfört med aktuell NAV (kr + %), samt **andel av portföljens totala värde** (%). Räcker inte kurshistoriken för ett nyckeltal markeras just det tydligt som otillräcklig data i stället för att gissas (samma princip som POR-3/POR-5/HEM-2). |
+| ANA-1 | Fonddetalj visar en **Analys**-sektion för fonder som är kvarvarande innehav, med nyckeltal: prisutveckling **i år, 3 månader, 1 år, 3 år och sedan första köp** (kr + %), **CAGR** (årlig snittavkastning sedan första köpet, bara om innehavet är minst ett år gammalt), **GAV** (kvarvarande FIFO-anskaffningsvärde per andel, TP-15) jämfört med aktuell NAV (kr + %), samt **andel av portföljens totala värde** (%). Räcker inte kurshistoriken för ett nyckeltal markeras just det tydligt som otillräcklig data i stället för att gissas (samma princip som POR-3/POR-5/HEM-2). Periodraderna visar fondens **kursutveckling (NAV)** under perioden, inte den egna avkastningen — "sedan första köp" mäter kursrörelsen sedan förstaköpsdagen och kan därför skilja sig från den faktiska vinsten på portföljkortet/GAV (som utgår från snittpriset, POR-3/TP-15) om andelar köpts vid flera tillfällen till olika kurs; raden har en egen utfällbar förklaring som gör den skillnaden tydlig (ANA-5). |
 | ANA-2 | Tre säljindikatorer beräknas per innehav, med fasta trösklar (dokumenterade i `FundAnalysisCalc`): **S1** avstånd från högsta NAV senaste 52 veckorna (−10 % gul, −20 % röd), **S2** NAV under 200-dagars glidande medelvärde (gul), **S3** innehavets 3-månadersutveckling minst 5 procentenheter sämre än snittet för övriga innehav (gul). Räcker inte historiken för en enskild indikator markeras den som otillräcklig data och ingår inte i statussummeringen (ANA-4). |
 | ANA-3 | Indikatorerna (ANA-2) summeras till en **status** — röd om någon indikator är röd eller minst två är gula, gul om minst en är gul, annars grön — visad som en statusbanner (färg + rubrik + triggertexter, aldrig färg ensam, jfr UI-3) ovanför kurshistoriken i Fonddetalj. Språket är alltid neutralt ("värt att se över"/"bör ses över") — appen ger aldrig finansiell rådgivning ("sälj"). |
 | ANA-4 | En indikator (ANA-2) eller ett nyckeltal (ANA-1) utan tillräcklig kurshistorik markeras tydligt som otillräcklig data och exkluderas ur statussummeringen (ANA-3) i stället för att tystas ner eller gissas — samma princip som HEM-2/POR-5/IMP-2/SLD-2. Saknar *alla* tre indikatorer data visas en neutral "otillräcklig kurshistorik"-text i stället för en färgad banner. |
@@ -329,6 +329,15 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   `AvanzaClient.chartUrl` (utbruten till en ren, testbar byggare). Samtidigt clampas ett
   `to`-datum i framtiden till idag — Avanza svarar annars `400 Bad Request`. Ingen ändrad
   persisterad data; NAV-uträkningarna var korrekta, de matades bara med för gles historik.
+- **Förtydligad "Sedan köp" (ANA-1/ANA-5):** raden lästes lätt som "min vinst" men mäter
+  fondens **kursutveckling sedan förstaköpsdagen**, inte den egna avkastningen. För ett
+  innehav som snittats upp skiljer den sig markant från portföljkortets vinst — verifierat
+  live för CPR Invest Global Gold Mines: NAV på förstaköpsdagen (2025-06-10) var 1 259 kr,
+  snittpriset (GAV) 1 517 kr, så fonden stigit ~40 % sedan första köpet medan den faktiska
+  vinsten är +16 %. Ingen siffra ändrad (talet är korrekt och konsekvent med övriga
+  periodrader); "Sedan köp" fick en egen utfällbar förklaring som skiljer fondens kurs från
+  din vinst och pekar till GAV-raden, och de generiska periodraderna säger nu "kurs" i
+  stället för "värde" för att inte förväxlas med innehavets värde.
 - **Töm databasen (SET-1):** en "farozon"-sektion i Inställningar låter användaren rensa
   all bevakad data i ett steg (fonder, transaktioner, cachade kurser) — användbart för att
   börja om från scratch under den här tidiga fasen, innan molnbackup (TP-7) finns att
