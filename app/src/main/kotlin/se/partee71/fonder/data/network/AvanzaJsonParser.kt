@@ -45,7 +45,7 @@ object AvanzaJsonParser {
     fun parseCurrency(responseJson: String): String? =
         runCatching { json.decodeFromString<GuideResponse>(responseJson) }.getOrNull()?.currency
 
-    /** Daglig kurshistorik i [currency] (kräver `raw=true` i anropet — annars procentavkastning). Saknade (null) punkter filtreras bort. */
+    /** Daglig kurshistorik i [currency] (kräver `raw=true` för absolut NAV i stället för procentavkastning, och `resolution=DAY` så långa spann inte nedsamplas till veckopunkter — se [AvanzaClient.chartUrl]). Saknade (null) punkter filtreras bort. */
     fun parseChart(responseJson: String, currency: String): List<IsinPricePoint> =
         runCatching { json.decodeFromString<ChartResponse>(responseJson) }
             .getOrNull()

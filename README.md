@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.19.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.19.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
