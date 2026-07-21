@@ -128,11 +128,10 @@ class PortfoljViewModel @Inject constructor(
         }.toMap()
     }
 
-    // Engångsuppdatering per fond utan cachad kurs, eller vars cachade kurs är äldre än idag
-    // (issue #18 — annars visar dag/vecka en falsk "0" i stället för att bli färsk så snart
-    // källan har ett nyare pris; ingen daglig WorkManager-körning har nödvändigtvis hunnit
-    // ännu). Håll enkel: ett refresh-anrop per fund och ViewModel-livstid, inte en ny
-    // bakgrundsjobb-mekanism (se issue #6).
+    // Engångsuppdatering per fond utan cachad kurs, eller vars cachade kurs är inaktuell
+    // (TP-17 — så dag/vecka/månad räknas på så färsk NAV som källan har, utan att vänta på
+    // nästa dagliga WorkManager-körning). Håll enkel: ett refresh-anrop per fund och
+    // ViewModel-livstid, inte en ny bakgrundsjobb-mekanism (se issue #6).
     private val refreshedFundIds = mutableSetOf<String>()
 
     init {

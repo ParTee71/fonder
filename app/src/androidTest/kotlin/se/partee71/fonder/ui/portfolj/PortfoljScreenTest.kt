@@ -77,16 +77,16 @@ class PortfoljScreenTest {
     }
 
     @Test
-    fun stale_price_visar_kurs_ej_uppdaterad_ist_for_falsk_noll() {
-        // Regression för issue #18: en inaktuell kurs ska aldrig se ut som "+0,0 % · 0,00 kr".
+    fun otillracklig_historik_visar_otillracklig_data_ist_for_falsk_noll() {
+        // En period utan tillräcklig historik ska aldrig se ut som "+0,0 % · 0,00 kr".
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
         val state = PortfoljUiState(
             loading = false,
             holdings = listOf(holding),
             performance = mapOf(
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
-                    day = PortfolioPerformanceCalc.PeriodResult.StalePrice,
-                    week = PortfolioPerformanceCalc.PeriodResult.StalePrice,
+                    day = PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
+                    week = PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
                     month = null,
                 ),
             ),
@@ -96,7 +96,7 @@ class PortfoljScreenTest {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
         }
 
-        composeRule.onAllNodesWithText("Kurs ej uppdaterad", useUnmergedTree = true).assertCountEquals(2)
+        composeRule.onAllNodesWithText("Otillräcklig data", useUnmergedTree = true).assertCountEquals(3)
     }
 
     @Test

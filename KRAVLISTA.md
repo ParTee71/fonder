@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.19.2 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.20.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -74,7 +74,7 @@
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
-| POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Räcker inte kurshistoriken tillbaka till periodens start (t.ex. nytillagd fond) markeras just den perioden som otillräcklig data i stället för ett gissat värde (issue #14). Är fondens senast kända kurs **äldre än periodens start** (t.ex. innan dagens kursuppdatering hunnit köras) visas i stället texten "Kurs ej uppdaterad" — aldrig ett missvisande `0` (issue #18). |
+| POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Måttet är förankrat i fondens **senaste kända NAV-dag** (referensdagen), inte väggklockans "idag": "En dag" är referensdagens NAV mot dagen före, "senaste veckan/månaden" mot 7/30 dagar före referensdagen. Det gör raderna beräkningsbara även innan dagens NAV publicerats eller för fonder vars NAV släpar (utländska fonder rapporterar med fördröjning) — då visas den senaste faktiska rörelsen, och hur färsk referensdagen är framgår av "Värde per \<datum\>" (POR-7). Räcker inte kurshistoriken [Period.days] dagar bak från referensdagen (t.ex. nytillagd fond, eller bara en enda känd kurs) markeras just den perioden som otillräcklig data i stället för ett gissat `0` (issue #14/#18). ~~Är fondens senast kända kurs äldre än periodens start visas i stället "Kurs ej uppdaterad".~~ *(borttaget — periodmåttet ankras nu i senaste NAV, inte "idag", så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad; färskheten visas via POR-7)* |
 | POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
 | POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
 | POR-8 | Varje innehavsrad i Portfölj visar den befintliga säljsignal-statusen (`StatusDot`, ANA-3) och en ev. triggad vinstsignal (ANA-8) direkt på kortet, utan att behöva öppna Fonddetalj (issue #26). Visas inget om analysen saknar tillräcklig data (ANA-4). |
@@ -120,7 +120,7 @@
 | ID | Krav |
 |----|------|
 | HEM-1 | Hem (ny startskärm, NAV-1) visar portföljens totala värde, vinst/förlust (kr + %) samt förändring för perioderna **en dag, senaste veckan och senaste månaden** för hela portföljen (dagsperioden etiketteras "En dag", tidigare "Idag") (issue #14, #31). |
-| HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. Beror det på att inget innehav har en tillräckligt färsk kurs för perioden visas i stället "Kurs ej uppdaterad", skilt från äkta otillräcklig historik (issue #18). |
+| HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. Perioderna är förankrade i senaste kända NAV-dag (se POR-5), så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad. ~~Beror det på att inget innehav har en tillräckligt färsk kurs för perioden visas i stället "Kurs ej uppdaterad".~~ *(borttaget, se POR-5)* |
 | HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
 
@@ -338,6 +338,20 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   periodrader); "Sedan köp" fick en egen utfällbar förklaring som skiljer fondens kurs från
   din vinst och pekar till GAV-raden, och de generiska periodraderna säger nu "kurs" i
   stället för "värde" för att inte förväxlas med innehavets värde.
+- **"En dag"/vecka/månad förankras i senaste NAV i stället för "idag" (POR-5/HEM-2):**
+  periodmåttet krävde tidigare en kurs daterad *idag* för "En dag" — en endagsförändring
+  jämförde senaste NAV mot igår och blev tom ("Kurs ej uppdaterad") tills dagens NAV
+  publicerats (kväll). Det gjorde raden tom hela dagen för **alla** fonder, och närmast
+  permanent för utländska fonder vars NAV släpar 1–3 dagar (verifierat live 2026-07-21:
+  svenska Handelsbanken Sverige/Nordea Småbolag hade senaste NAV 16–19/7, USD-fonderna
+  16/7). Måttet ankras nu i **senaste kända NAV-dag** (referensdagen, senaste NAV på/före
+  idag): "En dag" = referensdagen mot dagen före, vecka/månad mot 7/30 dagar före
+  referensdagen. Raden visar därmed alltid den senaste faktiska rörelsen, och färskheten
+  framgår av "Värde per \<datum\>" (POR-7). `StalePrice`/"Kurs ej uppdaterad" utgår helt —
+  enda tom-läget är nu `InsufficientHistory` ("Otillräcklig data", för kort historik/en
+  enda kurs). Fixar också en dold bugg där vecka/månad vid eftersläpande kurs jämförde mot
+  ett fönster relativt "idag" (t.ex. en 2-dagarsrörelse märkt "senaste veckan"); fönstret
+  räknas nu korrekt bakåt från referensdagen. Ingen persisterad data ändrad.
 - **Töm databasen (SET-1):** en "farozon"-sektion i Inställningar låter användaren rensa
   all bevakad data i ett steg (fonder, transaktioner, cachade kurser) — användbart för att
   börja om från scratch under den här tidiga fasen, innan molnbackup (TP-7) finns att
@@ -409,7 +423,8 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   `PortfolioPeriodResult`, sealed types): `StalePrice` (senast kända kurs äldre än
   periodens start — visas som "Kurs ej uppdaterad") skild från `InsufficientHistory`
   (kursen är färsk men historiken når inte periodens start — samma "Otillräcklig data"
-  som tidigare), se POR-5/HEM-2. `PortfoljViewModel`s engångsuppdatering triggar nu om även
+  som tidigare), se POR-5/HEM-2. *(`StalePrice` togs senare bort — periodmåttet ankras nu
+  i senaste NAV i stället för "idag", se re-ankrings-posten sist i listan.)* `PortfoljViewModel`s engångsuppdatering triggar nu om även
   för fonder med en **inaktuell** (inte bara helt saknad) cachad kurs, så en gårdagens kurs
   faktiskt hämtas om vid öppning i stället för att aldrig uppdateras förrän nästa dagliga
   bakgrundsjobb (TP-5) hunnit köras. Vidare visar varje innehavsrad i Portfölj, och

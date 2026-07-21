@@ -23,7 +23,6 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
-import se.partee71.fonder.ui.components.UnavailableReason
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.theme.MonoAmountStyle
@@ -87,47 +86,42 @@ private fun TotalCard(state: HemUiState) {
 private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerformance) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            val (dayAmount, dayFraction, dayPartial, dayReason) = performance.day.toRowArgs()
+            val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_day),
                 amount = dayAmount,
                 fraction = dayFraction,
                 partial = dayPartial,
-                unavailableReason = dayReason,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
-            val (weekAmount, weekFraction, weekPartial, weekReason) = performance.week.toRowArgs()
+            val (weekAmount, weekFraction, weekPartial) = performance.week.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_week),
                 amount = weekAmount,
                 fraction = weekFraction,
                 partial = weekPartial,
-                unavailableReason = weekReason,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
-            val (monthAmount, monthFraction, monthPartial, monthReason) = performance.month.toRowArgs()
+            val (monthAmount, monthFraction, monthPartial) = performance.month.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_month),
                 amount = monthAmount,
                 fraction = monthFraction,
                 partial = monthPartial,
-                unavailableReason = monthReason,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         }
     }
 }
 
-/** [amount]/[fraction]/[partial]/[UnavailableReason] — mappar [PortfolioPerformanceCalc.PortfolioPeriodResult] till [PeriodRow]s primitiver (issue #18, regel 4). */
-private data class PeriodRowArgs(val amount: Double?, val fraction: Double?, val partial: Boolean, val reason: UnavailableReason)
+/** [amount]/[fraction]/[partial] — mappar [PortfolioPerformanceCalc.PortfolioPeriodResult] till [PeriodRow]s primitiver (regel 4). Saknas värde blir kr/% null och raden visar "Otillräcklig data". */
+private data class PeriodRowArgs(val amount: Double?, val fraction: Double?, val partial: Boolean)
 
 private fun PortfolioPerformanceCalc.PortfolioPeriodResult.toRowArgs(): PeriodRowArgs = when (this) {
     is PortfolioPerformanceCalc.PortfolioPeriodResult.Available ->
-        PeriodRowArgs(amount, fraction, partial, UnavailableReason.INSUFFICIENT_DATA)
-    PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice ->
-        PeriodRowArgs(null, null, partial = false, UnavailableReason.STALE_PRICE)
+        PeriodRowArgs(amount, fraction, partial)
     PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory ->
-        PeriodRowArgs(null, null, partial = false, UnavailableReason.INSUFFICIENT_DATA)
+        PeriodRowArgs(null, null, partial = false)
 }
 
 /** Summeringskort över gul-/rödflaggade fonder (issue #16, HEM-4). */

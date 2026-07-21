@@ -59,12 +59,11 @@ class PortfolioPerformanceCalcTest {
     fun `holdingChange otillrackligt om historiken inte racker tillbaka for perioden`() {
         // Fonden köptes för 3 dagar sedan — ingen kurs finns 7 eller 30 dagar bak.
         val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
-        // Priset som bär upp currentValue (110, "idag") måste finnas i history — annars
-        // sammanfaller vår senast kända kurs med gårdagens (periodstarten för DAG) och ger
-        // StalePrice i stället för ett beräknat värde (issue #18).
+        // Referensdagen (senaste kända NAV) är idag (nav 110); dagen före finns (nav 108) men
+        // ingen kurs når 7/30 dagar bak — DAG räknas, vecka/månad blir otillräcklig.
         val history = listOf(price(daysAgo = 3, nav = 100.0), price(daysAgo = 1, nav = 108.0), price(daysAgo = 0, nav = 110.0))
 
-        // DAG: malldag = today-1, som exakt matchar priset vid daysAgo=1 (nav 108) -> 1100 - 10*108 = 20.
+        // DAG: referensdag = idag, målldag = referensdag-1, matchar priset vid daysAgo=1 (nav 108) -> 1100 - 10*108 = 20.
         assertEquals(
             20.0,
             available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history)).amount,
@@ -87,24 +86,28 @@ class PortfolioPerformanceCalcTest {
     }
 
     @Test
-    fun `holdingChange ger StalePrice nar senaste kanda kurs ar aldre an periodens start`() {
-        // Regression (issue #18): senaste cachade NAV är 10 dagar gammal — periodens start
-        // för DAG/VECKA hamnar då efter vår senaste kända kurs. Tidigare blev detta av misstag
-        // ett vilseledande `0` (samma prisrad valdes för både "idag" och periodstarten).
-        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0) // nav 100, 10 dagar gammal
+    fun `holdingChange raknar senaste dagsrorelsen aven nar kursen slapar`() {
+        // Kärnan i re-ankringen: senaste NAV är 5 dagar gammal (utländsk fond som släpar, eller
+        // dagens NAV inte publicerad än). "En dag" ska då visa den senaste faktiska dagsrörelsen
+        // (referensdagen mot dagen före), inte en tom rad — tidigare krävdes en kurs daterad idag.
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0) // nav 110, 5 dagar gammal
+        val history = listOf(price(daysAgo = 5, nav = 110.0), price(daysAgo = 6, nav = 100.0))
+
+        val day = available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history))
+        assertEquals(100.0, day.amount, 1e-9) // 1100 - 10*100
+        assertEquals(100.0 / 1000.0, day.fraction!!, 1e-9)
+    }
+
+    @Test
+    fun `holdingChange InsufficientHistory nar bara en enda kurs finns`() {
+        // En enda känd kurs — ingen tidigare punkt att jämföra mot -> otillräcklig, aldrig ett gissat 0.
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
         val history = listOf(price(daysAgo = 10, nav = 100.0))
 
         assertEquals(
-            PortfolioPerformanceCalc.PeriodResult.StalePrice,
+            PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
             PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history),
         )
-        assertEquals(
-            PortfolioPerformanceCalc.PeriodResult.StalePrice,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.VECKA, today, history),
-        )
-        // MANAD (30 dagar): vår kända kurs (10 dagar gammal) är nyare än periodens start
-        // (30 dagar bak), men vi har ingen kurs som når så långt tillbaka -> otillräcklig,
-        // inte inaktuell (vi VET faktiskt vad kursen var för 10 dagar sedan).
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
             PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.MANAD, today, history),
@@ -112,10 +115,10 @@ class PortfolioPerformanceCalcTest {
     }
 
     @Test
-    fun `holdingChange ger StalePrice om historik helt saknas trots kand currentValue`() {
+    fun `holdingChange InsufficientHistory om historik helt saknas trots kand currentValue`() {
         val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
         assertEquals(
-            PortfolioPerformanceCalc.PeriodResult.StalePrice,
+            PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
             PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, emptyList()),
         )
     }
@@ -183,8 +186,26 @@ class PortfolioPerformanceCalcTest {
     }
 
     @Test
-    fun `totalChange StalePrice om samtliga innehav har en inaktuell kurs`() {
-        // Regression (issue #18) — motsvarar skärmdumpen där varje fond visade falskt 0.
+    fun `totalChange raknar senaste dagsrorelsen aven nar samtliga kurser slapar`() {
+        // Re-ankring på portföljnivå: alla fonders NAV är några dagar gamla men har minst två
+        // punkter -> den senaste dagsrörelsen summeras, i stället för en tom total.
+        val a = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0) // nav 100, 5 dagar gammal
+        val b = Holding(fund = fondB, netShares = 5.0, netInvested = 450.0, currentValue = 500.0)   // nav 100, 5 dagar gammal
+        val historyByFundId = mapOf(
+            fondA.fundId to listOf(price(daysAgo = 5, nav = 100.0, fundId = fondA.fundId), price(daysAgo = 6, nav = 95.0, fundId = fondA.fundId)),
+            fondB.fundId to listOf(price(daysAgo = 5, nav = 100.0, fundId = fondB.fundId), price(daysAgo = 6, nav = 96.0, fundId = fondB.fundId)),
+        )
+
+        val day = PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
+            as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+
+        // a: 1000 - 10*95 = 50, b: 500 - 5*96 = 20.
+        assertEquals(70.0, day.amount, 1e-9)
+        assertFalse(day.partial)
+    }
+
+    @Test
+    fun `totalChange InsufficientHistory nar samtliga innehav bara har en enda kurs`() {
         val a = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
         val b = Holding(fund = fondB, netShares = 5.0, netInvested = 450.0, currentValue = 500.0)
         val historyByFundId = mapOf(
@@ -192,11 +213,10 @@ class PortfolioPerformanceCalcTest {
             fondB.fundId to listOf(price(daysAgo = 15, nav = 100.0, fundId = fondB.fundId)),
         )
 
-        val day = PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
-        val week = PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.VECKA, today, historyByFundId)
-
-        assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice, day)
-        assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice, week)
+        assertEquals(
+            PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+            PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId),
+        )
     }
 
     @Test
