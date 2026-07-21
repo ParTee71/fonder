@@ -38,7 +38,6 @@
     <string name="period_week">Senaste veckan</string>
     <string name="period_month">Senaste månaden</string>
     <string name="period_insufficient_data">Otillräcklig data</string>
-    <string name="period_stale_price">Kurs ej uppdaterad</string>
     <string name="period_partial_data">Delvis osäker — någon fond saknar historik</string>
 
     <!-- Portfölj -->

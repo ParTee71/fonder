@@ -65,8 +65,8 @@ class HemScreenTest {
     }
 
     @Test
-    fun inaktuell_kurs_visar_kurs_ej_uppdaterad_ist_for_falsk_noll() {
-        // Regression för issue #18.
+    fun otillracklig_historik_visar_otillracklig_data_ist_for_falsk_noll() {
+        // Räcker inte historiken för en period markeras den "Otillräcklig data" — aldrig ett gissat 0.
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
@@ -74,8 +74,8 @@ class HemScreenTest {
             totalGainLoss = 100.0,
             totalGainLossFraction = 0.2,
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice,
-                week = PortfolioPerformanceCalc.PortfolioPeriodResult.StalePrice,
+                day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
                 month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
             ),
         )
@@ -84,8 +84,7 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
-        composeRule.onAllNodesWithText("Kurs ej uppdaterad").assertCountEquals(2)
-        composeRule.onNodeWithText("Otillräcklig data").assertExists()
+        composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(3)
     }
 
     @Test

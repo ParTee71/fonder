@@ -28,7 +28,6 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.ProfitTakeBadge
 import se.partee71.fonder.ui.components.StatusDot
-import se.partee71.fonder.ui.components.UnavailableReason
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
@@ -147,27 +146,24 @@ private fun HoldingRow(
                     )
                 }
                 ValueAsOfRow(navEpochDay = holding.navEpochDay, modifier = Modifier.padding(top = 2.dp))
-                val (dayAmount, dayFraction, dayReason) = performance?.day.toRowArgs()
+                val (dayAmount, dayFraction) = performance?.day.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_day),
                     amount = dayAmount,
                     fraction = dayFraction,
-                    unavailableReason = dayReason,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                val (weekAmount, weekFraction, weekReason) = performance?.week.toRowArgs()
+                val (weekAmount, weekFraction) = performance?.week.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_week),
                     amount = weekAmount,
                     fraction = weekFraction,
-                    unavailableReason = weekReason,
                 )
-                val (monthAmount, monthFraction, monthReason) = performance?.month.toRowArgs()
+                val (monthAmount, monthFraction) = performance?.month.toRowArgs()
                 PeriodRow(
                     label = stringResource(R.string.period_month),
                     amount = monthAmount,
                     fraction = monthFraction,
-                    unavailableReason = monthReason,
                 )
             } else {
                 Text(
@@ -201,9 +197,8 @@ private fun FirstPurchaseRow(holding: Holding, modifier: Modifier = Modifier) {
     )
 }
 
-/** Mappar [PortfolioPerformanceCalc.PeriodResult] till [PeriodRow]s primitiva parametrar (issue #18) — komponenten själv känner inte till domänmodeller (regel 4). */
-private fun PortfolioPerformanceCalc.PeriodResult?.toRowArgs(): Triple<Double?, Double?, UnavailableReason> = when (this) {
-    is PortfolioPerformanceCalc.PeriodResult.Available -> Triple(amount, fraction, UnavailableReason.INSUFFICIENT_DATA)
-    PortfolioPerformanceCalc.PeriodResult.StalePrice -> Triple(null, null, UnavailableReason.STALE_PRICE)
-    PortfolioPerformanceCalc.PeriodResult.InsufficientHistory, null -> Triple(null, null, UnavailableReason.INSUFFICIENT_DATA)
+/** Mappar [PortfolioPerformanceCalc.PeriodResult] till [PeriodRow]s primitiva parametrar (kr/%) — komponenten känner inte till domänmodeller (regel 4). Saknas värde (otillräcklig historik/ingen kurs) blir båda null och raden visar "Otillräcklig data". */
+private fun PortfolioPerformanceCalc.PeriodResult?.toRowArgs(): Pair<Double?, Double?> = when (this) {
+    is PortfolioPerformanceCalc.PeriodResult.Available -> amount to fraction
+    PortfolioPerformanceCalc.PeriodResult.InsufficientHistory, null -> null to null
 }
