@@ -83,11 +83,9 @@ class HandelsbankenFundPriceRepositoryTest {
 
     @Test
     fun `refresh hamtar fem ars kurshistorik`() = runTest {
-        var capturedFrom: LocalDate? = null
-        var capturedTo: LocalDate? = null
+        val calls = mutableListOf<Pair<LocalDate, LocalDate>>()
         val client = FondlistaHtmlSource { _, from, to ->
-            capturedFrom = from
-            capturedTo = to
+            calls.add(from to to)
             ""
         }
         val repo = HandelsbankenFundPriceRepository(client = client, dao = dao, isinSources = emptyList())
@@ -95,8 +93,29 @@ class HandelsbankenFundPriceRepositoryTest {
         repo.refresh("SHB0000442")
 
         val today = LocalDate.now()
-        assertEquals(today.minusYears(5), capturedFrom)
-        assertEquals(today, capturedTo)
+        assertEquals(today.minusYears(5), calls.first().first)
+        assertEquals(today, calls.first().second)
+    }
+
+    @Test
+    fun `refresh hamtar dessutom ett kort farskt fonster utover femarsfonstret`() = runTest {
+        // issue #35: handelsbanken.fondlista.se är en odokumenterad källa (TP-10) som i teorin
+        // kan samplas ner över långa intervall — ett kort, dedikerat fönster garanterar tät
+        // historik för de senaste dagarna oavsett, så dag/vecka/månad-perioderna inte råkar
+        // välja samma, för gamla, kurs (se PortfolioPerformanceCalcTest).
+        val calls = mutableListOf<Pair<LocalDate, LocalDate>>()
+        val client = FondlistaHtmlSource { _, from, to ->
+            calls.add(from to to)
+            ""
+        }
+        val repo = HandelsbankenFundPriceRepository(client = client, dao = dao, isinSources = emptyList())
+
+        repo.refresh("SHB0000442")
+
+        val today = LocalDate.now()
+        assertEquals(2, calls.size)
+        assertEquals(today.minusDays(60), calls[1].first)
+        assertEquals(today, calls[1].second)
     }
 
     @Test
@@ -206,6 +225,43 @@ class HandelsbankenFundPriceRepositoryTest {
         repo.refreshSince("SHB0000442", "SE0004297927", since)
 
         assertEquals(99.0, repo.latestPrice("SHB0000442")?.nav ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `refreshSince hamtar dessutom ett kort farskt fonster fran samma kalla`() = runTest {
+        // issue #35: samma förtätningsprincip som för Handelsbanken-källan (se testet ovan),
+        // men för ISIN-kedjan — bara relevant när `since` ligger långt tillbaka (annars är
+        // det ursprungliga anropet redan ett kort fönster, se testet nedan).
+        val since = LocalDate.of(2020, 1, 1)
+        val calls = mutableListOf<Triple<LocalDate, LocalDate, LocalDate>>()
+        val source = FakeIsinSource(history = { _, from, to ->
+            calls.add(Triple(since, from, to))
+            listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 123.45, currency = "SEK"))
+        })
+        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> "" }, dao = dao, isinSources = listOf(source))
+
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+
+        val today = LocalDate.now()
+        assertEquals(2, calls.size)
+        assertEquals(since, calls[0].second)
+        assertEquals(today.minusDays(60), calls[1].second)
+        assertEquals(today, calls[1].third)
+    }
+
+    @Test
+    fun `refreshSince hoppar over det farska fonstret om since redan ligger inom det`() = runTest {
+        val since = LocalDate.now().minusDays(10)
+        var callCount = 0
+        val source = FakeIsinSource(history = { _, _, _ ->
+            callCount++
+            listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 100.0, currency = "SEK"))
+        })
+        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _ -> "" }, dao = dao, isinSources = listOf(source))
+
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+
+        assertEquals(1, callCount)
     }
 
     @Test

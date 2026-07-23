@@ -56,6 +56,25 @@ class PortfolioPerformanceCalcTest {
     }
 
     @Test
+    fun `holdingChange flaggar otillrackligt nar narmaste kurs ligger for langt fran malldagen`() {
+        // issue #35: kurscachen har ett hål strax före periodens start (t.ex. en odokumenterad
+        // källa som samplar ner långa intervall) — närmaste kurs på/före måldagen hittas
+        // fortfarande, men är för gammal för att vara en trovärdig proxy. Utan denna gräns
+        // skulle "En dag" tyst visa en missvisande siffra byggd på en 9 dagar gammal kurs —
+        // exakt samma, för gamla, rad som "Senaste veckan" också råkar välja.
+        val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1200.0)
+        val history = listOf(price(daysAgo = 0, nav = 120.0), price(daysAgo = 9, nav = 90.0))
+
+        assertEquals(
+            PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history),
+        )
+        // Veckan hittar samma rad, men gapet (2 dagar) är inom toleransen — fortsatt beräkningsbar.
+        val week = available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.VECKA, today, history))
+        assertEquals(300.0, week.amount, 1e-9) // 1200 - 10*90
+    }
+
+    @Test
     fun `holdingChange otillrackligt om historiken inte racker tillbaka for perioden`() {
         // Fonden köptes för 3 dagar sedan — ingen kurs finns 7 eller 30 dagar bak.
         val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
