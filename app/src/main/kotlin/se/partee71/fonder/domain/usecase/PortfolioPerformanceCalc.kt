@@ -24,6 +24,17 @@ object PortfolioPerformanceCalc {
     const val HISTORY_LOOKBACK_DAYS = 60L
 
     /**
+     * Max antal dagar en historisk kurs får ligga före periodens måldag för att fortfarande
+     * dugas som "periodens start" (issue #35). Täcker vanliga helger/röda dagar ([NavCalendar]
+     * hanterar bara lördag/söndag, inte svenska röda dagar) — en lucka större än så beror
+     * troligen på att kurscachen faktiskt saknar data för perioden (t.ex. en källa som samplar
+     * ner långa intervall), inte på stängda börsdagar. Utan denna gräns kunde två olika
+     * perioder tyst råka välja samma, för gamla, kurs och visa identiska men missvisande tal
+     * (samma symptom som "En dag" och "Senaste veckan" råkade dela exakt samma siffra).
+     */
+    private const val MAX_PRICE_GAP_DAYS = 5L
+
+    /**
      * Resultatet av [holdingChange] för ett enskilt innehav (issue #18):
      * - [Available] — referensdagens NAV och en NAV [Period.days] dagar dessförinnan finns, kr + % beräknat.
      * - [InsufficientHistory] — historiken når inte tillbaka [Period.days] dagar före referensdagen
@@ -69,9 +80,10 @@ object PortfolioPerformanceCalc {
             ?: return PeriodResult.InsufficientHistory
         val targetDay = referenceDay - period.days
 
-        val historicalNav = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay }?.nav
+        val historicalPrice = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay }
             ?: return PeriodResult.InsufficientHistory
-        val historicalValue = holding.netShares * historicalNav
+        if (targetDay - historicalPrice.epochDay > MAX_PRICE_GAP_DAYS) return PeriodResult.InsufficientHistory
+        val historicalValue = holding.netShares * historicalPrice.nav
         if (historicalValue == 0.0) return PeriodResult.InsufficientHistory
         val amount = currentValue - historicalValue
         return PeriodResult.Available(amount = amount, fraction = amount / historicalValue)

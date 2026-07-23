@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.20.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.20.1 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -486,3 +486,18 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   risknivå. Neutralt språk, aldrig ett köp-/säljråd (samma princip som ANA-3). Inget nytt
   persisterat fält (härlett ur befintlig `Holding`/kurshistorik, precis som övriga
   `FundAnalysisCalc`).
+- **"En dag" och "Senaste veckan" kunde tyst visa identiska (missvisande) tal (#35):**
+  rotorsak: `FundPriceRepository.refresh`/`refreshSince` hämtade alltid ett **långt**
+  kursfönster (Handelsbankens fasta femårsfönster respektive sedan första köpet) från
+  odokumenterade källor (TP-10/TP-14) som i teorin kan samplas ner över långa intervall —
+  fanns det en lucka i cachen strax före "idag", kunde `PortfolioPerformanceCalc.holdingChange`
+  välja **samma**, för gamla, kursrad som närmaste kända pris för både dagens och veckans
+  måldag, vilket gav två exakt lika (men felaktiga) belopp i stället för ett ärligt "vet
+  inte". Fix i två delar (POR-5/HEM-2): (1) `HandelsbankenFundPriceRepository` hämtar nu
+  alltid **även** ett kort, färskt fönster (60 dagar, `RECENT_WINDOW_DAYS`) utöver det långa
+  intervallet och skriver in det i cachen, så de senaste dagarnas historik förblir tät
+  oavsett källans samplingsbeteende — hoppas över för `refreshSince` när `since` redan
+  ligger inom det korta fönstret. (2) `PortfolioPerformanceCalc.holdingChange` flaggar nu
+  `InsufficientHistory` i stället för att beräkna ett värde om närmaste kända kurs ligger mer
+  än `MAX_PRICE_GAP_DAYS` (5 dagar, bortom vanliga helger/röda dagar) före periodens måldag —
+  ett skydd oavsett cacheorsak. Ingen ny/ändrad persisterad datamodell.

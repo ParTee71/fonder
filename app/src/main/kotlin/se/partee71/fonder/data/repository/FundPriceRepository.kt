@@ -12,6 +12,7 @@ import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.IsinPricePoint
 import se.partee71.fonder.domain.usecase.NavCalendar
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -117,9 +118,9 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
 
     override suspend fun refresh(fundId: String): Boolean {
+        val to = LocalDate.now()
+        val from = to.minusYears(5)
         val result = runCatching {
-            val to = LocalDate.now()
-            val from = to.minusYears(5)
             val html = client.fetchHistoryPage(fundId, from, to)
             HandelsbankenHtmlParser.parseHistory(html, fundId)
         }
@@ -132,7 +133,29 @@ class HandelsbankenFundPriceRepository @Inject constructor(
             // krascha aldrig UI:t. Se riskavsnittet i issue #2/#3.
             Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
         }
+        refreshRecentHandelsbankenWindow(fundId, to)
         return result.isSuccess
+    }
+
+    /**
+     * Kompletterande hämtning av ett kort, färskt fönster ovanpå [refresh]s långa femårsfönster
+     * (issue #35): källan är odokumenterad och kan i teorin samplas ner över långa intervall,
+     * vilket annars kan lämna en lucka i de senaste dagarnas historik — synligt som att
+     * "En dag" och "Senaste veckan" råkade visa exakt samma tal (samma, för gamla, kurs valdes
+     * för bådas måldag, se [se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc]). Ett
+     * kort fönster är osannolikt att samplas ner av samma anledning. Bästa-försök: fel loggas
+     * och ignoreras, [refresh]s returvärde styrs fortfarande bara av den långa hämtningen.
+     */
+    private suspend fun refreshRecentHandelsbankenWindow(fundId: String, to: LocalDate) {
+        val recentFrom = to.minusDays(RECENT_WINDOW_DAYS)
+        runCatching {
+            val html = client.fetchHistoryPage(fundId, recentFrom, to)
+            HandelsbankenHtmlParser.parseHistory(html, fundId)
+        }.onSuccess { prices ->
+            if (prices.isNotEmpty()) dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
+        }.onFailure { e ->
+            Log.w(TAG, "Kunde inte förtäta senaste kurshistoriken för fund $fundId", e)
+        }
     }
 
     override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
@@ -142,13 +165,29 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 .onFailure { e -> Log.w(TAG, "ISIN-källa gav fel för $isin, provar nästa i kedjan", e) }
                 .getOrNull()
             if (!points.isNullOrEmpty()) {
-                dao.upsertAll(points.map { FundPriceEntity(fundId = fundId, epochDay = it.epochDay, nav = it.nav, currency = it.currency) })
+                dao.upsertAll(points.map { it.toEntity(fundId) })
+                refreshRecentIsinWindow(fundId, isin, since, to, source)
                 return true
             }
         }
         Log.w(TAG, "Ingen ISIN-källa kunde ge historik för $isin, behåller cache")
         return false
     }
+
+    /** Som [refreshRecentHandelsbankenWindow], men för [refreshSince]s ISIN-källkedja — hoppas över om [since] redan ligger inom det korta fönstret (då gav den ursprungliga hämtningen redan ett kort intervall). */
+    private suspend fun refreshRecentIsinWindow(fundId: String, isin: String, since: LocalDate, to: LocalDate, source: IsinPriceHistorySource) {
+        val recentFrom = to.minusDays(RECENT_WINDOW_DAYS)
+        if (!since.isBefore(recentFrom)) return
+        val points = runCatching { source.fetchHistory(isin, recentFrom, to) }
+            .onFailure { e -> Log.w(TAG, "Kunde inte förtäta senaste kurshistoriken för $isin", e) }
+            .getOrNull()
+        if (!points.isNullOrEmpty()) {
+            dao.upsertAll(points.map { it.toEntity(fundId) })
+        }
+    }
+
+    private fun IsinPricePoint.toEntity(fundId: String) =
+        FundPriceEntity(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
 
     override suspend fun suggestIsin(fundName: String): String? {
         for (source in isinSources) {
@@ -186,5 +225,13 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     private companion object {
         const val TAG = "FundPriceRepository"
+
+        /**
+         * Kort, färskt fönster som alltid hämtas utöver [refresh]/[refreshSince]s långa
+         * intervall (issue #35) — se [refreshRecentHandelsbankenWindow]/[refreshRecentIsinWindow].
+         * Marginal utöver de periodfönster [se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc]
+         * behöver (upp till 30 dagar) plus helger/röda dagar.
+         */
+        const val RECENT_WINDOW_DAYS = 60L
     }
 }
