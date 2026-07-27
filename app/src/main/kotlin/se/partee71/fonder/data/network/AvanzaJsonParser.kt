@@ -3,6 +3,7 @@ package se.partee71.fonder.data.network
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.IsinPricePoint
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -45,15 +46,30 @@ object AvanzaJsonParser {
     fun parseCurrency(responseJson: String): String? =
         runCatching { json.decodeFromString<GuideResponse>(responseJson) }.getOrNull()?.currency
 
-    /** Daglig kurshistorik i [currency] (kräver `raw=true` för absolut NAV i stället för procentavkastning, och `resolution=DAY` så långa spann inte nedsamplas till veckopunkter — se [AvanzaClient.chartUrl]). Saknade (null) punkter filtreras bort. */
+    /**
+     * Daglig kurshistorik i [currency] (kräver `raw=true` för absolut NAV i stället för
+     * procentavkastning, och `resolution=DAY` så långa spann inte nedsamplas till veckopunkter
+     * — se [AvanzaClient.chartUrl]). Saknade (null) punkter filtreras bort.
+     *
+     * **Helgdaterade punkter förkastas** (issue #39): källan levererar ibland kurser daterade
+     * på lördag/söndag — verifierat 2026-07-27, där en fonds serie hoppade över fredagen och
+     * gav en söndag i stället. Någon NAV den dagen finns inte, och eftersom datumet är *nyare*
+     * än senaste handelsdag gjorde en sådan rad `FundPriceRepository.isPriceStale` (TP-17)
+     * falskt negativ: fonden ansågs färsk och slutade uppdateras, permanent låst på fel kurs.
+     * Vilken handelsdag punkten egentligen hör till går inte att veta, så den kastas hellre
+     * bort än placeras på en gissad dag.
+     */
     fun parseChart(responseJson: String, currency: String): List<IsinPricePoint> =
         runCatching { json.decodeFromString<ChartResponse>(responseJson) }
             .getOrNull()
             ?.dataSerie
             ?.mapNotNull { point ->
                 val nav = point.y ?: return@mapNotNull null
-                val epochDay = Instant.ofEpochMilli(point.x).atZone(ZoneOffset.UTC).toLocalDate().toEpochDay()
-                IsinPricePoint(epochDay = epochDay, nav = nav, currency = currency)
+                val date = Instant.ofEpochMilli(point.x).atZone(ZoneOffset.UTC).toLocalDate()
+                if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) {
+                    return@mapNotNull null
+                }
+                IsinPricePoint(epochDay = date.toEpochDay(), nav = nav, currency = currency)
             }
             ?: emptyList()
 

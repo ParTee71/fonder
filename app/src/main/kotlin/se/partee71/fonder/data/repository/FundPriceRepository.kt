@@ -8,13 +8,17 @@ import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.network.IsinPriceHistorySource
+import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.IsinPricePoint
+import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.NavCalendar
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -55,10 +59,16 @@ interface FundPriceRepository {
 
     /**
      * Hämtar kurshistorik sedan [since] och cachar den under [fundId]. Provar **fondlista
-     * först** (nycklad på [fundId], KRAVLISTA TP-18) och faller tillbaka till den ISIN-baserade
-     * källkedjan (Avanza m.fl., TP-14) först om fondlista inte kan leverera — t.ex. för fonder
-     * som saknas i katalogen och därför har `fundId == isin`. Källorna provas i prioritetsordning,
-     * nästa tas vid fel/tomt resultat. Fel loggas, kraschar aldrig, cache behålls.
+     * först** (KRAVLISTA TP-18) och faller tillbaka till den ISIN-baserade källkedjan
+     * (Avanza m.fl., TP-14) om fondlista inte kan leverera.
+     *
+     * Är [fundId] ett ISIN saknar fonden plattformskod (matchad via [findFundByIsin]) — då
+     * slås ett `fondlistaFundId` upp först och sparas på fonden (issue #39). Utan det steget
+     * hamnade hela importerade portföljer permanent på Avanza-grenen, som ligger en handelsdag
+     * efter. Kurserna cachas alltid under [fundId], som är fondens identitet.
+     *
+     * Källorna provas i prioritetsordning, nästa tas vid fel/tomt resultat. Fel loggas,
+     * kraschar aldrig, cache behålls.
      * @return true om någon källa gav historik, false om alla misslyckades/var tomma.
      */
     suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
@@ -126,8 +136,15 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     private val client: FondlistaHtmlSource,
     private val fundPageClient: FondlistaFundPageSource,
     private val dao: FundPriceDao,
+    private val fundDao: FundDao,
     private val isinSources: List<@JvmSuppressWildcards IsinPriceHistorySource>,
 ) : FundPriceRepository {
+
+    /** Katalogen memoiserad en kort stund — se [catalogFunds]. */
+    private var cachedCatalog: Pair<Instant, List<Fund>>? = null
+
+    /** Fonder som saknar motsvarighet i katalogen — se [fondlistaKeyFor]. */
+    private val unresolvableFundIds = mutableSetOf<String>()
 
     override suspend fun latestPrice(fundId: String): FundPrice? =
         dao.getLatest(fundId)?.toDomain()
@@ -146,7 +163,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
         val to = LocalDate.now()
         val from = historyStart(fundId, since, to)
-        return fetchAndCacheFromFondlista(fundId, from, to) != null
+        return fetchAndCacheFromFondlista(sourceFundId = fundId, from = from, to = to) != null
     }
 
     /**
@@ -168,29 +185,96 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     }
 
     /**
-     * Hämtar och cachar kurser från fondlista-källan. Null vid nätverksfel eller ett brott i
-     * sidans format — behåll senast cachade kurs, krascha aldrig UI:t (riskavsnittet i #2/#3).
-     * En tom lista är *inte* ett fel: fonden kan sakna kurser i intervallet.
+     * Hämtar och cachar kurser från fondlista-källan. [sourceFundId] är nyckeln mot källan,
+     * [cacheFundId] den nyckel kurserna cachas under — de skiljer sig för fonder vars
+     * identitet är ett ISIN men som nås i katalogen via ett uppslaget `fondlistaFundId`
+     * (issue #39). Null vid nätverksfel eller ett brott i sidans format — behåll senast
+     * cachade kurs, krascha aldrig UI:t (riskavsnittet i #2/#3). En tom lista är *inte* ett
+     * fel: fonden kan sakna kurser i intervallet.
      */
-    private suspend fun fetchAndCacheFromFondlista(fundId: String, from: LocalDate, to: LocalDate): List<FundPrice>? =
+    private suspend fun fetchAndCacheFromFondlista(
+        sourceFundId: String,
+        cacheFundId: String = sourceFundId,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<FundPrice>? =
         runCatching {
-            val html = client.fetchHistoryPage(fundId = fundId, company = null, from = from, to = to)
-            HandelsbankenHtmlParser.parseHistory(html, fundId)
+            val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
+            HandelsbankenHtmlParser.parseHistory(html, cacheFundId)
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
             }
         }.onFailure { e ->
-            Log.w(TAG, "Kunde inte uppdatera kurser för fund $fundId, behåller cache", e)
+            Log.w(TAG, "Kunde inte uppdatera kurser för fund $cacheFundId, behåller cache", e)
         }.getOrNull()
+
+    /**
+     * Nyckeln att hämta kurser med mot fondlista, eller null om fonden inte kan nås där.
+     *
+     * Är [fundId] inte ett ISIN är den redan plattformens egen kod. Annars är fonden matchad
+     * enbart via ISIN (`findFundByIsin`, TP-13/TP-14) och saknar kod — då används ett tidigare
+     * uppslaget `fondlistaFundId`, eller görs ett nytt uppslag via [resolveFondlistaFundId].
+     * En träff sparas på fonden så uppslaget bara görs en gång (issue #39).
+     */
+    private suspend fun fondlistaKeyFor(fundId: String, isin: String): String? {
+        if (fundId != isin) return fundId
+        val fund = fundDao.getByFundId(fundId) ?: return null
+        fund.fondlistaFundId?.let { return it }
+        if (fundId in unresolvableFundIds) return null
+
+        val resolved = resolveFondlistaFundId(fund.name, isin)
+        if (resolved == null) {
+            // Minns misslyckandet för processens livstid — annars kostar varje uppdatering av
+            // en fond som inte finns i katalogen ett nytt katalog- och sidanrop.
+            unresolvableFundIds.add(fundId)
+            Log.w(TAG, "Hittade ingen fondlista-motsvarighet för $fundId, använder ISIN-källkedjan")
+            return null
+        }
+        fundDao.upsert(fund.copy(fondlistaFundId = resolved))
+        return resolved
+    }
+
+    /**
+     * Letar upp fondlista-plattformens kod för en fond som bara är känd via namn + [isin]:
+     * bästa namnkandidat i katalogen, **verifierad mot ISIN** på fondens egen sida (TP-18).
+     * Null om ingen kandidat finns eller om ISIN inte stämmer — hellre Avanza-kedjan än fel
+     * fond (samma princip som importmatchningen, `ImportFundMatcher`).
+     */
+    private suspend fun resolveFondlistaFundId(fundName: String, isin: String): String? {
+        val candidate = FundNameMatcher.bestMatch(fundName, catalogFunds()) ?: return null
+        return candidate.fund.fundId.takeIf { lookupIsin(it) == isin }
+    }
+
+    /**
+     * Hela katalogen, memoiserad en kort stund: en worker-körning som löser upp flera fonder
+     * ska hämta den en gång, inte en gång per fond (svaret är ~125 kB).
+     */
+    private suspend fun catalogFunds(): List<Fund> {
+        val cached = cachedCatalog
+        if (cached != null && Duration.between(cached.first, Instant.now()) < CATALOG_CACHE_TTL) {
+            return cached.second
+        }
+        val funds = fetchCatalogPage(company = null)?.let(HandelsbankenHtmlParser::parseFundCatalog).orEmpty()
+        if (funds.isNotEmpty()) cachedCatalog = Instant.now() to funds
+        return funds
+    }
 
     override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
         val to = LocalDate.now()
         // Fondlista först (KRAVLISTA TP-18): daglig, luckfri historik utan datumtak och utan
-        // nedsamplingen ISIN-kedjan behövde skyddas mot (TP-14). Hoppas över för fonder som
-        // saknas i katalogen — de har `fundId == isin` och finns per definition inte i källan.
-        if (fundId != isin && fetchAndCacheFromFondlista(fundId, historyStart(fundId, since, to), to)?.isNotEmpty() == true) {
-            return true
+        // nedsamplingen ISIN-kedjan behövde skyddas mot (TP-14). Är `fundId` ett ISIN saknar
+        // fonden plattformskod och måste slås upp först (issue #39) — kurserna cachas ändå
+        // alltid under appens `fundId`, som är fondens identitet.
+        val fondlistaKey = fondlistaKeyFor(fundId, isin)
+        if (fondlistaKey != null) {
+            val prices = fetchAndCacheFromFondlista(
+                sourceFundId = fondlistaKey,
+                cacheFundId = fundId,
+                from = historyStart(fundId, since, to),
+                to = to,
+            )
+            if (prices?.isNotEmpty() == true) return true
         }
         for (source in isinSources) {
             val points = runCatching { source.fetchHistory(isin, since, to) }
@@ -291,5 +375,8 @@ class HandelsbankenFundPriceRepository @Inject constructor(
          * 30 dagar) plus helger/röda dagar.
          */
         const val RECENT_WINDOW_DAYS = 60L
+
+        /** Hur länge katalogen återanvänds i minnet — se [catalogFunds]. */
+        val CATALOG_CACHE_TTL: Duration = Duration.ofMinutes(10)
     }
 }

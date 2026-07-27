@@ -13,7 +13,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
     entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -76,6 +76,33 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        /**
+         * Version 4 → 5 (issue #39), två delar:
+         *
+         * 1. Lägger till `fondlistaFundId` (nullable) på `funds` — fondlista-plattformens kod
+         *    för en fond vars `fundId` är ett ISIN (importmatchad via `findFundByIsin`,
+         *    TP-13/TP-14). Utan den nåddes de fonderna aldrig av fondlista-källan och fastnade
+         *    på Avanzas eftersläpande data. Fondens identitet ändras **inte** — se
+         *    [se.partee71.fonder.domain.model.Fund.fondlistaFundId].
+         *
+         * 2. Rensar **helgdaterade** rader ur `fund_prices`. Avanza levererar punkter daterade
+         *    på lördag/söndag (verifierat 2026-07-27: en fonds serie hoppade över fredagen och
+         *    gav en söndag i stället). En sådan kurs finns inte, och eftersom datumet är
+         *    *nyare* än senaste handelsdag gjorde den `FundPriceRepository.isPriceStale`
+         *    (TP-17) falskt negativ — fonden ansågs färsk och slutade uppdateras. Nya punkter
+         *    filtreras bort i `AvanzaJsonParser`, men redan cachade rader måste bort här,
+         *    annars fortsätter de blockera uppdateringen.
+         *
+         * Epoch-dag 0 är torsdag 1970-01-01, så `(epochDay + 3) % 7` ger 0=måndag … 6=söndag.
+         * Kurser är härledd cache-data (NFR-1) och hämtas om vid nästa uppdatering.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `funds` ADD COLUMN `fondlistaFundId` TEXT")
+                db.execSQL("DELETE FROM `fund_prices` WHERE ((`epochDay` % 7) + 10) % 7 >= 5")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
 }

@@ -65,6 +65,30 @@ class FundDaoTest {
     }
 
     @Test
+    fun fund_fondlistaFundId_survives_round_trip() = runTest {
+        // Uppslaget fondlista-id för en fond vars identitet är dess ISIN (issue #39). Härledd
+        // cache-data, men persisterad — måste överleva skrivning/läsning oförändrad och ingå i
+        // backup-kedjan när den byggs (NFR-1, backup är ännu en stub).
+        val fund = FundEntity(
+            fundId = "LU0496367417",
+            name = "Franklin Gold and Prec Mtls A(acc)USD",
+            currency = "USD",
+            isin = "LU0496367417",
+            fondlistaFundId = "0P0000O30D",
+        )
+        fundDao.upsert(fund)
+
+        assertEquals("0P0000O30D", fundDao.getByFundId("LU0496367417")?.fondlistaFundId)
+        assertEquals(fund, fundDao.observeAll().first().single())
+
+        // Identiteten följer fundId — uppslaget id är bara en hämtningsnyckel.
+        assertEquals("LU0496367417", fundDao.getByFundId("LU0496367417")?.fundId)
+
+        fundDao.upsert(fund.copy(fondlistaFundId = null))
+        assertNull(fundDao.getByFundId("LU0496367417")?.fondlistaFundId)
+    }
+
+    @Test
     fun transaction_round_trip_and_link_to_fund() = runTest {
         fundDao.upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK"))
         val id = transactionDao.insert(
