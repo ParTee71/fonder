@@ -53,6 +53,24 @@ class FundPriceDaoTest {
     }
 
     @Test
+    fun getOldest_ger_aldsta_kursen_per_fund() = runTest {
+        // Avgör om en uppdatering behöver backfilla hela historiken eller bara hämta ett kort
+        // färskt fönster (KRAVLISTA TP-18, issue #37) — fel svar här ger antingen luckor i
+        // historiken eller flera megabyte i onödan vid varje kursuppdatering.
+        dao.upsertAll(
+            listOf(
+                FundPriceEntity(fundId = "SHB0000442", epochDay = 101, nav = 145.0, currency = "SEK"),
+                FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 140.0, currency = "SEK"),
+                FundPriceEntity(fundId = "SHB0000627", epochDay = 50, nav = 200.0, currency = "NOK"),
+            ),
+        )
+
+        assertEquals(100L, dao.getOldest("SHB0000442")?.epochDay)
+        assertEquals(50L, dao.getOldest("SHB0000627")?.epochDay)
+        assertNull(dao.getOldest("OKAND"))
+    }
+
+    @Test
     fun upsertAll_ersatter_befintlig_kurs_for_samma_dag() = runTest {
         dao.upsertAll(listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 100.0, currency = "SEK")))
         dao.upsertAll(listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 110.0, currency = "SEK")))

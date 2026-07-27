@@ -102,10 +102,66 @@ class HandelsbankenHtmlParserTest {
 
         val catalog = HandelsbankenHtmlParser.parseFundCatalog(html)
 
-        // Filtrering per fondbolag görs inte här (se FundCompanyMatcher) — bara tomma val bort.
+        // Filtrering per fondbolag görs av källan via `company`-parametern (TP-18), inte här —
+        // parsern läser bara det som levererats, och tar bara bort det tomma valet.
         assertEquals(5, catalog.size)
         assertEquals("Handelsbanken Amerika Småbolag Tema", catalog.first { it.fundId == "SHB0000442" }.name)
         assertTrue(catalog.any { it.fundId == "0P000083RV" })
+    }
+
+    @Test
+    fun `parseIsin laser isin ur fondsidans faktabladslank`() {
+        // Verkligt utdrag från /shb/sv/funds/0p0001kre7 (verifierat live 2026-07-27): sidan har
+        // inget eget ISIN-fält, men faktabladslänken bär det som Identifier-parameter.
+        val html = """
+            <div class="fund-page">
+              <h1>CPR Invest Global Gold Mines A USD Acc</h1>
+              <a class="icon pdf" href="https://handelsbanken.modelity.com/Structures/external/public/preorder-exante-costs-and-charges?ProductType=19&amp;IdentifierType=1&amp;Identifier=LU1989766289&amp;Country=SE&amp;Language=SE_sv&amp;Channel=1">Kostnader och avgifter</a>
+            </div>
+        """.trimIndent()
+
+        assertEquals("LU1989766289", HandelsbankenHtmlParser.parseIsin(html))
+    }
+
+    @Test
+    fun `parseIsin laser svenskt isin aven med oescapade parametrar`() {
+        // Källan skriver länken med rå `&` (verifierat live) — men `&amp;` ska funka lika bra,
+        // och `IdentifierType=` får aldrig förväxlas med `Identifier=`.
+        val html = """<a href="/x?IdentifierType=1&Identifier=SE0000582033&Country=SE">Faktablad</a>"""
+
+        assertEquals("SE0000582033", HandelsbankenHtmlParser.parseIsin(html))
+    }
+
+    @Test
+    fun `parseIsin hittar ett entydigt isin aven utan faktabladslank`() {
+        val html = """<table><tr><th>ISIN</th><td>SE0010921338</td></tr></table>"""
+
+        assertEquals("SE0010921338", HandelsbankenHtmlParser.parseIsin(html))
+    }
+
+    @Test
+    fun `parseIsin ar null nar sidan saknar isin`() {
+        val html = """<div><h1>Handelsbanken Sverige</h1><p>Ingen identifierare här.</p></div>"""
+
+        assertNull(HandelsbankenHtmlParser.parseIsin(html))
+    }
+
+    @Test
+    fun `parseIsin ar null nar flera olika isin ar mojliga utan faktabladslank`() {
+        // Hellre inget ISIN än fel ISIN på fel fond — en tvetydig sida ska falla igenom till
+        // de ISIN-baserade källorna (TP-14) i stället för att gissa.
+        val html = """<div><span>SE0000582033</span><span>LU1989766289</span></div>"""
+
+        assertNull(HandelsbankenHtmlParser.parseIsin(html))
+    }
+
+    @Test
+    fun `parseIsin plockar inte upp isin-liknande fondid`() {
+        // FundId som 0P0001KRE7 är kortare, men en id-sträng i en längre alfanumerisk kontext
+        // får aldrig läsas som ISIN.
+        val html = """<div data-id="XSE0000582033Q">CPR Invest</div>"""
+
+        assertNull(HandelsbankenHtmlParser.parseIsin(html))
     }
 
     @Test

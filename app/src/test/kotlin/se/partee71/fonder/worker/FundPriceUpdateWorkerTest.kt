@@ -29,6 +29,7 @@ class FundPriceUpdateWorkerTest {
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
     private val refreshedFundIds = mutableListOf<String>()
+    private val refreshCalls = mutableListOf<Pair<String, LocalDate?>>()
     private val refreshSinceCalls = mutableListOf<Triple<String, String, LocalDate>>()
     private var refreshResult = true
     private var refreshSinceResult = true
@@ -52,8 +53,9 @@ class FundPriceUpdateWorkerTest {
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String): Boolean {
+        override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundIds.add(fundId)
+            refreshCalls.add(fundId to since)
             return refreshResult
         }
         override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
@@ -62,6 +64,8 @@ class FundPriceUpdateWorkerTest {
         }
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
+        override suspend fun lookupIsin(fundId: String): String? = null
+        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
@@ -93,15 +97,31 @@ class FundPriceUpdateWorkerTest {
     }
 
     @Test
-    fun `isin-fond utan kop faller tillbaka pa fem ars sokfonster`() = runTest {
+    fun `fond utan kop hamtar utan historikhorisont — bara ett kort farskt fonster`() = runTest {
+        // Tidigare gissades ett femårsfönster här. En bevakad men aldrig köpt fond har ingen
+        // historik att backfilla mot — den behöver bara en färsk kurs (TP-18, issue #37).
         val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
         funds.value = listOf(fond)
         // Ingen transaktion (fonden bara bevakad, aldrig köpt) — inget känt inköpsdatum.
 
         FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 
-        val since = refreshSinceCalls.single().third
-        assertEquals(LocalDate.now().minusYears(5), since)
+        assertTrue(refreshSinceCalls.isEmpty())
+        assertEquals(fond.fundId to null, refreshCalls.single())
+    }
+
+    @Test
+    fun `fond utan isin men med kop hamtar med kopdatumet som horisont`() = runTest {
+        val since = LocalDate.of(2014, 5, 6)
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+        )
+
+        FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
+
+        assertEquals(fond.fundId to since, refreshCalls.single())
     }
 
     @Test
@@ -132,6 +152,11 @@ class FundPriceUpdateWorkerTest {
         val ok = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0004297927")
         val fails = Fund(fundId = "SHB0000443", name = "Fond B")
         funds.value = listOf(ok, fails)
+        // `ok` behöver ett köp för att nå refreshSince-grenen (som lyckas); `fails` går via
+        // refresh, som är riggad att misslyckas.
+        transactions.value = listOf(
+            Transaction(fundId = ok.fundId, type = TransactionType.KOP, epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+        )
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 

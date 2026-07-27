@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
@@ -53,11 +54,10 @@ private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
 
 /**
  * Fonddetalj — kurshistorik sedan första köpet (i diagram och tabell), inte bara senaste
- * året (issue #7-uppföljning: se KRAVLISTA TP-14). Har fonden ett känt ISIN (`Fund.isin`)
- * hämtas historiken från en ISIN-baserad källkedja (Avanza m.fl.) utöver Handelsbankens
- * fasta 5-årsfönster, eftersom äldre köp annars aldrig kan täckas fullt ut. Saknas ISIN
- * föreslås ett via namnsökning — användaren bekräftar/rättar innan det sparas (samma
- * "föreslå men kräv bekräftelse"-princip som importflödet, IMP-2).
+ * året (issue #7-uppföljning: se KRAVLISTA TP-14/TP-18). Har fonden ett känt ISIN
+ * (`Fund.isin`) provas fondlista-källan först och en ISIN-baserad källkedja (Avanza m.fl.)
+ * som reserv. Saknas ISIN föreslås ett via namnsökning — användaren bekräftar/rättar innan
+ * det sparas (samma "föreslå men kräv bekräftelse"-princip som importflödet, IMP-2).
  *
  * Bygger även [FundAnalysisCalc]-nyckeltal/säljsignaler (issue #16) — kräver, utöver den
  * redan reaktivt laddade kurshistoriken för den här fonden, portföljens totala värde (för
@@ -153,7 +153,11 @@ class FondDetaljViewModel @Inject constructor(
 
     // Engångsuppdatering per öppning av skärmen — samma "inte en ny bakgrundsjobb"-princip
     // som PortfoljViewModel (issue #6): har fonden ISIN, hämta hela historiken sedan första
-    // köpet; annars samma fallback som tidigare (5-årscachen, bara om helt tom).
+    // köpet; annars fondlista-källan med samma horisont. Repositoryt avgör själv om det räcker
+    // med ett kort färskt fönster eller om historiken behöver backfillas (TP-18), så den
+    // tidigare gaten "bara om cachen är helt tom" är utbytt mot den delade staleness-regeln
+    // (isPriceStale, TP-17, regel 4) — en fond med inaktuell men befintlig kurs uppdateras nu
+    // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
     init {
         viewModelScope.launch {
             val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
@@ -161,8 +165,8 @@ class FondDetaljViewModel @Inject constructor(
 
             if (fund?.isin != null && since != null) {
                 fundPriceRepository.refreshSince(fundId, fund.isin, since)
-            } else if (fundPriceRepository.latestPrice(fundId) == null) {
-                fundPriceRepository.refresh(fundId)
+            } else if (fundPriceRepository.isPriceStale(fundId)) {
+                fundPriceRepository.refresh(fundId, since)
             }
 
             if (fund != null && fund.isin == null) {

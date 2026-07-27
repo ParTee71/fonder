@@ -25,6 +25,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortfoljViewModelTest {
@@ -55,7 +56,7 @@ class PortfoljViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String): Boolean {
+        override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundIds.add(fundId)
             return true
         }
@@ -65,6 +66,8 @@ class PortfoljViewModelTest {
         }
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
+        override suspend fun lookupIsin(fundId: String): String? = null
+        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
