@@ -91,15 +91,17 @@ class FundSearchViewModel @Inject constructor(
 
     /** [company] = null betyder "Alla fondbolag" — då visas hela katalogen igen, utan nytt anrop. */
     fun onCompanySelected(company: FundCompany?) {
-        selectedCompany.value = company
         companyLoadJob?.cancel()
+        selectedCompany.value = company
         if (company == null) {
             visibleFunds.value = allFunds.value
             loading.value = false
             return
         }
+        // Sätts synkront, före coroutinen: annars finns ett observerbart mellanläge med det
+        // *nya* bolaget men det *gamla* bolagets fondlista — i UI:t en blink av fel lista.
+        loading.value = true
         companyLoadJob = viewModelScope.launch {
-            loading.value = true
             // Null = hämtningen misslyckades; behåll den lista som redan visas i stället för
             // att tömma vyn (samma degraderingsprincip som kurscachen, POR-3).
             fundPriceRepository.fetchFundsForCompany(company.id)?.let { visibleFunds.value = it }

@@ -283,7 +283,7 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `standarddatum blir fem ar tillbaka om ingen kurshistorik finns`() = runTest(dispatcher) {
+    fun `standarddatum blir sokfonstrets borjan om ingen kurshistorik finns`() = runTest(dispatcher) {
         val priceRepoUtanHistorik = object : FundPriceRepository by fakePriceRepo {
             override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         }
@@ -294,8 +294,10 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
+            // Gissningen får aldrig hamna utanför sökfönstret — och fönstret är sedan #37
+            // 30 år för alla rader, inte fem (TP-18).
             val occasion = state.rows.first().occasions.first()
-            assertEquals(LocalDate.now().minusYears(5), occasion.date)
+            assertEquals(LocalDate.now().minusYears(30), occasion.date)
             assertFalse(occasion.dateConfident)
             cancelAndIgnoreRemainingEvents()
         }
