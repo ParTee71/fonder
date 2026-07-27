@@ -13,6 +13,14 @@ interface FundPriceDao {
     @Query("SELECT * FROM fund_prices WHERE fundId = :fundId ORDER BY epochDay DESC LIMIT 1")
     suspend fun getLatest(fundId: String): FundPriceEntity?
 
+    /**
+     * Äldsta cachade kurs för en fond — hur långt bak historiken redan når. Avgör om en
+     * uppdatering behöver hämta hela historiken (backfill) eller bara ett kort färskt
+     * fönster, se `HandelsbankenFundPriceRepository.refresh` (issue #37).
+     */
+    @Query("SELECT * FROM fund_prices WHERE fundId = :fundId ORDER BY epochDay ASC LIMIT 1")
+    suspend fun getOldest(fundId: String): FundPriceEntity?
+
     /** Senaste kända kurs per fondId i [fundIds], reaktivt (uppdateras när WorkManager cachar nya kurser). */
     @Query(
         "SELECT fp.* FROM fund_prices fp " +

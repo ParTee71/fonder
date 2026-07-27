@@ -65,7 +65,7 @@ class ImportHoldingsViewModelTest {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
             listOf(FundPrice(fundId = fundId, epochDay = fromEpochDay, nav = 950.0, currency = "SEK"))
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String): Boolean {
+        override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundId = fundId
             return true
         }
@@ -75,6 +75,8 @@ class ImportHoldingsViewModelTest {
         }
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
+        override suspend fun lookupIsin(fundId: String): String? = null
+        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -150,9 +152,10 @@ class ImportHoldingsViewModelTest {
                 </sheetData>
             </worksheet>
         """.trimIndent()
-        // Handelsbankens katalog (fakePriceRepo.fetchFundCatalog) innehåller bara
-        // handelsbankenFund — namnmatchningen skulle ge INGEN träff för Franklin Templeton.
-        // Avanza (findFundByIsin) känner däremot till fonden exakt.
+        // Fondlista-katalogen (fakePriceRepo.fetchFundCatalog) innehåller bara
+        // handelsbankenFund — namnmatchningen skulle ge INGEN träff för Franklin Templeton,
+        // och därmed inget att ISIN-verifiera. Avanza (findFundByIsin) känner däremot till
+        // fonden exakt.
         val avanzaFund = Fund(fundId = "LU0496367417", name = "Franklin Gold and Prec Mtls A(acc)USD", currency = "USD", isin = "LU0496367417")
         findFundByIsinResult = avanzaFund
 
@@ -165,9 +168,9 @@ class ImportHoldingsViewModelTest {
 
             assertEquals(avanzaFund, state.rows.first().matchedFund)
             assertEquals(1.0, state.rows.first().matchConfidence)
-            // Fonden saknar Handelsbanken-FundId (isin != null) — historik ska hämtas via
-            // refreshSince (ISIN-kedjan, 30 års sökfönster i stället för Handelsbankens 5,
-            // eftersom Avanza normalt har mycket längre historik, TP-14), inte refresh().
+            // Fonden saknar fondlista-FundId (isin != null) — historik ska hämtas via
+            // refreshSince, inte refresh(). Sökfönstret är numera 30 år för alla importrader
+            // (fondlista har ingen femårsgräns, TP-18), inte bara de ISIN-matchade.
             assertEquals(Triple("LU0496367417", "LU0496367417", LocalDate.now().minusYears(30)), refreshSinceCall)
             assertNull(refreshedFundId)
             cancelAndIgnoreRemainingEvents()
@@ -235,7 +238,7 @@ class ImportHoldingsViewModelTest {
     @Test
     fun `misslyckad kurshamtning markerar raden i stallet for att tystas ner`() = runTest(dispatcher) {
         val priceRepoMedMisslyckadHamtning = object : FundPriceRepository by fakePriceRepo {
-            override suspend fun refresh(fundId: String): Boolean {
+            override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
                 refreshedFundId = fundId
                 return false
             }
@@ -253,7 +256,7 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
-    fun `kurshistorik hamtas for fem ar tillbaka`() = runTest(dispatcher) {
+    fun `kurshistorik hamtas for hela sokfonstret tillbaka`() = runTest(dispatcher) {
         var capturedFrom: Long? = null
         var capturedTo: Long? = null
         val priceRepoMedFangst = object : FundPriceRepository by fakePriceRepo {
@@ -272,13 +275,15 @@ class ImportHoldingsViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
+        // Ett enda sökfönster för alla rader sedan issue #37: femårsvarianten fanns bara för
+        // att Handelsbanken troddes ha ett fast femårstak, vilket källan aldrig haft (TP-18).
         val today = LocalDate.now()
-        assertEquals(today.minusYears(5).toEpochDay(), capturedFrom)
+        assertEquals(today.minusYears(30).toEpochDay(), capturedFrom)
         assertEquals(today.toEpochDay(), capturedTo)
     }
 
     @Test
-    fun `standarddatum blir fem ar tillbaka om ingen kurshistorik finns`() = runTest(dispatcher) {
+    fun `standarddatum blir sokfonstrets borjan om ingen kurshistorik finns`() = runTest(dispatcher) {
         val priceRepoUtanHistorik = object : FundPriceRepository by fakePriceRepo {
             override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         }
@@ -289,8 +294,10 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
+            // Gissningen får aldrig hamna utanför sökfönstret — och fönstret är sedan #37
+            // 30 år för alla rader, inte fem (TP-18).
             val occasion = state.rows.first().occasions.first()
-            assertEquals(LocalDate.now().minusYears(5), occasion.date)
+            assertEquals(LocalDate.now().minusYears(30), occasion.date)
             assertFalse(occasion.dateConfident)
             cancelAndIgnoreRemainingEvents()
         }
@@ -316,6 +323,8 @@ class ImportHoldingsViewModelTest {
             </worksheet>
         """.trimIndent()
         val priceRepoMedTvetydigKatalog = object : FundPriceRepository by fakePriceRepo {
+            override suspend fun lookupIsin(fundId: String): String? = null
+            override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
             override suspend fun fetchFundCatalog(): FundCatalog = ambiguousCatalog
         }
         val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedTvetydigKatalog)

@@ -1,24 +1,19 @@
 package se.partee71.fonder.domain.usecase
 
-import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.FundCompany
-
 /**
- * Avgör om en fond tillhör ett valt fondbolag.
+ * Städar ett fondbolagsnamn till dess "kärnnamn" — bolagsnamnet utan bolagsform och
+ * parentes, t.ex. "Aberdeen Global Services S.A." → "Aberdeen".
  *
- * Källan (handelsbanken.fondlista.se) har **ingen** maskinläsbar koppling mellan fond och
- * fondbolag i den skrapade markupen — `FundId`-listan är en global katalog över alla
- * fondbolags fonder utan bolagsattribut, och sidans eget "Fondbolag"-filter visade sig i
- * praktiken inte filtrera fondlistan (verifierat manuellt, se issue #3-uppföljning).
- * Den här matcharen bygger därför en egen, ungefärlig koppling:
+ * Objektet hade tidigare även en `matches`-funktion som *gissade* vilka fonder som tillhörde
+ * ett fondbolag (`SHB`-prefix för Handelsbanken, namnprefix för övriga). Den byggde på
+ * antagandet att källans eget "Fondbolag"-filter inte filtrerade fondlistan — vilket visade
+ * sig vara fel: `company`-parametern filtrerar `select#FundId` exakt (KRAVLISTA TP-18,
+ * issue #37). Kopplingen fond → fondbolag hämtas därför numera från källan via
+ * `FundPriceRepository.fetchFundsForCompany`, och gissningen är borta.
  *
- * 1. **Handelsbanken (id "1"):** använd `FundId`-prefixet `SHB` — täcker även varumärken
- *    som säljs under Handelsbankens fondplattform men som inte heter "Handelsbanken" i
- *    fondnamnet, t.ex. **XACT**-fonderna (Handelsbankens ETF-varumärke).
- * 2. **Övriga bolag:** fondnamnet måste **börja med** bolagets "kärnnamn" — bolagsnamnet
- *    med vanliga bolagsformer (AB, AS, S.A., Ltd, Kapitalförvaltning m.fl.) och eventuell
- *    parentes bortstädade. Ungefärligt: fonder vars varumärke skiljer sig påtagligt från
- *    den formella bolagsbeteckningen (som XACT/Handelsbanken) kan missas.
+ * Kvar finns [coreBrandName], som fortfarande behövs av [FundNameMatcher]: importfiler bär
+ * ett fondbolagsnamn i fritext, och kandidater vars fondnamn inleds med samma varumärke ska
+ * få ett litet försprång vid annars jämna namnträffar (KRAVLISTA TP-13).
  */
 object FundCompanyMatcher {
 
@@ -32,23 +27,13 @@ object FundCompanyMatcher {
         "s.a.", "sa", "n.v.", "nv", "a/s", "asa", "as", "ab", "ltd", "inc", "corp",
     )
 
-    /** True om [fund] bedöms tillhöra [company]. */
-    fun matches(fund: Fund, company: FundCompany): Boolean {
-        if (company.id == FundCompany.HANDELSBANKEN_ID) {
-            return fund.fundId.startsWith("SHB", ignoreCase = true)
-        }
-        val core = coreBrandName(company.name)
-        if (core.isBlank()) return false
-        return fund.name.startsWith(core, ignoreCase = true)
-    }
-
     /**
      * Bolagets "kärnnamn" utan bolagsform/parentes, t.ex. "Aberdeen Global Services S.A." →
      * "Aberdeen". Parentes och bolagsform kan behöva städdas växelvis (t.ex.
      * "AllianceBernstein (Luxembourg) S.A." → strippa "S.A." → parentesen hamnar sist →
      * strippa den), så båda görs i samma loop tills inget mer ändras.
      */
-    internal fun coreBrandName(companyName: String): String {
+    fun coreBrandName(companyName: String): String {
         var name = companyName.trim()
         var changed: Boolean
         do {

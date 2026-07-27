@@ -139,11 +139,16 @@ class PortfoljViewModel @Inject constructor(
             transactionRepository.observeFunds().collect { funds ->
                 funds.forEach { fund ->
                     if (refreshedFundIds.add(fund.fundId) && fundPriceRepository.isPriceStale(fund.fundId)) {
+                        // Utan köphistorik finns ingen historikhorisont att hämta mot — då
+                        // räcker repositoryts korta färska fönster (TP-18), se worker-varianten.
                         val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
                             .minOfOrNull { it.epochDay }
                             ?.let(LocalDate::ofEpochDay)
-                            ?: LocalDate.now().minusYears(5)
-                        fundPriceRepository.refreshFund(fund, since)
+                        if (since != null) {
+                            fundPriceRepository.refreshFund(fund, since)
+                        } else {
+                            fundPriceRepository.refresh(fund.fundId)
+                        }
                     }
                 }
             }

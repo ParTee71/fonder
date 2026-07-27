@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.20.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.21.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -23,7 +23,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Värdeberäkning, nuvarande värde (#6)
 - [x] Historisk värdeutveckling i tabell och diagram (#7)
 - [x] Import av befintliga innehav (Handelsbanken-Excel) (#8)
-- [x] Kurshistorik via ISIN sedan första köpet, utöver Handelsbankens 5-årsfönster (#7-uppföljning)
+- [x] Kurshistorik sedan första köpet, utan datumtak (#7-uppföljning, källan utnyttjad fullt ut i #37)
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
 - [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
 - [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
@@ -84,7 +84,7 @@ domain/
 └── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
                   FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
                   RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
-                  MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (fond ↔ fondbolag) · FundNameMatcher ·
+                  MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (kärnnamn för bolagsledtråd) · FundNameMatcher ·
                   PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
                   TransactionFormValidator
 ui/
@@ -94,7 +94,7 @@ ui/
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
 ├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
 │                 Analys-sektion med nyckeltal/säljsignaler, #16)
-├── fondsok/      FundSearchScreen + ViewModel (sök, filtrera per fondbolag, lägg till fond)
+├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
@@ -107,17 +107,24 @@ worker/           FundPriceUpdateWorker (daglig kursuppdatering)
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —
-odokumenterad, inofficiell HTML-källa). Har en fond ett känt **ISIN** hämtas kurshistorik
-**sedan första köpet** i stället (Handelsbankens fasta 5-årsfönster räcker inte för äldre
-köp) från en prioritetsordnad lista av `IsinPriceHistorySource` — i dag bara Avanzas
-odokumenterade fond-API (`AvanzaPriceSource`, samma riskprofil som Handelsbanken-källan,
-se KRAVLISTA TP-14). `BackupRepository` och `AuthRepository` är fortfarande kontrakt med
-stubbar tills respektive feature byggs.
+odokumenterad, inofficiell HTML-källa). Källan har **inget datumtak**: hela historiken
+sedan första köpet kommer i ett anrop, men eftersom svaret kan bli flera megabyte hämtas
+det bara som backfill — när cachen inte redan når tillbaka så långt räcker ett kort färskt
+fönster (KRAVLISTA TP-18, issue #37). Räcker inte fondlista provas en prioritetsordnad
+lista av `IsinPriceHistorySource` som reserv — i dag bara Avanzas odokumenterade fond-API
+(`AvanzaPriceSource`, samma riskprofil, se KRAVLISTA TP-14); den täcker fonder som saknas i
+katalogen och därför identifieras med sitt ISIN. `BackupRepository` och `AuthRepository` är
+fortfarande kontrakt med stubbar tills respektive feature byggs.
 
-**Fondbolagsfilter:** sidans eget "Fondbolag"-filter visade sig inte filtrera fondlistan i
-praktiken (verifierat manuellt) — `FundCompanyMatcher` bygger därför en egen, ungefärlig
-koppling fond ↔ fondbolag i appen: Handelsbanken via `FundId`-prefixet `SHB` (täcker även
-varumärket **XACT**), övriga bolag via namnprefix efter att bolagsform städats bort.
+**Fondbolagsfilter:** källans `company`-parameter filtrerar fondlistan exakt — utan den
+levereras hela plattformens katalog (~1500 fonder), med den bara det valda bolagets.
+Fondsök använder därför källans eget filter (`fetchFundsForCompany`) i stället för den
+tidigare gissningen i appen. `FundCompanyMatcher.matches` är borttagen; `coreBrandName`
+finns kvar som ledtråd åt `FundNameMatcher` vid importmatchning.
+
+**ISIN från källan:** fondens egen sida (`/shb/sv/funds/<fundid>`) bär ISIN i
+faktabladslänken, så `lookupIsin` kan koppla `FundId` ↔ ISIN maskinellt — används både när
+en fond läggs till via fondsök och för att verifiera importens namnmatchning.
 
 ---
 

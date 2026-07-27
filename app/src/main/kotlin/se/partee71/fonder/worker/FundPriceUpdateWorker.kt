@@ -39,13 +39,6 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         const val KEY_FORCE = "force"
 
         /**
-         * Fem år tillbaka används som sökfönster för ISIN-baserade fonder utan känd
-         * inköpshistorik (t.ex. bevakade men aldrig köpta) — samma fallback som
-         * `ImportHoldingsViewModel`/`FondDetaljViewModel` använder när inget köpdatum finns.
-         */
-        private const val ISIN_FALLBACK_LOOKBACK_YEARS = 5L
-
-        /**
          * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
          * kodgranskning fann att den dagliga uppdateringen aldrig hämtade kurser för
          * ISIN-matchade fonder, se KRAVLISTA TP-14 — [FundPriceRepository.refresh] nycklas på
@@ -84,12 +77,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             var anySuccess = false
             targets.forEach { fund ->
                 val isin = fund.isin
-                val success = if (isin != null) {
-                    val since = earliestPurchaseByFund[fund.fundId]
-                        ?: LocalDate.now().minusYears(ISIN_FALLBACK_LOOKBACK_YEARS)
+                // Utan köphistorik finns ingen historikhorisont att backfilla mot — en bevakad
+                // men aldrig köpt fond behöver bara en färsk kurs, inte trettio år bakåt
+                // (TP-18). Repositoryt hämtar då bara sitt korta fönster.
+                val since = earliestPurchaseByFund[fund.fundId]
+                val success = if (isin != null && since != null) {
                     fundPriceRepository.refreshSince(fund.fundId, isin, since)
                 } else {
-                    fundPriceRepository.refresh(fund.fundId)
+                    fundPriceRepository.refresh(fund.fundId, since)
                 }
                 if (success) anySuccess = true
             }

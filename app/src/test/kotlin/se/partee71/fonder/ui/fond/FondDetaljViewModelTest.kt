@@ -71,7 +71,7 @@ class FondDetaljViewModelTest {
             capturedFromEpochDay = fromEpochDay
             return history
         }
-        override suspend fun refresh(fundId: String): Boolean {
+        override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshCalledFor = fundId
             return true
         }
@@ -84,6 +84,8 @@ class FondDetaljViewModelTest {
             return suggestIsinReturn
         }
         override suspend fun findFundByIsin(isin: String): Fund? = null
+        override suspend fun lookupIsin(fundId: String): String? = null
+        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
@@ -130,11 +132,21 @@ class FondDetaljViewModelTest {
     }
 
     @Test
-    fun `triggar inte uppdatering nar en kurs redan ar cachad`() = runTest(dispatcher) {
-        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 140.0, currency = "SEK")
+    fun `triggar inte uppdatering nar kursen redan ar aktuell`() = runTest(dispatcher) {
+        // Gaten är den delade staleness-regeln (TP-17), inte längre "bara om cachen är tom":
+        // en fond med en gammal cachad kurs ska uppdateras när man öppnar den (issue #37).
+        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 140.0, currency = "SEK")
         viewModel()
         advanceUntilIdle()
         assertEquals(null, refreshCalledFor)
+    }
+
+    @Test
+    fun `triggar uppdatering nar den cachade kursen ar inaktuell`() = runTest(dispatcher) {
+        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 140.0, currency = "SEK")
+        viewModel()
+        advanceUntilIdle()
+        assertEquals(fund.fundId, refreshCalledFor)
     }
 
     @Test

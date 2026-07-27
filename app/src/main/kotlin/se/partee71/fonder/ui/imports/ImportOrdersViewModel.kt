@@ -113,6 +113,7 @@ class ImportOrdersViewModel @Inject constructor(
             catalogFunds = catalog.funds,
             trackedFunds = trackedFunds,
             findFundByIsin = fundPriceRepository::findFundByIsin,
+            lookupIsin = fundPriceRepository::lookupIsin,
         )
 
         // Till skillnad från ImportHoldingsViewModel hämtade det här flödet tidigare aldrig

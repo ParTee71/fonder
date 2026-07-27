@@ -31,9 +31,10 @@ object HandelsbankenHtmlParser {
     }
 
     /**
-     * Parsar `<select id="FundId">` till hela fondkatalogen (alla fondbolag — plattformen är
-     * delad, se [FundCompany]). Ofiltrerad avsiktligt: koppling fond → fondbolag görs av
-     * [se.partee71.fonder.domain.usecase.FundCompanyMatcher], inte här.
+     * Parsar `<select id="FundId">` till fondkatalogen. **Vilka** fonder som finns i listan
+     * styrs av `company`-parametern i anropet (se [FondlistaHtmlSource]): utan bolag hela
+     * plattformens katalog, med bolag bara det bolagets fonder (KRAVLISTA TP-18). Parsern
+     * filtrerar därför inte själv — den läser bara det källan levererat.
      */
     fun parseFundCatalog(html: String): List<Fund> {
         val doc = Jsoup.parse(html)
@@ -57,6 +58,28 @@ object HandelsbankenHtmlParser {
             FundCompany(id = id, name = name)
         }
     }
+
+    /**
+     * Parsar fondens **ISIN** ur en fondsida (`/shb/sv/funds/<fundid>`, se
+     * [FondlistaFundPageSource]). Källan har inget eget ISIN-fält, men fondsidans
+     * faktabladslänkar bär det som `Identifier=`-parameter — den läses i första hand.
+     * Saknas den letas en fristående ISIN-formad token i sidan, och accepteras bara om den
+     * är **entydig** (exakt ett distinkt värde) — hellre null än fel ISIN på fel fond.
+     */
+    fun parseIsin(html: String): String? {
+        identifierParam.find(html)?.groupValues?.get(1)?.let { return it }
+        val candidates = isinToken.findAll(html).map { it.value }.toSet()
+        return candidates.singleOrNull()
+    }
+
+    /** ISIN: två bokstäver (landkod), nio alfanumeriska tecken, en kontrollsiffra. */
+    private const val ISIN_PATTERN = """[A-Z]{2}[A-Z0-9]{9}[0-9]"""
+
+    /** Föregås av `?`, `&` eller `&amp;` — aldrig av en bokstav, så `IdentifierType=` inte träffar. */
+    private val identifierParam = Regex("""(?<![A-Za-z])Identifier=($ISIN_PATTERN)(?![A-Z0-9])""")
+
+    /** Fristående token — omgivande alfanumeriska tecken diskvalificerar (undviker träff mitt i en id-sträng). */
+    private val isinToken = Regex("""(?<![A-Z0-9])$ISIN_PATTERN(?![A-Z0-9])""")
 
     /** Svenskt talformat: mellanslag (vanligt eller hårt,  ) som tusentalsavgränsare, komma som decimal. */
     internal fun parseSwedishNumber(raw: String): Double? =

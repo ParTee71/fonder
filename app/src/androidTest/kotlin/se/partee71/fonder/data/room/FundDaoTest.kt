@@ -49,6 +49,22 @@ class FundDaoTest {
     }
 
     @Test
+    fun fund_isin_survives_round_trip() = runTest {
+        // ISIN fylls numera automatiskt vid tillägg via fondsök och vid importmatchning
+        // (KRAVLISTA TP-18, issue #37) — fältet måste överleva skrivning/läsning oförändrat,
+        // så det inte tyst tappas på vägen till (den planerade) backup-kedjan, NFR-1.
+        val fund = FundEntity(fundId = "0P0001KRE7", name = "CPR Invest Global Gold Mines A USD Acc", currency = "USD", isin = "LU1989766289")
+        fundDao.upsert(fund)
+
+        assertEquals("LU1989766289", fundDao.getByFundId("0P0001KRE7")?.isin)
+        assertEquals(fund, fundDao.observeAll().first().single())
+
+        // En senare uppsert utan ISIN ska inte behålla ett gammalt värde i smyg.
+        fundDao.upsert(fund.copy(isin = null))
+        assertNull(fundDao.getByFundId("0P0001KRE7")?.isin)
+    }
+
+    @Test
     fun transaction_round_trip_and_link_to_fund() = runTest {
         fundDao.upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK"))
         val id = transactionDao.insert(
