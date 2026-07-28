@@ -13,7 +13,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
     entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -103,6 +103,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        /**
+         * Version 5 → 6 (issue #41): rensar kurser som **inte är i kronor** ur `fund_prices`.
+         *
+         * Fondlista noterar varje fond i fondens egen valuta. När den blev källa även för
+         * ISIN-matchade fonder (#39/#40) hamnade USD-noterade NAV i cachen, där hela
+         * värdekedjan räknar kronor utan konvertering — CPR Invest Global Gold Mines föll från
+         * 14 462 kr till 1 490 kr (−87 %) enbart för att 1878,75 SEK ersattes av 193,48 USD.
+         * Diagrammet blandade dessutom bägge, med kvarvarande SEK-rader som spikar.
+         *
+         * Rensar också rader som Avanza-källan tidigare märkte med fondens egen valuta trots
+         * att värdena var i kronor — de var rätt värden men fel märkta, och kan inte skiljas
+         * från de felaktiga här. Kurser är härledd cache-data (NFR-1): allt hämtas om vid
+         * nästa uppdatering, nu med korrekt valuta.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DELETE FROM `fund_prices` WHERE `currency` <> 'SEK'")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
     }
 }
