@@ -72,6 +72,9 @@ class Migration45Test {
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
                     "VALUES ('LU0496367417', 'KOP', 100, 2.0, 150.0, 0.0)",
             )
+            // Kronor: det här testet gäller helgfiltret, och migrering 5→6 rensar allt som
+            // inte är i FundPrice.VALUE_CURRENCY (issue #41) — annars vore listan tom oavsett
+            // veckodag och testet skulle inte längre bevisa något om helgrensningen.
             listOf(
                 gammalFredag to 90.0,
                 gammalLordag to 91.0,
@@ -82,7 +85,7 @@ class Migration45Test {
             ).forEach { (day, nav) ->
                 db.execSQL(
                     "INSERT INTO fund_prices (fundId, epochDay, nav, currency) " +
-                        "VALUES ('LU0496367417', $day, $nav, 'USD')",
+                        "VALUES ('LU0496367417', $day, $nav, 'SEK')",
                 )
             }
             db.version = 4

@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.network
 
+import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
 import java.time.LocalDate
@@ -18,9 +19,22 @@ class AvanzaPriceSource @Inject constructor(
     private val source: AvanzaSource,
 ) : IsinPriceHistorySource {
 
+    /**
+     * Chart-svaret är **alltid i kronor** — värdet för en svensk sparare — oavsett fondens
+     * egen valuta. Verifierat 2026-07-28: CPR Invest Global Gold Mines (USD-fond) hade NAV
+     * 193,48 USD hos fondlista samma dag som Avanza gav 1878,75; kvoten är växelkursen. För
+     * rena SEK-fonder är talen identiska hos båda källorna.
+     *
+     * Punkterna märks därför [FundPrice.VALUE_CURRENCY], inte valutan ur `guide` (som är
+     * fondens egen och tidigare sattes här — en felmärkning som inte märktes så länge allt
+     * ändå var kronor, men som gör det omöjligt att sålla bort kurser i fel valuta, issue #41).
+     */
     override suspend fun fetchHistory(isin: String, from: LocalDate, to: LocalDate): List<IsinPricePoint> {
-        val (match, currency) = resolve(isin) ?: return emptyList()
-        return AvanzaJsonParser.parseChart(source.fetchChart(match.orderbookId, from, to), currency)
+        val (match, _) = resolve(isin) ?: return emptyList()
+        return AvanzaJsonParser.parseChart(
+            source.fetchChart(match.orderbookId, from, to),
+            FundPrice.VALUE_CURRENCY,
+        )
     }
 
     override suspend fun suggestIsin(fundName: String): String? =

@@ -200,7 +200,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     ): List<FundPrice>? =
         runCatching {
             val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
-            HandelsbankenHtmlParser.parseHistory(html, cacheFundId)
+            inValueCurrency(HandelsbankenHtmlParser.parseHistory(html, cacheFundId), cacheFundId)
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
@@ -208,6 +208,31 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         }.onFailure { e ->
             Log.w(TAG, "Kunde inte uppdatera kurser för fund $cacheFundId, behåller cache", e)
         }.getOrNull()
+
+    /**
+     * Sållar bort kurser som inte är i [FundPrice.VALUE_CURRENCY] (issue #41).
+     *
+     * Fondlista noterar varje fond i **fondens egen valuta** — en USD-fond får NAV i dollar.
+     * Appen räknar hela värdekedjan i kronor utan konvertering, så en sådan kurs skulle tyst
+     * behandlas som kronor: CPR Invest Global Gold Mines gick från 14 462 kr till 1 490 kr när
+     * 1878,75 (SEK, via Avanza) ersattes av 193,48 (USD, via fondlista) — fel med hela
+     * växelkursen, plus ett diagram som blandade bägge.
+     *
+     * Tom lista betyder att fondlista inte kan betjäna fonden, och [refreshSince] faller då
+     * tillbaka på ISIN-kedjan, som levererar värdet i kronor. Hellre en dags äldre kurs i rätt
+     * valuta än en färsk i fel (samma princip som POR-3: aldrig ett felaktigt värde).
+     */
+    private fun inValueCurrency(prices: List<FundPrice>, fundId: String): List<FundPrice> {
+        val (usable, wrongCurrency) = prices.partition { it.currency.equals(FundPrice.VALUE_CURRENCY, ignoreCase = true) }
+        if (wrongCurrency.isNotEmpty()) {
+            Log.w(
+                TAG,
+                "Fondlista noterar fund $fundId i ${wrongCurrency.first().currency}, inte " +
+                    "${FundPrice.VALUE_CURRENCY} — hoppar över ${wrongCurrency.size} kurser och provar ISIN-källkedjan",
+            )
+        }
+        return usable
+    }
 
     /**
      * Nyckeln att hämta kurser med mot fondlista, eller null om fonden inte kan nås där.

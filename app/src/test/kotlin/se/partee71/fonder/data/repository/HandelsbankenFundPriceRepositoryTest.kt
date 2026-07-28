@@ -309,7 +309,7 @@ class HandelsbankenFundPriceRepositoryTest {
         // Fondlista ger daglig, luckfri historik utan datumtak (TP-18) — Avanza är reserv,
         // inte primär väg för gamla köp (TP-14).
         val since = LocalDate.of(2016, 4, 13)
-        val html = historyHtml(fundId = "0P0001KRE7", nav = "193,53", currency = "USD", date = "2026-07-24")
+        val html = historyHtml(fundId = "0P0001KRE7", nav = "193,53", currency = "SEK", date = "2026-07-24")
         val avanza = FakeIsinSource(history = { _, _, _ ->
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 1.0, currency = "SEK"))
         })
@@ -385,6 +385,63 @@ class HandelsbankenFundPriceRepositoryTest {
     private fun fundPageMedIsin(isin: String) = """<a href="/x?IdentifierType=1&Identifier=$isin&Country=SE">Faktablad</a>"""
 
     @Test
+    fun `fondlista-kurser i annan valuta an kronor cachas inte`() = runTest {
+        // Fondlista noterar en USD-fond i dollar. Appen räknar kronor utan konvertering, så en
+        // sådan kurs skulle bli fel med hela växelkursen — CPR gick från 14 462 kr till
+        // 1 490 kr när 1878,75 SEK ersattes av 193,48 USD (issue #41).
+        val html = historyHtml(fundId = "0P0001KRE7", nav = "193,48", currency = "USD", date = "2026-07-23")
+        val repo = HandelsbankenFundPriceRepository(
+            client = FondlistaHtmlSource { _, _, _, _ -> html },
+            fundPageClient = { "" },
+            dao = dao,
+            fundDao = fundDao,
+            isinSources = emptyList(),
+        )
+
+        repo.refresh("0P0001KRE7", since = LocalDate.of(2020, 1, 1))
+
+        assertNull(repo.latestPrice("0P0001KRE7"))
+    }
+
+    @Test
+    fun `USD-fond faller tillbaka pa ISIN-kedjan som levererar kronor`() = runTest {
+        fundDao.stored[isinFond.fundId] = isinFond.copy(fondlistaFundId = "0P0000O30D")
+        val usdHtml = historyHtml(fundId = "0P0000O30D", nav = "16,93", currency = "USD", date = "2026-07-24")
+        val avanza = FakeIsinSource(history = { _, _, _ ->
+            listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 164.35, currency = "SEK"))
+        })
+        val repo = HandelsbankenFundPriceRepository(
+            client = FondlistaHtmlSource { _, _, _, _ -> usdHtml },
+            fundPageClient = { "" },
+            dao = dao,
+            fundDao = fundDao,
+            isinSources = listOf(avanza),
+        )
+
+        assertTrue(repo.refreshSince(isinFond.fundId, isinFond.isin!!, LocalDate.of(2020, 1, 1)))
+
+        // Hellre gårdagens kurs i rätt valuta än dagens i fel (POR-3).
+        assertEquals(164.35, repo.latestPrice(isinFond.fundId)?.nav ?: -1.0, 1e-9)
+        assertEquals("SEK", repo.latestPrice(isinFond.fundId)?.currency)
+    }
+
+    @Test
+    fun `SEK-fond fran fondlista cachas som vanligt`() = runTest {
+        val html = historyHtml(fundId = "0P00000L4S", nav = "323,07", currency = "SEK", date = "2026-07-24")
+        val repo = HandelsbankenFundPriceRepository(
+            client = FondlistaHtmlSource { _, _, _, _ -> html },
+            fundPageClient = { "" },
+            dao = dao,
+            fundDao = fundDao,
+            isinSources = emptyList(),
+        )
+
+        repo.refresh("0P00000L4S", since = LocalDate.of(2020, 1, 1))
+
+        assertEquals(323.07, repo.latestPrice("0P00000L4S")?.nav ?: -1.0, 1e-9)
+    }
+
+    @Test
     fun `refreshSince loser upp fondlista-id for en ISIN-identifierad fond och sparar det`() = runTest {
         // Utan uppslaget hamnar hela importerade portföljer permanent på Avanza-grenen, som
         // ligger en handelsdag efter (issue #39).
@@ -392,11 +449,11 @@ class HandelsbankenFundPriceRepositoryTest {
         val client = CatalogAndHistorySource(
             catalogHtml = katalogHtml,
             historyByFundId = mapOf(
-                "0P0000O30D" to historyHtml(fundId = "0P0000O30D", nav = "193,53", currency = "USD", date = "2026-07-24"),
+                "0P0000O30D" to historyHtml(fundId = "0P0000O30D", nav = "193,53", currency = "SEK", date = "2026-07-24"),
             ),
         )
         val avanza = FakeIsinSource(history = { _, _, _ ->
-            listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 1.0, currency = "USD"))
+            listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 1.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
             client = client,
@@ -425,7 +482,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val client = CatalogAndHistorySource(
             catalogHtml = katalogHtml,
             historyByFundId = mapOf(
-                "0P0000O30D" to historyHtml(fundId = "0P0000O30D", nav = "193,53", currency = "USD", date = "2026-07-24"),
+                "0P0000O30D" to historyHtml(fundId = "0P0000O30D", nav = "193,53", currency = "SEK", date = "2026-07-24"),
             ),
         )
         val repo = HandelsbankenFundPriceRepository(
@@ -448,7 +505,7 @@ class HandelsbankenFundPriceRepositoryTest {
         fundDao.stored[isinFond.fundId] = isinFond
         val client = CatalogAndHistorySource(catalogHtml = katalogHtml, historyByFundId = emptyMap())
         val avanza = FakeIsinSource(history = { _, _, _ ->
-            listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 55.0, currency = "USD"))
+            listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 55.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
             client = client,

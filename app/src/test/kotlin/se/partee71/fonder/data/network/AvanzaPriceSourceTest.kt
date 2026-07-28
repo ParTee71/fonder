@@ -29,7 +29,12 @@ class AvanzaPriceSourceTest {
     private val searchHit = """{"fundSearchViews":[{"isin":"$isin","name":"Spiltan Aktiefond Investmentbolag","orderbookId":"325406"}]}"""
 
     @Test
-    fun `fetchHistory slar upp orderbookId och valuta innan kurshistorik hamtas`() = runTest {
+    fun `fetchHistory markerar kurserna som kronor aven for en fond i annan valuta`() = runTest {
+        // Chart-svaret är alltid värdet för en svensk sparare, i kronor — även när fondens
+        // egen valuta (ur guide-anropet) är en annan. Verifierat 2026-07-28: CPR Invest hade
+        // NAV 193,48 USD hos fondlista samma dag som Avanza gav 1878,75. Att märka punkterna
+        // med guide-valutan var en felmärkning som gjorde det omöjligt att sålla bort kurser
+        // i fel valuta (issue #41).
         val fakeSource = FakeAvanzaSource(
             searchResponse = { searchHit },
             guideResponse = """{"currency":"USD"}""",
@@ -41,7 +46,7 @@ class AvanzaPriceSourceTest {
 
         assertEquals("325406", fakeSource.lastChartOrderbookId)
         assertEquals(1, prices.size)
-        assertEquals("USD", prices.first().currency)
+        assertEquals("SEK", prices.first().currency)
         assertEquals(429.25, prices.first().nav, 1e-9)
     }
 

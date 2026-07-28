@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.21.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.21.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -125,6 +125,10 @@ finns kvar som ledtråd åt `FundNameMatcher` vid importmatchning.
 **ISIN från källan:** fondens egen sida (`/shb/sv/funds/<fundid>`) bär ISIN i
 faktabladslänken, så `lookupIsin` kan koppla `FundId` ↔ ISIN maskinellt — används både när
 en fond läggs till via fondsök och för att verifiera importens namnmatchning.
+
+**Valuta:** all cachad NAV är i kronor (`FundPrice.VALUE_CURRENCY`) — värdekedjan konverterar
+aldrig. Fondlista noterar fonder i fondens egen valuta, så kurser i annat än kronor cachas inte
+utan lämnas till Avanza, som alltid ger värdet i kronor (KRAVLISTA TP-19).
 
 **Fonder som bara är kända via ISIN:** importmatchade fonder (`findFundByIsin`) har ISIN:et
 som `fundId` och saknar plattformskod. De får ett uppslaget `fondlistaFundId` (namnkandidat
