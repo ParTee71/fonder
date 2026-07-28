@@ -305,14 +305,20 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     }
 
     /**
-     * Letar upp fondlista-plattformens kod för en fond som bara är känd via namn + [isin]:
-     * bästa namnkandidat i katalogen, **verifierad mot ISIN** på fondens egen sida (TP-18).
-     * Null om ingen kandidat finns eller om ISIN inte stämmer — hellre Avanza-kedjan än fel
-     * fond (samma princip som importmatchningen, `ImportFundMatcher`).
+     * Letar upp fondlista-plattformens kod för en fond som bara är känd via namn + [isin]: de
+     * bästa namnkandidaterna i katalogen, i turordning **verifierade mot ISIN** på respektive
+     * kandidats egen sida (TP-18). Andelsklassfamiljer (t.ex. Handelsbankens "Sverige"-fonder)
+     * kan göra att en fel syskonfond rankas högre än den rätta (se [FundNameMatcher.rankedMatches]),
+     * så flera kandidater prövas — begränsat till [MAX_ISIN_VERIFICATIONS] för att inte kosta
+     * ett sidanrop per katalogkandidat. Null om ingen kandidat finns eller verifieras — hellre
+     * Avanza-kedjan än fel fond (samma princip som importmatchningen, `ImportFundMatcher`).
      */
     private suspend fun resolveFondlistaFundId(fundName: String, isin: String): String? {
-        val candidate = FundNameMatcher.bestMatch(fundName, catalogFunds()) ?: return null
-        return candidate.fund.fundId.takeIf { lookupIsin(it) == isin }
+        val candidates = FundNameMatcher.rankedMatches(fundName, catalogFunds())
+        return candidates
+            .take(MAX_ISIN_VERIFICATIONS)
+            .firstOrNull { lookupIsin(it.fund.fundId) == isin }
+            ?.fund?.fundId
     }
 
     /**
@@ -447,5 +453,8 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
         /** Hur länge katalogen återanvänds i minnet — se [catalogFunds]. */
         val CATALOG_CACHE_TTL: Duration = Duration.ofMinutes(10)
+
+        /** Tak på antal ISIN-verifierade kandidater i [resolveFondlistaFundId]. */
+        const val MAX_ISIN_VERIFICATIONS = 5
     }
 }

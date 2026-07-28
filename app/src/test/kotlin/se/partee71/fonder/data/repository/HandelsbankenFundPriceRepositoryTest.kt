@@ -578,6 +578,55 @@ class HandelsbankenFundPriceRepositoryTest {
     }
 
     @Test
+    fun `resolveFondlistaFundId provar flera rankade kandidater tills ISIN stammer`() = runTest {
+        // Verklig andelsklasskollision (Handelsbanken Sverige-familjen): fondens namn delar
+        // suffix-tokenet "sek" med tre felaktiga syskon, som Jaccard-rankar högre än den
+        // suffixlösa basfonden — trots att basfonden (SE0000582033) är rätt träff. Bara den
+        // högst rankade kandidaten verifierades tidigare; nu ska ISIN-verifieringen fortsätta
+        // till nästa rankade kandidat tills en stämmer.
+        val a1Fond = isinFond.copy(
+            fundId = "SE0000582033",
+            isin = "SE0000582033",
+            name = "Handelsbanken Sverige (A1 SEK)",
+            currency = "SEK",
+        )
+        fundDao.stored[a1Fond.fundId] = a1Fond
+        val familjeKatalogHtml = """
+            <select id="FundId" name="FundId"><option value="">Välj fond</option>
+            <option value="SHB0000387">Handelsbanken Sverige (A10 SEK)</option>
+            <option value="SHB0000541">Handelsbanken Sverige (A9 SEK)</option>
+            <option value="SHB0000610">Handelsbanken Sverige (B1 SEK)</option>
+            <option value="0P00000F8J">Handelsbanken Sverige</option>
+            </select>
+        """.trimIndent()
+        val client = CatalogAndHistorySource(
+            catalogHtml = familjeKatalogHtml,
+            historyByFundId = mapOf(
+                "0P00000F8J" to historyHtml(fundId = "0P00000F8J", nav = "193,53", currency = "SEK", date = "2026-07-24"),
+            ),
+        )
+        val fundPageIsinByCandidate = mapOf(
+            "SHB0000387" to "SE0000000001",
+            "SHB0000541" to "SE0000000002",
+            "SHB0000610" to "SE0000000003",
+            "0P00000F8J" to "SE0000582033",
+        )
+        val repo = HandelsbankenFundPriceRepository(
+            client = client,
+            fundPageClient = { fundId -> fundPageMedIsin(requireNotNull(fundPageIsinByCandidate[fundId])) },
+            dao = dao,
+            fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource,
+            isinSources = emptyList(),
+        )
+
+        val success = repo.refreshSince(a1Fond.fundId, a1Fond.isin!!, LocalDate.of(2020, 1, 1))
+
+        assertTrue(success)
+        assertEquals("0P00000F8J", fundDao.stored[a1Fond.fundId]?.fondlistaFundId)
+        assertEquals(193.53, repo.latestPrice(a1Fond.fundId)?.nav ?: -1.0, 1e-9)
+    }
+
+    @Test
     fun `redan uppslaget fondlista-id ateranvands utan ny kataloghamtning`() = runTest {
         fundDao.stored[isinFond.fundId] = isinFond.copy(fondlistaFundId = "0P0000O30D")
         val client = CatalogAndHistorySource(
