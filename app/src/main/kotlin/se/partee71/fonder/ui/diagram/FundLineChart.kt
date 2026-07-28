@@ -12,7 +12,11 @@ import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
+import com.patrykandpatrick.vico.core.cartesian.Scroll
+import com.patrykandpatrick.vico.core.cartesian.Zoom
 import com.patrykandpatrick.vico.core.cartesian.axis.Axis
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
@@ -26,6 +30,10 @@ import kotlin.math.roundToLong
 /**
  * Delad linjediagram-komponent (regel 4) som wrappar Vico — resten av appen ska aldrig
  * röra Vico-API:t direkt. Används för fondens kurshistorik i Fonddetalj (issue #7).
+ *
+ * Zoomar som standard in till den senaste månaden och skrollar till slutet, så den senaste
+ * kursen alltid syns direkt i stället för att drunkna i hela historiken — hela historiken
+ * är fortfarande nåbar genom att nypa ut/dra i diagrammet (Vicos inbyggda pinch/pan).
  *
  * @param points (epochDay, NAV), i stigande datumordning. Tom lista ritar inget — visa ett
  *   eget tomt-tillstånd (`EmptyState`) i anropande skärm i stället.
@@ -53,9 +61,20 @@ fun FundLineChart(
             bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
         ),
         modelProducer = modelProducer,
+        scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
+        zoomState = rememberVicoZoomState(
+            // x-värdena är epoch-dagar, så en enhet är en kalenderdag — Zoom.x(30.0) visar
+            // därför ungefär den senaste månaden. Har fonden kortare historik än så vinner
+            // Zoom.Content (hela historiken) i stället, så vyn aldrig blir tommare än datan.
+            initialZoom = remember { Zoom.max(Zoom.Content, Zoom.x(DEFAULT_ZOOM_WINDOW_DAYS)) },
+            minZoom = Zoom.Content,
+        ),
         modifier = modifier.fillMaxWidth().height(220.dp),
     )
 }
+
+/** Standardzoomens fönsterbredd i dagar — se [FundLineChart]. */
+private const val DEFAULT_ZOOM_WINDOW_DAYS = 30.0
 
 /**
  * X-värdena är epoch-dagar, och utan formaterare skrev Vico ut dem som råa tal ("20535",
