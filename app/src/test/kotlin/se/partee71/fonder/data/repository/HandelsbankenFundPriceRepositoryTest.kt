@@ -26,6 +26,7 @@ import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
+import se.partee71.fonder.domain.usecase.CurrencyConverter
 import java.io.IOException
 import java.time.LocalDate
 
@@ -475,7 +476,14 @@ class HandelsbankenFundPriceRepositoryTest {
 
     @Test
     fun `redan cachad vaxelkurs ateranvands utan nytt anrop`() = runTest {
-        fxRateDao.stored.add(FxRateEntity(currency = "USD", epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), rate = 9.73973))
+        // Cachen behandlas som ett sammanhängande intervall (ensureRatesCached) — den måste
+        // täcka HELA marginalfönstret före priskursens dag (MAX_RATE_AGE_DAYS), inte bara den
+        // exakta dagen, annars ser koden det (korrekt) som en lucka att fylla. En riktig
+        // tidigare hämtning fyller alltid ett sammanhängande spann, aldrig en enstaka dag.
+        val priceDay = LocalDate.of(2026, 7, 23)
+        for (day in priceDay.minusDays(CurrencyConverter.MAX_RATE_AGE_DAYS).toEpochDay()..priceDay.toEpochDay()) {
+            fxRateDao.stored.add(FxRateEntity(currency = "USD", epochDay = day, rate = 9.73973))
+        }
         val html = historyHtml(fundId = "0P0001KRE7", nav = "193,48", currency = "USD", date = "2026-07-23")
         val fx = RecordingFxRateSource()
         val repo = HandelsbankenFundPriceRepository(
