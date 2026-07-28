@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
@@ -20,6 +21,11 @@ import java.time.LocalDate
  * Migration34Test: bygger en v4-databas för hand, kör migreringen, öppnar via den riktiga
  * Room-AppDatabase (identity-hash-validering mot de kompilerade entiteterna fångar en
  * felaktig migrering).
+ *
+ * Sedan migrering 6→7 (issue #43) töms `fund_prices` helt som en del av samma kedja — det
+ * här testet kan därför inte längre visa att just helgraderna filtrerades bort (allt är
+ * borta oavsett), bara att 4→5:s SQL körs utan att krascha och att fond-/transaktionsdata
+ * överlever hela kedjan. Se `Migration67Test` för den nu gällande sanningen om `fund_prices`.
  */
 @RunWith(AndroidJUnit4::class)
 class Migration45Test {
@@ -106,11 +112,17 @@ class Migration45Test {
         assertNull(fund?.fondlistaFundId)
         assertEquals(1, db.transactionDao().observeForFund("LU0496367417").first().size)
 
-        // Helgraderna är borta — även den före epoken, där SQLites trunkerande modulo
-        // annars kunde ge fel veckodag. Vardagsraderna är kvar.
+        // Testet öppnar (som alla migreringstester i det här repot) via den riktiga,
+        // kompilerade AppDatabase-klassen — Room kör då alltid HELA kedjan fram till den
+        // aktuella versionen, inte bara 4→5. Sedan migrering 6→7 (issue #43) tömmer
+        // `fund_prices` helt (källbytet fondlista/Avanza kräver en ren cache) är alla
+        // kurser borta oavsett vad 4→5:s helgfilter gjorde med dem — det går inte att
+        // observera "läget precis efter 4→5" utan `MigrationTestHelper`, som repot
+        // medvetet inte använder (se KDoc:en ovan). Det som återstår att verifiera här är
+        // att 4→5:s SQL inte kraschar och att fond/transaktionsdata överlever hela kedjan.
         val prices = db.fundPriceDao()
             .getRange("LU0496367417", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-        assertEquals(listOf(gammalFredag, fredag, mandag), prices.map { it.epochDay })
+        assertTrue("fund_prices ska vara tom efter hela kedjan — se migrering 6→7", prices.isEmpty())
 
         // Nya kolumnen ska gå att skriva och läsa direkt efter migreringen.
         db.fundDao().upsert(requireNotNull(fund).copy(fondlistaFundId = "0P0000O30D"))

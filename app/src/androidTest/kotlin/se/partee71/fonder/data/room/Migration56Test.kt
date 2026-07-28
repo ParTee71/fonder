@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -20,6 +21,12 @@ import org.junit.runner.RunWith
  *
  * Samma mönster som de övriga migreringstesterna: bygger en v5-databas för hand, kör hela
  * kedjan, öppnar via den riktiga Room-AppDatabase.
+ *
+ * Sedan migrering 6→7 (issue #43, samma källbyte som gjorde valutakonvertering nödvändig)
+ * töms `fund_prices` helt som en del av samma kedja — det här testet kan därför inte längre
+ * visa att just SEK-raden överlevde valutafiltreringen (allt är borta oavsett), bara att
+ * 5→6:s SQL körs utan att krascha och att fond-/transaktionsdata överlever hela kedjan.
+ * Se `Migration67Test` för den nu gällande sanningen om `fund_prices`.
  */
 @RunWith(AndroidJUnit4::class)
 class Migration56Test {
@@ -74,13 +81,15 @@ class Migration56Test {
 
         db.openHelper.writableDatabase
 
-        // Dollarraden är borta; kronraderna är kvar.
+        // Testet öppnar (som alla migreringstester i det här repot) via den riktiga,
+        // kompilerade AppDatabase-klassen — Room kör då alltid HELA kedjan fram till den
+        // aktuella versionen, inte bara 5→6. Migrering 6→7 tömmer `fund_prices` helt direkt
+        // efteråt, så både dollar- och kronraden är borta oavsett vad 5→6 gjorde med dem.
         val franklin = db.fundPriceDao()
             .getRange("LU0496367417", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-        assertEquals(listOf(20655L), franklin.map { it.epochDay })
-        assertEquals(1878.75, franklin.single().nav, 1e-9)
+        assertTrue("fund_prices ska vara tom efter hela kedjan — se migrering 6→7", franklin.isEmpty())
 
-        assertEquals(1, db.fundPriceDao().getRange("0P00000L4S", Long.MIN_VALUE, Long.MAX_VALUE).size)
+        assertTrue(db.fundPriceDao().getRange("0P00000L4S", Long.MIN_VALUE, Long.MAX_VALUE).isEmpty())
 
         // Fonderna och transaktionerna rörs inte — bara den härledda kurscachen (NFR-1).
         assertEquals("Franklin Gold", db.fundDao().getByFundId("LU0496367417")?.name)
