@@ -89,7 +89,8 @@ class Migration45Test {
         }
 
         val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_4_5)
+            // Hela kedjan, av samma skäl som i de äldre migreringstesterna.
+            .addMigrations(*AppDatabase.MIGRATIONS)
             .build()
 
         // Öppnar (och migrerar) — kastar om det resulterande schemat inte matchar entiteterna.
