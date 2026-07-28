@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.21.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.21.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -79,7 +79,7 @@ data/
 └── room/         AppDatabase (v4) · entities · daos
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund (fundId, valfritt isin) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
+├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding
 └── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
                   FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
@@ -125,6 +125,13 @@ finns kvar som ledtråd åt `FundNameMatcher` vid importmatchning.
 **ISIN från källan:** fondens egen sida (`/shb/sv/funds/<fundid>`) bär ISIN i
 faktabladslänken, så `lookupIsin` kan koppla `FundId` ↔ ISIN maskinellt — används både när
 en fond läggs till via fondsök och för att verifiera importens namnmatchning.
+
+**Fonder som bara är kända via ISIN:** importmatchade fonder (`findFundByIsin`) har ISIN:et
+som `fundId` och saknar plattformskod. De får ett uppslaget `fondlistaFundId` (namnkandidat
+i katalogen verifierad mot ISIN) så även de når fondlistas färskare kurser — identiteten och
+transaktionernas koppling följer fortfarande `fundId`. Avanzas svar filtreras dessutom på
+handelsdag: källan levererar ibland helgdaterade kurser, som både är påhittade och gör
+staleness-gaten (`isPriceStale`) falskt negativ.
 
 ---
 

@@ -86,6 +86,32 @@ class AvanzaJsonParserTest {
     }
 
     @Test
+    fun `parseChart forkastar helgdaterade punkter`() {
+        // Verkligt beteende hos källan (verifierat 2026-07-27 för AMF Aktiefond Småbolag):
+        // serien hoppar över fredagen och ger en söndagsdaterad punkt i stället. Någon NAV den
+        // dagen finns inte, och eftersom söndagen är NYARE än senaste handelsdag gjorde raden
+        // `isPriceStale` (TP-17) falskt negativ — fonden ansågs färsk och slutade uppdateras
+        // (issue #39).
+        val chartResponse = """
+            {"dataSerie":[
+                {"x":1784764800000,"y":100.0},
+                {"x":1784937600000,"y":101.0},
+                {"x":1785024000000,"y":102.0},
+                {"x":1785110400000,"y":103.0}
+            ]}
+        """.trimIndent()
+
+        val prices = AvanzaJsonParser.parseChart(chartResponse, currency = "SEK")
+
+        // Bara torsdagen och måndagen överlever.
+        assertEquals(listOf(100.0, 103.0), prices.map { it.nav })
+        assertEquals(
+            listOf(java.time.LocalDate.of(2026, 7, 23), java.time.LocalDate.of(2026, 7, 27)),
+            prices.map { java.time.LocalDate.ofEpochDay(it.epochDay) },
+        )
+    }
+
+    @Test
     fun `parseChart ger tom lista om svaret inte gar att tolka`() {
         assertEquals(emptyList<Any>(), AvanzaJsonParser.parseChart("inte json", currency = "SEK"))
     }
