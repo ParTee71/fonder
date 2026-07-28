@@ -2,6 +2,7 @@ package se.partee71.fonder.domain.usecase
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 
@@ -93,5 +94,26 @@ class FundNameMatcherTest {
 
         assertEquals(fund, match?.fund)
         assertEquals(1.0, match?.confidence ?: 0.0, 1e-9)
+    }
+
+    @Test
+    fun `rankedMatches ranker fel andelsklassyskon over den suffixlosa basfonden`() {
+        // Verklig katalogkollision: "Handelsbanken Sverige (A1 SEK)" delar tokenet "sek" med
+        // suffixerade syskon ("A10 SEK" osv), som därför Jaccard-rankas högre än den
+        // suffixlösa basfonden "Handelsbanken Sverige" — trots att basfonden är rätt träff
+        // (ISIN SE0000582033). bestMatch (som bara ger toppkandidaten) skulle därför ge fel
+        // svar om inte anroparen ISIN-verifierar flera rankade kandidater i tur och ordning.
+        val basfond = Fund(fundId = "0P00000F8J", name = "Handelsbanken Sverige")
+        val a10 = Fund(fundId = "SHB0000387", name = "Handelsbanken Sverige (A10 SEK)")
+        val a9 = Fund(fundId = "SHB0000541", name = "Handelsbanken Sverige (A9 SEK)")
+        val b1 = Fund(fundId = "SHB0000610", name = "Handelsbanken Sverige (B1 SEK)")
+
+        val ranked = FundNameMatcher.rankedMatches(
+            importedFundName = "Handelsbanken Sverige (A1 SEK)",
+            candidates = listOf(basfond, a10, a9, b1),
+        )
+
+        assertTrue("basfonden ska vara med bland de rankade kandidaterna", ranked.any { it.fund == basfond })
+        assertTrue("fel syskon rankas forst enligt kand Jaccard-svaghet", ranked.first().fund != basfond)
     }
 }

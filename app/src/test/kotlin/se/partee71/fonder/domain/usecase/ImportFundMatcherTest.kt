@@ -108,4 +108,29 @@ class ImportFundMatcherTest {
 
         assertEquals(0, uppslag)
     }
+
+    @Test
+    fun `andra rankade kandidaten verifieras nar toppkandidaten har fel isin`() = runTest {
+        // Verklig andelsklasskollision (Handelsbanken Sverige-familjen): den suffixlösa
+        // basfonden är rätt träff (ISIN SE0000582033), men Jaccard rankar ett suffixerat
+        // syskon ("A10 SEK") högre eftersom det delar suffix-tokenet "sek" med importradens
+        // namn. Toppkandidatens ISIN stämmer inte — steg 2 ska då pröva nästa rankade
+        // kandidat i stället för att ge upp direkt till Avanza.
+        val basfond = Fund(fundId = "0P00000F8J", name = "Handelsbanken Sverige")
+        val a10 = Fund(fundId = "SHB0000387", name = "Handelsbanken Sverige (A10 SEK)")
+        var avanzaAnropad = false
+
+        val result = match(
+            isin = "SE0000582033",
+            fundName = "Handelsbanken Sverige (A1 SEK)",
+            catalogFunds = listOf(a10, basfond),
+            findFundByIsin = { avanzaAnropad = true; null },
+            lookupIsin = { fundId -> if (fundId == "0P00000F8J") "SE0000582033" else null },
+        )
+
+        assertEquals("0P00000F8J", result?.fund?.fundId)
+        assertEquals("SE0000582033", result?.fund?.isin)
+        assertEquals(1.0, result?.confidence ?: -1.0, 1e-9)
+        assertFalse("Avanza ska inte behöva anropas när en rankad katalogkandidat verifieras", avanzaAnropad)
+    }
 }
