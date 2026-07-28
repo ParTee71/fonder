@@ -6,20 +6,23 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
-    entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class],
-    version = 6,
+    entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class, FxRateEntity::class],
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fundDao(): FundDao
     abstract fun transactionDao(): TransactionDao
     abstract fun fundPriceDao(): FundPriceDao
+    abstract fun fxRateDao(): FxRateDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -123,6 +126,42 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        /**
+         * Version 6 → 7 (issue #43): lägger till `fx_rates` för Riksbankens dagsnoterade
+         * växelkurser (TP-20), så fondlistas kurser i fondens egen valuta kan räknas om till
+         * kronor i stället för att kastas (TP-19, issue #41).
+         *
+         * Tömmer samtidigt kurscachen. Fonder som hittills betjänats av Avanza får nu sina
+         * kurser från fondlista, och de två källorna skiljer sig någon promille (Avanza
+         * använder sin egen växelkurstidpunkt — 1878,75 mot 1884,44 för CPR 2026-07-23). Utan
+         * tömning hade serien fått en konstlad nivåskillnad just där källan byter, vilket
+         * `PortfolioPerformanceCalc` skulle läsa som en verklig dagsrörelse. Kurser är härledd
+         * data (NFR-1) och hämtas om vid nästa uppdatering; fonder, transaktioner och avgifter
+         * rörs inte.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fx_rates` (
+                        `currency` TEXT NOT NULL,
+                        `epochDay` INTEGER NOT NULL,
+                        `rate` REAL NOT NULL,
+                        PRIMARY KEY(`currency`, `epochDay`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("DELETE FROM `fund_prices`")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+        )
     }
 }

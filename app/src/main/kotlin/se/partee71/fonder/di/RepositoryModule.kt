@@ -14,8 +14,10 @@ import se.partee71.fonder.data.network.AvanzaPriceSource
 import se.partee71.fonder.data.network.AvanzaSource
 import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
+import se.partee71.fonder.data.network.FxRateSource
 import se.partee71.fonder.data.network.HandelsbankenFondlistaClient
 import se.partee71.fonder.data.network.IsinPriceHistorySource
+import se.partee71.fonder.data.network.RiksbankFxClient
 import se.partee71.fonder.data.repository.BackupRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
@@ -41,6 +43,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFondlistaFundPageSource(impl: HandelsbankenFondlistaClient): FondlistaFundPageSource
+
+    @Binds
+    abstract fun bindFxRateSource(impl: RiksbankFxClient): FxRateSource
 
     @Binds
     abstract fun bindAvanzaSource(impl: AvanzaClient): AvanzaSource
