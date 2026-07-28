@@ -84,6 +84,10 @@
     <string name="fond_isin_label">ISIN</string>
     <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
+    <string name="fond_chart_period_1man">1 mån</string>
+    <string name="fond_chart_period_3man">3 mån</string>
+    <string name="fond_chart_period_1ar">1 år</string>
+    <string name="fond_chart_period_allt">Allt</string>
 
     <!-- Analys — nyckeltal och säljsignaler (issue #16, ANA-1–ANA-4) -->
     <string name="analys_section_title">Analys</string>

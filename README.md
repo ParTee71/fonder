@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.21.6 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.22.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -87,7 +87,8 @@ domain/
                   RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
                   MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (kärnnamn för bolagsledtråd) · FundNameMatcher ·
                   PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
-                  CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator
+                  CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator ·
+                  ChartPeriodFilter (kursdiagrammets periodväljare, #51)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel

@@ -1,11 +1,22 @@
 package se.partee71.fonder.ui.diagram
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
@@ -13,10 +24,8 @@ import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
-import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
 import com.patrykandpatrick.vico.core.cartesian.Scroll
-import com.patrykandpatrick.vico.core.cartesian.Zoom
 import com.patrykandpatrick.vico.core.cartesian.axis.Axis
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
@@ -25,6 +34,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianLayerRangeProvider
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.common.data.ExtraStore
+import se.partee71.fonder.R
+import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -35,11 +46,13 @@ import kotlin.math.roundToLong
  * Delad linjediagram-komponent (regel 4) som wrappar Vico — resten av appen ska aldrig
  * röra Vico-API:t direkt. Används för fondens kurshistorik i Fonddetalj (issue #7).
  *
- * Zoomar som standard in till den senaste månaden och skrollar till slutet, så den senaste
- * kursen alltid syns direkt i stället för att drunkna i hela historiken — hela historiken
- * är fortfarande nåbar genom att nypa ut/dra i diagrammet (Vicos inbyggda pinch/pan).
- * Y-axeln pads runt kursens egna min/max i stället för att alltid inkludera noll, se
- * [PriceRangeProvider].
+ * En periodväljare (1 mån/3 mån/1 år/Allt, issue #51) styr vilken del av [points] som skickas
+ * till Vico — bara den valda periodens punkter, inte hela historiken zoomad. Både x- och
+ * y-axeln (se [PriceRangeProvider]) följer därför automatiskt den period användaren faktiskt
+ * tittar på, i stället för att alltid räknas ut från hela historikens min/max (känd
+ * begränsning i den tidigare fasta zoomlösningen, #47/#49 — Vico räknar bara om axlarna när
+ * modellen ändras, inte när användaren nyper/drar). Diagrammet skrollar till slutet av den
+ * valda perioden, så den senaste kursen alltid syns direkt.
  *
  * @param points (epochDay, NAV), i stigande datumordning. Tom lista ritar inget — visa ett
  *   eget tomt-tillstånd (`EmptyState`) i anropande skärm i stället.
@@ -49,38 +62,60 @@ fun FundLineChart(
     points: List<Pair<Long, Double>>,
     modifier: Modifier = Modifier,
 ) {
+    var period by remember { mutableStateOf(ChartPeriodFilter.Period.EN_MANAD) }
+    val windowedPoints = remember(points, period) { ChartPeriodFilter.apply(points, period) }
     val modelProducer = remember { CartesianChartModelProducer() }
 
-    LaunchedEffect(points) {
-        if (points.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(windowedPoints) {
+        if (windowedPoints.isEmpty()) return@LaunchedEffect
         modelProducer.runTransaction {
             lineSeries {
-                series(x = points.map { it.first }, y = points.map { it.second })
+                series(x = windowedPoints.map { it.first }, y = windowedPoints.map { it.second })
             }
         }
     }
 
-    CartesianChartHost(
-        chart = rememberCartesianChart(
-            rememberLineCartesianLayer(rangeProvider = PriceRangeProvider),
-            startAxis = VerticalAxis.rememberStart(),
-            bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
-        ),
-        modelProducer = modelProducer,
-        scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
-        zoomState = rememberVicoZoomState(
-            // x-värdena är epoch-dagar, så en enhet är en kalenderdag — Zoom.x(30.0) visar
-            // därför ungefär den senaste månaden. Har fonden kortare historik än så vinner
-            // Zoom.Content (hela historiken) i stället, så vyn aldrig blir tommare än datan.
-            initialZoom = remember { Zoom.max(Zoom.Content, Zoom.x(DEFAULT_ZOOM_WINDOW_DAYS)) },
-            minZoom = Zoom.Content,
-        ),
-        modifier = modifier.fillMaxWidth().height(220.dp),
-    )
+    Column(modifier = modifier) {
+        // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
+        // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
+        // (helt andra) datavolym.
+        key(period) {
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(rangeProvider = PriceRangeProvider),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
+                ),
+                modelProducer = modelProducer,
+                scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
+                modifier = Modifier.fillMaxWidth().height(220.dp),
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            PeriodChip(ChartPeriodFilter.Period.EN_MANAD, period, R.string.fond_chart_period_1man) { period = it }
+            PeriodChip(ChartPeriodFilter.Period.TRE_MANADER, period, R.string.fond_chart_period_3man) { period = it }
+            PeriodChip(ChartPeriodFilter.Period.ETT_AR, period, R.string.fond_chart_period_1ar) { period = it }
+            PeriodChip(ChartPeriodFilter.Period.ALLT, period, R.string.fond_chart_period_allt) { period = it }
+        }
+    }
 }
 
-/** Standardzoomens fönsterbredd i dagar — se [FundLineChart]. */
-private const val DEFAULT_ZOOM_WINDOW_DAYS = 30.0
+@Composable
+private fun PeriodChip(
+    value: ChartPeriodFilter.Period,
+    selected: ChartPeriodFilter.Period,
+    labelRes: Int,
+    onSelect: (ChartPeriodFilter.Period) -> Unit,
+) {
+    FilterChip(
+        selected = value == selected,
+        onClick = { onSelect(value) },
+        label = { Text(stringResource(labelRes)) },
+    )
+}
 
 /**
  * Vicos inbyggda `CartesianLayerRangeProvider.auto()` tvingar alltid y-axeln att inkludera
@@ -89,8 +124,8 @@ private const val DEFAULT_ZOOM_WINDOW_DAYS = 30.0
  * stället för att fylla diagrammets höjd. I stället pads vi runt datans egna min/max, så
  * även små men relevanta rörelser syns.
  *
- * Baseras på hela historiken (Vico räknar om intervallet när modellen ändras, inte när
- * användaren zoomar/skrollar) — samma intervall oavsett vilken del av historiken som visas.
+ * Räknas ut från vad som faktiskt skickas till Vico, dvs. den valda periodens punkter (se
+ * [FundLineChart]) — inte hela historiken.
  */
 internal object PriceRangeProvider : CartesianLayerRangeProvider {
     override fun getMinY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
