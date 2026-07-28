@@ -13,6 +13,7 @@ import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import javax.inject.Singleton
 
@@ -42,4 +43,7 @@ object AppModule {
 
     @Provides
     fun provideFundPriceDao(db: AppDatabase): FundPriceDao = db.fundPriceDao()
+
+    @Provides
+    fun provideFxRateDao(db: AppDatabase): FxRateDao = db.fxRateDao()
 }

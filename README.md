@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.21.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.21.3 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -72,11 +72,12 @@ data/
 ├── auth/         AuthRepository (Google-inloggning — stub tills auth-issue)
 ├── datastore/    PreferencesRepository (tema m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
-│                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning)
+│                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·
+│                 RiksbankFxClient + RiksbankJsonParser (dagsnoterade växelkurser, #43)
 ├── imports/      HoldingsImportParser (Excel-innehav, #8) · AvrakningsnotaPdfParser + PdfTextExtractor
 │                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) · BackupRepository (stub)
-└── room/         AppDatabase (v4) · entities · daos
+└── room/         AppDatabase (v7) · entities (inkl. FxRateEntity) · daos (inkl. FxRateDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
@@ -86,7 +87,7 @@ domain/
                   RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
                   MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (kärnnamn för bolagsledtråd) · FundNameMatcher ·
                   PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
-                  TransactionFormValidator
+                  CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel
@@ -126,9 +127,11 @@ finns kvar som ledtråd åt `FundNameMatcher` vid importmatchning.
 faktabladslänken, så `lookupIsin` kan koppla `FundId` ↔ ISIN maskinellt — används både när
 en fond läggs till via fondsök och för att verifiera importens namnmatchning.
 
-**Valuta:** all cachad NAV är i kronor (`FundPrice.VALUE_CURRENCY`) — värdekedjan konverterar
-aldrig. Fondlista noterar fonder i fondens egen valuta, så kurser i annat än kronor cachas inte
-utan lämnas till Avanza, som alltid ger värdet i kronor (KRAVLISTA TP-19).
+**Valuta:** all cachad NAV är i kronor (`FundPrice.VALUE_CURRENCY`). Fondlista noterar fonder i
+fondens egen valuta — sådana kurser räknas om till kronor med en dagsnoterad växelkurs från
+Riksbankens öppna API (`RiksbankFxClient`, `CurrencyConverter`, KRAVLISTA TP-19/TP-20) i stället
+för att kastas. Saknas växelkursen för en dag utelämnas dagen, aldrig ett gissat värde; går
+hämtningen inte alls faller fonden tillbaka på Avanza, som redan ger kronor direkt.
 
 **Fonder som bara är kända via ISIN:** importmatchade fonder (`findFundByIsin`) har ISIN:et
 som `fundId` och saknar plattformskod. De får ett uppslaget `fondlistaFundId` (namnkandidat

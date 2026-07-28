@@ -6,15 +6,19 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
+import se.partee71.fonder.data.network.FxRateSource
 import se.partee71.fonder.data.network.HandelsbankenHtmlParser
 import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.IsinPricePoint
+import se.partee71.fonder.domain.usecase.CurrencyConverter
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.NavCalendar
 import java.time.Duration
@@ -137,6 +141,8 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     private val fundPageClient: FondlistaFundPageSource,
     private val dao: FundPriceDao,
     private val fundDao: FundDao,
+    private val fxRateDao: FxRateDao,
+    private val fxRateSource: FxRateSource,
     private val isinSources: List<@JvmSuppressWildcards IsinPriceHistorySource>,
 ) : FundPriceRepository {
 
@@ -200,7 +206,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     ): List<FundPrice>? =
         runCatching {
             val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
-            inValueCurrency(HandelsbankenHtmlParser.parseHistory(html, cacheFundId), cacheFundId)
+            toValueCurrency(HandelsbankenHtmlParser.parseHistory(html, cacheFundId))
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
@@ -210,28 +216,66 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         }.getOrNull()
 
     /**
-     * Sållar bort kurser som inte är i [FundPrice.VALUE_CURRENCY] (issue #41).
+     * Räknar om kurser som inte är i [FundPrice.VALUE_CURRENCY] till kronor (KRAVLISTA
+     * TP-19/TP-20, issue #41/#43).
      *
      * Fondlista noterar varje fond i **fondens egen valuta** — en USD-fond får NAV i dollar.
-     * Appen räknar hela värdekedjan i kronor utan konvertering, så en sådan kurs skulle tyst
-     * behandlas som kronor: CPR Invest Global Gold Mines gick från 14 462 kr till 1 490 kr när
+     * Appen räknar hela värdekedjan i kronor, så en sådan kurs skulle tyst tolkas som kronor
+     * om den lämnades orörd: CPR Invest Global Gold Mines gick från 14 462 kr till 1 490 kr när
      * 1878,75 (SEK, via Avanza) ersattes av 193,48 (USD, via fondlista) — fel med hela
-     * växelkursen, plus ett diagram som blandade bägge.
+     * växelkursen.
      *
-     * Tom lista betyder att fondlista inte kan betjäna fonden, och [refreshSince] faller då
-     * tillbaka på ISIN-kedjan, som levererar värdet i kronor. Hellre en dags äldre kurs i rätt
-     * valuta än en färsk i fel (samma princip som POR-3: aldrig ett felaktigt värde).
+     * Växelkurser hämtas från Riksbanken ([fxRateSource]) och cachas ([fxRateDao]) — samma
+     * "krascha aldrig, degradera"-princip som resten av datalagret: går hämtningen inte kan
+     * de dagarna inte konverteras och utelämnas i stället för att gissas ([CurrencyConverter]).
+     * Blir resultatet tomt (t.ex. helt nätverksfel) faller [refreshSince] tillbaka på
+     * ISIN-kedjan, som levererar värdet i kronor direkt.
      */
-    private fun inValueCurrency(prices: List<FundPrice>, fundId: String): List<FundPrice> {
-        val (usable, wrongCurrency) = prices.partition { it.currency.equals(FundPrice.VALUE_CURRENCY, ignoreCase = true) }
-        if (wrongCurrency.isNotEmpty()) {
-            Log.w(
-                TAG,
-                "Fondlista noterar fund $fundId i ${wrongCurrency.first().currency}, inte " +
-                    "${FundPrice.VALUE_CURRENCY} — hoppar över ${wrongCurrency.size} kurser och provar ISIN-källkedjan",
-            )
+    private suspend fun toValueCurrency(prices: List<FundPrice>): List<FundPrice> {
+        if (prices.isEmpty()) return prices
+        val (inSek, foreign) = prices.partition { it.currency.equals(FundPrice.VALUE_CURRENCY, ignoreCase = true) }
+        if (foreign.isEmpty()) return inSek
+
+        val converted = foreign.groupBy { it.currency }.flatMap { (currency, points) ->
+            // Marginal bakåt så CurrencyConverter kan återanvända en närliggande kurs för
+            // fondkursens första dag, om just den dagen saknar egen valutanotering.
+            val from = LocalDate.ofEpochDay(points.minOf { it.epochDay }).minusDays(CurrencyConverter.MAX_RATE_AGE_DAYS)
+            val to = LocalDate.ofEpochDay(points.maxOf { it.epochDay })
+            ensureRatesCached(currency, from, to)
+            val rates = fxRateDao.getRange(currency, from.toEpochDay(), to.toEpochDay())
+                .associate { it.epochDay to it.rate }
+            CurrencyConverter.toValueCurrency(points, rates)
         }
-        return usable
+        return inSek + converted
+    }
+
+    /**
+     * Fyller på [fxRateDao] med det som saknas för [currency] inom [from]..[to]. Växelkurser
+     * är historiskt oföränderliga — en gång hämtad dag hämtas aldrig om — så bara den
+     * inledande och/eller avslutande luckan hämtas, inte hela intervallet varje gång.
+     */
+    private suspend fun ensureRatesCached(currency: String, from: LocalDate, to: LocalDate) {
+        val oldest = fxRateDao.getOldest(currency)?.epochDay
+        val latest = fxRateDao.getLatest(currency)?.epochDay
+        if (oldest == null || latest == null) {
+            fetchAndCacheRates(currency, from, to)
+            return
+        }
+        if (from.toEpochDay() < oldest) {
+            fetchAndCacheRates(currency, from, LocalDate.ofEpochDay(oldest - 1))
+        }
+        if (to.toEpochDay() > latest) {
+            fetchAndCacheRates(currency, LocalDate.ofEpochDay(latest + 1), to)
+        }
+    }
+
+    private suspend fun fetchAndCacheRates(currency: String, from: LocalDate, to: LocalDate) {
+        val rates = runCatching { fxRateSource.fetchRates(currency, from, to) }
+            .onFailure { e -> Log.w(TAG, "Kunde inte hämta växelkurser för $currency, behåller cache", e) }
+            .getOrNull()
+        if (!rates.isNullOrEmpty()) {
+            fxRateDao.upsertAll(rates.map { FxRateEntity(currency = currency, epochDay = it.epochDay, rate = it.rate) })
+        }
     }
 
     /**
