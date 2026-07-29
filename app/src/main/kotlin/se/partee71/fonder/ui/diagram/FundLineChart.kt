@@ -24,8 +24,10 @@ import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
 import com.patrykandpatrick.vico.core.cartesian.Scroll
+import com.patrykandpatrick.vico.core.cartesian.Zoom
 import com.patrykandpatrick.vico.core.cartesian.axis.Axis
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
@@ -51,8 +53,8 @@ import kotlin.math.roundToLong
  * y-axeln (se [PriceRangeProvider]) följer därför automatiskt den period användaren faktiskt
  * tittar på, i stället för att alltid räknas ut från hela historikens min/max (känd
  * begränsning i den tidigare fasta zoomlösningen, #47/#49 — Vico räknar bara om axlarna när
- * modellen ändras, inte när användaren nyper/drar). Diagrammet skrollar till slutet av den
- * valda perioden, så den senaste kursen alltid syns direkt.
+ * modellen ändras, inte när användaren nyper/drar). Diagrammet visar hela den valda perioden
+ * (`Zoom.Content`) skrollat till slutet, så den senaste kursen alltid syns direkt.
  *
  * @param points (epochDay, NAV), i stigande datumordning. Tom lista ritar inget — visa ett
  *   eget tomt-tillstånd (`EmptyState`) i anropande skärm i stället.
@@ -88,6 +90,12 @@ fun FundLineChart(
                 ),
                 modelProducer = modelProducer,
                 scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
+                // Vicos standardzoom (`Zoom.max(Zoom.fixed(), Zoom.Content)`) tillåter aldrig
+                // mer utzoomat än "naturligt" punktavstånd — för en period med fler punkter än
+                // vad som får plats i den bredden (t.ex. "1 år"/"Allt") visades då bara svansen
+                // närmast slutet i stället för hela den valda perioden. `Zoom.Content` ensamt
+                // visar alltid ALLA punkter som skickats in, oavsett antal.
+                zoomState = rememberVicoZoomState(initialZoom = Zoom.Content),
                 modifier = Modifier.fillMaxWidth().height(220.dp),
             )
         }
