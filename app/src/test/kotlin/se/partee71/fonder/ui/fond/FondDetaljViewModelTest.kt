@@ -125,6 +125,25 @@ class FondDetaljViewModelTest {
     }
 
     @Test
+    fun `purchaseEpochDays innehaller bara kop, inte salj, utan dubbletter`() = runTest(dispatcher) {
+        val sell = Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = 250, shares = 1.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(
+            transaction(epochDay = 100),
+            transaction(epochDay = 100),
+            transaction(epochDay = 200),
+            sell,
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(listOf(100L, 200L), state.purchaseEpochDays.sorted())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `triggar engangsuppdatering nar ingen kurs ar cachad`() = runTest(dispatcher) {
         viewModel()
         advanceUntilIdle()
