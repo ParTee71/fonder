@@ -96,6 +96,7 @@ fun FondDetaljContent(
                     }
                     FundLineChart(
                         points = state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav },
+                        purchaseEpochDays = state.purchaseEpochDays,
                         modifier = Modifier.padding(top = 16.dp),
                     )
                     if (state.isin == null) {

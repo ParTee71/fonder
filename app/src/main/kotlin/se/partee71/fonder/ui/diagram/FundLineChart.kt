@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,13 +19,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.marker.rememberDefaultCartesianMarker
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
+import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
+import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
+import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
+import com.patrykandpatrick.vico.compose.common.fill
+import com.patrykandpatrick.vico.compose.common.shape.rounded
+import com.patrykandpatrick.vico.core.cartesian.CartesianDrawingContext
 import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
 import com.patrykandpatrick.vico.core.cartesian.Scroll
 import com.patrykandpatrick.vico.core.cartesian.Zoom
@@ -35,9 +44,14 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianLayerRangeProvider
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.patrykandpatrick.vico.core.cartesian.marker.CartesianMarker
+import com.patrykandpatrick.vico.core.cartesian.marker.DefaultCartesianMarker
+import com.patrykandpatrick.vico.core.common.Insets
 import com.patrykandpatrick.vico.core.common.data.ExtraStore
+import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.ChartPeriodFilter
+import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -56,16 +70,25 @@ import kotlin.math.roundToLong
  * modellen ändras, inte när användaren nyper/drar). Diagrammet visar hela den valda perioden
  * (`Zoom.Content`) skrollat till slutet, så den senaste kursen alltid syns direkt.
  *
+ * Köptillfällen som ingår i den visade perioden markeras med en linje och ett datum (issue
+ * #55) — det kan vara flera. Se [PurchaseMarkerFilter].
+ *
  * @param points (epochDay, NAV), i stigande datumordning. Tom lista ritar inget — visa ett
  *   eget tomt-tillstånd (`EmptyState`) i anropande skärm i stället.
+ * @param purchaseEpochDays köpdagar (epochDay) för fonden, i valfri ordning. Markeras bara de
+ *   som faller inom den period diagrammet just nu visar.
  */
 @Composable
 fun FundLineChart(
     points: List<Pair<Long, Double>>,
+    purchaseEpochDays: List<Long> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(ChartPeriodFilter.Period.EN_MANAD) }
     val windowedPoints = remember(points, period) { ChartPeriodFilter.apply(points, period) }
+    val markerEpochDays = remember(windowedPoints, purchaseEpochDays) {
+        PurchaseMarkerFilter.apply(windowedPoints, purchaseEpochDays)
+    }
     val modelProducer = remember { CartesianChartModelProducer() }
 
     LaunchedEffect(windowedPoints) {
@@ -78,6 +101,7 @@ fun FundLineChart(
     }
 
     Column(modifier = modifier) {
+        val purchaseMarker = rememberPurchaseMarker()
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
         // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
         // (helt andra) datavolym.
@@ -87,6 +111,7 @@ fun FundLineChart(
                     rememberLineCartesianLayer(rangeProvider = PriceRangeProvider),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
+                    persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } },
                 ),
                 modelProducer = modelProducer,
                 scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
@@ -123,6 +148,46 @@ private fun PeriodChip(
         onClick = { onSelect(value) },
         label = { Text(stringResource(labelRes)) },
     )
+}
+
+/**
+ * Persistent markör (issue #55) för ett köptillfälle — en vertikal linje och en etikett med
+ * köpdagens datum, i appens mässingsaccent (`secondary`) så den syns tydligt mot kurslinjen
+ * utan att kunna förväxlas med den.
+ */
+@Composable
+private fun rememberPurchaseMarker(): CartesianMarker {
+    val label = rememberTextComponent(
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
+        textSize = 11.sp,
+        padding = Insets(horizontalDp = 6f, verticalDp = 3f),
+        background = rememberShapeComponent(
+            fill = fill(MaterialTheme.colorScheme.secondaryContainer),
+            shape = CorneredShape.rounded(4.dp),
+        ),
+    )
+    val guideline = rememberLineComponent(
+        fill = fill(MaterialTheme.colorScheme.secondary),
+        thickness = 1.dp,
+    )
+    return rememberDefaultCartesianMarker(
+        label = label,
+        valueFormatter = PurchaseValueFormatter,
+        guideline = guideline,
+    )
+}
+
+/**
+ * Visar köpdagens datum i markörens etikett — kursens y-värde (Vicos standardformatterare)
+ * syns redan i diagrammet självt, så datumet är den nya informationen markören bidrar med.
+ */
+private object PurchaseValueFormatter : DefaultCartesianMarker.ValueFormatter {
+    private val format = DateTimeFormatter.ofPattern("yy-MM-dd")
+
+    override fun format(context: CartesianDrawingContext, targets: List<CartesianMarker.Target>): CharSequence {
+        val x = targets.firstOrNull()?.x ?: return ""
+        return LocalDate.ofEpochDay(x.roundToLong()).format(format)
+    }
 }
 
 /**

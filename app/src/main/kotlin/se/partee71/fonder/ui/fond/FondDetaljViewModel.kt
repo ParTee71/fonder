@@ -22,6 +22,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import java.time.LocalDate
@@ -36,6 +37,9 @@ data class FondDetaljUiState(
     /** Första köp-datum och kvarvarande (FIFO) inköpsvärde — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
     val firstPurchaseEpochDay: Long? = null,
     val netInvested: Double? = null,
+    /** Köpdagar (epochDay) för den här fonden — markeras i diagrammet när de ingår i den
+     *  valda perioden, se [se.partee71.fonder.ui.diagram.FundLineChart] (issue #55). */
+    val purchaseEpochDays: List<Long> = emptyList(),
     /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
     val analysis: FundAnalysisCalc.Analysis? = null,
 ) {
@@ -47,6 +51,7 @@ private data class Snapshot(
     val transactions: List<Transaction>,
     val since: LocalDate?,
     val suggestedIsin: String?,
+    val purchaseEpochDays: List<Long>,
 )
 
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
@@ -75,16 +80,25 @@ class FondDetaljViewModel @Inject constructor(
     private val fundId: String = checkNotNull(savedStateHandle["fundId"])
     private val suggestedIsin = MutableStateFlow<String?>(null)
 
-    private val earliestPurchase: Flow<LocalDate?> =
+    private val fundTransactions: Flow<List<Transaction>> =
         transactionRepository.observeTransactionsForFund(fundId)
-            .map { transactions -> transactions.minOfOrNull { it.epochDay }?.let(LocalDate::ofEpochDay) }
+
+    private val earliestPurchase: Flow<LocalDate?> =
+        fundTransactions.map { transactions -> transactions.minOfOrNull { it.epochDay }?.let(LocalDate::ofEpochDay) }
+
+    /** Köpdagar (epochDay) — se [FondDetaljUiState.purchaseEpochDays]. */
+    private val purchaseEpochDays: Flow<List<Long>> =
+        fundTransactions.map { transactions ->
+            transactions.filter { it.type == TransactionType.KOP }.map { it.epochDay }.distinct()
+        }
 
     val uiState: StateFlow<FondDetaljUiState> = combine(
         transactionRepository.observeFunds(),
         transactionRepository.observeTransactions(),
         earliestPurchase,
         suggestedIsin,
-    ) { funds, transactions, since, suggested -> Snapshot(funds, transactions, since, suggested) }
+        purchaseEpochDays,
+    ) { funds, transactions, since, suggested, purchases -> Snapshot(funds, transactions, since, suggested, purchases) }
         .flatMapLatest { snapshot ->
             val fundIds = snapshot.funds.map { it.fundId }
             val priceHistoryFlow = fundPriceRepository.observePriceHistory(
@@ -108,6 +122,7 @@ class FondDetaljViewModel @Inject constructor(
                 prices = history.sortedByDescending { it.epochDay },
                 firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
                 netInvested = holding?.netInvested,
+                purchaseEpochDays = snapshot.purchaseEpochDays,
                 analysis = buildAnalysis(holdings, holding, latestPrices, history),
             )
         }.stateIn(
