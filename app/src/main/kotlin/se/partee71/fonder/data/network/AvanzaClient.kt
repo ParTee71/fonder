@@ -37,6 +37,11 @@ class AvanzaClient @Inject constructor(
             execute(Request.Builder().url(chartUrl(orderbookId, from, to)).build())
         }
 
+    override suspend fun fetchFundList(requestBody: String): String = withContext(Dispatchers.IO) {
+        val body = requestBody.toRequestBody(JSON_MEDIA_TYPE)
+        execute(Request.Builder().url(FUND_LIST_URL).post(body).build())
+    }
+
     private fun execute(request: Request): String =
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -52,6 +57,7 @@ class AvanzaClient @Inject constructor(
         const val SEARCH_URL = "https://www.avanza.se/_api/fund-guide/search"
         const val GUIDE_URL = "https://www.avanza.se/_api/fund-guide/guide"
         const val CHART_URL = "https://www.avanza.se/_api/fund-guide/chart"
+        const val FUND_LIST_URL = "https://www.avanza.se/_api/fund-guide/list"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 

@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.23.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.24.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -29,6 +29,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
 - [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
 - [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
+- [x] Fondmetadata (avgift, kategori, risk) — sökbart datalager, grund för en framtida
+      fondrobot; ingen UI ännu (#57)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -73,11 +75,13 @@ data/
 ├── datastore/    PreferencesRepository (tema m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·
+│                 AvanzaFundListParser + AvanzaFundListRequestBuilder (sökbar fondmetadata, #57) ·
 │                 RiksbankFxClient + RiksbankJsonParser (dagsnoterade växelkurser, #43)
 ├── imports/      HoldingsImportParser (Excel-innehav, #8) · AvrakningsnotaPdfParser + PdfTextExtractor
 │                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
-├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) · BackupRepository (stub)
-└── room/         AppDatabase (v7) · entities (inkl. FxRateEntity) · daos (inkl. FxRateDao)
+├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) ·
+│                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet, #57) · BackupRepository (stub)
+└── room/         AppDatabase (v8) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
@@ -89,7 +93,8 @@ domain/
                   PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
                   CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator ·
                   ChartPeriodFilter (kursdiagrammets periodväljare, #51) ·
-                  PurchaseMarkerFilter (köpmarkörer i diagrammet, #55)
+                  PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
+                  FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel

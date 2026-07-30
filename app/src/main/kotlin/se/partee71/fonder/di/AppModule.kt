@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
+import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.TransactionDao
@@ -46,4 +47,7 @@ object AppModule {
 
     @Provides
     fun provideFxRateDao(db: AppDatabase): FxRateDao = db.fxRateDao()
+
+    @Provides
+    fun provideFundMetadataDao(db: AppDatabase): FundMetadataDao = db.fundMetadataDao()
 }
