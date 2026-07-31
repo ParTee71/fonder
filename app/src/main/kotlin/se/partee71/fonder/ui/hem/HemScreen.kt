@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +40,13 @@ fun HemScreen(
     HemContent(state = state, onFundClick = onFundClick, modifier = modifier)
 }
 
-/** Tillståndsdriven, testbar del av [HemScreen] — inget ViewModel/Hilt-beroende (issue #14). */
+/**
+ * Tillståndsdriven, testbar del av [HemScreen] — inget ViewModel/Hilt-beroende (issue #14).
+ * `LazyColumn` (samma mönster som [se.partee71.fonder.ui.fond.FondDetaljScreen], regel 4) —
+ * en vanlig `Column(fillMaxSize())` klippte tyst innehåll som växte förbi skärmhöjden
+ * (analys-summeringskortets flaggade fonder, HEM-4, plus avgiftskortets rader, HEM-5) i
+ * stället för att göra det nåbart (UI-5, issue #63).
+ */
 @Composable
 fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: Modifier = Modifier) {
     when {
@@ -49,11 +56,11 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
             modifier = modifier,
         )
 
-        else -> Column(modifier = modifier.fillMaxSize()) {
-            TotalCard(state = state)
-            PerformanceCard(performance = state.performance)
-            AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick)
-            FeeCard(summary = state.feeSummary)
+        else -> LazyColumn(modifier = modifier.fillMaxSize()) {
+            item { TotalCard(state = state) }
+            item { PerformanceCard(performance = state.performance) }
+            item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
+            item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
         }
     }
 }
@@ -150,9 +157,14 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, onFundClick: (String) 
     }
 }
 
-/** Portföljens totala fondavgift per år (HEM-5, issue #60). */
+/**
+ * Portföljens totala fondavgift per år (HEM-5, issue #60), med en rad per innehav (störst
+ * avgift först, redan sorterat av [PortfolioFeeCalc.compute]) som öppnar fonden i Fonddetalj
+ * — annars var totalen inte handlingsbar: användaren visste vad avgifterna kostade totalt,
+ * men inte vilken fond som gjorde det (issue #63).
+ */
 @Composable
-private fun FeeCard(summary: PortfolioFeeCalc.Result) {
+private fun FeeCard(summary: PortfolioFeeCalc.Result, onFundClick: (String) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             PeriodRow(
@@ -175,7 +187,31 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result) {
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            if (summary.byHolding.isNotEmpty()) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    summary.byHolding.forEach { holdingFee ->
+                        FeeHoldingRow(holdingFee = holdingFee, onClick = { onFundClick(holdingFee.fund.fundId) })
+                    }
+                }
+            }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        PeriodRow(
+            label = holdingFee.fund.name,
+            amount = null,
+            fraction = null,
+            valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+            modifier = Modifier.padding(12.dp),
+        )
     }
 }
 
