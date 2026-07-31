@@ -1,10 +1,12 @@
 package se.partee71.fonder.ui.hem
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -193,6 +195,67 @@ class HemScreenTest {
         }
 
         composeRule.onNodeWithText("saknar känd avgift", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun fondavgiftskort_visar_rad_per_innehav_sorterat_och_navigerar_vid_klick() {
+        val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
+        val billig = Fund(fundId = "BIL", name = "Billig Fond")
+        var clickedFundId: String? = null
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(
+                totalAnnualFeeKr = 900.0,
+                // Redan sorterat störst avgift först av PortfolioFeeCalc.compute — kortet
+                // ska bara rendera i den ordningen, inte sortera om.
+                byHolding = listOf(
+                    PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0),
+                    PortfolioFeeCalc.HoldingFee(billig, annualFeeKr = 200.0),
+                ),
+                unknownFeeCount = 0,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state, onFundClick = { clickedFundId = it }) }
+        }
+
+        composeRule.onNodeWithText("Dyr Fond").assertExists()
+        composeRule.onNodeWithText("700,00 kr", substring = true).assertExists()
+        composeRule.onNodeWithText("Billig Fond").assertExists()
+        composeRule.onNodeWithText("200,00 kr", substring = true).assertExists()
+
+        composeRule.onNodeWithText("Billig Fond").performClick()
+        assertEquals("BIL", clickedFundId)
+    }
+
+    // --- Skrollbarhet (UI-5, issue #63) ---
+
+    @Test
+    fun hem_ar_skrollbar_nar_innehallet_overstiger_skarmen() {
+        // Ett generöst antal flaggade fonder — inte den minsta möjliga för att just överstiga
+        // en uppskattad skärmhöjd (för sköra tal beroende på exakt Material3-metrik), utan
+        // gott om marginal så testet är robust oavsett enhetens faktiska viewport.
+        val funds = (1..10).map { i -> Fund(fundId = "F$i", name = "Flaggad Fond $i") }
+        val analysis = sampleAnalysis(FundAnalysisCalc.SignalLevel.GUL)
+        val flagged = funds.map { FlaggedHolding(it, analysis) }
+
+        composeRule.setContent {
+            FonderTheme {
+                HemContent(
+                    state = HemUiState(
+                        loading = false,
+                        hasHoldings = true,
+                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged),
+                    ),
+                )
+            }
+        }
+
+        // performScrollTo() kräver en skrollbar förälder — utan den (bugen i #63) skulle
+        // testet aldrig nå fram till assertIsDisplayed() på den sista, annars avklippta raden.
+        composeRule.onNodeWithText("Flaggad Fond 10").performScrollTo().assertIsDisplayed()
     }
 
     private fun sampleAnalysis(status: FundAnalysisCalc.SignalLevel) = FundAnalysisCalc.Analysis(

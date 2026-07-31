@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.26.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.27.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -61,6 +61,7 @@
 | UI-2 | Rubriker/UI i **Space Grotesk**; belopp och sifferkolumner med **tabulära siffror**. |
 | UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. |
 | UI-4 | Tema kan väljas: **Ljust / Mörkt / Auto** (sparas i DataStore). |
+| UI-5 | Varje skärm vars innehåll kan överstiga skärmhöjden är **skrollbar** (`LazyColumn`, eller `verticalScroll` för korta fasta vyer) — innehåll får aldrig klippas bort utan att gå att nå. Gäller särskilt vyer med kort/sektioner som växer med antalet innehav eller flaggade fonder (t.ex. HEM-4, HEM-5). Ett tillstånd som får plats i en testviewport kan ändå klippas i den riktiga appen, där `Scaffold`s topp- och bottenfält tar bort utrymme — instrumenterade tester för sådana vyer ska därför verifiera skrollbarhet (`performScrollTo().assertIsDisplayed()`), inte bara att en nod finns i semantikträdet (`assertExists()`, som inte fångar avklippt men komponerat innehåll, issue #63). |
 
 ---
 
@@ -127,7 +128,7 @@
 | HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. Perioderna är förankrade i senaste kända NAV-dag (se POR-5), så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad. ~~Beror det på att inget innehav har en tillräckligt färsk kurs för perioden visas i stället "Kurs ej uppdaterad".~~ *(borttaget, se POR-5)* |
 | HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
-| HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
+| HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Under totalen visas **en rad per innehav med känd avgift, störst avgift först**, som öppnar fonden i Fonddetalj vid klick (issue #63) — annars var totalen inte handlingsbar: att veta vad avgifterna kostar totalt hjälper inte utan att veta vilken fond som gör det. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
 
 ---
 
@@ -744,3 +745,20 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   ut till ett eget issue (#61) efter en kostnadsberäkning: en fullständig genomsökning kan
   kosta hundratals hämtningar mot Handelsbankens fondlista, vilket aldrig får ske automatiskt
   på startskärmen.
+
+- **Hem: skroll och avgift per fond (#63):** Granskning efter #60 mergats hittade två
+  problem. Hem var **den enda skärmen i appen utan skroll** — `HemContent` la fyra kort i en
+  vanlig `Column(fillMaxSize())`; sex av sju skärmar använder redan `LazyColumn` eller
+  `verticalScroll`. Uppskattat ur Material3s standardhöjder och kortens faktiska padding
+  klipptes avgiftskortet redan **utan en enda flaggad fond** på en typisk telefonhöjd, eftersom
+  `Scaffold`s topp-/bottenfält tar bort ~144 dp jämfört med en instrumenterad tests viewport.
+  Just därför fångade inte testerna i #60 det: `assertExists()` läser semantikträdet, där en
+  `Column` komponerar alla barn oavsett om de syns eller ej. Fixat genom att göra `HemContent`
+  till en `LazyColumn` (samma mönster som `FondDetaljScreen`, regel 4). Ny kravrad **UI-5**
+  kodifierar invarianten för framtida skärmar och kräver att skrollbarhetstester verifierar
+  `performScrollTo().assertIsDisplayed()`, inte bara att en nod finns.
+
+  Samtidigt: `PortfolioFeeCalc.byHolding` — nedbrytningen per innehav, redan beräknad, sorterad
+  och enhetstestad i #60 — renderades ingenstans i `FeeCard`. Totalen var inte handlingsbar utan
+  att veta vilken fond som kostade mest. HEM-5 utökad med en klickbar rad per innehav, samma
+  mönster som HEM-4:s flaggade fonder, återanvänder `PeriodRow`.
