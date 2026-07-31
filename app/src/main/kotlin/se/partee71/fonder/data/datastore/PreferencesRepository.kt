@@ -55,11 +55,11 @@ class PreferencesRepository @Inject constructor(
      */
     val fundFilterVocabulary: Flow<FundFilterVocabulary> = dataStore.data.map { prefs ->
         prefs[fundFilterVocabularyKey]
-            ?.let { runCatching { Json.decodeFromString<FundFilterVocabulary>(it) }.getOrNull() }
+            ?.let { runCatching { Json.decodeFromString(FundFilterVocabulary.serializer(), it) }.getOrNull() }
             ?: FundFilterVocabulary()
     }
 
     suspend fun setFundFilterVocabulary(vocabulary: FundFilterVocabulary) {
-        dataStore.edit { it[fundFilterVocabularyKey] = Json.encodeToString(vocabulary) }
+        dataStore.edit { it[fundFilterVocabularyKey] = Json.encodeToString(FundFilterVocabulary.serializer(), vocabulary) }
     }
 }
