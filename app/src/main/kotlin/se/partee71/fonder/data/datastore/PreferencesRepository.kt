@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
+import se.partee71.fonder.domain.model.FundFilterVocabulary
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +24,7 @@ class PreferencesRepository @Inject constructor(
 ) {
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val lastPriceSyncKey = longPreferencesKey("last_price_sync_epoch_millis")
+    private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -41,5 +44,22 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setLastPriceSyncEpochMillis(epochMillis: Long) {
         dataStore.edit { it[lastPriceSyncKey] = epochMillis }
+    }
+
+    /**
+     * Senast kända filtervokabulär för fondmetadata-frågor (KRAVLISTA TP-21) — vilka
+     * fondtyper/regioner/branscher/fondbolag/risknivåer källan faktiskt känner till just nu.
+     * Byggs enbart ur källans eget svar ([se.partee71.fonder.data.network.AvanzaFundListParser]),
+     * aldrig hårdkodad. Tom vokabulär om ingen fråga körts än. Ren cache-metadata, ingår
+     * medvetet inte i backup-kontraktet (samma princip som [lastPriceSyncEpochMillis]).
+     */
+    val fundFilterVocabulary: Flow<FundFilterVocabulary> = dataStore.data.map { prefs ->
+        prefs[fundFilterVocabularyKey]
+            ?.let { runCatching { Json.decodeFromString(FundFilterVocabulary.serializer(), it) }.getOrNull() }
+            ?: FundFilterVocabulary()
+    }
+
+    suspend fun setFundFilterVocabulary(vocabulary: FundFilterVocabulary) {
+        dataStore.edit { it[fundFilterVocabularyKey] = Json.encodeToString(FundFilterVocabulary.serializer(), vocabulary) }
     }
 }

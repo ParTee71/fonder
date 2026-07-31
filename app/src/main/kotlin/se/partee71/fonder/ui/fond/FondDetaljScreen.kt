@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
@@ -93,6 +94,9 @@ fun FondDetaljContent(
                     }
                     if (state.analysis != null) {
                         AnalysisSection(analysis = state.analysis!!, modifier = Modifier.padding(top = 16.dp))
+                    }
+                    state.feeComparison?.let { feeComparison ->
+                        FeeComparisonSection(state = feeComparison, modifier = Modifier.padding(top = 16.dp))
                     }
                     FundLineChart(
                         points = state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav },
@@ -176,6 +180,55 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
             }
         }
         AnalysisGlossary(modifier = Modifier.padding(top = 16.dp))
+    }
+}
+
+/**
+ * Föreslår billigare, likvärdiga alternativ till innehavet (ANA-9, issue #59) — appens
+ * första **rådgivande** kort. Anger uttryckligen vad jämförelsen omfattar (avgift vid
+ * identisk exponering, verifierat köpbar hos Handelsbanken) och vad den inte gör, så
+ * förslagen går att värdera i stället för att tas på tro.
+ */
+@Composable
+private fun FeeComparisonSection(state: FeeComparisonUiState, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(stringResource(R.string.fee_comparison_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.fee_comparison_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+        )
+        when (state) {
+            FeeComparisonUiState.Loading -> FeeComparisonMessage(stringResource(R.string.fee_comparison_loading))
+            FeeComparisonUiState.Unavailable -> FeeComparisonMessage(stringResource(R.string.fee_comparison_unavailable))
+            FeeComparisonUiState.NoCheaperAlternative -> FeeComparisonMessage(stringResource(R.string.fee_comparison_none_cheaper))
+            is FeeComparisonUiState.Found -> Column {
+                state.alternatives.forEach { alternative ->
+                    FeeAlternativeRow(alternative)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeeComparisonMessage(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun FeeAlternativeRow(alternative: FeeComparisonCalc.Alternative) {
+    val explanation = stringResource(
+        R.string.format_fee_comparison_alternative_explain,
+        MoneyFormat.feePercent(alternative.candidateFeePercent),
+    )
+    ExpandableInfoRow(explanation = explanation) {
+        PeriodRow(
+            label = alternative.candidate.name,
+            amount = alternative.annualSavingsKr,
+            fraction = null,
+        )
     }
 }
 

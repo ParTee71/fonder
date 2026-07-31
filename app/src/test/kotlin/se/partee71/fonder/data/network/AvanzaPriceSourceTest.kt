@@ -21,6 +21,7 @@ private class FakeAvanzaSource(
         lastChartOrderbookId = orderbookId
         return chartResponse
     }
+    override suspend fun fetchFundList(requestBody: String): String = """{"fundListViews":[]}"""
 }
 
 class AvanzaPriceSourceTest {
@@ -77,6 +78,7 @@ class AvanzaPriceSourceTest {
             override suspend fun search(query: String): String = throw IOException("nätverksfel")
             override suspend fun fetchGuide(orderbookId: String): String = ""
             override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String = ""
+            override suspend fun fetchFundList(requestBody: String): String = ""
         }
         AvanzaPriceSource(failingSource).fetchHistory(isin, LocalDate.of(2020, 1, 1), LocalDate.of(2020, 6, 1))
     }

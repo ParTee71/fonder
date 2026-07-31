@@ -139,6 +139,13 @@
     <string name="analys_sharpe_label">Sharpe-kvot</string>
     <string name="analys_volatility_explain">Hur mycket fondens kurs svänger, uttryckt som årlig standardavvikelse. Högre värde = större gungor upp och ner. Säger inget om riktningen — bara hur skakig resan varit. Kräver minst ~3 månaders historik.</string>
     <string name="analys_sharpe_explain">Avkastning i förhållande till risken (svängningarna). Högre är bättre — du har fått mer betalt per enhet risk. Under 0 betyder att fonden gått back under perioden. Ett jämförelsetal mellan fonder, inte ett betyg på om du ska sälja.</string>
+    <!-- Billigare alternativ (ANA-9, issue #59) — appens första rådgivande kort -->
+    <string name="fee_comparison_title">Billigare alternativ</string>
+    <string name="fee_comparison_explain">Jämför totalavgift mellan fonder med samma fondtyp, region, inriktning och indexstatus, verifierat köpbara hos Handelsbanken. Jämför inte innehav, historisk avkastning eller risk — bara avgiften för samma sorts exponering.</string>
+    <string name="fee_comparison_loading">Letar efter billigare alternativ …</string>
+    <string name="fee_comparison_unavailable">Kunde inte jämföras — fonden saknar ISIN eller känd avgift.</string>
+    <string name="fee_comparison_none_cheaper">Redan bland de billigaste i sin kategori.</string>
+    <string name="format_fee_comparison_alternative_explain">Kostar %1$s i totalavgift, mot vad du betalar för den här fonden. Samma fondtyp, region, inriktning och indexstatus — men inte nödvändigtvis samma underliggande innehav.</string>
     <!-- Ordlista "Så funkar analysen" -->
     <string name="analys_glossary_title">Så funkar analysen</string>
     <string name="analys_glossary_nav_term">NAV (fondkurs)</string>

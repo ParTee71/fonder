@@ -39,4 +39,19 @@ class MoneyFormatTest {
         assertTrue("fick: ${MoneyFormat.decimal(0.8)}", MoneyFormat.decimal(0.8).contains("0,80"))
         assertTrue(MoneyFormat.decimal(-0.4).startsWith("−"))
     }
+
+    @Test
+    fun `feePercent formaterar en avgift med tva decimaler, tar emot procentsiffran direkt`() {
+        // Källans totalFee är redan en procentsiffra (0.73 = 0,73 %), ingen fraction (issue #59).
+        val out = MoneyFormat.feePercent(0.73)
+        assertTrue("fick: $out", out.contains("0,73"))
+        assertTrue("fick: $out", out.trim().endsWith("%"))
+    }
+
+    @Test
+    fun `feePercent behaller bada decimalerna for smaskillnader`() {
+        // En decimal (som percent()) hade avrundat bort just den här skillnaden.
+        assertTrue(MoneyFormat.feePercent(0.21).contains("0,21"))
+        assertTrue(MoneyFormat.feePercent(0.20).contains("0,20"))
+    }
 }

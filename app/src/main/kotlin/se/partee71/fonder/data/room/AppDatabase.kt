@@ -5,17 +5,25 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import se.partee71.fonder.data.room.daos.FundDao
+import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
+import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
-    entities = [FundEntity::class, TransactionEntity::class, FundPriceEntity::class, FxRateEntity::class],
-    version = 7,
+    entities = [
+        FundEntity::class,
+        TransactionEntity::class,
+        FundPriceEntity::class,
+        FxRateEntity::class,
+        FundMetadataEntity::class,
+    ],
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun fundPriceDao(): FundPriceDao
     abstract fun fxRateDao(): FxRateDao
+    abstract fun fundMetadataDao(): FundMetadataDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -155,6 +164,42 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 7 → 8 (issue #57): lägger till `fund_metadata` för Avanzas sökbara
+         * fondmetadata (avgift, kategori, fondtyp, risk, se KRAVLISTA TP-21) — grunden en
+         * framtida köpscreener/rebalanseringsmotor byggs på. Helt ny tabell, cachad härledd
+         * data precis som `fx_rates` (TP-20): går den förlorad hämtas den bara om vid nästa
+         * fråga, och den ingår därför medvetet inte i backup-kontraktet (NFR-1). Fonder,
+         * transaktioner och kurser rörs inte.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fund_metadata` (
+                        `isin` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `orderbookId` TEXT NOT NULL,
+                        `totalFee` REAL,
+                        `managementFee` REAL,
+                        `category` TEXT,
+                        `fundType` TEXT,
+                        `companyName` TEXT,
+                        `risk` INTEGER,
+                        `indexFund` INTEGER NOT NULL,
+                        `startDateEpochDay` INTEGER,
+                        `minimumBuy` REAL,
+                        `tagsJson` TEXT NOT NULL,
+                        `availableAtHandelsbanken` INTEGER,
+                        `availabilityResolvedAtEpochDay` INTEGER,
+                        `fetchedAtEpochDay` INTEGER NOT NULL,
+                        PRIMARY KEY(`isin`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -162,6 +207,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
         )
     }
 }

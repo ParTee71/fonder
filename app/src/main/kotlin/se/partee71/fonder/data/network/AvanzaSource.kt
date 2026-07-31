@@ -16,4 +16,11 @@ interface AvanzaSource {
 
     /** Daglig kurshistorik för [orderbookId] inom [from]..[to] — rått JSON-svar. */
     suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String
+
+    /**
+     * Sökbar fondmetadata (avgift, kategori, fondtyp, risk, se KRAVLISTA TP-21) — [requestBody]
+     * är en färdig JSON-payload från [AvanzaFundListRequestBuilder]. Rått JSON-svar, 20 fonder
+     * per sida (källans sidstorlek, går inte att ändra).
+     */
+    suspend fun fetchFundList(requestBody: String): String
 }
