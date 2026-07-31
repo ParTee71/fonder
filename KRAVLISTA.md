@@ -713,3 +713,12 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   engångsuppdatering (samma princip som prisuppdateringen) i stället för reaktivt vid varje
   NAV-tick. Innebar att ANA-3/ANA-5/ANA-6/ANA-7/ANA-8:s "aldrig rådgivning"-klausuler ströks —
   se respektive rad.
+
+  En andra, snävare variant av baslinjeförorening upptäcktes av regressionstestet och fixades
+  innan mergning: `candidateQuery` för ett innehav **utan egna dimension-taggar** ger en fråga
+  utan kategoriskt filter (bara `maxTotalFee`), som — till skillnad från ett ISIN-uppslag — GÅR
+  via `query()`. `query()` tolkade "inget kategoriskt filter" som "hela universumet" och skrev
+  över baslinjen med kandidatfrågans (mindre) `totalNoFunds`. Fixat genom att bara sätta
+  baslinjen när frågan är helt ofiltrerad (varken kategoriskt filter, `maxTotalFee` eller
+  `nameContains`) — en `maxTotalFee`-fråga är en verifierat respekterad avgränsning, inte en
+  ofiltrerad baslinje.

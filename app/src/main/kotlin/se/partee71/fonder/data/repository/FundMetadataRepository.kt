@@ -93,7 +93,13 @@ class AvanzaFundMetadataRepository @Inject constructor(
         }
 
         if (!query.hasCategoricalFilters()) {
-            lastKnownUnfilteredTotal = live.totalNoFunds
+            // Bara en fråga helt utan filter (varken kategoriskt, avgiftstak eller fritext) speglar
+            // hela universumet — en maxTotalFee-only fråga (t.ex. FeeComparisonCalc.candidateQuery
+            // för ett innehav utan egna dimension-taggar) har redan en verifierat respekterad
+            // avgränsning och skulle annars förorena baslinjen med sitt eget, mindre antal.
+            if (query.maxTotalFee == null && query.nameContains == null) {
+                lastKnownUnfilteredTotal = live.totalNoFunds
+            }
             return live.funds
         }
 

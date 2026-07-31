@@ -397,9 +397,11 @@ class FundMetadataRepositoryTest {
         source.response = fundListJson(1499, listOf(Triple("SE_BASE", "Bas", "Sverige")))
         repository.query(FundScreenQuery())
 
-        // 2) suggestCheaperAlternatives ISIN-slår upp innehavet (totalNoFunds=1) och kör sedan
-        // en (tom) kandidatfråga. Om ISIN-uppslaget felaktigt gått via query() skulle baslinjen
-        // ha förorenats till 1 här.
+        // 2) suggestCheaperAlternatives ISIN-slår upp innehavet (via findByIsin, som medvetet
+        // inte går via query()) och kör sedan en kandidatfråga för ett innehav UTAN egna
+        // dimension-taggar — den frågan har inget kategoriskt filter, bara maxTotalFee, och
+        // GÅR via query(). Utan skyddet i query() (maxTotalFee/nameContains utesluter
+        // baslinje-uppdatering) hade den kandidatfrågans totalNoFunds=0 förorenat baslinjen.
         val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = emptyList())
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
         repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
