@@ -97,6 +97,26 @@ class FundScreenFilterTest {
     }
 
     @Test
+    fun `otherRegion alignment interestType och misc matchar mot respektive tagg`() {
+        val taiwan = fund("TW", tags = listOf(FundTag("Taiwan", "OTHER_REGION")))
+        val smabolag = fund("SB", tags = listOf(FundTag("Småbolag", "ALIGNMENT")))
+        val sekRanta = fund("SEK", tags = listOf(FundTag("SEK", "INTEREST")))
+        val ovrigt = fund("OV", tags = listOf(FundTag("Övriga", "MISC")))
+
+        assertTrue(FundScreenFilter.matches(taiwan, FundScreenQuery(otherRegion = listOf("Taiwan"))))
+        assertFalse(FundScreenFilter.matches(sverigeAktie, FundScreenQuery(otherRegion = listOf("Taiwan"))))
+
+        assertTrue(FundScreenFilter.matches(smabolag, FundScreenQuery(alignment = listOf("Småbolag"))))
+        assertFalse(FundScreenFilter.matches(sverigeAktie, FundScreenQuery(alignment = listOf("Småbolag"))))
+
+        assertTrue(FundScreenFilter.matches(sekRanta, FundScreenQuery(interestType = listOf("SEK"))))
+        assertFalse(FundScreenFilter.matches(sverigeAktie, FundScreenQuery(interestType = listOf("SEK"))))
+
+        assertTrue(FundScreenFilter.matches(ovrigt, FundScreenQuery(misc = listOf("Övriga"))))
+        assertFalse(FundScreenFilter.matches(sverigeAktie, FundScreenQuery(misc = listOf("Övriga"))))
+    }
+
+    @Test
     fun `risk matchar mot fondens risksiffra som strang`() {
         val query = FundScreenQuery(risk = listOf("4"))
 

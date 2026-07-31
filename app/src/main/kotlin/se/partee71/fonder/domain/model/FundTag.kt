@@ -21,6 +21,10 @@ data class FundTag(
         /** Källans `fundTagCategory`-värden som [se.partee71.fonder.domain.usecase.FundScreenFilter] vet att matcha mot ett filter. */
         const val CATEGORY_TYPE = "TYPE"
         const val CATEGORY_COMMON_REGION = "COMMON_REGION"
+        const val CATEGORY_OTHER_REGION = "OTHER_REGION"
         const val CATEGORY_INDUSTRY = "INDUSTRY"
+        const val CATEGORY_ALIGNMENT = "ALIGNMENT"
+        const val CATEGORY_INTEREST = "INTEREST"
+        const val CATEGORY_MISC = "MISC"
     }
 }

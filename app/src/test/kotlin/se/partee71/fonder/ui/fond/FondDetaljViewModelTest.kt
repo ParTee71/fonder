@@ -11,19 +11,25 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
 
@@ -89,8 +95,21 @@ class FondDetaljViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
+    private var suggestCheaperAlternativesCall: Pair<String, Double>? = null
+    private var suggestCheaperAlternativesReturn: List<FeeComparisonCalc.Alternative>? = emptyList()
+
+    private val fakeFundMetadataRepo = object : FundMetadataRepository {
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
+        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
+            suggestCheaperAlternativesCall = isin to holdingValue
+            return suggestCheaperAlternativesReturn
+        }
+    }
+
     private fun viewModel() =
-        FondDetaljViewModel(SavedStateHandle(mapOf("fundId" to fund.fundId)), fakeTransactionRepo, fakePriceRepo)
+        FondDetaljViewModel(SavedStateHandle(mapOf("fundId" to fund.fundId)), fakeTransactionRepo, fakePriceRepo, fakeFundMetadataRepo)
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -299,6 +318,117 @@ class FondDetaljViewModelTest {
             while (state.loading) state = awaitItem()
             assertEquals(today.minusYears(1).toEpochDay(), state.firstPurchaseEpochDay)
             assertEquals(1000.0, state.netInvested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Billigare alternativ (ANA-9, issue #59) ---
+
+    private fun setUpHolding(isin: String? = "SE0004297927") {
+        funds.value = listOf(if (isin != null) fund.copy(isin = isin) else fund)
+        val today = LocalDate.now()
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+    }
+
+    @Test
+    fun `feeComparison forblir null om fonden inte ar ett kvarvarande innehav`() = runTest(dispatcher) {
+        // Inga transaktioner — inget innehav, inget kort ska visas alls (skiljs från "Unavailable").
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull(state.analysis)
+            assertNull(state.feeComparison)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+        assertNull("Inget uppslag ska göras för en fond som inte är ett innehav", suggestCheaperAlternativesCall)
+    }
+
+    @Test
+    fun `feeComparison blir Unavailable direkt om innehavet saknar isin`() = runTest(dispatcher) {
+        setUpHolding(isin = null)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.analysis != null)
+            while (state.feeComparison == null) state = awaitItem()
+            assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+        assertNull("Utan ISIN ska repositoryt aldrig anropas", suggestCheaperAlternativesCall)
+    }
+
+    @Test
+    fun `feeComparison anropar suggestCheaperAlternatives med ratt isin och innehavsvarde`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+
+        viewModel()
+        advanceUntilIdle()
+
+        // 10 andelar × 120 kr senaste NAV = 1200 kr innehavsvärde.
+        assertEquals("SE0004297927" to 1200.0, suggestCheaperAlternativesCall)
+    }
+
+    @Test
+    fun `feeComparison blir Found med alternativen fran repositoryt`() = runTest(dispatcher) {
+        setUpHolding()
+        val alternative = FeeComparisonCalc.Alternative(
+            candidate = FundMetadata(
+                isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345",
+                totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
+                companyName = "Länsförsäkringar", risk = null, indexFund = true, startDateEpochDay = null,
+                minimumBuy = null, tags = emptyList(),
+            ),
+            candidateFeePercent = 0.21,
+            annualSavingsKr = 1560.0,
+        )
+        suggestCheaperAlternativesReturn = listOf(alternative)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
+            val found = state.feeComparison as FeeComparisonUiState.Found
+            assertEquals(listOf(alternative), found.alternatives)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `feeComparison blir NoCheaperAlternative nar listan ar tom`() = runTest(dispatcher) {
+        setUpHolding()
+        suggestCheaperAlternativesReturn = emptyList()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
+            assertEquals(FeeComparisonUiState.NoCheaperAlternative, state.feeComparison)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `feeComparison blir Unavailable nar repositoryt inte kan jamfora fonden`() = runTest(dispatcher) {
+        setUpHolding()
+        suggestCheaperAlternativesReturn = null
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
+            assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
             cancelAndIgnoreRemainingEvents()
         }
     }

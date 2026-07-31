@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.24.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.25.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -30,7 +30,9 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
 - [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
 - [x] Fondmetadata (avgift, kategori, risk) — sökbart datalager, grund för en framtida
-      fondrobot; ingen UI ännu (#57)
+      fondrobot (#57)
+- [x] Billigare alternativ till ett innehav — appens första rådgivande funktion, i Fonddetalj
+      (ANA-9, #59)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -94,14 +96,15 @@ domain/
                   CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator ·
                   ChartPeriodFilter (kursdiagrammets periodväljare, #51) ·
                   PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
-                  FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57)
+                  FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
+                  FeeComparisonCalc (billigare alternativ, ANA-9, #59)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
 ├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
-│                 Analys-sektion med nyckeltal/säljsignaler, #16)
+│                 Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
 ├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)

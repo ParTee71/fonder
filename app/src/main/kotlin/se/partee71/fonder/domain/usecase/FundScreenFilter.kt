@@ -33,7 +33,11 @@ object FundScreenFilter {
     fun matches(metadata: FundMetadata, query: FundScreenQuery): Boolean {
         if (query.fundType.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_TYPE, query.fundType)) return false
         if (query.region.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_COMMON_REGION, query.region)) return false
+        if (query.otherRegion.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_OTHER_REGION, query.otherRegion)) return false
         if (query.industry.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_INDUSTRY, query.industry)) return false
+        if (query.alignment.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_ALIGNMENT, query.alignment)) return false
+        if (query.interestType.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_INTEREST, query.interestType)) return false
+        if (query.misc.isNotEmpty() && !hasTag(metadata, FundTag.CATEGORY_MISC, query.misc)) return false
         val companyName = metadata.companyName
         if (query.company.isNotEmpty() && (companyName == null || companyName !in query.company)) return false
         val risk = metadata.risk

@@ -28,7 +28,11 @@ class AvanzaFundListRequestBuilderTest {
         val query = FundScreenQuery(
             fundType = listOf("Aktiefond"),
             region = listOf("Sverige", "Norden"),
+            otherRegion = listOf("Taiwan"),
             industry = listOf("Fastighetsbolag"),
+            alignment = listOf("Småbolag"),
+            interestType = listOf("SEK"),
+            misc = listOf("Övriga"),
             company = listOf("Länsförsäkringar"),
             risk = listOf("4"),
         )
@@ -37,7 +41,11 @@ class AvanzaFundListRequestBuilderTest {
 
         assertEquals(listOf("Aktiefond"), json["fundTypeFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
         assertEquals(listOf("Sverige", "Norden"), json["commonRegionFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("Taiwan"), json["otherRegionFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
         assertEquals(listOf("Fastighetsbolag"), json["industryFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("Småbolag"), json["alignmentFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("SEK"), json["interestTypeFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("Övriga"), json["miscFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
         assertEquals(listOf("Länsförsäkringar"), json["companyFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
         assertEquals(listOf("4"), json["riskFilter"]?.jsonArray?.map { it.jsonPrimitive.content })
     }
@@ -76,7 +84,11 @@ class AvanzaFundListRequestBuilderTest {
 
         assertFalse(json.containsKey("fundTypeFilter"))
         assertFalse(json.containsKey("commonRegionFilter"))
+        assertFalse(json.containsKey("otherRegionFilter"))
         assertFalse(json.containsKey("industryFilter"))
+        assertFalse(json.containsKey("alignmentFilter"))
+        assertFalse(json.containsKey("interestTypeFilter"))
+        assertFalse(json.containsKey("miscFilter"))
         assertFalse(json.containsKey("companyFilter"))
         assertFalse(json.containsKey("riskFilter"))
         assertTrue(!json.containsKey("maxTotalFee") && !json.containsKey("name") && !json.containsKey("sortField"))

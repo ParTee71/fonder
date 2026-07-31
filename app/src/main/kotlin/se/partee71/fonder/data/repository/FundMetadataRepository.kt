@@ -11,6 +11,7 @@ import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.FundScreenFilter
@@ -45,6 +46,20 @@ interface FundMetadataRepository {
 
     /** Senast kända filtervokabulär, se [se.partee71.fonder.data.datastore.PreferencesRepository.fundFilterVocabulary]. */
     fun observeFilterVocabulary(): Flow<FundFilterVocabulary>
+
+    /**
+     * Föreslår billigare, ISIN-verifierat köpbara alternativ till innehavet med [isin]
+     * (ANA-9, issue #59) — se [FeeComparisonCalc] för matchningsregeln (identisk
+     * exponering, strikt lägre avgift). [holdingValue] är innehavets nuvarande värde
+     * (netShares × senaste NAV), används för att räkna årsbesparingen i kronor.
+     *
+     * Null om [isin] inte kan slås upp i källans universum eller saknar känd avgift —
+     * inget att jämföra med (UI visar "kunde inte jämföras"). Tom lista om inga
+     * kvalificerade, köpbara alternativ hittades. Köpbarheten verifieras budgeterat (ett
+     * fåtal kandidater visas, ett begränsat antal prövas) och kan därför ta flera
+     * nätverksanrop — körs asynkront, blockerar aldrig UI.
+     */
+    suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>?
 }
 
 @Singleton
@@ -150,8 +165,44 @@ class AvanzaFundMetadataRepository @Inject constructor(
             .any { fundPriceRepository.lookupIsin(it.fund.fundId) == isin }
     }
 
+    override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
+        val held = findByIsin(isin) ?: return null
+        if (held.totalFee == null) return null
+
+        val candidates = query(FeeComparisonCalc.candidateQuery(held))
+        val ranked = FeeComparisonCalc.rank(held, candidates, holdingValue)
+
+        val verified = mutableListOf<FeeComparisonCalc.Alternative>()
+        for (alternative in ranked.take(MAX_VERIFICATION_ATTEMPTS)) {
+            if (verified.size >= MAX_VERIFIED_ALTERNATIVES) break
+            if (resolveHandelsbankenAvailability(alternative.candidate.isin) == true) {
+                verified += alternative
+            }
+        }
+        return verified
+    }
+
+    /**
+     * Slår upp en enskild fonds metadata exakt via ISIN (källans `name`-filter accepterar
+     * ett ISIN och ger då en enda träff, TP-21) — medvetet **inte** via [query]: dess
+     * offline-fallback matchar [FundScreenQuery.nameContains] mot fondens **namn**
+     * ([FundScreenFilter]), inte ISIN, och dess baslinjelogik för "källan ignorerar
+     * filtret tyst" är bara meningsfull för kategoriska frågor — ett ISIN-uppslag skulle
+     * annars förorena [lastKnownUnfilteredTotal] med totalen för en enda fond. Faller
+     * tillbaka på cachen direkt vid nätverksfel, precis som [query].
+     */
+    private suspend fun findByIsin(isin: String): FundMetadata? {
+        val live = fetchLive(FundScreenQuery(nameContains = isin))
+        if (live != null && live.funds.isNotEmpty()) {
+            dao.upsertAll(live.funds.map { it.toEntityPreservingAvailability() })
+        }
+        return live?.funds?.firstOrNull { it.isin == isin } ?: dao.getByIsin(isin)?.toDomain()
+    }
+
     private companion object {
         const val TAG = "FundMetadataRepository"
         const val MAX_ISIN_VERIFICATIONS = 5
+        const val MAX_VERIFIED_ALTERNATIVES = 3
+        const val MAX_VERIFICATION_ATTEMPTS = 10
     }
 }

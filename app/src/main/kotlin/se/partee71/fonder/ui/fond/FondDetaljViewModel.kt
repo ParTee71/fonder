@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
@@ -23,6 +24,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import java.time.LocalDate
@@ -42,8 +44,32 @@ data class FondDetaljUiState(
     val purchaseEpochDays: List<Long> = emptyList(),
     /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
     val analysis: FundAnalysisCalc.Analysis? = null,
+    /** Innehavets nuvarande värde (netShares × senaste NAV) — null om okänt/inte ett innehav. Underlag för [feeComparison]. */
+    val holdingValue: Double? = null,
+    /** Billigare-alternativ-jämförelse (ANA-9, issue #59). Null = fonden är inte ett kvarvarande innehav, inget kort visas. */
+    val feeComparison: FeeComparisonUiState? = null,
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
+}
+
+/**
+ * Resultatet av att jämföra innehavets avgift mot billigare, likvärdiga alternativ (ANA-9,
+ * issue #59) — appens första rådgivande funktion (ANA-3:s tidigare "aldrig
+ * rådgivning"-princip är struken, se KRAVLISTA). Beräknas en gång per skärmöppning
+ * ("engångsuppdatering", samma princip som prisuppdateringen nedan), inte reaktivt vid varje
+ * NAV-tick, eftersom den kan kosta flera nätverksanrop (budgeterad köpbarhetsverifiering).
+ */
+sealed interface FeeComparisonUiState {
+    /** Jämförelsen pågår — flera nätverksanrop kan behövas. */
+    data object Loading : FeeComparisonUiState
+
+    /** Fonden saknar ISIN, finns inte i källans universum, eller saknar känd avgift (ANA-4-principen). */
+    data object Unavailable : FeeComparisonUiState
+
+    /** Inga alternativ med identisk exponering och lägre avgift hittades — fonden är redan bland de billigaste i sin kategori. */
+    data object NoCheaperAlternative : FeeComparisonUiState
+
+    data class Found(val alternatives: List<FeeComparisonCalc.Alternative>) : FeeComparisonUiState
 }
 
 private data class Snapshot(
@@ -68,6 +94,9 @@ private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
  * redan reaktivt laddade kurshistoriken för den här fonden, portföljens totala värde (för
  * portföljandelen) och övriga innehavs tremånadershistorik (för momentum-signalen S3), som
  * hämtas ur den lokala cachen (ingen extra nätverksuppdatering).
+ *
+ * Föreslår dessutom billigare, likvärdiga alternativ (ANA-9, issue #59) för ett kvarvarande
+ * innehav — se [FeeComparisonUiState].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -75,10 +104,12 @@ class FondDetaljViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
+    private val fundMetadataRepository: FundMetadataRepository,
 ) : ViewModel() {
 
     private val fundId: String = checkNotNull(savedStateHandle["fundId"])
     private val suggestedIsin = MutableStateFlow<String?>(null)
+    private val feeComparisonState = MutableStateFlow<FeeComparisonUiState?>(null)
 
     private val fundTransactions: Flow<List<Transaction>> =
         transactionRepository.observeTransactionsForFund(fundId)
@@ -92,7 +123,7 @@ class FondDetaljViewModel @Inject constructor(
             transactions.filter { it.type == TransactionType.KOP }.map { it.epochDay }.distinct()
         }
 
-    val uiState: StateFlow<FondDetaljUiState> = combine(
+    private val baseUiState: Flow<FondDetaljUiState> = combine(
         transactionRepository.observeFunds(),
         transactionRepository.observeTransactions(),
         earliestPurchase,
@@ -114,6 +145,7 @@ class FondDetaljViewModel @Inject constructor(
             val fund = snapshot.funds.firstOrNull { it.fundId == fundId }
             val holdings = PortfolioCalc.computeHoldings(snapshot.funds, snapshot.transactions)
             val holding = holdings.firstOrNull { it.fund.fundId == fundId }
+            val holdingValue = holding?.let { PortfolioCalc.withCurrentValue(listOf(it), latestPrices).first().currentValue }
             FondDetaljUiState(
                 loading = false,
                 fundName = fund?.name,
@@ -124,12 +156,17 @@ class FondDetaljViewModel @Inject constructor(
                 netInvested = holding?.netInvested,
                 purchaseEpochDays = snapshot.purchaseEpochDays,
                 analysis = buildAnalysis(holdings, holding, latestPrices, history),
+                holdingValue = holdingValue,
             )
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = FondDetaljUiState(),
-        )
+        }
+
+    val uiState: StateFlow<FondDetaljUiState> = combine(baseUiState, feeComparisonState) { state, feeComparison ->
+        state.copy(feeComparison = feeComparison)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = FondDetaljUiState(),
+    )
 
     /**
      * Bygger [FundAnalysisCalc.Analysis] för den visade fonden. Null om fonden inte är ett
@@ -186,6 +223,31 @@ class FondDetaljViewModel @Inject constructor(
 
             if (fund != null && fund.isin == null) {
                 suggestedIsin.value = fundPriceRepository.suggestIsin(fund.name)
+            }
+        }
+
+        // Billigare-alternativ-jämförelsen (ANA-9) är också en engångsuppdatering — den kan
+        // kosta flera nätverksanrop (budgeterad köpbarhetsverifiering) och ska inte köras om
+        // för varje NAV-tick. Kortet visas bara för ett kvarvarande innehav (analysis != null);
+        // saknar det ISIN eller känt värde visas kortet ändå, men som "kunde inte jämföras"
+        // (ANA-4-principen) — det ska inte se ut som att inget hände.
+        viewModelScope.launch {
+            val loaded = uiState.first { !it.loading }
+            if (loaded.analysis == null) return@launch
+
+            val isin = loaded.isin
+            val holdingValue = loaded.holdingValue
+            if (isin == null || holdingValue == null) {
+                feeComparisonState.value = FeeComparisonUiState.Unavailable
+                return@launch
+            }
+
+            feeComparisonState.value = FeeComparisonUiState.Loading
+            val alternatives = fundMetadataRepository.suggestCheaperAlternatives(isin, holdingValue)
+            feeComparisonState.value = when {
+                alternatives == null -> FeeComparisonUiState.Unavailable
+                alternatives.isEmpty() -> FeeComparisonUiState.NoCheaperAlternative
+                else -> FeeComparisonUiState.Found(alternatives)
             }
         }
     }

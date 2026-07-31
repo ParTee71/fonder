@@ -14,8 +14,9 @@ import se.partee71.fonder.domain.model.FundScreenSortDirection
  * satta värden tas med; en tom [FundScreenQuery] ger en payload utan filter (hela universumet,
  * källans standardsortering).
  *
- * Filternamnen (`fundTypeFilter`, `commonRegionFilter`, `industryFilter`, `companyFilter`,
- * `riskFilter`) är källans **transportnycklar**, verifierade live 2026-07-30 — till skillnad
+ * Filternamnen (`fundTypeFilter`, `commonRegionFilter`, `otherRegionFilter`, `industryFilter`,
+ * `alignmentFilter`, `interestTypeFilter`, `miscFilter`, `companyFilter`, `riskFilter`) är
+ * källans **transportnycklar**, verifierade live 2026-07-30/31 — till skillnad
  * från filtrens *värden* (som alltid kommer från [se.partee71.fonder.domain.model.FundFilterVocabulary],
  * aldrig hårdkodade här) är dessa nyckelnamn en del av API-kontraktet, i samma kategori som
  * `resolution=DAY` i [AvanzaClient.chartUrl].
@@ -26,7 +27,11 @@ object AvanzaFundListRequestBuilder {
         buildJsonObject {
             putFilter("fundTypeFilter", query.fundType)
             putFilter("commonRegionFilter", query.region)
+            putFilter("otherRegionFilter", query.otherRegion)
             putFilter("industryFilter", query.industry)
+            putFilter("alignmentFilter", query.alignment)
+            putFilter("interestTypeFilter", query.interestType)
+            putFilter("miscFilter", query.misc)
             putFilter("companyFilter", query.company)
             putFilter("riskFilter", query.risk)
             query.maxTotalFee?.let { put("maxTotalFee", it) }

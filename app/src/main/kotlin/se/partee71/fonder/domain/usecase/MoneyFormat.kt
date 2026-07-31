@@ -30,4 +30,15 @@ object MoneyFormat {
         val sign = if (value < 0.0) "−" else "" // äkta minustecken
         return String.format(locale, "%s%.2f", sign, kotlin.math.abs(value))
     }
+
+    /**
+     * Formaterar en fondavgift med två decimaler, t.ex. 0.73 → "0,73 %" (issue #59). Till
+     * skillnad från [percent], som tar emot en *fraction* (0..1), är källans `totalFee`
+     * redan en procentsiffra (0,73 betyder 0,73 %, inte 73 %) — en egen formatterare
+     * undviker att den skillnaden blandas ihop. Två decimaler i stället för [percent]s en,
+     * eftersom avgiftsskillnader ofta ligger under en tiondels procentenhet (0,73 % mot
+     * 0,21 % — en decimal hade avrundat bort just den skillnaden).
+     */
+    fun feePercent(totalFeePercent: Double): String =
+        String.format(locale, "%.2f %%", totalFeePercent)
 }

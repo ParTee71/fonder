@@ -32,12 +32,19 @@ import java.time.LocalDate
 
 private class FakeAvanzaSource(var response: String = """{"fundListViews":[],"totalNoFunds":0,"filterCounts":{}}""") : AvanzaSource {
     var lastRequestBody: String? = null
+    private val queue = ArrayDeque<String>()
+
+    /** Köar svar som returneras i turordning, ett per anrop — [response] används när kön är tom. */
+    fun enqueue(vararg responses: String) {
+        queue.addAll(responses)
+    }
+
     override suspend fun search(query: String): String = ""
     override suspend fun fetchGuide(orderbookId: String): String = ""
     override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String = ""
     override suspend fun fetchFundList(requestBody: String): String {
         lastRequestBody = requestBody
-        return response
+        return if (queue.isNotEmpty()) queue.removeFirst() else response
     }
 }
 
@@ -120,6 +127,16 @@ class FundMetadataRepositoryTest {
              "filterCounts":{"fundTypeCounts":[{"title":"Aktiefond","count":10,"type":"fundType","active":false,"group":0}]}}
         """.trimIndent()
     }
+
+    /** Full kontroll över en enskild rad (avgift, indexstatus, godtyckliga taggar) — issue #59. */
+    private fun fundView(isin: String, name: String, totalFee: Double?, indexFund: Boolean, tags: List<Pair<String, String>>): String {
+        val feeField = if (totalFee != null) "\"totalFee\":$totalFee," else ""
+        val tagList = tags.joinToString(",") { (title, category) -> """{"title":"$title","fundTagCategory":"$category"}""" }
+        return """{"isin":"$isin","name":"$name","orderbookId":"$isin",$feeField"indexFund":$indexFund,"tagList":[$tagList]}"""
+    }
+
+    private fun fullListJson(totalNoFunds: Int, views: List<String>): String =
+        """{"fundListViews":[${views.joinToString(",")}],"totalNoFunds":$totalNoFunds,"filterCounts":{}}"""
 
     @Test
     fun `query utan filter cachar traffarna och persisterar vokabularen`() = runTest {
@@ -269,6 +286,134 @@ class FundMetadataRepositoryTest {
 
         assertEquals(true, available)
         assertEquals(1, fundPriceRepo.fetchFundCatalogCallCount)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives slar upp innehavet via isin, bygger kandidatfraga och verifierar kopbarhet`() = runTest {
+        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION", "Index" to "INDEX")
+        val heldView = fundView("SE_HELD", "Handelsbanken Sverige Index Criteria", totalFee = 0.73, indexFund = true, tags = heldTags)
+        val candidateView = fundView("SE_CAND", "Länsförsäkringar Sverige Index", totalFee = 0.21, indexFund = true, tags = heldTags)
+        val source = FakeAvanzaSource()
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(1, listOf(candidateView)))
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(
+                companies = emptyList(),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+            ),
+            isinByFundId = mapOf("X1" to "SE_CAND"),
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.suggestCheaperAlternatives("SE_HELD", holdingValue = 300_000.0)
+
+        assertEquals(1, result?.size)
+        assertEquals("SE_CAND", result?.first()?.candidate?.isin)
+        // (0,73 - 0,21) / 100 * 300 000 = 1 560 kr/år.
+        assertEquals(1560.0, result?.first()?.annualSavingsKr ?: -1.0, 0.5)
+        // Kandidatfrågan byggdes ur innehavets egna taggar (fundType/region), inte fritt.
+        assertTrue(source.lastRequestBody?.contains("\"fundTypeFilter\":[\"Aktiefond\"]") == true)
+        assertTrue(source.lastRequestBody?.contains("\"commonRegionFilter\":[\"Sverige\"]") == true)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives fond utan kand avgift ger null`() = runTest {
+        val heldView = fundView("SE_HELD", "Fond utan avgift", totalFee = null, indexFund = false, tags = emptyList())
+        val repository = repo(FakeAvanzaSource(fullListJson(1, listOf(heldView))))
+
+        assertNull(repository.suggestCheaperAlternatives("SE_HELD", 300_000.0))
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives fond som inte finns i kallans universum ger null`() = runTest {
+        val repository = repo(FakeAvanzaSource(fullListJson(0, emptyList())))
+
+        assertNull(repository.suggestCheaperAlternatives("OKAND_ISIN", 300_000.0))
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives tom lista om inga kandidater kvalificerar`() = runTest {
+        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
+        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = heldTags)
+        val source = FakeAvanzaSource()
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
+        val repository = repo(source)
+
+        val result = repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
+
+        assertEquals(emptyList<Any>(), result)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives stannar efter tre bekraftade alternativ`() = runTest {
+        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
+        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.73, indexFund = false, tags = heldTags)
+        val candidateFees = listOf(0.10, 0.15, 0.20, 0.25, 0.30)
+        val candidateViews = candidateFees.mapIndexed { i, fee ->
+            fundView("SE_C$i", "Kandidat $i", totalFee = fee, indexFund = false, tags = heldTags)
+        }
+        val source = FakeAvanzaSource()
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(candidateViews.size, candidateViews))
+        val catalogFunds = candidateFees.indices.map { i -> Fund(fundId = "F$i", name = "Kandidat $i", currency = "SEK") }
+        val isinByFundId = candidateFees.indices.associate { i -> "F$i" to "SE_C$i" }
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
+            isinByFundId = isinByFundId,
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
+
+        // Alla 5 kandidater hade varit köpbara — budgeten (högst 3 visade) stoppar tidigt.
+        assertEquals(3, result?.size)
+        assertEquals(3, fundPriceRepo.fetchFundCatalogCallCount)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives stannar efter tio provade aven om inga bekraftas`() = runTest {
+        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
+        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.73, indexFund = false, tags = heldTags)
+        val candidateViews = (1..12).map { i ->
+            fundView("SE_C$i", "Kandidat $i", totalFee = 0.73 - i * 0.01, indexFund = false, tags = heldTags)
+        }
+        val source = FakeAvanzaSource()
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(candidateViews.size, candidateViews))
+        // Tom katalog — ingen kandidat kan någonsin ISIN-verifieras som köpbar.
+        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
+
+        assertEquals(emptyList<Any>(), result)
+        // 12 kvalificerade kandidater fanns — budgeten (högst 10 prövade) stoppar innan alla testats.
+        assertEquals(10, fundPriceRepo.fetchFundCatalogCallCount)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives isin-uppslagning fororenar inte baslinjen for senare kategoriska fragor`() = runTest {
+        val source = FakeAvanzaSource()
+        val repository = repo(source)
+
+        // 1) En obefiltrerad fråga sätter den sanna baslinjen till 1499.
+        source.response = fundListJson(1499, listOf(Triple("SE_BASE", "Bas", "Sverige")))
+        repository.query(FundScreenQuery())
+
+        // 2) suggestCheaperAlternatives ISIN-slår upp innehavet (totalNoFunds=1) och kör sedan
+        // en (tom) kandidatfråga. Om ISIN-uppslaget felaktigt gått via query() skulle baslinjen
+        // ha förorenats till 1 här.
+        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = emptyList())
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
+        repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
+
+        // 3) Cachen skiljer sig medvetet från källans (påstått tystade) live-svar, så testet kan
+        // skilja mellan "baslinjen förorenad" (live-svaret används rakt av) och "baslinjen intakt"
+        // (källan upptäcks ha ignorerat filtret, frågan besvaras ur cachen i stället).
+        dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
+            .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
+        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Sverige")))
+
+        val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
+
+        assertEquals(listOf("SE_CACHE"), result.map { it.isin })
     }
 
     private fun fundMetadataEntity(

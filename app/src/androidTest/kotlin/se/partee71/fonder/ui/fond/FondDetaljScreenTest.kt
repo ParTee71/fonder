@@ -10,7 +10,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -325,5 +327,109 @@ class FondDetaljScreenTest {
         composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
         // Båda riskmåtten saknar värde → markeras som otillräcklig data (ANA-4), inget gissat 0.
         assertTrue(composeRule.onAllNodesWithText("Otillräcklig data").fetchSemanticsNodes().size >= 2)
+    }
+
+    // --- Billigare alternativ (ANA-9, issue #59) ---
+
+    private val alternative = FeeComparisonCalc.Alternative(
+        candidate = FundMetadata(
+            isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345",
+            totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
+            companyName = "Länsförsäkringar", risk = null, indexFund = true, startDateEpochDay = null,
+            minimumBuy = null, tags = emptyList(),
+        ),
+        candidateFeePercent = 0.21,
+        // Under 1000 kr undviker tusentalsavgränsarens tvetydiga blanksteg (se MoneyFormatTest).
+        annualSavingsKr = 780.0,
+    )
+
+    @Test
+    fun visar_inget_kort_utan_feeComparison() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, feeComparison = null))
+            }
+        }
+
+        composeRule.onNodeWithText("Billigare alternativ").assertDoesNotExist()
+    }
+
+    @Test
+    fun visar_laddar_text_medan_jamforelsen_pagar() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, feeComparison = FeeComparisonUiState.Loading),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Billigare alternativ").assertExists()
+        composeRule.onNodeWithText("Letar efter billigare alternativ", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_kunde_inte_jamforas_text() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices, feeComparison = FeeComparisonUiState.Unavailable),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Kunde inte jämföras", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_redan_bland_de_billigaste_text() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(
+                        loading = false, fundName = "Fond A", prices = prices,
+                        feeComparison = FeeComparisonUiState.NoCheaperAlternative,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Redan bland de billigaste", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_alternativ_med_namn_och_arsbesparing() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(
+                        loading = false, fundName = "Fond A", prices = prices,
+                        feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").assertExists()
+        composeRule.onNodeWithText("780,00 kr", substring = true).assertExists()
+    }
+
+    @Test
+    fun kan_falla_ut_avgiften_for_ett_alternativ() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(
+                        loading = false, fundName = "Fond A", prices = prices,
+                        feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
+                    ),
+                )
+            }
+        }
+
+        // Avgiften (förklaringen) är dold tills raden fälls ut.
+        composeRule.onNodeWithText("0,21 %", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performClick()
+        composeRule.onNodeWithText("0,21 %", substring = true).assertExists()
     }
 }
