@@ -27,11 +27,13 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import java.io.IOException
 import java.time.LocalDate
 
 private class FakeAvanzaSource(var response: String = """{"fundListViews":[],"totalNoFunds":0,"filterCounts":{}}""") : AvanzaSource {
     var lastRequestBody: String? = null
+    var fetchFundListCallCount = 0
     private val queue = ArrayDeque<String>()
 
     /** Köar svar som returneras i turordning, ett per anrop — [response] används när kön är tom. */
@@ -44,6 +46,7 @@ private class FakeAvanzaSource(var response: String = """{"fundListViews":[],"to
     override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String = ""
     override suspend fun fetchFundList(requestBody: String): String {
         lastRequestBody = requestBody
+        fetchFundListCallCount++
         return if (queue.isNotEmpty()) queue.removeFirst() else response
     }
 }
@@ -417,6 +420,81 @@ class FundMetadataRepositoryTest {
         // mellan "baslinjen förorenad" (live-svaret SE_LIVE används rakt av) och "baslinjen
         // intakt" (källan upptäcks ha ignorerat filtret, frågan besvaras ur cachen i stället,
         // bara SE_CACHE matchar).
+        dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
+            .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
+        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))
+
+        val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
+
+        assertEquals(listOf("SE_CACHE"), result.map { it.isin })
+    }
+
+    // --- metadataFor (HEM-5, issue #60) ---
+
+    @Test
+    fun `metadataFor svarar ur cachen for farska rader utan natanrop`() = runTest {
+        val today = LocalDate.now()
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Fond Ett")
+            .copy(totalFee = 0.73, fetchedAtEpochDay = today.toEpochDay())
+        val source = FakeAvanzaSource()
+        val repository = repo(source)
+
+        val result = repository.metadataFor(listOf("SE1"))
+
+        assertEquals(0.73, result["SE1"]?.totalFee ?: -1.0, 1e-9)
+        assertEquals(0, source.fetchFundListCallCount)
+    }
+
+    @Test
+    fun `metadataFor hamtar om en rad som ar aldre an FEE_TTL_DAYS`() = runTest {
+        val today = LocalDate.now()
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Fond Ett")
+            .copy(totalFee = 0.73, fetchedAtEpochDay = today.minusDays(FundMetadataFreshness.FEE_TTL_DAYS + 1).toEpochDay())
+        val source = FakeAvanzaSource(fullListJson(1, listOf(fundView("SE1", "Fond Ett", totalFee = 0.21, indexFund = false, tags = emptyList()))))
+        val repository = repo(source)
+
+        val result = repository.metadataFor(listOf("SE1"))
+
+        assertEquals(0.21, result["SE1"]?.totalFee ?: -1.0, 1e-9)
+        assertEquals(1, source.fetchFundListCallCount)
+    }
+
+    @Test
+    fun `metadataFor fyller en helt saknad isin via natverket`() = runTest {
+        val source = FakeAvanzaSource(fullListJson(1, listOf(fundView("SE1", "Fond Ett", totalFee = 0.5, indexFund = false, tags = emptyList()))))
+        val repository = repo(source)
+
+        val result = repository.metadataFor(listOf("SE1"))
+
+        assertEquals(0.5, result["SE1"]?.totalFee ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `metadataFor utelamnar en isin som inte finns i kallans universum`() = runTest {
+        val source = FakeAvanzaSource(fullListJson(0, emptyList()))
+        val repository = repo(source)
+
+        val result = repository.metadataFor(listOf("OKAND_ISIN"))
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `metadataFor ror aldrig baslinjen for senare kategoriska fragor`() = runTest {
+        val source = FakeAvanzaSource()
+        val repository = repo(source)
+
+        // Sann baslinje.
+        source.response = fundListJson(1499, listOf(Triple("SE_BASE", "Bas", "Global")))
+        repository.query(FundScreenQuery())
+
+        // metadataFor slår upp en enda fond (totalNoFunds=1) för ett innehav utan cachad rad.
+        source.enqueue(fullListJson(1, listOf(fundView("SE_NY", "Ny fond", totalFee = 0.4, indexFund = false, tags = emptyList()))))
+        repository.metadataFor(listOf("SE_NY"))
+
+        // Samma teknik som den redan existerande baslinjeregressionen ovan: ett live-svar med
+        // samma totalNoFunds som baslinjen ska tolkas som "källan ignorerar filtret" och
+        // besvaras ur cachen — bara möjligt om baslinjen fortfarande är 1499, inte 1.
         dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
             .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
         source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))

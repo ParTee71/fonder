@@ -60,6 +60,14 @@ interface FundMetadataRepository {
      * nätverksanrop — körs asynkront, blockerar aldrig UI.
      */
     suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>?
+
+    /**
+     * Fondmetadata för [isins] (HEM-5, issue #60) — cache-först: en färsk cachad rad
+     * (yngre än [FundMetadataFreshness.FEE_TTL_DAYS]) kostar inget nätanrop, en saknad eller
+     * inaktuell rad hämtas om. Isin som inte kan slås upp i källans universum saknas i
+     * resultatkartan — anroparen ska räkna det innehavet som "okänd avgift", aldrig gissa.
+     */
+    suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata>
 }
 
 @Singleton
@@ -203,6 +211,21 @@ class AvanzaFundMetadataRepository @Inject constructor(
             dao.upsertAll(live.funds.map { it.toEntityPreservingAvailability() })
         }
         return live?.funds?.firstOrNull { it.isin == isin } ?: dao.getByIsin(isin)?.toDomain()
+    }
+
+    override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
+        val today = LocalDate.now()
+        val result = mutableMapOf<String, FundMetadata>()
+        for (isin in isins.distinct()) {
+            val cached = dao.getByIsin(isin)
+            val metadata = if (cached != null && !FundMetadataFreshness.isStale(cached.fetchedAtEpochDay, today, FundMetadataFreshness.FEE_TTL_DAYS)) {
+                cached.toDomain()
+            } else {
+                findByIsin(isin)
+            }
+            if (metadata != null) result[isin] = metadata
+        }
+        return result
     }
 
     private companion object {

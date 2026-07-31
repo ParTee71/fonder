@@ -106,6 +106,7 @@ class FondDetaljViewModelTest {
             suggestCheaperAlternativesCall = isin to holdingValue
             return suggestCheaperAlternativesReturn
         }
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
     }
 
     private fun viewModel() =

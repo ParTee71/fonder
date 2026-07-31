@@ -33,6 +33,11 @@
     <string name="hem_analysis_title">Att se över</string>
     <string name="hem_analysis_empty">Inga fonder flaggade</string>
 
+    <!-- Hem — fondavgift (HEM-5, issue #60) -->
+    <string name="hem_fee_title">Fondavgifter per år</string>
+    <string name="hem_fee_explain">Redan avdraget löpande ur fondernas kurs — ingen separat kostnad att hitta på kontot.</string>
+    <string name="format_hem_fee_unknown">%1$d fond(er) saknar känd avgift och räknas inte in i totalen.</string>
+
     <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
     <string name="period_day">En dag</string>
     <string name="period_week">Senaste veckan</string>

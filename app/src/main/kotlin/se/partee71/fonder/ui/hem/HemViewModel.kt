@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -18,6 +19,7 @@ import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import java.time.LocalDate
 import javax.inject.Inject
@@ -49,6 +51,8 @@ data class HemUiState(
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,
+    /** Portföljens totala fondavgift per år (HEM-5, issue #60). */
+    val feeSummary: PortfolioFeeCalc.Result = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0),
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -69,6 +73,7 @@ private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
 class HemViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
+    private val fundMetadataRepository: FundMetadataRepository,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -89,6 +94,8 @@ class HemViewModel @Inject constructor(
                         toEpochDay = today.toEpochDay(),
                     )
                 }
+                val isins = enriched.mapNotNull { it.fund.isin }
+                val metadataByIsin = fundMetadataRepository.metadataFor(isins)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -99,6 +106,7 @@ class HemViewModel @Inject constructor(
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
                     analysisSummary = buildAnalysisSummary(enriched, transactions, today),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
+                    feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin),
                 )
             }
         }.stateIn(

@@ -68,11 +68,16 @@ object FeeComparisonCalc {
             .mapNotNull { candidate ->
                 val candidateFee = candidate.totalFee ?: return@mapNotNull null
                 if (candidateFee >= heldFee) return@mapNotNull null
-                Alternative(candidate, candidateFee, annualSavings(heldFee, candidateFee, holdingValue))
+                Alternative(candidate, candidateFee, annualFeeKr(heldFee, holdingValue) - annualFeeKr(candidateFee, holdingValue))
             }
             .sortedByDescending { it.annualSavingsKr }
     }
 
-    private fun annualSavings(heldFeePercent: Double, candidateFeePercent: Double, holdingValue: Double): Double =
-        (heldFeePercent - candidateFeePercent) / 100.0 * holdingValue
+    /**
+     * Omvandlar en fondavgift i procentform (som källans `totalFee`, t.ex. 0.73 = 0,73 %) till
+     * kronor per år för ett innehav värt [holdingValue] — den delade primitiven bakom både
+     * [rank]s besparingsbelopp och `PortfolioFeeCalc`s portföljtotal (issue #60), så de två
+     * inte kan glida isär till olika svar på samma räknestycke.
+     */
+    fun annualFeeKr(feePercent: Double, holdingValue: Double): Double = feePercent / 100.0 * holdingValue
 }

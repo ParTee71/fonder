@@ -16,13 +16,18 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import java.time.LocalDate
@@ -63,12 +68,28 @@ class HemViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
+    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
+    private var metadataForCall: List<String>? = null
+
+    private val fakeFundMetadataRepo = object : FundMetadataRepository {
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
+        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
+            metadataForCall = isins
+            return metadataByIsin.filterKeys { it in isins }
+        }
+    }
+
+    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
     fun `tomt tillstand nar ingen portfolj finns`() = runTest(dispatcher) {
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             assertTrue(awaitItem().loading)
             val loaded = awaitItem()
@@ -95,7 +116,7 @@ class HemViewModelTest {
             ),
         )
 
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -130,7 +151,7 @@ class HemViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 120.0))
 
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -153,7 +174,7 @@ class HemViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 105.0))
 
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -178,7 +199,7 @@ class HemViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -205,12 +226,85 @@ class HemViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
-        val vm = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertEquals(1, state.analysisSummary.flagged.size)
             assertEquals(fond.fundId, state.analysisSummary.flagged.first().fund.fundId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Fondavgifter (HEM-5, issue #60) ---
+
+    @Test
+    fun `feeSummary anropar metadataFor med innehavens isin och rapporterar totalen`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            // 10 andelar × 120 kr = 1200 kr innehavsvärde; 0,73 % av 1200 = 8,76 kr/år.
+            assertEquals(8.76, state.feeSummary.totalAnnualFeeKr, 0.01)
+            assertEquals(0, state.feeSummary.unknownFeeCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf("SE0001466368"), metadataForCall)
+    }
+
+    @Test
+    fun `feeSummary raknar ett innehav utan isin som okand avgift, aldrig som noll`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A") // inget ISIN
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(0.0, state.feeSummary.totalAnnualFeeKr, 1e-9)
+            assertEquals(1, state.feeSummary.unknownFeeCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(emptyList<String>(), metadataForCall) // inget ISIN att slå upp
+    }
+
+    @Test
+    fun `feeSummary raknar ett innehav utan metadatatraff som okand avgift`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = emptyMap() // källan känner inte till ISIN:et
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(0.0, state.feeSummary.totalAnnualFeeKr, 1e-9)
+            assertEquals(1, state.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
