@@ -393,8 +393,11 @@ class FundMetadataRepositoryTest {
         val source = FakeAvanzaSource()
         val repository = repo(source)
 
-        // 1) En obefiltrerad fråga sätter den sanna baslinjen till 1499.
-        source.response = fundListJson(1499, listOf(Triple("SE_BASE", "Bas", "Sverige")))
+        // 1) En obefiltrerad fråga sätter den sanna baslinjen till 1499. Regionen på fonden i
+        // svaret spelar ingen roll för baslinjen (bara totalNoFunds gör), men den skrivs
+        // igenom till cachen av query() — "Global" i stället för "Sverige" så att den inte kan
+        // råka matcha det Sverige-filtrerade steg 3 nedan och maskera resultatet.
+        source.response = fundListJson(1499, listOf(Triple("SE_BASE", "Bas", "Global")))
         repository.query(FundScreenQuery())
 
         // 2) suggestCheaperAlternatives ISIN-slår upp innehavet (via findByIsin, som medvetet
