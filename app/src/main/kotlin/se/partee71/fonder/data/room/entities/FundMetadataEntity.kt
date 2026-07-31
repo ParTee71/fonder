@@ -14,11 +14,12 @@ import se.partee71.fonder.domain.model.FundTag
  *
  * [tagsJson] lagrar [FundMetadata.tags] som JSON-text i en enda kolumn — krävs för att en
  * cachad rad ska kunna filtreras på region/bransch/fondtyp offline med samma semantik som
- * källan (se [se.partee71.fonder.domain.usecase.FundScreenFilter]).
- *
- * [availableAtHandelsbanken]/[availabilityResolvedAtEpochDay] är null tills
- * [se.partee71.fonder.data.repository.FundMetadataRepository.resolveHandelsbankenAvailability]
- * har körts för fonden — se den för TTL-principen.
+ * källan (se [se.partee71.fonder.domain.usecase.FundScreenFilter]). Kodningen sköts av
+ * [FundTagsCodec], utanför den här klassen — Rooms KSP-processor läser annars av *alla*
+ * deklarationer i en `@Entity`-klass (inklusive companion-objektet) för att bygga sin
+ * kolumnmodell, och `FundTag.serializer()` (syntetiserad av kotlinx.serialization-pluginet)
+ * var inte synlig för den processorn när den låg i entitetens eget companion-objekt —
+ * `[MissingType]` i KSP-loggen trots att en vanlig Kotlin-kompilering var felfri.
  */
 @Entity(tableName = "fund_metadata")
 data class FundMetadataEntity(
@@ -52,14 +53,11 @@ data class FundMetadataEntity(
         indexFund = indexFund,
         startDateEpochDay = startDateEpochDay,
         minimumBuy = minimumBuy,
-        tags = decodeTags(tagsJson),
+        tags = FundTagsCodec.decode(tagsJson),
         availableAtHandelsbanken = availableAtHandelsbanken,
     )
 
     companion object {
-        private val json = Json { ignoreUnknownKeys = true }
-        private val tagListSerializer = ListSerializer(FundTag.serializer())
-
         fun fromDomain(
             metadata: FundMetadata,
             fetchedAtEpochDay: Long,
@@ -77,13 +75,25 @@ data class FundMetadataEntity(
             indexFund = metadata.indexFund,
             startDateEpochDay = metadata.startDateEpochDay,
             minimumBuy = metadata.minimumBuy,
-            tagsJson = json.encodeToString(tagListSerializer, metadata.tags),
+            tagsJson = FundTagsCodec.encode(metadata.tags),
             availableAtHandelsbanken = metadata.availableAtHandelsbanken,
             availabilityResolvedAtEpochDay = availabilityResolvedAtEpochDay,
             fetchedAtEpochDay = fetchedAtEpochDay,
         )
-
-        private fun decodeTags(tagsJson: String): List<FundTag> =
-            runCatching { json.decodeFromString(tagListSerializer, tagsJson) }.getOrElse { emptyList() }
     }
+}
+
+/**
+ * JSON-(av)kodning av [FundTag]-listan i [FundMetadataEntity.tagsJson] — medvetet **utanför**
+ * `FundMetadataEntity` (se dess KDoc för varför: Rooms KSP-processor kunde annars inte
+ * resolva `@Entity`-klassen).
+ */
+private object FundTagsCodec {
+    private val json = Json { ignoreUnknownKeys = true }
+    private val tagListSerializer = ListSerializer(FundTag.serializer())
+
+    fun encode(tags: List<FundTag>): String = json.encodeToString(tagListSerializer, tags)
+
+    fun decode(tagsJson: String): List<FundTag> =
+        runCatching { json.decodeFromString(tagListSerializer, tagsJson) }.getOrElse { emptyList() }
 }
