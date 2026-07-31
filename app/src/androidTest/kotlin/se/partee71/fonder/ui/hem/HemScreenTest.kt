@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -142,6 +143,56 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("Flaggad Fond").performClick()
         assertEquals("SHB0000442", clickedFundId)
+    }
+
+    // --- Fondavgifter (HEM-5, issue #60) ---
+
+    @Test
+    fun fondavgiftskort_visar_totalen_och_forklaringstexten() {
+        // Under 1000 kr — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg (se MoneyFormatTest).
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Fondavgifter per år").assertExists()
+        composeRule.onNodeWithText("500,00 kr", substring = true).assertExists()
+        composeRule.onNodeWithText("Redan avdraget löpande ur fondernas kurs", substring = true).assertExists()
+    }
+
+    @Test
+    fun fondavgiftskort_visar_antal_fonder_utan_kand_avgift() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 2),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("2 fond(er) saknar känd avgift", substring = true).assertExists()
+    }
+
+    @Test
+    fun fondavgiftskort_visar_ingen_okand_avgift_text_nar_alla_kanda() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("saknar känd avgift", substring = true).assertDoesNotExist()
     }
 
     private fun sampleAnalysis(status: FundAnalysisCalc.SignalLevel) = FundAnalysisCalc.Analysis(

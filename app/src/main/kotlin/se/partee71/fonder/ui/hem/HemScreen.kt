@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
@@ -52,6 +53,7 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
             TotalCard(state = state)
             PerformanceCard(performance = state.performance)
             AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick)
+            FeeCard(summary = state.feeSummary)
         }
     }
 }
@@ -143,6 +145,35 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, onFundClick: (String) 
                         FlaggedFundRow(flagged = flagged, onClick = { onFundClick(flagged.fund.fundId) })
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Portföljens totala fondavgift per år (HEM-5, issue #60). */
+@Composable
+private fun FeeCard(summary: PortfolioFeeCalc.Result) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            PeriodRow(
+                label = stringResource(R.string.hem_fee_title),
+                amount = null,
+                fraction = null,
+                valueText = MoneyFormat.kr(summary.totalAnnualFeeKr),
+            )
+            Text(
+                stringResource(R.string.hem_fee_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (summary.unknownFeeCount > 0) {
+                Text(
+                    stringResource(R.string.format_hem_fee_unknown, summary.unknownFeeCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
     }

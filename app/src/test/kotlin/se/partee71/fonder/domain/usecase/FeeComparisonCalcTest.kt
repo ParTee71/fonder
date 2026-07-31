@@ -158,4 +158,11 @@ class FeeComparisonCalcTest {
 
         assertEquals(listOf("SE_STOR", "SE_LITEN"), result.map { it.candidate.isin })
     }
+
+    @Test
+    fun `annualFeeKr omvandlar en avgift i procentform till kronor per ar, delad primitiv med PortfolioFeeCalc (issue 60)`() {
+        // 300 000 kr × 0,73 % = 2 190 kr/år.
+        assertEquals(2190.0, FeeComparisonCalc.annualFeeKr(feePercent = 0.73, holdingValue = 300_000.0), 0.01)
+        assertEquals(0.0, FeeComparisonCalc.annualFeeKr(feePercent = 0.73, holdingValue = 0.0), 1e-9)
+    }
 }

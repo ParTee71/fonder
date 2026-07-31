@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.25.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.26.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -33,6 +33,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       fondrobot (#57)
 - [x] Billigare alternativ till ett innehav — appens första rådgivande funktion, i Fonddetalj
       (ANA-9, #59)
+- [x] Portföljens totala fondavgift per år, kort på Hem (HEM-5, #60)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -97,9 +98,11 @@ domain/
                   ChartPeriodFilter (kursdiagrammets periodväljare, #51) ·
                   PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
                   FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
-                  FeeComparisonCalc (billigare alternativ, ANA-9, #59)
+                  FeeComparisonCalc (billigare alternativ, ANA-9, #59) ·
+                  PortfolioFeeCalc (portföljens totala fondavgift, HEM-5, #60)
 ui/
-├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16)
+├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
+│                 fondavgiftskort HEM-5/#60)
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)

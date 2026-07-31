@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.25.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.26.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -127,6 +127,7 @@
 | HEM-2 | Räcker inte kurshistoriken för en period (t.ex. nyligen tillagd fond) markeras den perioden tydligt som osäker/saknas i stället för att tystas ner eller visa fel värde. Har *något* innehav historik men inte alla, markeras totalen som **delvis osäker** i stället för att exkludera hela totalen eller låtsas att alla fonder är med. Perioderna är förankrade i senaste kända NAV-dag (se POR-5), så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad. ~~Beror det på att inget innehav har en tillräckligt färsk kurs för perioden visas i stället "Kurs ej uppdaterad".~~ *(borttaget, se POR-5)* |
 | HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
+| HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
 
 ---
 
@@ -722,3 +723,24 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   baslinjen när frågan är helt ofiltrerad (varken kategoriskt filter, `maxTotalFee` eller
   `nameContains`) — en `maxTotalFee`-fråga är en verifierat respekterad avgränsning, inte en
   ofiltrerad baslinje.
+
+- **Portföljens totala fondavgift på Hem (#60):** Ny rad HEM-5 — ett kort som visar vad
+  portföljens fondavgifter kostar i kronor per år, ovanpå fondmetadata-lagret (#57) och den
+  delade avgift→kr-primitiven från ANA-9 (#59). Verifierat mot källan innan implementation:
+  `totalFee` är förvaltning + handelskostnader (0,73 % = ongoingFee 0,66 + transactionFee 0,07
+  för Handelsbanken Sverige Index Criteria), så #59 redan valde rätt fält. Namnuppslag mot
+  Handelsbanken-fonder är opålitligt (andelsklass-suffix som "(A1 SEK)" ger ofta noll träffar
+  på namn), men ISIN-uppslag ger exakt en träff — `Fund.isin` finns redan lokalt via import,
+  så `metadataFor` behöver aldrig ett namnuppslag. Ny `FundMetadataRepository.metadataFor`
+  slår upp fondmetadata cache-först per ISIN, via samma `findByIsin`-väg som
+  `suggestCheaperAlternatives` (utanför `query()`, rör aldrig `lastKnownUnfilteredTotal` —
+  regressionstestat). Ny `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) täpper en lucka:
+  fondmetadata skrivs annars bara över av en livehämtning via `query()`, men en
+  cache-först-läsning gör aldrig en sådan — utan egen TTL hade avgiftstotalen kunnat visa
+  godtyckligt gamla avgifter. Den delade beräkningen `FeeComparisonCalc.annualFeeKr(feePercent,
+  holdingValue)` lyftes ut ur ANA-9:s besparingsformel så portföljtotalen och
+  enskild-fond-besparingen inte kan glida isär till olika svar på samma räknestycke.
+  Besparingspotential (vad portföljen kan spara genom byte) hörde ursprungligen hit men bröts
+  ut till ett eget issue (#61) efter en kostnadsberäkning: en fullständig genomsökning kan
+  kosta hundratals hämtningar mot Handelsbankens fondlista, vilket aldrig får ske automatiskt
+  på startskärmen.
