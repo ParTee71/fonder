@@ -4,8 +4,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -61,7 +63,13 @@ class SettingsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        // DataStore skriver annars på sin egen Dispatchers.IO-bundna scope, frikopplad från
+        // testets StandardTestDispatcher — awaitItem() väntar då på en riktig (klock-)tid som
+        // ibland hann överstiga Turbines timeout under CI-belastning (flaky, se
+        // "lastPriceSyncEpochMillis speglar preferences efter en uppdatering"). Ger DataStore
+        // samma dispatcher som testet så skrivningen blir en del av samma virtuella tid.
         dataStore = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("settings_test.preferences_pb") },
         )
     }
