@@ -43,4 +43,18 @@ class FundMetadataFreshnessTest {
 
         assertTrue(FundMetadataFreshness.isStale(resolvedAt, today, FundMetadataFreshness.FEE_TTL_DAYS))
     }
+
+    @Test
+    fun `COMPARISON_TTL_DAYS exakt pa gransen ar inte inaktuell`() {
+        val resolvedAt = today.minusDays(FundMetadataFreshness.COMPARISON_TTL_DAYS).toEpochDay()
+
+        assertFalse(FundMetadataFreshness.isStale(resolvedAt, today, FundMetadataFreshness.COMPARISON_TTL_DAYS))
+    }
+
+    @Test
+    fun `COMPARISON_TTL_DAYS pluss en dag ar inaktuell`() {
+        val resolvedAt = today.minusDays(FundMetadataFreshness.COMPARISON_TTL_DAYS + 1).toEpochDay()
+
+        assertTrue(FundMetadataFreshness.isStale(resolvedAt, today, FundMetadataFreshness.COMPARISON_TTL_DAYS))
+    }
 }

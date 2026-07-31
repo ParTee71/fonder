@@ -106,7 +106,7 @@ class HemViewModel @Inject constructor(
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
                     analysisSummary = buildAnalysisSummary(enriched, transactions, today),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
-                    feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin),
+                    feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
                 )
             }
         }.stateIn(

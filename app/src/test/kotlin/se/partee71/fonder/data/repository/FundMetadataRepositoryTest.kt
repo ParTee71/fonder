@@ -316,6 +316,31 @@ class FundMetadataRepositoryTest {
         // Kandidatfrågan byggdes ur innehavets egna taggar (fundType/region), inte fritt.
         assertTrue(source.lastRequestBody?.contains("\"fundTypeFilter\":[\"Aktiefond\"]") == true)
         assertTrue(source.lastRequestBody?.contains("\"commonRegionFilter\":[\"Sverige\"]") == true)
+
+        // Sparat för portföljens samlade besparingspotential (HEM-6, issue #61) — det
+        // billigaste verifierade alternativets ISIN och avgift, plus dagens datum.
+        val stored = dao.stored["SE_HELD"]
+        assertEquals("SE_CAND", stored?.cheapestAlternativeIsin)
+        assertEquals(0.21, stored?.cheapestAlternativeFee ?: -1.0, 1e-9)
+        assertEquals(LocalDate.now().toEpochDay(), stored?.comparisonResolvedAtEpochDay)
+    }
+
+    @Test
+    fun `suggestCheaperAlternatives sparar sokt-utan-traff, skilt fran aldrig sokt`() = runTest {
+        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
+        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = heldTags)
+        val source = FakeAvanzaSource()
+        source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
+        val repository = repo(source)
+
+        val result = repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
+
+        assertEquals(emptyList<Any>(), result)
+        val stored = dao.stored["SE_HELD"]
+        // Datumet är satt (sökningen gjordes) men isinet är null (inget billigare hittades) —
+        // den distinktionen är precis vad som skiljer "genomsökt utan träff" från "aldrig sökt".
+        assertNull(stored?.cheapestAlternativeIsin)
+        assertEquals(LocalDate.now().toEpochDay(), stored?.comparisonResolvedAtEpochDay)
     }
 
     @Test

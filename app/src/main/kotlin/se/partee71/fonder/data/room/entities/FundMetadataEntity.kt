@@ -39,6 +39,11 @@ data class FundMetadataEntity(
     val availableAtHandelsbanken: Boolean?,
     val availabilityResolvedAtEpochDay: Long?,
     val fetchedAtEpochDay: Long,
+    /** Billigaste verifierat köpbara alternativets ISIN (ANA-9, HEM-6, issue #61) — se [FundMetadata.cheapestAlternativeIsin]. */
+    val cheapestAlternativeIsin: String? = null,
+    val cheapestAlternativeFee: Double? = null,
+    /** Null = aldrig jämfört. Satt (oavsett [cheapestAlternativeIsin]) = jämfört den dagen. */
+    val comparisonResolvedAtEpochDay: Long? = null,
 ) {
     fun toDomain() = FundMetadata(
         isin = isin,
@@ -55,6 +60,9 @@ data class FundMetadataEntity(
         minimumBuy = minimumBuy,
         tags = FundTagsCodec.decode(tagsJson),
         availableAtHandelsbanken = availableAtHandelsbanken,
+        cheapestAlternativeIsin = cheapestAlternativeIsin,
+        cheapestAlternativeFee = cheapestAlternativeFee,
+        comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay,
     )
 
     companion object {
@@ -79,6 +87,9 @@ data class FundMetadataEntity(
             availableAtHandelsbanken = metadata.availableAtHandelsbanken,
             availabilityResolvedAtEpochDay = availabilityResolvedAtEpochDay,
             fetchedAtEpochDay = fetchedAtEpochDay,
+            cheapestAlternativeIsin = metadata.cheapestAlternativeIsin,
+            cheapestAlternativeFee = metadata.cheapestAlternativeFee,
+            comparisonResolvedAtEpochDay = metadata.comparisonResolvedAtEpochDay,
         )
     }
 }

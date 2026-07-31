@@ -230,6 +230,116 @@ class HemScreenTest {
         assertEquals("BIL", clickedFundId)
     }
 
+    // --- Samlad besparingspotential (HEM-6, issue #61) ---
+
+    @Test
+    fun fondavgiftskort_visar_samlad_besparing_och_antal_genomsokta() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(
+                totalAnnualFeeKr = 900.0,
+                byHolding = emptyList(),
+                unknownFeeCount = 0,
+                totalAnnualSavingsKr = 300.0,
+                comparedCount = 2,
+                comparableCount = 3,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("300,00 kr", substring = true).assertExists()
+        composeRule.onNodeWithText("2 av 3", substring = true).assertExists()
+    }
+
+    @Test
+    fun fondavgiftskort_visar_ingen_besparingstext_utan_jamforbara_innehav() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Möjlig besparing", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun avgiftsrad_visar_besparing_nar_ett_farskt_billigare_alternativ_finns() {
+        val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(
+                totalAnnualFeeKr = 700.0,
+                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = 350.0)),
+                unknownFeeCount = 0,
+                totalAnnualSavingsKr = 350.0,
+                comparedCount = 1,
+                comparableCount = 1,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Kan spara 350,00 kr/år", substring = true).assertExists()
+    }
+
+    @Test
+    fun avgiftsrad_visar_ingen_text_alls_for_ett_aldrig_sokt_innehav() {
+        val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(
+                totalAnnualFeeKr = 700.0,
+                // wasCompared=false (standard) — aldrig sökt, eller ett utgånget resultat.
+                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null)),
+                unknownFeeCount = 0,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Kan spara", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Redan bland de billigaste", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun avgiftsrad_visar_redan_bland_de_billigaste_nar_genomsokt_utan_traff() {
+        // Skilt tillstånd från "aldrig sökt" — samma text som ANA-9:s eget kort i Fonddetalj
+        // (regel 4), så det inte ser ut som att innehavet aldrig genomsökts.
+        val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            feeSummary = PortfolioFeeCalc.Result(
+                totalAnnualFeeKr = 700.0,
+                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null, wasCompared = true)),
+                unknownFeeCount = 0,
+                comparedCount = 1,
+                comparableCount = 1,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Redan bland de billigaste", substring = true).assertExists()
+        composeRule.onNodeWithText("Kan spara", substring = true).assertDoesNotExist()
+    }
+
     // --- Skrollbarhet (UI-5, issue #63) ---
 
     @Test

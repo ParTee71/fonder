@@ -19,6 +19,16 @@ package se.partee71.fonder.domain.model
  *   [se.partee71.fonder.data.repository.FundMetadataRepository.resolveHandelsbankenAvailability],
  *   som ISIN-verifierar mot fondlista-katalogen — ren namnmatchning räcker inte
  *   (andelsklassfamiljer, se issue #45).
+ * @param cheapestAlternativeIsin ISIN för det billigaste verifierat köpbara alternativet med
+ *   identisk exponering (ANA-9), eller null. [comparisonResolvedAtEpochDay] avgör om null
+ *   betyder "aldrig jämfört" eller "jämfört, inget billigare hittades" — se den för
+ *   distinktionen (HEM-6, issue #61).
+ * @param cheapestAlternativeFee [cheapestAlternativeIsin]s `totalFee` vid jämförelsetillfället,
+ *   för att räkna kr-besparingen ur innehavets *aktuella* värde vid visning — aldrig ett sparat
+ *   kronbelopp, som blir fel så fort NAV rör sig.
+ * @param comparisonResolvedAtEpochDay Null = aldrig jämfört. Satt datum (oavsett om
+ *   [cheapestAlternativeIsin] är null eller ej) = jämfört den dagen. Sätts av
+ *   [se.partee71.fonder.data.repository.FundMetadataRepository.suggestCheaperAlternatives].
  */
 data class FundMetadata(
     val isin: String,
@@ -35,4 +45,7 @@ data class FundMetadata(
     val minimumBuy: Double?,
     val tags: List<FundTag>,
     val availableAtHandelsbanken: Boolean? = null,
+    val cheapestAlternativeIsin: String? = null,
+    val cheapestAlternativeFee: Double? = null,
+    val comparisonResolvedAtEpochDay: Long? = null,
 )

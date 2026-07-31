@@ -23,7 +23,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FxRateEntity::class,
         FundMetadataEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -200,6 +200,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 8 → 9 (issue #61): lägger till tre kolumner på `fund_metadata` för den
+         * persisterade jämförelsen (ANA-9/HEM-6) — billigaste verifierat köpbara alternativets
+         * ISIN och avgift, plus datumet jämförelsen gjordes. `comparisonResolvedAtEpochDay`
+         * null = aldrig jämfört; satt datum med `cheapestAlternativeIsin` null = jämfört, inget
+         * billigare hittades. Kronbesparingen sparas medvetet **inte** — den räknas alltid ur
+         * innehavets aktuella värde vid visning, annars blir den fel så fort NAV rör sig.
+         * Härledd cache-data precis som resten av `fund_metadata` (NFR-1); befintliga rader
+         * (inklusive redan uppslagen köpbarhet) rörs inte, bara utökas med nullbara kolumner.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `cheapestAlternativeIsin` TEXT")
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `cheapestAlternativeFee` REAL")
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `comparisonResolvedAtEpochDay` INTEGER")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -208,6 +226,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
         )
     }
 }

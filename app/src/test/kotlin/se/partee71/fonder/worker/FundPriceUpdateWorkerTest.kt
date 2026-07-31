@@ -8,13 +8,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import java.time.LocalDate
 
 /**
@@ -50,7 +55,7 @@ class FundPriceUpdateWorkerTest {
 
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = cachedPrices[fundId]
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
+        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(cachedPrices)
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
@@ -205,5 +210,106 @@ class FundPriceUpdateWorkerTest {
 
         assertTrue(success)
         assertEquals(listOf(fond.fundId), refreshedFundIds)
+    }
+
+    // --- scanComparisons: inkrementell ifyllnad av billigare-alternativ-jämförelsen (HEM-6, issue #61) ---
+
+    private val metadataByIsin = mutableMapOf<String, FundMetadata>()
+    private val suggestCheaperAlternativesCalls = mutableListOf<Pair<String, Double>>()
+
+    private val fakeFundMetadataRepo = object : FundMetadataRepository {
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
+        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
+            suggestCheaperAlternativesCalls.add(isin to holdingValue)
+            return emptyList()
+        }
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> =
+            metadataByIsin.filterKeys { it in isins }
+    }
+
+    private fun buy(fundId: String, shares: Double, pricePerShare: Double) = Transaction(
+        fundId = fundId, type = TransactionType.KOP,
+        epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), shares = shares, pricePerShare = pricePerShare,
+    )
+
+    private fun neverScanned(isin: String) = FundMetadata(
+        isin = isin, name = isin, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
+        category = null, fundType = null, companyName = null, risk = null, indexFund = false,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+    )
+
+    @Test
+    fun `scanComparisons gor inget nar inga bevakade fonder finns`() = runTest {
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        assertTrue(suggestCheaperAlternativesCalls.isEmpty())
+    }
+
+    @Test
+    fun `scanComparisons hoppar over innehav utan isin`() = runTest {
+        val utanIsin = Fund(fundId = "UTAN", name = "Utan ISIN")
+        val medIsin = Fund(fundId = "MED", name = "Med ISIN", isin = "SE_MED")
+        funds.value = listOf(utanIsin, medIsin)
+        transactions.value = listOf(buy(utanIsin.fundId, 1.0, 100.0), buy(medIsin.fundId, 1.0, 100.0))
+        cachedPrices[utanIsin.fundId] = FundPrice(fundId = utanIsin.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[medIsin.fundId] = FundPrice(fundId = medIsin.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        assertEquals(listOf("SE_MED"), suggestCheaperAlternativesCalls.map { it.first })
+    }
+
+    @Test
+    fun `scanComparisons tar hogst tva innehav per korning`() = runTest {
+        // Mycket färre än en normal portfölj skulle behöva skannas på en gång — inkrementell
+        // ifyllnad i stället för en dyr engångsskanning (issue #61).
+        val fundIds = (1..5).map { "F$it" }
+        funds.value = fundIds.map { Fund(fundId = it, name = it, isin = "SE_$it") }
+        transactions.value = fundIds.map { buy(it, 1.0, 100.0) }
+        fundIds.forEach { cachedPrices[it] = FundPrice(fundId = it, epochDay = LocalDate.now().toEpochDay(), nav = 100.0) }
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        assertEquals(2, suggestCheaperAlternativesCalls.size)
+    }
+
+    @Test
+    fun `scanComparisons prioriterar storst innehavsvarde forst`() = runTest {
+        val small = Fund(fundId = "SMALL", name = "Small", isin = "SE_SMALL")
+        val medium = Fund(fundId = "MEDIUM", name = "Medium", isin = "SE_MEDIUM")
+        val large = Fund(fundId = "LARGE", name = "Large", isin = "SE_LARGE")
+        funds.value = listOf(small, medium, large)
+        transactions.value = listOf(buy(small.fundId, 1.0, 100.0), buy(medium.fundId, 1.0, 100.0), buy(large.fundId, 1.0, 100.0))
+        cachedPrices[small.fundId] = FundPrice(fundId = small.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 10.0)
+        cachedPrices[medium.fundId] = FundPrice(fundId = medium.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[large.fundId] = FundPrice(fundId = large.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 1000.0)
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        assertEquals(setOf(large.isin, medium.isin), suggestCheaperAlternativesCalls.map { it.first }.toSet())
+    }
+
+    @Test
+    fun `scanComparisons hoppar over farska resultat, tar aldrig sokta eller utgangna`() = runTest {
+        val today = LocalDate.now()
+        val farsk = Fund(fundId = "FARSK", name = "Färsk", isin = "SE_FARSK")
+        val utgangen = Fund(fundId = "UTGANGEN", name = "Utgången", isin = "SE_UTGANGEN")
+        val aldrigSokt = Fund(fundId = "ALDRIG", name = "Aldrig sökt", isin = "SE_ALDRIG")
+        funds.value = listOf(farsk, utgangen, aldrigSokt)
+        transactions.value = listOf(buy(farsk.fundId, 1.0, 100.0), buy(utgangen.fundId, 1.0, 100.0), buy(aldrigSokt.fundId, 1.0, 100.0))
+        listOf(farsk, utgangen, aldrigSokt).forEach {
+            cachedPrices[it.fundId] = FundPrice(fundId = it.fundId, epochDay = today.toEpochDay(), nav = 100.0)
+        }
+        metadataByIsin["SE_FARSK"] = neverScanned("SE_FARSK").copy(comparisonResolvedAtEpochDay = today.toEpochDay())
+        metadataByIsin["SE_UTGANGEN"] = neverScanned("SE_UTGANGEN").copy(
+            comparisonResolvedAtEpochDay = today.minusDays(31).toEpochDay(),
+        )
+        // ALDRIG har ingen fund_metadata-rad alls — aldrig sökt.
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, today)
+
+        assertEquals(setOf("SE_UTGANGEN", "SE_ALDRIG"), suggestCheaperAlternativesCalls.map { it.first }.toSet())
     }
 }
