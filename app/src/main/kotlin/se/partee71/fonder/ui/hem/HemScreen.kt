@@ -158,10 +158,14 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, onFundClick: (String) 
 }
 
 /**
- * Portföljens totala fondavgift per år (HEM-5, issue #60), med en rad per innehav (störst
- * avgift först, redan sorterat av [PortfolioFeeCalc.compute]) som öppnar fonden i Fonddetalj
- * — annars var totalen inte handlingsbar: användaren visste vad avgifterna kostade totalt,
- * men inte vilken fond som gjorde det (issue #63).
+ * Portföljens totala fondavgift per år (HEM-5, issue #60), samlade besparingspotential
+ * (HEM-6, issue #61) och en rad per innehav (störst avgift först, redan sorterat av
+ * [PortfolioFeeCalc.compute]) som öppnar fonden i Fonddetalj — annars var totalen inte
+ * handlingsbar: användaren visste vad avgifterna kostade totalt, men inte vilken fond som
+ * gjorde det (issue #63). Besparingen visas bara för innehav med ett känt, färskt
+ * jämförelseresultat ([PortfolioFeeCalc.HoldingFee.annualSavingsKr] null annars) — ett
+ * innehav som aldrig genomsökts ser ut som just det (via "N av M genomsökta"), aldrig som
+ * "inget billigare hittades".
  */
 @Composable
 private fun FeeCard(summary: PortfolioFeeCalc.Result, onFundClick: (String) -> Unit) {
@@ -187,6 +191,19 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, onFundClick: (String) -> U
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            if (summary.comparableCount > 0) {
+                Text(
+                    stringResource(
+                        R.string.format_hem_fee_savings,
+                        MoneyFormat.kr(summary.totalAnnualSavingsKr),
+                        summary.comparedCount,
+                        summary.comparableCount,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             if (summary.byHolding.isNotEmpty()) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
                     summary.byHolding.forEach { holdingFee ->
@@ -205,13 +222,33 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        PeriodRow(
-            label = holdingFee.fund.name,
-            amount = null,
-            fraction = null,
-            valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
-            modifier = Modifier.padding(12.dp),
-        )
+        Column(modifier = Modifier.padding(12.dp)) {
+            PeriodRow(
+                label = holdingFee.fund.name,
+                amount = null,
+                fraction = null,
+                valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+            )
+            // Aldrig jämfört (ingen text) och jämfört-utan-träff ("Redan bland de billigaste",
+            // samma text som ANA-9:s eget kort i Fonddetalj — regel 4) är skilda tillstånd,
+            // både i data (PortfolioFeeCalc.HoldingFee.wasCompared) och här i UI:t. Annars ser
+            // ett outforskat innehav ut som redan optimalt.
+            val savings = holdingFee.annualSavingsKr
+            when {
+                savings != null && savings > 0 -> Text(
+                    stringResource(R.string.format_hem_fee_holding_savings, MoneyFormat.kr(savings)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                holdingFee.wasCompared -> Text(
+                    stringResource(R.string.fee_comparison_none_cheaper),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
     }
 }
 

@@ -61,6 +61,10 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
 
     override fun scheduleBackstop() {
         val request = PeriodicWorkRequestBuilder<FundPriceUpdateWorker>(BACKSTOP_INTERVAL_HOURS, TimeUnit.HOURS)
+            // Bara backstopen fyller inkrementellt på billigare-alternativ-jämförelsen (HEM-6,
+            // issue #61) — aldrig launch-gaten eller den manuella knappen, se
+            // FundPriceUpdateWorker.KEY_SCAN_COMPARISONS.
+            .setInputData(workDataOf(FundPriceUpdateWorker.KEY_SCAN_COMPARISONS to true))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints)
             .build()

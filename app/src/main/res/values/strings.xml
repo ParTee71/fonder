@@ -37,6 +37,9 @@
     <string name="hem_fee_title">Fondavgifter per år</string>
     <string name="hem_fee_explain">Redan avdraget löpande ur fondernas kurs — ingen separat kostnad att hitta på kontot.</string>
     <string name="format_hem_fee_unknown">%1$d fond(er) saknar känd avgift och räknas inte in i totalen.</string>
+    <!-- Samlad besparingspotential (HEM-6, issue #61) -->
+    <string name="format_hem_fee_savings">Möjlig besparing %1$s/år (%2$d av %3$d fonder genomsökta)</string>
+    <string name="format_hem_fee_holding_savings">Kan spara %1$s/år</string>
 
     <!-- Period-förändring (dag/vecka/månad), delad mellan Hem och Portfölj -->
     <string name="period_day">En dag</string>

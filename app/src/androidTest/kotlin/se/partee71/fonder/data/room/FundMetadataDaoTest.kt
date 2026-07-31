@@ -92,4 +92,44 @@ class FundMetadataDaoTest {
 
         assertTrue(dao.getAll().isEmpty())
     }
+
+    // --- Persisterad jämförelse (HEM-6, issue #61) ---
+
+    @Test
+    fun `jamforelsefalten ar null som standard - aldrig sokt`() = runTest {
+        dao.upsert(entity("SE1"))
+
+        val loaded = dao.getByIsin("SE1")
+
+        assertNull(loaded?.cheapestAlternativeIsin)
+        assertNull(loaded?.cheapestAlternativeFee)
+        assertNull(loaded?.comparisonResolvedAtEpochDay)
+    }
+
+    @Test
+    fun `sokt utan traff sparas som datum satt men isin null`() = runTest {
+        dao.upsert(entity("SE1").copy(comparisonResolvedAtEpochDay = 20100))
+
+        val loaded = dao.getByIsin("SE1")
+
+        assertNull(loaded?.cheapestAlternativeIsin)
+        assertEquals(20100L, loaded?.comparisonResolvedAtEpochDay)
+    }
+
+    @Test
+    fun `sokt med traff rundtur pa alla tre falten`() = runTest {
+        dao.upsert(
+            entity("SE1").copy(
+                cheapestAlternativeIsin = "SE2",
+                cheapestAlternativeFee = 0.21,
+                comparisonResolvedAtEpochDay = 20100,
+            ),
+        )
+
+        val loaded = dao.getByIsin("SE1")
+
+        assertEquals("SE2", loaded?.cheapestAlternativeIsin)
+        assertEquals(0.21, loaded?.cheapestAlternativeFee ?: -1.0, 1e-9)
+        assertEquals(20100L, loaded?.comparisonResolvedAtEpochDay)
+    }
 }

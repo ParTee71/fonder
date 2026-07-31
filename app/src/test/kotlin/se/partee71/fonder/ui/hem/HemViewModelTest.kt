@@ -308,4 +308,37 @@ class HemViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // --- Samlad besparingspotential (HEM-6, issue #61) ---
+
+    @Test
+    fun `feeSummary visar besparing fran ett farskt persisterat jamforelseresultat`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+                cheapestAlternativeIsin = "SE_ALT", cheapestAlternativeFee = 0.21,
+                comparisonResolvedAtEpochDay = today.toEpochDay(),
+            ),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            // 1200 kr innehavsvärde × (0,73−0,21)% = 6,24 kr/år.
+            assertEquals(6.24, state.feeSummary.totalAnnualSavingsKr, 0.01)
+            assertEquals(1, state.feeSummary.comparedCount)
+            assertEquals(1, state.feeSummary.comparableCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

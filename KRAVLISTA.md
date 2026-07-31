@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.27.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.28.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -129,6 +129,7 @@
 | HEM-3 | Tom portfölj visar samma tomt-tillstånds-princip som Portfölj (POR-2), med uppmaning att lägga till en transaktion. |
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
 | HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Under totalen visas **en rad per innehav med känd avgift, störst avgift först**, som öppnar fonden i Fonddetalj vid klick (issue #63) — annars var totalen inte handlingsbar: att veta vad avgifterna kostar totalt hjälper inte utan att veta vilken fond som gör det. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
+| HEM-6 | Hem visar portföljens **samlade besparingspotential per år** — summan av (innehavets avgift − billigaste verifierat köpbara alternativets avgift) × innehavets aktuella värde, för innehav med ett **färskt** jämförelseresultat — samt "N av M genomsökta" (antal innehav med ett färskt resultat, av totalt jämförbara). Kronbeloppet räknas alltid ur innehavets aktuella värde, aldrig ur ett sparat kronbelopp — den sparade `cheapestAlternativeFee` (ANA-9) är värdeoberoende, kronorna är det inte. "Aldrig genomsökt" (`comparisonResolvedAtEpochDay` null) och "genomsökt utan träff" (satt datum, `cheapestAlternativeIsin` null) är skilda tillstånd i både data och UI — en avgiftsrad utan besparing visar antingen ingen text (aldrig sökt) eller "Redan bland de billigaste i sin kategori" (samma text som ANA-9:s eget kort, regel 4), aldrig samma text för båda. Ett resultat äldre än `FundMetadataFreshness.COMPARISON_TTL_DAYS` (30 dygn) räknas som osökt, aldrig som en aktuell rekommendation — ett gammalt råd (fonden kan ha höjt avgiften eller slutat säljas hos Handelsbanken sedan dess) är fel på ett sätt gammal avgiftsdata inte är. Ifyllnaden sker **inkrementellt** (högst två innehav per körning, störst värde först, `FundPriceUpdateWorker.scanComparisons`) via den befintliga periodiska bakgrundskörningen (`FundPriceRefreshScheduler.scheduleBackstop`, var 12:e timme) — aldrig vid appstart eller den manuella kursuppdateringen, eftersom en fullständig skanning kan kosta hundratals hämtningar mot Handelsbankens fondlista (issue #61). Ingen egen worker eller schemaläggare — rider med på den som redan itererar alla bevakade fonder (regel 4). |
 
 ---
 
@@ -144,7 +145,7 @@
 | ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta, volatilitet, Sharpe-kvot). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. ~~Språket är alltid förklarande, aldrig rådgivande (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* |
 | ANA-7 | Analys visar två **riskmått** per innehav, beräknade ur NAV-historiken med fasta konstanter (dokumenterade i `FundAnalysisCalc`): **volatilitet** (annualiserad standardavvikelse på dagsavkastningar, ×√252) och **Sharpe-kvot** ((annualiserad avkastning − fast riskfri ränta 0 %) / volatilitet). Räcker inte historiken (färre än ~60 dagsavkastningar) markeras måttet som otillräcklig data i stället för att gissas (ANA-4); är volatiliteten 0 saknas Sharpe (ingen division med noll). Måtten visas via delade `PeriodRow`/`ExpandableInfoRow` med utfällbar förklaring och ordlisttermer (ANA-5/ANA-6). ~~Neutralt språk, aldrig rådgivning (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* Inget nytt persisterat fält (härlett ur befintlig kurshistorik). |
 | ANA-8 | En fjärde signal, **vinstsignal (S4)**, flaggar när ett innehavs orealiserade vinst mot GAV är minst **+50 %** (fast tröskel, dokumenterad i `FundAnalysisCalc`). Till skillnad från S1–S3 (ANA-2) är det ingen risksignal — den deltar **inte** i den sammanslagna statusen (ANA-3) och visas med en egen markering (`ProfitTakeBadge`, `ui/components/`, regel 4), skild från risk-trafikljuset, eftersom paletten (UI-1) redan har både den gula och gröna nivåfärgen upptagna. Otillräcklig data (samma gate som GAV-nyckeltalet, ANA-1) visar ingen signal (ANA-4). ~~Aldrig ett köp-/säljråd (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* issue #26. |
-| ANA-9 | Fonddetalj föreslår för ett kvarvarande innehav **billigare, likvärdiga alternativ** — appens första rådgivande funktion (se ANA-3/ANA-5/ANA-6/ANA-7/ANA-8). En kandidat visas bara vid **identisk taggmängd och samma indexstatus** som innehavet (TP-21), **strikt lägre totalavgift** och ISIN-verifierad köpbarhet hos Handelsbanken (`FundNameMatcher`, samma princip som `ImportFundMatcher`, TP-13/issue #45) — rankad på **årsbesparing i kronor** (avgiftsskillnad × innehavets nuvarande värde, `FeeComparisonCalc`, `domain/usecase/`). Köpbarheten verifieras budgeterat (högst tre kandidater visas, högst tio prövas) och asynkront — jämförelsen blockerar aldrig Fonddetalj. Innehav utan ISIN, utan metadataträff eller utan känd avgift visar "kunde inte jämföras" (ANA-4-principen); inga kvalificerade alternativ visar ett lugnt "redan bland de billigaste" i stället för ett tomt kort. Kortet anger uttryckligen vad jämförelsen omfattar (avgift vid identisk exponering, inte innehav/avkastning/risk) och vad den inte gör. Ingen ny persisterad data — härleds ur `fund_metadata`-cachen (TP-21). |
+| ANA-9 | Fonddetalj föreslår för ett kvarvarande innehav **billigare, likvärdiga alternativ** — appens första rådgivande funktion (se ANA-3/ANA-5/ANA-6/ANA-7/ANA-8). En kandidat visas bara vid **identisk taggmängd och samma indexstatus** som innehavet (TP-21), **strikt lägre totalavgift** och ISIN-verifierad köpbarhet hos Handelsbanken (`FundNameMatcher`, samma princip som `ImportFundMatcher`, TP-13/issue #45) — rankad på **årsbesparing i kronor** (avgiftsskillnad × innehavets nuvarande värde, `FeeComparisonCalc`, `domain/usecase/`). Köpbarheten verifieras budgeterat (högst tre kandidater visas, högst tio prövas) och asynkront — jämförelsen blockerar aldrig Fonddetalj. Innehav utan ISIN, utan metadataträff eller utan känd avgift visar "kunde inte jämföras" (ANA-4-principen); inga kvalificerade alternativ visar ett lugnt "redan bland de billigaste" i stället för ett tomt kort. Kortet anger uttryckligen vad jämförelsen omfattar (avgift vid identisk exponering, inte innehav/avkastning/risk) och vad den inte gör. Resultatet (billigaste alternativets ISIN och avgift, plus jämförelsedatum — aldrig ett kronbelopp) persisteras på fondens `fund_metadata`-rad (Room 8→9, `cheapestAlternativeIsin`/`cheapestAlternativeFee`/`comparisonResolvedAtEpochDay`) varje gång jämförelsen körs, vilket driver portföljens samlade besparingspotential på Hem (HEM-6, issue #61). |
 
 ---
 
@@ -762,3 +763,32 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   och enhetstestad i #60 — renderades ingenstans i `FeeCard`. Totalen var inte handlingsbar utan
   att veta vilken fond som kostade mest. HEM-5 utökad med en klickbar rad per innehav, samma
   mönster som HEM-4:s flaggade fonder, återanvänder `PeriodRow`.
+
+- **Samlad besparingspotential med inkrementell ifyllnad via befintlig worker (#61):** Ny
+  HEM-6. Omskrivet efter kodverifiering innan implementation — första utkastet ville bygga en
+  ny worker, en ny schemaläggare och en skanningsknapp; repot hade redan allt det.
+  `FundPriceUpdateWorker` itererar redan alla bevakade fonder på ett schema som redan är
+  koalescerat (`FundPriceRefreshScheduler`), så jämförelsen (`scanComparisons`) rider med i
+  stället för att duplicera mekaniken. En ny input-data-nyckel (`KEY_SCAN_COMPARISONS`) gör att
+  bara den 12-timmars periodiska backstopen skannar — aldrig launch-gaten eller den manuella
+  kursuppdateringen, eftersom en jämförelse kan kosta upp till ~50 hämtningar per innehav.
+  Inkrementell ifyllnad (högst två innehav per körning, störst värde först) ersatte en
+  skanningsknapp helt — med 12-timmarsintervallet räcker det för att en normalstor portfölj är
+  genomsökt inom några dygn.
+
+  Nyckelinsikten som gjorde persistensen säker: den sparade kandidaten
+  (`cheapestAlternativeFee`) är **värdeoberoende** — `FeeComparisonCalc.rank()` sorterar på
+  kronbesparing, men för ett givet innehav är `holdingValue` konstant över alla kandidater, så
+  ordningen är identisk med "lägst avgift först". Kronbeloppet självt sparas medvetet inte —
+  det räknas alltid om ur innehavets aktuella värde vid visning, annars blir det fel så fort
+  NAV rör sig. Tre tillstånd hålls isär genomgående (data och UI): aldrig genomsökt
+  (`comparisonResolvedAtEpochDay` null), genomsökt utan träff (satt datum, `cheapestAlternativeIsin`
+  null) och genomsökt med träff — annars ser en outforskad portfölj ut som en optimal.
+
+  Room-migrering 8→9 (tre nya kolumner på `fund_metadata`) — till skillnad från #60 och #63 en
+  verklig regel 1-punkt, inte en no-op, med `Migration89Test` som bevisar att redan uppslagen
+  köpbarhet (#57) överlever. `FundMetadataRepository.toEntityPreservingDerivedState`
+  (omdöpt från `toEntityPreservingAvailability`) utökad att bevara även jämförelsefälten vid en
+  ny livehämtning — annars skulle varje `query()`/`findByIsin()`-anrop tyst nollställa en redan
+  gjord jämförelse, samma klass av bugg som `availableAtHandelsbanken` redan skyddades mot i
+  #57.

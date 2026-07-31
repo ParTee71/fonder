@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.27.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.28.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -34,6 +34,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Billigare alternativ till ett innehav — appens första rådgivande funktion, i Fonddetalj
       (ANA-9, #59)
 - [x] Portföljens totala fondavgift per år, kort på Hem (HEM-5, #60)
+- [x] Samlad besparingspotential, persisterad jämförelse med inkrementell bakgrundsifyllnad
+      (HEM-6, #61)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -83,8 +85,9 @@ data/
 ├── imports/      HoldingsImportParser (Excel-innehav, #8) · AvrakningsnotaPdfParser + PdfTextExtractor
 │                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) ·
-│                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet, #57) · BackupRepository (stub)
-└── room/         AppDatabase (v8) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
+│                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet + persisterad
+│                 billigare-alternativ-jämförelse, #57/#61) · BackupRepository (stub)
+└── room/         AppDatabase (v9) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
@@ -99,10 +102,10 @@ domain/
                   PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
                   FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
                   FeeComparisonCalc (billigare alternativ, ANA-9, #59) ·
-                  PortfolioFeeCalc (portföljens totala fondavgift, HEM-5, #60)
+                  PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
-│                 fondavgiftskort HEM-5/#60)
+│                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61)
 ├── portfolj/     PortfoljScreen + ViewModel
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
@@ -116,7 +119,7 @@ ui/
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot …)
 ├── diagram/      Delade diagram (FundLineChart)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
-worker/           FundPriceUpdateWorker (daglig kursuppdatering)
+worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)
 ```
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga

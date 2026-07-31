@@ -94,7 +94,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
         val live = fetchLive(query) ?: return offlineQuery(query)
 
         if (live.funds.isNotEmpty()) {
-            dao.upsertAll(live.funds.map { it.toEntityPreservingAvailability() })
+            dao.upsertAll(live.funds.map { it.toEntityPreservingDerivedState() })
         }
         if (live.vocabulary.filters.isNotEmpty()) {
             preferencesRepository.setFundFilterVocabulary(live.vocabulary)
@@ -131,16 +131,21 @@ class AvanzaFundMetadataRepository @Inject constructor(
         FundScreenFilter.apply(dao.getAll().map { it.toDomain() }, query)
 
     /**
-     * En färsk [FundMetadata] från källan bär aldrig köpbarhet (den sätts bara av
-     * [resolveHandelsbankenAvailability]) — utan den här sammanslagningen skulle varje ny
-     * livehämtning tyst nollställa en redan uppslagen köpbarhet för en fond som råkar dyka upp
-     * i resultatet igen, i strid med att "både träff och miss cachas" (TP-21).
+     * En färsk [FundMetadata] från källan bär aldrig köpbarhet eller jämförelseresultat (de
+     * sätts bara av [resolveHandelsbankenAvailability] respektive [suggestCheaperAlternatives])
+     * — utan den här sammanslagningen skulle varje ny livehämtning tyst nollställa redan
+     * uppslagen köpbarhet/jämförelse för en fond som råkar dyka upp i resultatet igen, i strid
+     * med att "både träff och miss cachas" (TP-21) och att en persisterad jämförelse (HEM-6,
+     * issue #61) ska överleva tills den blir inaktuell — inte tills nästa oberoende livehämtning.
      */
-    private suspend fun FundMetadata.toEntityPreservingAvailability(): FundMetadataEntity {
+    private suspend fun FundMetadata.toEntityPreservingDerivedState(): FundMetadataEntity {
         val existing = dao.getByIsin(isin)
         return FundMetadataEntity.fromDomain(this, fetchedAtEpochDay = LocalDate.now().toEpochDay()).copy(
             availableAtHandelsbanken = existing?.availableAtHandelsbanken,
             availabilityResolvedAtEpochDay = existing?.availabilityResolvedAtEpochDay,
+            cheapestAlternativeIsin = existing?.cheapestAlternativeIsin,
+            cheapestAlternativeFee = existing?.cheapestAlternativeFee,
+            comparisonResolvedAtEpochDay = existing?.comparisonResolvedAtEpochDay,
         )
     }
 
@@ -193,7 +198,30 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 verified += alternative
             }
         }
+        persistComparisonResult(isin, verified.firstOrNull())
         return verified
+    }
+
+    /**
+     * Sparar resultatet av en jämförelse för portföljens samlade besparingspotential
+     * (HEM-6, issue #61) — [best] är redan rankad på störst besparing (samma sak som lägst
+     * avgift, eftersom `annualSavingsKr` är monotont avtagande i kandidatens avgift för ett
+     * givet innehav och värde), så `verified.firstOrNull()` i anroparen är det billigaste
+     * verifierade alternativet. Kronbesparingen sparas medvetet inte — bara avgiften, så den
+     * kan räknas om ur innehavets aktuella värde vid visning i stället för att bli fel så
+     * fort NAV rör sig. [best] null (ingen kandidat kvalificerade eller verifierades) sparas
+     * som "jämfört, inget billigare hittades" — skilt från att aldrig ha jämförts alls, se
+     * [FundMetadata.comparisonResolvedAtEpochDay].
+     */
+    private suspend fun persistComparisonResult(isin: String, best: FeeComparisonCalc.Alternative?) {
+        val cached = dao.getByIsin(isin) ?: return
+        dao.upsert(
+            cached.copy(
+                cheapestAlternativeIsin = best?.candidate?.isin,
+                cheapestAlternativeFee = best?.candidateFeePercent,
+                comparisonResolvedAtEpochDay = LocalDate.now().toEpochDay(),
+            ),
+        )
     }
 
     /**
@@ -208,7 +236,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
     private suspend fun findByIsin(isin: String): FundMetadata? {
         val live = fetchLive(FundScreenQuery(nameContains = isin))
         if (live != null && live.funds.isNotEmpty()) {
-            dao.upsertAll(live.funds.map { it.toEntityPreservingAvailability() })
+            dao.upsertAll(live.funds.map { it.toEntityPreservingDerivedState() })
         }
         return live?.funds?.firstOrNull { it.isin == isin } ?: dao.getByIsin(isin)?.toDomain()
     }
