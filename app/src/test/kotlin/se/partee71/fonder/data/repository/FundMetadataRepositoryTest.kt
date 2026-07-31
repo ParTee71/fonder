@@ -406,12 +406,17 @@ class FundMetadataRepositoryTest {
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
         repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
 
-        // 3) Cachen skiljer sig medvetet från källans (påstått tystade) live-svar, så testet kan
-        // skilja mellan "baslinjen förorenad" (live-svaret används rakt av) och "baslinjen intakt"
-        // (källan upptäcks ha ignorerat filtret, frågan besvaras ur cachen i stället).
+        // 3) Cachen skiljer sig medvetet från källans (påstått tystade) live-svar — och
+        // live-svarets fond har en ANNAN region än filtret (matchar alltså inte
+        // "region=Sverige") så att den, även om den skrivs igenom till cachen (query()
+        // cachar alltid det som kommer tillbaka), inte kan råka dyka upp i ett offline-
+        // filtrerat resultat och maskera en förorenad baslinje. Testet kan därför skilja
+        // mellan "baslinjen förorenad" (live-svaret SE_LIVE används rakt av) och "baslinjen
+        // intakt" (källan upptäcks ha ignorerat filtret, frågan besvaras ur cachen i stället,
+        // bara SE_CACHE matchar).
         dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
             .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
-        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Sverige")))
+        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))
 
         val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
 
