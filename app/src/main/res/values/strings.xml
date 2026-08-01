@@ -58,6 +58,18 @@
     <!-- NAV-datum bredvid värde (POR-7, issue #27) — en normal endagsförskjutning mot en extern källa (t.ex. banken) blir begriplig i stället för att se ut som ett fel. -->
     <string name="format_value_as_of">Värde per %1$s</string>
 
+    <!-- Exponeringskarta (POR-9, issue #66) -->
+    <string name="portfolj_exposure_title">Exponering</string>
+    <string name="portfolj_exposure_type_title">Fondtyp</string>
+    <string name="portfolj_exposure_region_title">Region</string>
+    <string name="portfolj_exposure_region_explain">Region saknas ofta för ränte- och blandfonder.</string>
+    <string name="portfolj_exposure_index_title">Index vs. aktivt förvaltat</string>
+    <string name="portfolj_exposure_index_label">Indexfond</string>
+    <string name="portfolj_exposure_active_label">Aktivt förvaltad</string>
+    <string name="portfolj_exposure_unknown_type">Okänd fondtyp</string>
+    <string name="portfolj_exposure_unknown_region">Okänd region</string>
+    <string name="format_portfolj_exposure_excluded">%1$d innehav saknar ISIN, fondmetadata eller känd kurs och räknas inte in i exponeringen.</string>
+
     <!-- Transaktioner -->
     <string name="transaktioner_title">Transaktioner</string>
     <string name="transaktioner_empty_title">Inga transaktioner</string>

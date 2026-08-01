@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,8 +24,10 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.ProfitTakeBadge
 import se.partee71.fonder.ui.components.StatusDot
@@ -35,6 +38,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+/** Adresserar innehavslistan för `performScrollToIndex` i tester (UI-5, issue #66) — se [PortfoljContent]. */
+const val PORTFOLJ_LIST_TEST_TAG = "portfolj_list"
 
 @Composable
 fun PortfoljScreen(
@@ -60,17 +66,23 @@ fun PortfoljContent(
             modifier = modifier,
         )
 
-        else -> Column(modifier = modifier.fillMaxSize()) {
-            TotalCard(state = state)
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.holdings, key = { it.fund.fundId }) { holding ->
-                    HoldingRow(
-                        holding = holding,
-                        performance = state.performance[holding.fund.fundId],
-                        analysis = state.analysis[holding.fund.fundId],
-                        onClick = { onFundClick(holding.fund.fundId) },
-                    )
-                }
+        // Både totalkortet och exponeringskortet ligger som `item {}` i samma `LazyColumn` som
+        // innehavsraderna (inte i en fast `Column` ovanför) — annars äter de permanent
+        // skärmhöjd och kan klippa bort innehav på en liten skärm, exakt buggklassen UI-5
+        // beskriver (issue #63). `testTag` gör listan adresserbar för `performScrollToIndex`
+        // i tester — till skillnad från Hem har innehavsraderna här riktiga lazy `items()`,
+        // inte allihop under en enda icke-lazy `Column`, så `onNodeWithText(...).performScrollTo()`
+        // hittar aldrig en rad som ännu inte komponerats (issue #66).
+        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
+            item { TotalCard(state = state) }
+            item { ExposureCard(exposure = state.exposure) }
+            items(state.holdings, key = { it.fund.fundId }) { holding ->
+                HoldingRow(
+                    holding = holding,
+                    performance = state.performance[holding.fund.fundId],
+                    analysis = state.analysis[holding.fund.fundId],
+                    onClick = { onFundClick(holding.fund.fundId) },
+                )
             }
         }
     }
@@ -99,6 +111,69 @@ private fun TotalCard(state: PortfoljUiState) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Exponeringskarta (POR-9, issue #66) — andel av portföljens värde per fondtyp, region och
+ * index/aktivt förvaltat, ren inventering utan köp- eller rebalanseringstext. Okänd-hinkar
+ * visas sist i sin sektion, med en dämpad stapelfärg (`outline`) som skiljer dem visuellt
+ * från de riktiga kategorierna (regel 4, [ExposureBar]).
+ */
+@Composable
+private fun ExposureCard(exposure: PortfolioExposureCalc.Result) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.portfolj_exposure_title), style = MaterialTheme.typography.labelMedium)
+
+            ExposureDimensionSection(
+                title = stringResource(R.string.portfolj_exposure_type_title),
+                dimension = exposure.byType,
+                unknownLabel = stringResource(R.string.portfolj_exposure_unknown_type),
+            )
+            ExposureDimensionSection(
+                title = stringResource(R.string.portfolj_exposure_region_title),
+                dimension = exposure.byRegion,
+                unknownLabel = stringResource(R.string.portfolj_exposure_unknown_region),
+                explain = stringResource(R.string.portfolj_exposure_region_explain),
+            )
+
+            Text(
+                stringResource(R.string.portfolj_exposure_index_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            ExposureBar(label = stringResource(R.string.portfolj_exposure_index_label), fraction = exposure.indexStatus.indexFraction)
+            ExposureBar(label = stringResource(R.string.portfolj_exposure_active_label), fraction = exposure.indexStatus.activeFraction)
+
+            if (exposure.excludedCount > 0) {
+                Text(
+                    stringResource(R.string.format_portfolj_exposure_excluded, exposure.excludedCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExposureDimensionSection(
+    title: String,
+    dimension: PortfolioExposureCalc.Dimension,
+    unknownLabel: String,
+    explain: String? = null,
+) {
+    Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+    if (explain != null) {
+        Text(explain, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    dimension.buckets.forEach { bucket ->
+        ExposureBar(label = bucket.label, fraction = bucket.fraction)
+    }
+    if (dimension.unknownCount > 0) {
+        ExposureBar(label = unknownLabel, fraction = dimension.unknownFraction, color = MaterialTheme.colorScheme.outline)
     }
 }
 
