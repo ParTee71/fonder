@@ -8,19 +8,23 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -53,6 +57,10 @@ data class HemUiState(
     val navEpochDay: Long? = null,
     /** Portföljens totala fondavgift per år (HEM-5, issue #60). */
     val feeSummary: PortfolioFeeCalc.Result = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0),
+    /** Riskprofilens målnivå (SET-3), null om ingen profil är satt — raden uteblir helt då (HEM-7, issue #68). */
+    val riskProfile: RiskProfile? = null,
+    /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
+    val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -74,6 +82,7 @@ class HemViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -107,6 +116,8 @@ class HemViewModel @Inject constructor(
                     analysisSummary = buildAnalysisSummary(enriched, transactions, today),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
+                    riskProfile = preferencesRepository.riskProfile.first(),
+                    portfolioRisk = PortfolioRiskCalc.compute(enriched, metadataByIsin),
                 )
             }
         }.stateIn(

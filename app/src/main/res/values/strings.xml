@@ -213,6 +213,10 @@
     <string name="settings_import_section">Importera innehav</string>
     <string name="settings_import_body">Importera befintliga fondinnehav från Handelsbankens Excel-export (\"Innehav Fonder\").</string>
     <string name="settings_import_button">Importera innehav</string>
+    <!-- Riskprofil (SET-3, issue #68) -->
+    <string name="settings_riskprofile_section">Riskprofil</string>
+    <string name="settings_riskprofile_body">Sätt en målrisknivå för portföljen och jämför den mot dina innehav.</string>
+    <string name="settings_riskprofile_button">Öppna riskprofil</string>
     <string name="settings_about_section">Om appen</string>
 
     <!-- Importera innehav (issue #8) -->
@@ -242,6 +246,35 @@
     <!-- Importera avräkningsnotor (issue #8-uppföljning) -->
     <string name="settings_import_orders_section">Importera avräkningsnotor</string>
     <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
+
+    <!-- Riskprofil (SET-3, issue #68) -->
+    <string name="riskprofile_title">Riskprofil</string>
+    <string name="riskprofile_intro">Tre frågor föreslår en målrisknivå för portföljen. Förslaget är bara ett förslag — du väljer och sparar din egen nivå.</string>
+    <string name="riskprofile_q_horizon">Tidshorisont</string>
+    <string name="risk_horizon_under_3">Mindre än 3 år</string>
+    <string name="risk_horizon_3_7">3–7 år</string>
+    <string name="risk_horizon_7_15">7–15 år</string>
+    <string name="risk_horizon_over_15">Mer än 15 år</string>
+    <string name="riskprofile_q_reaction">Om portföljen tappade 30 % på ett år</string>
+    <string name="risk_reaction_saljer_allt">Säljer allt</string>
+    <string name="risk_reaction_saljer_del">Säljer en del</string>
+    <string name="risk_reaction_gor_inget">Gör inget</string>
+    <string name="risk_reaction_koper_mer">Köper mer</string>
+    <string name="riskprofile_q_goal">Primärt mål med sparandet</string>
+    <string name="risk_goal_bevara">Bevara värdet</string>
+    <string name="risk_goal_balanserad">Balanserad tillväxt</string>
+    <string name="risk_goal_maximal_tillvaxt">Maximal tillväxt</string>
+    <string name="format_riskprofile_suggested">Förslag: nivå %1$d</string>
+    <string name="riskprofile_level_title">Målrisknivå</string>
+    <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
+    <string name="riskprofile_save_button">Spara</string>
+
+    <!-- Riskprofil på Hem (HEM-7, issue #68) -->
+    <string name="hem_risk_title">Riskprofil</string>
+    <string name="hem_risk_target_label">Målnivå</string>
+    <string name="hem_risk_actual_label">Innehavens snittnivå</string>
+    <string name="hem_risk_explain">Innehavens genomsnittliga risknivå, viktad på aktuellt värde — inte portföljens samlade risk (korrelation och riskspridning räknas inte in).</string>
+    <string name="format_hem_risk_excluded">%1$d fond(er) saknar känd risknivå och räknas inte in.</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>
     <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>

@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.29.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.30.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -37,6 +37,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Samlad besparingspotential, persisterad jämförelse med inkrementell bakgrundsifyllnad
       (HEM-6, #61)
 - [x] Exponeringskarta i Portfölj — andel per fondtyp, region, index/aktivt (POR-9, #66)
+- [x] Riskprofil — enkät, målrisknivå och jämförelse mot innehavens faktiska risk (SET-3/HEM-7, #68)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -78,7 +79,7 @@ Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 ```
 data/
 ├── auth/         AuthRepository (Google-inloggning — stub tills auth-issue)
-├── datastore/    PreferencesRepository (tema m.m.)
+├── datastore/    PreferencesRepository (tema, riskprofil #68 m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·
 │                 AvanzaFundListParser + AvanzaFundListRequestBuilder (sökbar fondmetadata, #57) ·
@@ -87,12 +88,12 @@ data/
 │                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) ·
 │                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet + persisterad
-│                 billigare-alternativ-jämförelse, #57/#61) · BackupRepository (stub)
+│                 billigare-alternativ-jämförelse + kända risknivåer, #57/#61/#68) · BackupRepository (stub)
 └── room/         AppDatabase (v9) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
-│                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding
+│                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding · RiskProfile/RiskProfileAnswers (#68)
 └── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
                   FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
                   RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
@@ -104,10 +105,13 @@ domain/
                   FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
                   FeeComparisonCalc (billigare alternativ, ANA-9, #59) ·
                   PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61) ·
-                  PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
+                  PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66) ·
+                  RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
+                  PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
-│                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61)
+│                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61,
+│                 riskrad mot riskprofilens målnivå HEM-7/#68)
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
@@ -116,10 +120,11 @@ ui/
 ├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
-├── settings/     SettingsScreen + ViewModel
+├── settings/     SettingsScreen + ViewModel (tema, kursuppdatering, riskprofil-ingång SET-3/#68 …)
+├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
-│                 ExposureBar — proportionell radlista, POR-9/#66 …)
+│                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 …)
 ├── diagram/      Delade diagram (FundLineChart)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)

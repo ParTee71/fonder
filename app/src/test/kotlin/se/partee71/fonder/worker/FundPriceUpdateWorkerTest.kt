@@ -221,6 +221,7 @@ class FundPriceUpdateWorkerTest {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
             suggestCheaperAlternativesCalls.add(isin to holdingValue)
             return emptyList()

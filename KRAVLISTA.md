@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.29.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.30.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -97,6 +97,7 @@
 | IMP-9 | När import är klar visas en stängbar modal (titel + antal importerade poster + en tydlig **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy — stängning återgår till Inställningar. Gäller båda importflödena (issue #19). |
 | SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
 | SET-2 | Inställningar visar ett **kursuppdateringskort** med "Senast uppdaterad: \<tidsstämpel\>" (eller "Aldrig uppdaterad") och en **"Uppdatera nu"-knapp** som forcerar en kursuppdatering oavsett staleness-gate (TP-17, issue #27) — bypassar launch-gate/backstopens "bara om inaktuellt"-princip, för den som inte vill vänta. |
+| SET-3 | Inställningar har en **Riskprofil** (egen undersida) — tre frågor (tidshorisont, reaktion vid en 30 %-nedgång, primärt mål) som **föreslår** en målrisknivå på källans egen riskskala (`FundMetadata.risk`, TP-21). Skalans giltiga nivåer är unionen av senast kända filtervokabulär (`FundFilterVocabulary["risk"]`, som bara fylls av Fondsök/ANA-9:s frågeflöden) och redan cachade fonders egen `risk` (fylld av HEM-5/POR-9:s `metadataFor`-anrop, mer pålitligt populerad för en användare med innehav) — aldrig hårdkodad, samma princip som TP-21:s övriga filtervärden. Förslaget är just ett förslag: **användaren äger målnivån** och kan sätta eller ändra den direkt i nivåväljaren utan att svara på enkäten — det egna valet vinner alltid över förslaget. Både den valda nivån och de underliggande svaren persisteras i `PreferencesRepository` (DataStore), separat från varandra, så en framtida ändring av poängsättningen (`RiskProfileCalc`) inte tyst skriver om en gammal slutsats. Detta är **genuin användardata** och ska ingå i backup-kontraktet (NFR-1), till skillnad från `lastPriceSyncEpochMillis`/`fundFilterVocabulary` som är ren cache-metadata; Drive-backup (TP-7) är fortfarande en stub, så fältet är täckt av rundturstest på DataStore-nivå i väntan på den. Poängsättningen är ett kodifierat omdöme, inte ett verifierbart faktum som ANA-9:s avgiftsjämförelse — den ligger därför samlad på ett ställe (`RiskProfileCalc`), i klartext och enhetstestad. Ingen köp- eller rebalanseringsrekommendation — den kräver ett eget issue (issue #68). |
 
 ---
 
@@ -131,6 +132,7 @@
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
 | HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Under totalen visas **en rad per innehav med känd avgift, störst avgift först**, som öppnar fonden i Fonddetalj vid klick (issue #63) — annars var totalen inte handlingsbar: att veta vad avgifterna kostar totalt hjälper inte utan att veta vilken fond som gör det. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
 | HEM-6 | Hem visar portföljens **samlade besparingspotential per år** — summan av (innehavets avgift − billigaste verifierat köpbara alternativets avgift) × innehavets aktuella värde, för innehav med ett **färskt** jämförelseresultat — samt "N av M genomsökta" (antal innehav med ett färskt resultat, av totalt jämförbara). Kronbeloppet räknas alltid ur innehavets aktuella värde, aldrig ur ett sparat kronbelopp — den sparade `cheapestAlternativeFee` (ANA-9) är värdeoberoende, kronorna är det inte. "Aldrig genomsökt" (`comparisonResolvedAtEpochDay` null) och "genomsökt utan träff" (satt datum, `cheapestAlternativeIsin` null) är skilda tillstånd i både data och UI — en avgiftsrad utan besparing visar antingen ingen text (aldrig sökt) eller "Redan bland de billigaste i sin kategori" (samma text som ANA-9:s eget kort, regel 4), aldrig samma text för båda. Ett resultat äldre än `FundMetadataFreshness.COMPARISON_TTL_DAYS` (30 dygn) räknas som osökt, aldrig som en aktuell rekommendation — ett gammalt råd (fonden kan ha höjt avgiften eller slutat säljas hos Handelsbanken sedan dess) är fel på ett sätt gammal avgiftsdata inte är. Ifyllnaden sker **inkrementellt** (högst två innehav per körning, störst värde först, `FundPriceUpdateWorker.scanComparisons`) via den befintliga periodiska bakgrundskörningen (`FundPriceRefreshScheduler.scheduleBackstop`, var 12:e timme) — aldrig vid appstart eller den manuella kursuppdateringen, eftersom en fullständig skanning kan kosta hundratals hämtningar mot Handelsbankens fondlista (issue #61). Ingen egen worker eller schemaläggare — rider med på den som redan itererar alla bevakade fonder (regel 4). |
+| HEM-7 | Hem visar innehavens **genomsnittliga risknivå, viktad på värde** (`Σ(värde × risk) / Σ(värde)`, TP-21) jämfört med målrisknivån från riskprofilen (SET-3) — bara om en profil är satt, annars uteblir raden helt. Måttet är uttryckligen ett värdeviktat medel av de enskilda fondernas risknivåer — **inte** portföljens risk: korrelation och diversifiering modelleras inte, och en 50/50-mix av nivå 1 och 6 räknas identiskt med en enda fond på nivå 3,5. Texten säger vad måttet är, samma precisionsprincip som ANA-1 använder när den skiljer fondens kursutveckling från den egna avkastningen. Innehav utan ISIN, metadataträff eller känd risknivå exkluderas och räknas separat (samma princip som HEM-5/POR-9) — aldrig en gissad risksiffra. Ren läsvy: ingen åtgärdsknapp och ingen uppmaning att köpa eller sälja (issue #68). |
 
 ---
 
@@ -831,3 +833,43 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   (`PORTFOLJ_LIST_TEST_TAG`) och `performScrollToIndex`, som skrollar en genuint virtualiserad
   lista till rätt index innan den läses av. UI-5 uppdaterad med distinktionen mellan de två
   fallen så nästa lazy-lista-test inte gör samma antagande.
+
+- **Riskprofil — målrisknivå och jämförelse mot innehavens faktiska risk (#68):** Ny **SET-3**
+  (enkät + målnivå under Inställningar) och **HEM-7** (jämförelse på Hem) — den saknade
+  förutsättningen fem tidigare issues (#57/#59/#60/#61/#66) alla sköt upp en riktig köp-/
+  rebalanseringsrekommendation till: appen visste inget om användarens risktolerans.
+  Rebalanseringen själv är fortfarande ett eget, senare issue — det här levererar bara profilen.
+
+  Första utkastet ville bygga en **målallokering per fondtyp** ovanpå POR-9:s
+  exponeringsdimensioner (t.ex. "Balanserad = 60 % aktiefond / 40 % räntefond"). Verifiering mot
+  källan (999-fondsstickprovet från #66) visade att `FundMetadata.risk` redan finns på varenda
+  fond, redan cachas (TP-21) och aldrig visades i UI:t — en målrisknivå (ett tal på en
+  källdefinierad skala) blev alltså gratis given befintlig data, i stället för en helt påhittad
+  fördelningsmatris. Löste samtidigt blandfondsproblemet: appen vet inte en blandfonds interna
+  aktie-/räntefördelning, men på riskskalan har den bara en risksiffra som alla andra.
+
+  Ny domän: `RiskProfileCalc` (`domain/usecase/`) — tre frågor (tidshorisont, reaktion vid en
+  30 %-nedgång, primärt mål) poängsätts och mappas mot skalans faktiska nivåer, **aldrig**
+  hårdkodade. Skalans nivåer (`FundMetadataRepository.knownRiskLevels`) är unionen av senast
+  kända filtervokabulär (som bara fylls av Fondsök/ANA-9, ofta tom för en användare som aldrig
+  öppnat dem) och redan cachade fonders egen `risk` (fylld redan av HEM-5/POR-9:s
+  `metadataFor`-anrop, mer pålitligt populerad för en användare med innehav) — en genuin
+  robusthetsvinst upptäckt under research, inte i det ursprungliga issuet. `PortfolioRiskCalc`
+  räknar innehavens värdeviktade snitt, med samma precisionsdisciplin som ANA-1: måttet heter
+  vad det är, inte "portföljens risk" (korrelation/diversifiering modelleras inte).
+
+  Enkäten föreslår, användaren äger: målnivån går att sätta direkt i nivåväljaren utan att
+  svara på en enda fråga, och ett eget val vinner alltid över förslaget. Både nivån och
+  enkätsvaren persisteras separat i `PreferencesRepository` (DataStore) — svaren för sig, så en
+  framtida ändring av poängsättningen inte tyst skriver om en gammal slutsats. Det här är den
+  **första genuina användardatan** i DataStore sedan backupen stubbades (till skillnad från
+  `lastPriceSyncEpochMillis`/`fundFilterVocabulary`, uttryckligen cache-metadata) — `StubBackupRepository`s
+  TODO uppdaterad att nämna den explicit, och en `PreferencesRepositoryTest` (ny, DataStore
+  fungerar direkt i ett JVM-test) bevisar rundturen i väntan på riktig Drive-backup (TP-7).
+
+  Ny delad `ChoiceChipRow` (`ui/components/`) extraherad ur Inställningars tidigare privata
+  `ThemeChip` — enkätens tre frågor och nivåväljaren återanvänder samma val-mönster som
+  temaväljaren i stället för en egen variant (regel 4). Riskraden på Hem återanvänder `PeriodRow`s
+  `valueText`-läge (samma användning som ANA-7:s riskmått) — en risknivå är en position på en
+  skala, inte en andel, så #66:s `ExposureBar` hade varit fel komponent trots ytlig likhet.
+  Ingen Room-migrering.

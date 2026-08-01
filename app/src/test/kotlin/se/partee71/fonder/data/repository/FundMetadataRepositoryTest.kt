@@ -25,6 +25,7 @@ import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
@@ -527,6 +528,42 @@ class FundMetadataRepositoryTest {
         val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
 
         assertEquals(listOf("SE_CACHE"), result.map { it.isin })
+    }
+
+    // --- knownRiskLevels (SET-3, issue #68) ---
+
+    @Test
+    fun `knownRiskLevels tom nar varken vokabular eller cache kanner till nagon risknivå`() = runTest {
+        val repository = repo(FakeAvanzaSource())
+
+        assertTrue(repository.knownRiskLevels().isEmpty())
+    }
+
+    @Test
+    fun `knownRiskLevels laser fran senast kanda vokabular`() = runTest {
+        preferencesRepository.setFundFilterVocabulary(FundFilterVocabulary(filters = mapOf("risk" to listOf("1", "3", "6"))))
+        val repository = repo(FakeAvanzaSource())
+
+        assertEquals(listOf(1, 3, 6), repository.knownRiskLevels())
+    }
+
+    @Test
+    fun `knownRiskLevels laser fran redan cachade fonders egen risk aven utan vokabular`() = runTest {
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Fond Ett").copy(risk = 4)
+        dao.stored["SE2"] = fundMetadataEntity(isin = "SE2", name = "Fond Två").copy(risk = 2)
+        val repository = repo(FakeAvanzaSource())
+
+        assertEquals(listOf(2, 4), repository.knownRiskLevels())
+    }
+
+    @Test
+    fun `knownRiskLevels slar ihop vokabular och cache, sorterat utan dubbletter`() = runTest {
+        preferencesRepository.setFundFilterVocabulary(FundFilterVocabulary(filters = mapOf("risk" to listOf("1", "4"))))
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Fond Ett").copy(risk = 4)
+        dao.stored["SE2"] = fundMetadataEntity(isin = "SE2", name = "Fond Två").copy(risk = 6)
+        val repository = repo(FakeAvanzaSource())
+
+        assertEquals(listOf(1, 4, 6), repository.knownRiskLevels())
     }
 
     private fun fundMetadataEntity(

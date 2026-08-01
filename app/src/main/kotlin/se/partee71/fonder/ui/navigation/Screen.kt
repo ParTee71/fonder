@@ -37,4 +37,7 @@ object Routes {
 
     /** Importera exakta transaktioner från Handelsbanken-PDF-avräkningsnotor, se issue #8-uppföljning. */
     const val IMPORT_ORDERS = "import-orders"
+
+    /** Riskprofil — engångsenkät + målrisknivå, nås från Inställningar (SET-3, issue #68). */
+    const val RISK_PROFILE = "risk-profile"
 }
