@@ -430,7 +430,9 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
-        composeRule.onNodeWithText("Otillräcklig data").assertExists()
+        // 3 kommer från PerformanceCard-kortets dag/vecka/månad (ingen performance-data satt i
+        // testtillståndet), den fjärde är riskradens "otillräcklig data".
+        composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(4)
         composeRule.onNodeWithText("1 fond(er) saknar känd risknivå", substring = true).assertExists()
     }
 }

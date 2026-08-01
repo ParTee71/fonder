@@ -61,15 +61,20 @@ class RiskProfilScreenTest {
     }
 
     @Test
-    fun sparaknappen_ar_inaktiv_utan_en_vald_niva_och_aktiv_med_en() {
+    fun sparaknappen_ar_inaktiv_utan_en_vald_niva() {
         composeRule.setContent {
             FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = (1..6).toList())) }
         }
-        composeRule.onNodeWithText("Spara").assertIsNotEnabled()
 
+        composeRule.onNodeWithText("Spara").assertIsNotEnabled()
+    }
+
+    @Test
+    fun sparaknappen_ar_aktiv_med_en_vald_niva() {
         composeRule.setContent {
             FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = (1..6).toList(), manualLevel = 3)) }
         }
+
         composeRule.onNodeWithText("Spara").assertIsEnabled()
     }
 
