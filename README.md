@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.28.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.29.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -36,6 +36,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Portföljens totala fondavgift per år, kort på Hem (HEM-5, #60)
 - [x] Samlad besparingspotential, persisterad jämförelse med inkrementell bakgrundsifyllnad
       (HEM-6, #61)
+- [x] Exponeringskarta i Portfölj — andel per fondtyp, region, index/aktivt (POR-9, #66)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 
@@ -102,11 +103,12 @@ domain/
                   PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
                   FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
                   FeeComparisonCalc (billigare alternativ, ANA-9, #59) ·
-                  PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61)
+                  PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61) ·
+                  PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
 │                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61)
-├── portfolj/     PortfoljScreen + ViewModel
+├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
 ├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
@@ -116,7 +118,8 @@ ui/
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel
 ├── navigation/   AppNavigation · Screen
-├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot …)
+├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
+│                 ExposureBar — proportionell radlista, POR-9/#66 …)
 ├── diagram/      Delade diagram (FundLineChart)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)

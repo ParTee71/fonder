@@ -1,9 +1,11 @@
 package se.partee71.fonder.ui.portfolj
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -11,6 +13,7 @@ import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -203,5 +206,117 @@ class PortfoljScreenTest {
         }
 
         composeRule.onNodeWithText("Vinstläge", substring = true).assertDoesNotExist()
+    }
+
+    // --- Exponeringskarta (POR-9, issue #66) ---
+
+    private val emptyDimension = PortfolioExposureCalc.Dimension(buckets = emptyList(), unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0)
+    private val emptyIndexStatus = PortfolioExposureCalc.IndexStatusSplit(indexValueKr = 0.0, indexFraction = 0.0, activeValueKr = 0.0, activeFraction = 0.0)
+
+    @Test
+    fun exponeringskortet_visar_ratt_kategorier_och_procent() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposure = PortfolioExposureCalc.Result(
+            byType = PortfolioExposureCalc.Dimension(
+                buckets = listOf(
+                    PortfolioExposureCalc.Bucket("Aktiefond", 800.0, 0.8),
+                    PortfolioExposureCalc.Bucket("Räntefond", 200.0, 0.2),
+                ),
+                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+            ),
+            byRegion = PortfolioExposureCalc.Dimension(
+                buckets = listOf(PortfolioExposureCalc.Bucket("Sverige", 1000.0, 1.0)),
+                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+            ),
+            indexStatus = PortfolioExposureCalc.IndexStatusSplit(indexValueKr = 300.0, indexFraction = 0.3, activeValueKr = 700.0, activeFraction = 0.7),
+            includedValueKr = 1000.0,
+            excludedCount = 0,
+        )
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposure)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Aktiefond").assertExists()
+        composeRule.onNodeWithText("80,0 %").assertExists()
+        composeRule.onNodeWithText("Räntefond").assertExists()
+        composeRule.onNodeWithText("20,0 %").assertExists()
+        composeRule.onNodeWithText("Sverige").assertExists()
+        composeRule.onNodeWithText("Indexfond").assertExists()
+        composeRule.onNodeWithText("30,0 %").assertExists()
+        composeRule.onNodeWithText("Aktivt förvaltad").assertExists()
+        composeRule.onNodeWithText("70,0 %").assertExists()
+    }
+
+    @Test
+    fun okand_region_visas_separat_och_tydligt_markt() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposure = PortfolioExposureCalc.Result(
+            byType = emptyDimension,
+            byRegion = PortfolioExposureCalc.Dimension(
+                buckets = listOf(PortfolioExposureCalc.Bucket("Sverige", 600.0, 0.6)),
+                unknownValueKr = 400.0, unknownFraction = 0.4, unknownCount = 1,
+            ),
+            indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0,
+            excludedCount = 0,
+        )
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposure)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Sverige").assertExists()
+        composeRule.onNodeWithText("Okänd region").assertExists()
+        composeRule.onNodeWithText("40,0 %").assertExists()
+    }
+
+    @Test
+    fun excludedCount_text_visas_nar_over_noll_och_uteblir_nar_noll() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposureUtanExkludering = PortfolioExposureCalc.Result(
+            byType = emptyDimension, byRegion = emptyDimension, indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0, excludedCount = 0,
+        )
+        val stateUtan = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposureUtanExkludering)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = stateUtan, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("räknas inte in i exponeringen", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun excludedCount_text_visas_nar_innehav_ar_exkluderade() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposureMedExkludering = PortfolioExposureCalc.Result(
+            byType = emptyDimension, byRegion = emptyDimension, indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0, excludedCount = 2,
+        )
+        val stateMed = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposureMedExkludering)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = stateMed, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("2 innehav", substring = true).assertExists()
+    }
+
+    @Test
+    fun portfolj_ar_skrollbar_med_exponeringskort_och_manga_innehav() {
+        // Exponeringskortet ligger som ett `item {}` i samma `LazyColumn` som innehavsraderna
+        // (inte i en fast `Column` ovanför, se PortfoljContent) — annars skulle det äta
+        // skärmhöjd permanent och kunna klippa bort de sista innehavsraderna (UI-5, issue #63).
+        val funds = (1..10).map { i -> Holding(fund = Fund(fundId = "F$i", name = "Innehav $i"), netShares = 1.0, netInvested = 100.0, currentValue = 100.0) }
+        val state = PortfoljUiState(loading = false, holdings = funds)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Innehav 10").performScrollTo().assertIsDisplayed()
     }
 }

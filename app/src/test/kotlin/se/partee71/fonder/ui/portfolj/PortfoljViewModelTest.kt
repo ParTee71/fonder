@@ -18,13 +18,19 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -71,12 +77,22 @@ class PortfoljViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
+    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
+
+    private val fakeFundMetadataRepo = object : FundMetadataRepository {
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
+        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
+    }
+
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
     fun `tomt tillstand nar inga transaktioner finns`() = runTest(dispatcher) {
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             // Initialt: laddar
             assertTrue(awaitItem().loading)
@@ -96,7 +112,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -118,7 +134,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -135,7 +151,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -167,7 +183,7 @@ class PortfoljViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -200,7 +216,7 @@ class PortfoljViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -224,7 +240,7 @@ class PortfoljViewModelTest {
         priceHistoryByFundId = mapOf(fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)))
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -248,7 +264,7 @@ class PortfoljViewModelTest {
         )
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -267,7 +283,7 @@ class PortfoljViewModelTest {
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -289,10 +305,64 @@ class PortfoljViewModelTest {
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(10).toEpochDay(), nav = 110.0))
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
         advanceUntilIdle()
 
         assertEquals(1, refreshedFundIds.size)
         assertEquals(fond.fundId, refreshedFundIds.first())
+    }
+
+    // --- Exponeringskarta (POR-9, issue #66) ---
+
+    @Test
+    fun `exposure anropar metadataFor med innehavens isin och rapporterar fondtyp`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null,
+                tags = listOf(FundTag(title = "Aktiefond", category = "TYPE")),
+            ),
+        )
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            // 10 andelar × 120 kr = 1200 kr innehavsvärde, helt i "Aktiefond".
+            assertEquals(1200.0, state.exposure.includedValueKr, 1e-9)
+            assertEquals(0, state.exposure.excludedCount)
+            assertEquals(listOf("Aktiefond"), state.exposure.byType.buckets.map { it.label })
+            assertEquals(1.0, state.exposure.byType.buckets.single().fraction, 1e-9)
+            assertEquals(1.0, state.exposure.indexStatus.indexFraction, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `exposure exkluderar innehav utan isin, aldrig gissar en kategori`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = null)
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(1, state.exposure.excludedCount)
+            assertEquals(0.0, state.exposure.includedValueKr, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

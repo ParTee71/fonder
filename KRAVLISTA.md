@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.28.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.29.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -83,6 +83,7 @@
 | POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
 | POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
 | POR-8 | Varje innehavsrad i Portfölj visar den befintliga säljsignal-statusen (`StatusDot`, ANA-3) och en ev. triggad vinstsignal (ANA-8) direkt på kortet, utan att behöva öppna Fonddetalj (issue #26). Visas inget om analysen saknar tillräcklig data (ANA-4). |
+| POR-9 | Portfölj visar en **exponeringskarta**: andel av portföljens värde per **fondtyp**, **region** och **index vs. aktivt förvaltat**, viktat på innehavens aktuella värde. Fondtypen läses ur källans `TYPE`-tagg (exakt en per fond, verifierat 999/999) — **inte** ur `FundMetadata.fundType`, som är en engelsk kod vars gruppering dessutom skiljer sig från taggens. Region slår ihop `COMMON_REGION` och `OTHER_REGION` (verifierat aldrig samtidiga, och aldrig fler än en per fond); index/aktiv läses ur `FundMetadata.indexFund` (alltid satt). Etiketterna är källans egna svenska titlar, oöversatta, så en ny kategori källan inför inte tappas bort. Procenten räknas på hela det medräknade värdet inklusive okänt, så varje dimension summerar till 100 %. Innehav utan ISIN, metadataträff eller känd kurs exkluderas helt och räknas separat (samma princip som HEM-5); ett känt innehav utan regiontagg (vanligt för ränte-, bland- och alternativa fonder) hamnar i en egen "okänd region"-hink, aldrig gissad eller dold. `MISC`/`INTEREST` ingår inte — flera fonder bär mer än en tagg där, vilket skulle dubbelräkna värde; `INDUSTRY`/`ALIGNMENT` ingår inte heller på grund av låg täckning. Att öppna Portfölj utlöser aldrig en köpbarhets- eller alternativskanning (samma avgränsning som HEM-5) — bara cache-först-uppslag via `metadataFor`. Ingen köp- eller rebalanseringsrekommendation — ren inventering (issue #66). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
@@ -792,3 +793,31 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   ny livehämtning — annars skulle varje `query()`/`findByIsin()`-anrop tyst nollställa en redan
   gjord jämförelse, samma klass av bugg som `availableAtHandelsbanken` redan skyddades mot i
   #57.
+
+- **Exponeringskarta i Portfölj (#66):** Ny **POR-9** — ren, ny domänfunktion
+  `PortfolioExposureCalc` (`domain/usecase/`) bryter ner portföljens värde per fondtyp, region
+  och index/aktivt förvaltat, viktat på innehavens aktuella värde. Ingen ny nätverkskod —
+  återanvänder `FundMetadataRepository.metadataFor` (från #60), aldrig
+  `suggestCheaperAlternatives` (samma avgränsning som HEM-5: att öppna Portfölj utlöser ingen
+  köpbarhets- eller alternativskanning).
+
+  Verifierat mot källan innan implementation (999 av 1499 fonder, två åtskilda skivor) att
+  fondtypen måste läsas ur `TYPE`-taggens `title`, inte ur `FundMetadata.fundType` — fältet är
+  en engelsk transportkod vars gruppering dessutom skiljer sig från taggens (`EQUITY_FUND`
+  förekommer på fonder taggade både "Aktiefond" och "Alternativa"). Ett tidigare, mindre
+  stickprov (200 fonder, från #57/#59) hade fel motivering för att utesluta `ALIGNMENT`/
+  `INDUSTRY` (de är inte flervärdes, bara lågt täckta) och underskattade `MISC`/`INTEREST`s
+  flervärdeshet (10,5 % respektive 2,9 %, mot 3,5 % totalt tidigare) — den nya, bredare
+  verifieringen ersätter den gamla i POR-9-texten.
+
+  Ny delad komponent `ExposureBar` (`ui/components/`) — en proportionell radlista i stället för
+  ett nytt diagram-bibliotek: Vico (TP-12) är kartesiskt utan tårtdiagram-stöd, och en
+  återhållsam textrad matchar appens stil bättre (regel 4). Varje dimensions okänd-hink
+  (`Dimension.unknownValueKr`/`unknownCount`) visas sist och med en dämpad stapelfärg
+  (`outline`), tydligt skild från de riktiga kategorierna.
+
+  `PortfoljContent` skrevs om från en fast `Column { TotalCard; LazyColumn }` till en enda
+  `LazyColumn` med `TotalCard`/`ExposureCard` som egna `item {}` — den gamla strukturen hade
+  gjort exponeringskortet till ett fastnitat, icke-skrollbart element ovanför innehavslistan,
+  exakt buggklassen UI-5 kodifierade efter #63. Ingen Room-migrering — ren härledning ur redan
+  cachad `fund_metadata` och befintliga innehav/kurser, ett äkta regel 1-no-op.
