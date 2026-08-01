@@ -13,9 +13,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
@@ -385,4 +387,50 @@ class HemScreenTest {
         status = status,
         profitTake = null,
     )
+
+    // --- Riskprofil (HEM-7, issue #68) ---
+
+    @Test
+    fun riskkortet_uteblir_helt_utan_sparad_profil() {
+        composeRule.setContent {
+            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true, riskProfile = null)) }
+        }
+
+        composeRule.onNodeWithText("Riskprofil").assertDoesNotExist()
+    }
+
+    @Test
+    fun riskkortet_visar_malniva_och_faktisk_niva() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetRiskLevel = 5),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Riskprofil").assertExists()
+        composeRule.onNodeWithText("5").assertExists()
+        composeRule.onNodeWithText("3,50").assertExists()
+    }
+
+    @Test
+    fun riskkortet_visar_otillrackligt_data_nar_ingen_faktisk_niva_kunde_beraknas() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetRiskLevel = 4),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Otillräcklig data").assertExists()
+        composeRule.onNodeWithText("1 fond(er) saknar känd risknivå", substring = true).assertExists()
+    }
 }

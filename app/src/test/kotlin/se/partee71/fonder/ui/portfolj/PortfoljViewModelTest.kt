@@ -83,6 +83,7 @@ class PortfoljViewModelTest {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }

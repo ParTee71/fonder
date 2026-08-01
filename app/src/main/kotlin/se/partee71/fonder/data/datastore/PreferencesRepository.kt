@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.RiskProfile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +26,7 @@ class PreferencesRepository @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val lastPriceSyncKey = longPreferencesKey("last_price_sync_epoch_millis")
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
+    private val riskProfileKey = stringPreferencesKey("risk_profile")
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -61,5 +63,19 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setFundFilterVocabulary(vocabulary: FundFilterVocabulary) {
         dataStore.edit { it[fundFilterVocabularyKey] = Json.encodeToString(FundFilterVocabulary.serializer(), vocabulary) }
+    }
+
+    /**
+     * Användarens riskprofil (SET-3, issue #68), null om ingen är satt. Till skillnad från
+     * [lastPriceSyncEpochMillis]/[fundFilterVocabulary] är det här **genuin användardata** —
+     * inte härledd ur någon källa — och ska ingå i backup-kontraktet när Drive-backup (TP-7)
+     * byggs, se [se.partee71.fonder.data.repository.StubBackupRepository].
+     */
+    val riskProfile: Flow<RiskProfile?> = dataStore.data.map { prefs ->
+        prefs[riskProfileKey]?.let { runCatching { Json.decodeFromString(RiskProfile.serializer(), it) }.getOrNull() }
+    }
+
+    suspend fun setRiskProfile(profile: RiskProfile) {
+        dataStore.edit { it[riskProfileKey] = Json.encodeToString(RiskProfile.serializer(), profile) }
     }
 }

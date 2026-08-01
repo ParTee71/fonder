@@ -56,4 +56,32 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Uppdatera nu").performClick()
         assertTrue(called)
     }
+
+    // --- Riskprofil-ingång (SET-3, issue #68) ---
+
+    @Test
+    fun temavaljaren_visar_alla_tre_lagen_via_delad_ChoiceChipRow() {
+        // Regression efter extraheringen till den delade ChoiceChipRow (issue #68) —
+        // temaväljaren ska fungera precis som innan omskrivningen.
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState()) }
+        }
+
+        composeRule.onNodeWithText("Ljust").assertExists()
+        composeRule.onNodeWithText("Mörkt").assertExists()
+        composeRule.onNodeWithText("Auto").assertExists()
+    }
+
+    @Test
+    fun riskprofil_knappen_anropar_callback() {
+        var called = false
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(state = SettingsUiState(), onOpenRiskProfile = { called = true })
+            }
+        }
+
+        composeRule.onNodeWithText("Öppna riskprofil").performClick()
+        assertTrue(called)
+    }
 }

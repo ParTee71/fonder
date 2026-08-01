@@ -1,21 +1,16 @@
 package se.partee71.fonder.ui.settings
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.data.datastore.ThemeMode
+import se.partee71.fonder.ui.components.ChoiceChipRow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -43,6 +39,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
+    onOpenRiskProfile: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -51,6 +48,7 @@ fun SettingsScreen(
         onThemeSelected = viewModel::setThemeMode,
         onImportHoldings = onImportHoldings,
         onImportOrders = onImportOrders,
+        onOpenRiskProfile = onOpenRiskProfile,
         onRefreshPricesNow = viewModel::refreshPricesNow,
         onClearDatabase = viewModel::clearDatabase,
         modifier = modifier,
@@ -64,6 +62,7 @@ fun SettingsContent(
     onThemeSelected: (ThemeMode) -> Unit = {},
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
+    onOpenRiskProfile: () -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -86,15 +85,27 @@ fun SettingsContent(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(vertical = 8.dp),
         )
-        Row(modifier = Modifier.selectableGroup()) {
-            ThemeChip(ThemeMode.LIGHT, R.string.theme_light, state.themeMode, onThemeSelected)
-            Spacer(Modifier.width(8.dp))
-            ThemeChip(ThemeMode.DARK, R.string.theme_dark, state.themeMode, onThemeSelected)
-            Spacer(Modifier.width(8.dp))
-            ThemeChip(ThemeMode.AUTO, R.string.theme_auto, state.themeMode, onThemeSelected)
-        }
+        ChoiceChipRow(
+            options = ThemeMode.entries,
+            selected = state.themeMode,
+            optionLabel = { mode -> stringResource(themeModeLabelRes(mode)) },
+            onSelect = onThemeSelected,
+        )
 
         Card(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_riskprofile_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_riskprofile_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                Button(onClick = onOpenRiskProfile) { Text(stringResource(R.string.settings_riskprofile_button)) }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(stringResource(R.string.settings_price_update_section), style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -209,16 +220,8 @@ private fun lastPriceSyncText(epochMillis: Long?): String {
     return stringResource(R.string.format_settings_last_price_sync, formatted)
 }
 
-@Composable
-private fun ThemeChip(
-    mode: ThemeMode,
-    labelRes: Int,
-    selected: ThemeMode,
-    onSelect: (ThemeMode) -> Unit,
-) {
-    FilterChip(
-        selected = selected == mode,
-        onClick = { onSelect(mode) },
-        label = { Text(stringResource(labelRes)) },
-    )
+private fun themeModeLabelRes(mode: ThemeMode): Int = when (mode) {
+    ThemeMode.LIGHT -> R.string.theme_light
+    ThemeMode.DARK -> R.string.theme_dark
+    ThemeMode.AUTO -> R.string.theme_auto
 }

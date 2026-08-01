@@ -19,9 +19,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
@@ -61,6 +63,9 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
             item { PerformanceCard(performance = state.performance) }
             item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
             item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
+            state.riskProfile?.let { riskProfile ->
+                item { RiskCard(riskProfile = riskProfile, portfolioRisk = state.portfolioRisk) }
+            }
         }
     }
 }
@@ -270,6 +275,49 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
                     statusTriggerMessages(flagged.analysis).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Målrisknivå (SET-3) mot innehavens faktiska, värdeviktade risknivå (HEM-7, issue #68) — ren
+ * läsvy, ingen åtgärdsknapp. Återanvänder [PeriodRow]s `valueText`-läge (regel 4, samma
+ * användning som ANA-7:s riskmått) i stället för en ny komponent, eftersom en risknivå är ett
+ * neutralt, icke-avkastningsfärgat mått — inte en andel som [se.partee71.fonder.ui.components.ExposureBar] (#66) visar.
+ */
+@Composable
+private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.Result) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.hem_risk_title), style = MaterialTheme.typography.labelMedium)
+            PeriodRow(
+                label = stringResource(R.string.hem_risk_target_label),
+                amount = null,
+                fraction = null,
+                valueText = riskProfile.targetRiskLevel.toString(),
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            PeriodRow(
+                label = stringResource(R.string.hem_risk_actual_label),
+                amount = null,
+                fraction = null,
+                valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                stringResource(R.string.hem_risk_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (portfolioRisk.excludedCount > 0) {
+                Text(
+                    stringResource(R.string.format_hem_risk_excluded, portfolioRisk.excludedCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }

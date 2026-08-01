@@ -30,6 +30,7 @@ import se.partee71.fonder.ui.hem.HemScreen
 import se.partee71.fonder.ui.imports.ImportHoldingsScreen
 import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
+import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
@@ -109,6 +110,7 @@ fun AppNavigation() {
                 SettingsScreen(
                     onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
                     onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
+                    onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
                 )
             }
             composable(
@@ -128,6 +130,9 @@ fun AppNavigation() {
             }
             composable(Routes.IMPORT_ORDERS) {
                 ImportOrdersScreen(onDone = { navController.popBackStack() })
+            }
+            composable(Routes.RISK_PROFILE) {
+                RiskProfilScreen(onSaved = { navController.popBackStack() })
             }
         }
     }

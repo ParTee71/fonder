@@ -1,8 +1,13 @@
 package se.partee71.fonder.ui.hem
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -13,9 +18,13 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -25,6 +34,7 @@ import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
@@ -35,7 +45,12 @@ import java.time.LocalDate
 @OptIn(ExperimentalCoroutinesApi::class)
 class HemViewModelTest {
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
     private val dispatcher = StandardTestDispatcher()
+    private lateinit var dataStore: DataStore<Preferences>
+    private lateinit var preferencesRepository: PreferencesRepository
 
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
@@ -80,11 +95,23 @@ class HemViewModelTest {
             metadataForCall = isins
             return metadataByIsin.filterKeys { it in isins }
         }
+        override suspend fun knownRiskLevels(): List<Int> = emptyList()
     }
 
-    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
 
-    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+        // Samma dispatcher som testet (se SettingsViewModelTest) — undviker en flaky
+        // Turbine-timeout om DataStores egen skrivning annars kör på en frikopplad klocka.
+        dataStore = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + SupervisorJob()),
+            produceFile = { tempFolder.newFile("hem_test.preferences_pb") },
+        )
+        preferencesRepository = PreferencesRepository(dataStore)
+    }
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
@@ -338,6 +365,80 @@ class HemViewModelTest {
             assertEquals(6.24, state.feeSummary.totalAnnualSavingsKr, 0.01)
             assertEquals(1, state.feeSummary.comparedCount)
             assertEquals(1, state.feeSummary.comparableCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Riskprofil (HEM-7, issue #68) ---
+
+    @Test
+    fun `riskProfile ar null och portfolioRisk saknar varde utan sparad profil`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull(state.riskProfile)
+            assertNull(state.portfolioRisk.weightedAverageRisk)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `riskProfile speglar sparad malniva och portfolioRisk raknar det vardeviktade snittet`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+        preferencesRepository.setRiskProfile(RiskProfile(targetRiskLevel = 5))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskProfile == null) state = awaitItem()
+            assertEquals(5, state.riskProfile?.targetRiskLevel)
+            // Ett enda innehav -> det värdeviktade snittet är exakt fondens egen risknivå.
+            assertEquals(4.0, state.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
+            assertEquals(0, state.portfolioRisk.excludedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `portfolioRisk exkluderar innehav utan kand risk och rapporterar det`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = emptyMap()
+        preferencesRepository.setRiskProfile(RiskProfile(targetRiskLevel = 3))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskProfile == null) state = awaitItem()
+            assertNull(state.portfolioRisk.weightedAverageRisk)
+            assertEquals(1, state.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
         }
     }

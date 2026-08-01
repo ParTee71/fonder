@@ -2,6 +2,7 @@ package se.partee71.fonder.data.repository
 
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.network.AvanzaFundListParser
 import se.partee71.fonder.data.network.AvanzaFundListRequestBuilder
@@ -68,6 +69,17 @@ interface FundMetadataRepository {
      * resultatkartan — anroparen ska räkna det innehavet som "okänd avgift", aldrig gissa.
      */
     suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata>
+
+    /**
+     * Kända risknivåer på källans skala (TP-21, SET-3/issue #68) — unionen av senast kända
+     * filtervokabulär ([se.partee71.fonder.data.datastore.PreferencesRepository.fundFilterVocabulary],
+     * som bara fylls av Fondsök/ANA-9:s frågeflöden och därför kan vara tom för en användare
+     * som aldrig öppnat dem) och de redan cachade fondernas egen `risk` (fylld redan av
+     * HEM-5/POR-9:s [metadataFor]-anrop, mer pålitligt populerad för en användare med
+     * innehav). Läser aldrig nätverket. Tom lista om ingen fondmetadata alls hämtats än —
+     * aldrig en hårdkodad skala.
+     */
+    suspend fun knownRiskLevels(): List<Int>
 }
 
 @Singleton
@@ -256,10 +268,19 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return result
     }
 
+    override suspend fun knownRiskLevels(): List<Int> {
+        // Källans egen `type`-sträng för risk-dimensionen är "risk" (verifierat live
+        // 2026-08-01, samma `filterCounts`-svar som TP-21 i övrigt bygger vokabulären ur).
+        val fromVocabulary = preferencesRepository.fundFilterVocabulary.first().filters[RISK_VOCABULARY_KEY].orEmpty().mapNotNull { it.toIntOrNull() }
+        val fromCache = dao.getAll().mapNotNull { it.risk }
+        return (fromVocabulary + fromCache).distinct().sorted()
+    }
+
     private companion object {
         const val TAG = "FundMetadataRepository"
         const val MAX_ISIN_VERIFICATIONS = 5
         const val MAX_VERIFIED_ALTERNATIVES = 3
         const val MAX_VERIFICATION_ATTEMPTS = 10
+        const val RISK_VOCABULARY_KEY = "risk"
     }
 }
