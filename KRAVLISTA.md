@@ -61,7 +61,7 @@
 | UI-2 | Rubriker/UI i **Space Grotesk**; belopp och sifferkolumner med **tabulära siffror**. |
 | UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. |
 | UI-4 | Tema kan väljas: **Ljust / Mörkt / Auto** (sparas i DataStore). |
-| UI-5 | Varje skärm vars innehåll kan överstiga skärmhöjden är **skrollbar** (`LazyColumn`, eller `verticalScroll` för korta fasta vyer) — innehåll får aldrig klippas bort utan att gå att nå. Gäller särskilt vyer med kort/sektioner som växer med antalet innehav eller flaggade fonder (t.ex. HEM-4, HEM-5). Ett tillstånd som får plats i en testviewport kan ändå klippas i den riktiga appen, där `Scaffold`s topp- och bottenfält tar bort utrymme — instrumenterade tester för sådana vyer ska därför verifiera skrollbarhet (`performScrollTo().assertIsDisplayed()`), inte bara att en nod finns i semantikträdet (`assertExists()`, som inte fångar avklippt men komponerat innehåll, issue #63). |
+| UI-5 | Varje skärm vars innehåll kan överstiga skärmhöjden är **skrollbar** (`LazyColumn`, eller `verticalScroll` för korta fasta vyer) — innehåll får aldrig klippas bort utan att gå att nå. Gäller särskilt vyer med kort/sektioner som växer med antalet innehav eller flaggade fonder (t.ex. HEM-4, HEM-5). Ett tillstånd som får plats i en testviewport kan ändå klippas i den riktiga appen, där `Scaffold`s topp- och bottenfält tar bort utrymme — instrumenterade tester för sådana vyer ska därför verifiera skrollbarhet, inte bara att en nod finns i semantikträdet (`assertExists()`, som inte fångar avklippt men komponerat innehåll, issue #63). Metoden beror på om innehållet är genuint lazy-virtualiserat: `onNodeWithText(...).performScrollTo().assertIsDisplayed()` kräver att noden **redan är komponerad** (fungerar för rader samlade under en enda icke-lazy `Column` inuti ett `item {}`, t.ex. HEM-4:s flaggade fonder) — för en riktig lazy `items()`-lista (t.ex. Portföljs innehavsrader) är sista raden inte komponerad förrän listan skrollats dit, och testet måste i stället tagga `LazyColumn`n (`Modifier.testTag`) och använda `onNodeWithTag(...).performScrollToIndex(n)` (issue #66 — fångad i CI, inte antagen). |
 
 ---
 
@@ -821,3 +821,13 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   gjort exponeringskortet till ett fastnitat, icke-skrollbart element ovanför innehavslistan,
   exakt buggklassen UI-5 kodifierade efter #63. Ingen Room-migrering — ren härledning ur redan
   cachad `fund_metadata` och befintliga innehav/kurser, ett äkta regel 1-no-op.
+
+  CI fångade ett testfel i PR:n (inte gissat, inte förbisett): skrollbarhetstestet för Portfölj
+  återanvände HEM-4:s `onNodeWithText(...).performScrollTo()`-mönster rakt av, men Portföljs
+  innehavsrader är en riktig lazy `items()`-lista (till skillnad från HEM-4:s flaggade fonder,
+  som alla ligger under en enda icke-lazy `Column` i ett enda `item {}` och därför redan är
+  komponerade). `performScrollTo()` kräver att noden redan finns i semantikträdet — den tionde,
+  ännu okomponerade raden hittades aldrig. Fixat med en taggad `LazyColumn`
+  (`PORTFOLJ_LIST_TEST_TAG`) och `performScrollToIndex`, som skrollar en genuint virtualiserad
+  lista till rätt index innan den läses av. UI-5 uppdaterad med distinktionen mellan de två
+  fallen så nästa lazy-lista-test inte gör samma antagande.

@@ -4,8 +4,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -310,6 +311,12 @@ class PortfoljScreenTest {
         // Exponeringskortet ligger som ett `item {}` i samma `LazyColumn` som innehavsraderna
         // (inte i en fast `Column` ovanför, se PortfoljContent) — annars skulle det äta
         // skärmhöjd permanent och kunna klippa bort de sista innehavsraderna (UI-5, issue #63).
+        // Till skillnad från Hems flaggade fonder (allihop under en enda icke-lazy `Column`
+        // inuti ett `item {}`) är innehavsraderna här riktiga lazy `items()` — den sista raden
+        // är därför inte komponerad förrän listan faktiskt skrollas dit, så
+        // `onNodeWithText(...).performScrollTo()` (som kräver att noden redan finns i
+        // semantikträdet) skulle aldrig hitta den. `performScrollToIndex` på den taggade listan
+        // är rätt verktyg för en genuint virtualiserad lista.
         val funds = (1..10).map { i -> Holding(fund = Fund(fundId = "F$i", name = "Innehav $i"), netShares = 1.0, netInvested = 100.0, currentValue = 100.0) }
         val state = PortfoljUiState(loading = false, holdings = funds)
 
@@ -317,6 +324,8 @@ class PortfoljScreenTest {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
         }
 
-        composeRule.onNodeWithText("Innehav 10").performScrollTo().assertIsDisplayed()
+        // Index 0/1 = TotalCard/ExposureCard, holdings börjar på index 2 -> sista (10:e) på index 11.
+        composeRule.onNodeWithTag(PORTFOLJ_LIST_TEST_TAG).performScrollToIndex(11)
+        composeRule.onNodeWithText("Innehav 10").assertIsDisplayed()
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +38,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+/** Adresserar innehavslistan för `performScrollToIndex` i tester (UI-5, issue #66) — se [PortfoljContent]. */
+const val PORTFOLJ_LIST_TEST_TAG = "portfolj_list"
 
 @Composable
 fun PortfoljScreen(
@@ -65,8 +69,11 @@ fun PortfoljContent(
         // Både totalkortet och exponeringskortet ligger som `item {}` i samma `LazyColumn` som
         // innehavsraderna (inte i en fast `Column` ovanför) — annars äter de permanent
         // skärmhöjd och kan klippa bort innehav på en liten skärm, exakt buggklassen UI-5
-        // beskriver (issue #63).
-        else -> LazyColumn(modifier = modifier.fillMaxSize()) {
+        // beskriver (issue #63). `testTag` gör listan adresserbar för `performScrollToIndex`
+        // i tester — till skillnad från Hem har innehavsraderna här riktiga lazy `items()`,
+        // inte allihop under en enda icke-lazy `Column`, så `onNodeWithText(...).performScrollTo()`
+        // hittar aldrig en rad som ännu inte komponerats (issue #66).
+        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
             item { TotalCard(state = state) }
             item { ExposureCard(exposure = state.exposure) }
             items(state.holdings, key = { it.fund.fundId }) { holding ->
