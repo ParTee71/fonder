@@ -83,7 +83,9 @@ class SuggestionRecordDaoTest {
     }
 
     @Test
-    fun `observeHistory ger alla batchar, nyast forst`() = runTest {
+    // Inget kommatecken i namnet: ett instrumenterat testnamn blir ett dex-metodnamn, och D8
+    // vägrar representera "," (mellanslag och bindestreck går bra, se övriga testnamn här).
+    fun `observeHistory ger alla batchar - nyast forst`() = runTest {
         // observeLatestBatch ger med flit bara den senaste körningen — facit ska se hela
         // historiken, annars kan utfallet aldrig utvärderas över tid (SET-5).
         dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 0))
