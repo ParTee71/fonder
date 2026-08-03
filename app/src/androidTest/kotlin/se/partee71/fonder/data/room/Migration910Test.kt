@@ -115,7 +115,7 @@ class Migration910Test {
                 sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0, followed = null,
             ),
         )
-        val records = db.suggestionRecordDao().observeAll().first()
+        val records = db.suggestionRecordDao().getAll()
         assertEquals(1, records.size)
         assertEquals("SE0000581434", records.single().sellIsin)
 

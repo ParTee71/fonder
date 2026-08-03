@@ -262,4 +262,56 @@ class SwitchPlanCalcTest {
 
         assertTrue(plan.switches.isEmpty())
     }
+
+    // --- underweightedLevels: låter anroparen hämta kandidater bara för nivåer planen kan köpa på ---
+
+    @Test
+    fun `underweightedLevels ger bara nivaer over MIN_GAP_PP, storst underviktning forst`() {
+        val holdings = listOf(holding("A", 10_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
+
+        val levels = SwitchPlanCalc.underweightedLevels(
+            holdings,
+            metadataByIsin,
+            // Nivå 3 saknar 60 pp, nivå 4 saknar 39 pp, nivå 2 saknar 1 pp (under gränsen),
+            // nivå 5 är kraftigt överviktad.
+            mapOf(2 to 0.01, 3 to 0.60, 4 to 0.39),
+        )
+
+        assertEquals(listOf(3, 4), levels)
+    }
+
+    @Test
+    fun `underweightedLevels ger tom lista for en portfolj som redan ligger pa malet`() {
+        val holdings = listOf(holding("A", 10_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 4, fee = 0.5))
+
+        assertTrue(SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, mapOf(4 to 1.0)).isEmpty())
+    }
+
+    @Test
+    fun `underweightedLevels tacker alla nivaer plan faktiskt koper pa`() {
+        // Kontraktet mellan de två: hämtar anroparen kandidater bara för underweightedLevels
+        // får plan aldrig sakna en nivå den skulle ha köpt på. Att titta på utgångsläget räcker
+        // eftersom ett byte aldrig kan göra den sålda nivån underviktad (issue #75, punkt 4).
+        val holdings = listOf(holding("Dyr", 6_000.0, isin = "SED"), holding("Billig", 4_000.0, isin = "SEB"))
+        val metadataByIsin = mapOf(
+            "SED" to metadata("SED", risk = 5, fee = 1.5),
+            "SEB" to metadata("SEB", risk = 5, fee = 0.4),
+        )
+        val target = mapOf(2 to 0.4, 3 to 0.4, 5 to 0.2)
+        val candidates = listOf(
+            candidate("C2", risk = 2, fee = 0.2, twelveMonthReturn = 0.10),
+            candidate("C3", risk = 3, fee = 0.2, twelveMonthReturn = 0.10),
+        )
+
+        val levels = SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, target)
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, target)
+
+        assertTrue(plan.switches.isNotEmpty())
+        assertTrue(
+            "plan köpte på en nivå underweightedLevels inte pekade ut",
+            plan.switches.map { it.toLevel }.all { it in levels },
+        )
+    }
 }

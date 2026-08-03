@@ -30,7 +30,9 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -166,8 +168,8 @@ class HemViewModel @Inject constructor(
                 fundPriceRepository.observeLatestPrices(fundIds),
                 metadata,
                 settings,
-                suggestionRecordRepository.observeAll(),
-            ) { prices, metadataByIsin, currentSettings, records ->
+                suggestionRecordRepository.observeLatestBatch(),
+            ) { prices, metadataByIsin, currentSettings, latestBatch ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
                 val historyByFundId = enriched.associate { holding ->
@@ -177,11 +179,10 @@ class HemViewModel @Inject constructor(
                         toEpochDay = today.toEpochDay(),
                     )
                 }
-                val latestBatch = latestBatchOf(records)
                 refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
-                val switchPlan = buildSwitchPlan(currentSettings.accountType, latestBatch, metadataByIsin)
+                val switchPlan = buildSwitchPlan(currentSettings.accountType, latestBatch, metadataByIsin, today)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -258,24 +259,6 @@ class HemViewModel @Inject constructor(
     }
 
     /**
-     * Den senast inspelade **planen** — en enskild körning, inte ett helt dygn.
-     *
-     * Backstopen kör var 12:e timme, så två körningar landar normalt samma kalenderdygn, och
-     * dygnsdedupen spärrar bara identiska sälj-/köp-par. Ändras portföljen däremellan räknas en
-     * annan plan fram, och "alla rader från senaste dygnet" blev då två planer sammanslagna:
-     * samma fond kunde säljas två gånger och två rader bära `planIndex 0` (issue #75).
-     * [SuggestionRecord.batchEpochMillis] grupperar körningen; rader inspelade före det fältet
-     * har 0 och grupperas per dygn som förut.
-     */
-    private fun latestBatchOf(records: List<SuggestionRecord>): List<SuggestionRecord> {
-        if (records.isEmpty()) return emptyList()
-        val latestDay = records.maxOf { it.suggestedAtEpochDay }
-        val sameDay = records.filter { it.suggestedAtEpochDay == latestDay }
-        val latestBatchMillis = sameDay.maxOf { it.batchEpochMillis }
-        return sameDay.filter { it.batchEpochMillis == latestBatchMillis }.sortedBy { it.planIndex }
-    }
-
-    /**
      * Formaterar den senast inspelade bytesplanen ur facit ([SuggestionRecordRepository], HEM-8,
      * issue #70) för visning — räknar **inte** om planen live, se [SwitchSuggestionUi]s KDoc.
      * Tom lista utan ISK/KF (SET-4) eller innan bakgrundsworkerns backstop hunnit spela in
@@ -291,8 +274,15 @@ class HemViewModel @Inject constructor(
         accountType: AccountType?,
         latestBatch: List<SuggestionRecord>,
         metadataByIsin: Map<String, FundMetadata>,
+        today: LocalDate,
     ): List<SwitchSuggestionUi> {
         if (accountType != AccountType.ISK_KF) return emptyList()
+
+        // Färskhetsgräns, samma princip som HEM-6:s jämförelse: ett gammalt råd är fel på ett
+        // sätt gammal avgiftsdata inte är. Slutar backstopen köra ska planen försvinna, inte
+        // ligga kvar prissatt mot en portfölj som sedan dess rört sig (issue #75, punkt 5).
+        val suggestedAt = latestBatch.firstOrNull()?.suggestedAtEpochDay ?: return emptyList()
+        if (FundMetadataFreshness.isStale(suggestedAt, today, SwitchPlanCalc.PLAN_TTL_DAYS)) return emptyList()
 
         val resolved = latestBatch.mapNotNull { record ->
             val sellMeta = metadataByIsin[record.sellIsin] ?: return@mapNotNull null

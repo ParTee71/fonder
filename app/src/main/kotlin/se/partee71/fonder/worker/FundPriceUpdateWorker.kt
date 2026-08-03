@@ -111,27 +111,6 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val ISIN_FALLBACK_LOOKBACK_DAYS = 30L
 
         /**
-         * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
-         * kodgranskning fann att den dagliga uppdateringen aldrig hämtade kurser för
-         * ISIN-matchade fonder, se KRAVLISTA TP-14 — [FundPriceRepository.refresh] nycklas på
-         * Handelsbankens FundId, som ISIN-matchade fonder saknar).
-         *
-         * Fonder med känt ISIN ([se.partee71.fonder.domain.model.Fund.isin] != null, t.ex.
-         * fonder från andra fondbolag matchade via [FundPriceRepository.findFundByIsin])
-         * uppdateras via [FundPriceRepository.refreshSince] i stället för [FundPriceRepository.refresh]
-         * — annars nås de aldrig av den dagliga uppdateringen (samma gren som
-         * `FondDetaljViewModel`/`ImportHoldingsViewModel` redan använder).
-         *
-         * @param force hoppar över [isPriceStale]-gaten och uppdaterar alla bevakade fonder,
-         *   oavsett om cachen redan är aktuell (TP-17, den manuella "Uppdatera nu"-knappen, SET-2).
-         *   Annars uppdateras bara fonder vars cachade kurs faktiskt är inaktuell — gör den
-         *   periodiska backstopen billig (inget nätverksanrop när kursen redan är färsk).
-         * @return true om det inte finns några bevakade fonder, om ingen fond var inaktuell, eller
-         *   om minst en fonds uppdatering lyckades — false bara om samtliga (inaktuella) fonder
-         *   misslyckades (troligen ett tillfälligt nätverksfel), så [CoroutineWorker.Result.retry]
-         *   kan användas i stället för att vänta på nästa schemalagda körning.
-         */
-        /**
          * Kör de begärda skanningarna — men **bara** efter en lyckad kursuppdatering.
          *
          * Misslyckades [refreshSucceeded] läser skanningarna ur en cache workern precis bevisat
@@ -161,6 +140,27 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             }
         }
 
+        /**
+         * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
+         * kodgranskning fann att den dagliga uppdateringen aldrig hämtade kurser för
+         * ISIN-matchade fonder, se KRAVLISTA TP-14 — [FundPriceRepository.refresh] nycklas på
+         * Handelsbankens FundId, som ISIN-matchade fonder saknar).
+         *
+         * Fonder med känt ISIN ([se.partee71.fonder.domain.model.Fund.isin] != null, t.ex.
+         * fonder från andra fondbolag matchade via [FundPriceRepository.findFundByIsin])
+         * uppdateras via [FundPriceRepository.refreshSince] i stället för [FundPriceRepository.refresh]
+         * — annars nås de aldrig av den dagliga uppdateringen (samma gren som
+         * `FondDetaljViewModel`/`ImportHoldingsViewModel` redan använder).
+         *
+         * @param force hoppar över [isPriceStale]-gaten och uppdaterar alla bevakade fonder,
+         *   oavsett om cachen redan är aktuell (TP-17, den manuella "Uppdatera nu"-knappen, SET-2).
+         *   Annars uppdateras bara fonder vars cachade kurs faktiskt är inaktuell — gör den
+         *   periodiska backstopen billig (inget nätverksanrop när kursen redan är färsk).
+         * @return true om det inte finns några bevakade fonder, om ingen fond var inaktuell, eller
+         *   om minst en fonds uppdatering lyckades — false bara om samtliga (inaktuella) fonder
+         *   misslyckades (troligen ett tillfälligt nätverksfel), så [CoroutineWorker.Result.retry]
+         *   kan användas i stället för att vänta på nästa schemalagda körning.
+         */
         internal suspend fun refreshAll(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
@@ -279,7 +279,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             val heldIsins = withValue.mapNotNull { it.fund.isin }.toSet()
             val metadataByIsin = fundMetadataRepository.metadataFor(heldIsins.toList())
 
-            val candidates = targetAllocation.keys.flatMap { level ->
+            // Bara **underviktade** nivåer, inte varje nivå i målfördelningen: gapen räknas ur
+            // redan känd data utan nätverk, medan varje nivå kostar en källfråga plus upp till
+            // MAX_SWITCH_VERIFICATION_ATTEMPTS köpbarhetsuppslag. En femnivåfördelning gav
+            // tidigare 5 frågor och upp till 50 verifieringar var 12:e timme, för nivåer planen
+            // ändå aldrig skulle köpa på — i strid med den budget KEY_SCAN_SWITCH_PLAN
+            // dokumenterar (issue #75, punkt 4).
+            val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation)
+            if (levels.isEmpty()) return
+            val candidates = levels.flatMap { level ->
                 fundMetadataRepository.findSwitchCandidates(level, excludeIsins = heldIsins)
             }
             val plan = SwitchPlanCalc.plan(withValue, metadataByIsin, candidates, targetAllocation)
@@ -288,7 +296,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
                 if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
 
-                val sellNav = sellNavOf(switch, withValue) ?: return@forEachIndexed
+                // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
+                // `currentValue / netShares` gav exakt samma tal via en division som krävde en
+                // nollvakt och införde flyttalsfel utan vinst (issue #75, punkt 9).
+                val sellNav = prices[switch.sellFund.fundId]?.nav ?: return@forEachIndexed
                 val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: return@forEachIndexed
 
                 suggestionRecordRepository.record(
@@ -304,13 +315,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     ),
                 )
             }
-        }
 
-        private fun sellNavOf(switch: SwitchPlanCalc.Switch, holdings: List<Holding>): Double? {
-            val holding = holdings.firstOrNull { it.fund.fundId == switch.sellFund.fundId } ?: return null
-            val value = holding.currentValue ?: return null
-            if (holding.netShares == 0.0) return null
-            return value / holding.netShares
+            // Tak mot obegränsad tillväxt — se SuggestionRecordRepository.prune. Körs efter
+            // inspelningen, så dagens rader aldrig kan falla offer för sin egen gallring.
+            suggestionRecordRepository.prune(today)
         }
 
         /**

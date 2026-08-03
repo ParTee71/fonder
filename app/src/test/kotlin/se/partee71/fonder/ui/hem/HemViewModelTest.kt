@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -106,7 +107,17 @@ class HemViewModelTest {
 
     private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
         val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeAll(): Flow<List<SuggestionRecord>> = records
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { all ->
+            // Speglar DAO:ns SQL: senaste dygnets senaste körning, sorterad på plats i planen.
+            if (all.isEmpty()) return@map emptyList()
+            val latestDay = all.maxOf { it.suggestedAtEpochDay }
+            val sameDay = all.filter { it.suggestedAtEpochDay == latestDay }
+            val latestBatch = sameDay.maxOf { it.batchEpochMillis }
+            sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex }
+        }
+
+        var prunedBefore: LocalDate? = null
+        override suspend fun prune(today: LocalDate) { prunedBefore = today }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
     }
@@ -661,6 +672,47 @@ class HemViewModelTest {
             while (state.loading) state = awaitItem()
             advanceUntilIdle()
             assertTrue(vm.uiState.value.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan doljs nar den inspelade planen blivit for gammal`() = runTest(dispatcher) {
+        // Regression (issue #75, punkt 5): planen visades oavsett ålder. Slutar backstopen köra
+        // (inget nät, batterioptimering, appen inte öppnad) låg ett gammalt "Sälj X → Köp Y"
+        // kvar på Hem, prissatt mot en portfölj som sedan dess rört sig. HEM-6 gör uttryckligen
+        // tvärtom för avgiftsjämförelsen; ett bytesförslag är samma sorts råd.
+        setUpHoldingWithMetadataForSwitchPlan()
+        val gammalt = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS + 1).toEpochDay()
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
+            it.copy(suggestedAtEpochDay = gammalt)
+        }
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan visas fortfarande dagen innan farskhetsgransen loper ut`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        val precisInomGransen = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS).toEpochDay()
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
+            it.copy(suggestedAtEpochDay = precisInomGransen)
+        }
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            assertEquals("Innehav", state.switchPlan.single().sellFundName)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -107,7 +107,7 @@ class Migration1112Test {
         db.openHelper.writableDatabase
 
         // Den gamla raden överlever oförändrad, utan körnings-id.
-        val existing = db.suggestionRecordDao().observeAll().first().single()
+        val existing = db.suggestionRecordDao().getAll().single()
         assertEquals("SE0000581434", existing.sellIsin)
         assertEquals(42_000.0, existing.switchValueKr ?: -1.0, 1e-9)
         assertEquals(0L, existing.batchEpochMillis)
@@ -121,7 +121,7 @@ class Migration1112Test {
                 switchValueKr = 1_000.0, followed = null, batchEpochMillis = 1_785_000_000_000,
             ),
         )
-        val nyast = db.suggestionRecordDao().observeAll().first().first()
+        val nyast = db.suggestionRecordDao().getAll().maxBy { it.id }
         assertEquals(1_785_000_000_000L, nyast.batchEpochMillis)
 
         // Befintliga fonder och transaktioner rörs inte.

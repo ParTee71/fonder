@@ -79,11 +79,76 @@ object SwitchPlanCalc {
     const val MAX_SWITCHES_PER_PLAN = 3
 
     /**
+     * Hur gammal en inspelad plan får vara för att fortfarande visas (HEM-8). Samma princip som
+     * HEM-6:s [FundMetadataFreshness.COMPARISON_TTL_DAYS] — *"ett gammalt råd är fel på ett sätt
+     * gammal avgiftsdata inte är"* — men snävare: ett bytesförslag är prissatt mot portföljen
+     * som den såg ut den dagen, och den rör sig varje handelsdag. Backstopen kör var 12:e timme,
+     * så en plan som är äldre än så här betyder att den inte kommit fram på över en vecka
+     * (inget nät, batterioptimering, appen inte öppnad) — då är "ingen plan" ärligare än ett
+     * inaktuellt "Sälj X → Köp Y" (issue #75, punkt 5).
+     */
+    const val PLAN_TTL_DAYS = 7L
+
+    /**
      * Ett innehav vars risknivå går att avgöra — alltså med i fördelningen. [feePercent] null
      * betyder att fonden **inte** kan väljas som säljkandidat (avgiften avgör vilken position på
      * nivån som säljs, och ingår i [Switch.feeDelta]), men värdet räknas ändå med i nivåns vikt.
      */
     private data class Position(val holding: Holding, val isin: String, val level: Int, val feePercent: Double?, val valueKr: Double)
+
+    /**
+     * Nivåerna som är underviktade med minst [MIN_GAP_PP] — alltså de enda [plan] någonsin
+     * kommer att köpa på. Räknas ur redan känd data (innehav + cachad metadata), **utan
+     * nätverk**, så anroparen kan hämta köpkandidater bara för dem: en källfråga plus
+     * budgeterad köpbarhetsverifiering per nivå är dyrt, och en femnivåfördelning gav tidigare
+     * 5 frågor och upp till 50 verifieringar var 12:e timme för nivåer planen ändå aldrig
+     * skulle röra (issue #75, punkt 4).
+     *
+     * Att titta på **utgångsläget** räcker: ett byte storleksbestäms till min(under, över), så
+     * den sålda nivån kan aldrig sjunka under sitt eget mål och därmed aldrig bli underviktad
+     * av ett byte. Mängden underviktade nivåer kan alltså bara krympa under den giriga loopen,
+     * aldrig växa.
+     */
+    fun underweightedLevels(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        targetAllocation: Map<Int, Double>,
+    ): List<Int> {
+        if (targetAllocation.isEmpty()) return emptyList()
+        val positions = positionsOf(holdings, metadataByIsin)
+        val totalValueKr = positions.sumOf { it.valueKr }
+        if (totalValueKr <= 0.0) return emptyList()
+
+        val levelValues = positions.groupBy { it.level }.mapValues { (_, p) -> p.sumOf { it.valueKr } }
+        return gapsPp(targetAllocation, levelValues, totalValueKr)
+            .filterValues { it >= MIN_GAP_PP }
+            .entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+    }
+
+    /**
+     * Innehav vars risknivå går att avgöra. Se [plan] för varför avgiften **inte** krävs här:
+     * den behövs bara för att välja säljkandidat, inte för att räkna med värdet i nivåns vikt.
+     */
+    private fun positionsOf(holdings: List<Holding>, metadataByIsin: Map<String, FundMetadata>): List<Position> =
+        holdings.mapNotNull { holding ->
+            val isin = holding.fund.isin ?: return@mapNotNull null
+            val value = holding.currentValue ?: return@mapNotNull null
+            val metadata = metadataByIsin[isin] ?: return@mapNotNull null
+            val level = metadata.risk ?: return@mapNotNull null
+            Position(holding, isin, level, metadata.totalFee, value)
+        }
+
+    /** Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. */
+    private fun gapsPp(
+        targetAllocation: Map<Int, Double>,
+        levelValues: Map<Int, Double>,
+        totalValueKr: Double,
+    ): Map<Int, Double> =
+        (targetAllocation.keys + levelValues.keys).associateWith { level ->
+            ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
+        }
 
     fun plan(
         holdings: List<Holding>,
@@ -100,13 +165,7 @@ object SwitchPlanCalc {
         // (issue #75). Nämnaren är portföljens klassificerade värde, samma som
         // [PortfolioRiskCalc.actualAllocation] använder, så procenttalen i planen och i
         // riskkortet ovanför beskriver samma fördelning.
-        val positions = holdings.mapNotNull { holding ->
-            val isin = holding.fund.isin ?: return@mapNotNull null
-            val value = holding.currentValue ?: return@mapNotNull null
-            val metadata = metadataByIsin[isin] ?: return@mapNotNull null
-            val level = metadata.risk ?: return@mapNotNull null
-            Position(holding, isin, level, metadata.totalFee, value)
-        }
+        val positions = positionsOf(holdings, metadataByIsin)
 
         val totalValueKr = positions.sumOf { it.valueKr }
         if (totalValueKr <= 0.0) return EMPTY_PLAN
@@ -117,9 +176,7 @@ object SwitchPlanCalc {
         val switches = mutableListOf<Switch>()
 
         while (switches.size < MAX_SWITCHES_PER_PLAN) {
-            val gapsPp = (targetAllocation.keys + levelValues.keys).associateWith { level ->
-                ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
-            }
+            val gapsPp = gapsPp(targetAllocation, levelValues, totalValueKr)
             val underEntry = gapsPp.filterValues { it >= MIN_GAP_PP }.maxByOrNull { it.value } ?: break
             val overEntry = gapsPp.filter { it.key != underEntry.key && it.value <= -MIN_GAP_PP }.minByOrNull { it.value } ?: break
 
