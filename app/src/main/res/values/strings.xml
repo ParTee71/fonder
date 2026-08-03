@@ -63,11 +63,13 @@
     <string name="portfolj_exposure_type_title">Fondtyp</string>
     <string name="portfolj_exposure_region_title">Region</string>
     <string name="portfolj_exposure_region_explain">Region saknas ofta för ränte- och blandfonder.</string>
+    <string name="portfolj_exposure_risk_title">Risknivå</string>
     <string name="portfolj_exposure_index_title">Index vs. aktivt förvaltat</string>
     <string name="portfolj_exposure_index_label">Indexfond</string>
     <string name="portfolj_exposure_active_label">Aktivt förvaltad</string>
     <string name="portfolj_exposure_unknown_type">Okänd fondtyp</string>
     <string name="portfolj_exposure_unknown_region">Okänd region</string>
+    <string name="portfolj_exposure_unknown_risk">Okänd risknivå</string>
     <string name="format_portfolj_exposure_excluded">%1$d innehav saknar ISIN, fondmetadata eller känd kurs och räknas inte in i exponeringen.</string>
 
     <!-- Transaktioner -->
@@ -215,7 +217,7 @@
     <string name="settings_import_button">Importera innehav</string>
     <!-- Riskprofil (SET-3, issue #68) -->
     <string name="settings_riskprofile_section">Riskprofil</string>
-    <string name="settings_riskprofile_body">Sätt en målrisknivå för portföljen och jämför den mot dina innehav.</string>
+    <string name="settings_riskprofile_body">Sätt en målfördelning för portföljen och jämför den mot dina innehav.</string>
     <string name="settings_riskprofile_button">Öppna riskprofil</string>
     <string name="settings_about_section">Om appen</string>
 
@@ -247,9 +249,9 @@
     <string name="settings_import_orders_section">Importera avräkningsnotor</string>
     <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
 
-    <!-- Riskprofil (SET-3, issue #68) -->
+    <!-- Riskprofil (SET-3, issue #68, målfördelning i issue #71) -->
     <string name="riskprofile_title">Riskprofil</string>
-    <string name="riskprofile_intro">Tre frågor föreslår en målrisknivå för portföljen. Förslaget är bara ett förslag — du väljer och sparar din egen nivå.</string>
+    <string name="riskprofile_intro">Tre frågor föreslår en målfördelning över risknivåer för portföljen. Förslaget är bara ett förslag — du justerar och sparar din egen fördelning.</string>
     <string name="riskprofile_q_horizon">Tidshorisont</string>
     <string name="risk_horizon_under_3">Mindre än 3 år</string>
     <string name="risk_horizon_3_7">3–7 år</string>
@@ -264,17 +266,25 @@
     <string name="risk_goal_bevara">Bevara värdet</string>
     <string name="risk_goal_balanserad">Balanserad tillväxt</string>
     <string name="risk_goal_maximal_tillvaxt">Maximal tillväxt</string>
-    <string name="format_riskprofile_suggested">Förslag: nivå %1$d</string>
-    <string name="riskprofile_level_title">Målrisknivå</string>
+    <string name="riskprofile_suggestion_hint">Enkätens förslag har fyllts i nedan. Justera andelarna om du vill.</string>
+    <string name="riskprofile_allocation_title">Målfördelning</string>
+    <string name="riskprofile_allocation_disclaimer">Fördelningarna är utgångspunkter, inte optima — ett verkligt optimum kräver uppgifter om ålder, övriga tillgångar och inkomst som appen varken har eller frågar om.</string>
+    <string name="format_riskprofile_level_label">Nivå %1$d</string>
+    <string name="format_riskprofile_allocation_sum">Summa: %1$d %%</string>
+    <string name="riskprofile_allocation_sum_error">Summan måste bli 100 % för att kunna sparas.</string>
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
     <string name="riskprofile_save_button">Spara</string>
 
-    <!-- Riskprofil på Hem (HEM-7, issue #68) -->
+    <!-- Riskprofil på Hem (HEM-7, issue #68, mål-mot-faktisk per nivå i issue #71) -->
     <string name="hem_risk_title">Riskprofil</string>
     <string name="hem_risk_target_label">Målnivå</string>
     <string name="hem_risk_actual_label">Innehavens snittnivå</string>
     <string name="hem_risk_explain">Innehavens genomsnittliga risknivå, viktad på aktuellt värde — inte portföljens samlade risk (korrelation och riskspridning räknas inte in).</string>
     <string name="format_hem_risk_excluded">%1$d fond(er) saknar känd risknivå och räknas inte in.</string>
+    <string name="hem_risk_distribution_title">Mål mot faktisk fördelning</string>
+    <string name="format_hem_risk_level">Nivå %1$d</string>
+    <string name="hem_risk_target_bar_label">Mål</string>
+    <string name="hem_risk_actual_bar_label">Faktisk</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>
     <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>

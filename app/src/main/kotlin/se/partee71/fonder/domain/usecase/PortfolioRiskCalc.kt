@@ -43,4 +43,25 @@ object PortfolioRiskCalc {
         val weighted = if (includedValueKr == 0.0) null else weightedSum / includedValueKr
         return Result(weightedAverageRisk = weighted, includedValueKr = includedValueKr, excludedCount = excludedCount)
     }
+
+    /** Mål- och faktisk andel för en enskild risknivå, plus den härledda avvikelsen ur [deviationByLevel]. */
+    data class LevelDeviation(val level: Int, val targetFraction: Double, val actualFraction: Double) {
+        /** Mål minus faktisk — positiv betyder underviktad (köp här), negativ betyder överviktad (sälj här). */
+        val deviationFraction: Double get() = targetFraction - actualFraction
+    }
+
+    /**
+     * Avvikelse per risknivå (HEM-7/issue #71) — målfördelningen
+     * ([se.partee71.fonder.domain.model.RiskProfile.effectiveAllocation]) mot innehavens
+     * faktiska fördelning (t.ex. [PortfolioExposureCalc.Result.byRiskLevel]).
+     * Sorterat på störst underviktning först, vilket direkt pekar ut hinken som bör fyllas —
+     * det underlag issue #70 (bytesplan) konsumerar. Unionen av nivåer på båda sidor tas med,
+     * så en nivå som bara finns i den ena fördelningen ändå syns med sin fulla avvikelse.
+     */
+    fun deviationByLevel(targetAllocation: Map<Int, Double>, actualAllocation: Map<Int, Double>): List<LevelDeviation> {
+        val levels = (targetAllocation.keys + actualAllocation.keys).toSortedSet()
+        return levels
+            .map { level -> LevelDeviation(level, targetAllocation[level] ?: 0.0, actualAllocation[level] ?: 0.0) }
+            .sortedByDescending { it.deviationFraction }
+    }
 }

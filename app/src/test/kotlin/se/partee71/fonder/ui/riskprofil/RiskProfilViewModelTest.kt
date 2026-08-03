@@ -34,6 +34,7 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.RiskProfileCalc
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiskProfilViewModelTest {
@@ -70,14 +71,16 @@ class RiskProfilViewModelTest {
     private fun viewModel() = RiskProfilViewModel(preferencesRepository, fakeFundMetadataRepo)
 
     @Test
-    fun `initialt tillstand har ingen niva och en tom enkat`() = runTest(dispatcher) {
+    fun `initialt tillstand har ingen egen andring och en tom enkat`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.availableLevels.isEmpty()) state = awaitItem()
             assertNull(state.horizon)
-            assertNull(state.suggestedLevel)
-            assertNull(state.selectedLevel)
+            assertNull(state.suggestedAllocation)
+            assertFalse(state.hasManualEdit)
+            assertFalse(state.canSave)
+            assertTrue(state.availableLevels.all { (state.allocationText[it] ?: "") == "0" })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -91,22 +94,21 @@ class RiskProfilViewModelTest {
 
             vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
             state = awaitItem()
-            assertNull(state.suggestedLevel)
+            assertNull(state.suggestedAllocation)
 
             vm.onReactionSelected(DownturnReaction.KOPER_MER)
             state = awaitItem()
-            assertNull(state.suggestedLevel)
+            assertNull(state.suggestedAllocation)
 
             vm.onGoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT)
             state = awaitItem()
-            assertEquals(6, state.suggestedLevel)
-            assertEquals(6, state.selectedLevel)
+            assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, state.suggestedAllocation)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `ett eget val av niva vinner over forslaget`() = runTest(dispatcher) {
+    fun `ett eget varde i ett falt vinner over forslaget i sin helhet`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
@@ -118,27 +120,30 @@ class RiskProfilViewModelTest {
             awaitItem()
             vm.onGoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT)
             state = awaitItem()
-            assertEquals(6, state.selectedLevel) // förslaget innan något eget val gjorts
+            assertFalse(state.hasManualEdit)
 
-            vm.onLevelSelected(2)
+            vm.onAllocationPercentChanged(4, "100")
             state = awaitItem()
-            assertEquals(2, state.selectedLevel)
-            assertEquals(6, state.suggestedLevel) // förslaget kvarstår oförändrat, bara overridat
+            assertTrue(state.hasManualEdit)
+            assertEquals("100", state.allocationText[4])
+            // Övriga nivåer var kvar på förslagets värden innan de själva rörs.
+            assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, state.suggestedAllocation)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `malniva kan sattas direkt utan att besvara enkaten`() = runTest(dispatcher) {
+    fun `en fordelning kan sattas direkt utan att besvara enkaten`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.availableLevels.isEmpty()) state = awaitItem()
 
-            vm.onLevelSelected(3)
+            vm.onAllocationPercentChanged(3, "100")
             state = awaitItem()
-            assertEquals(3, state.selectedLevel)
+            assertEquals(mapOf(3 to 1.0), state.effectiveAllocation)
+            assertTrue(state.canSave)
             assertNull(state.horizon)
             cancelAndIgnoreRemainingEvents()
         }
@@ -146,12 +151,47 @@ class RiskProfilViewModelTest {
         vm.save()
         dispatcher.scheduler.advanceUntilIdle()
         val saved = preferencesRepository.riskProfile.first()
-        assertEquals(3, saved?.targetRiskLevel)
+        assertEquals(mapOf(3 to 1.0), saved?.targetAllocation)
         assertNull(saved?.answers)
     }
 
     @Test
-    fun `save persisterar bade niva och svar nar enkaten ar fullstandig`() = runTest(dispatcher) {
+    fun `en summa skild fran 100 spargar sparande`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.availableLevels.isEmpty()) state = awaitItem()
+
+            vm.onAllocationPercentChanged(3, "50")
+            state = awaitItem()
+            assertEquals(50, state.allocationSumPercent)
+            assertFalse(state.canSave)
+            assertTrue(state.effectiveAllocation.isEmpty())
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `save gor ingenting nar summan inte ar 100`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.availableLevels.isEmpty()) state = awaitItem()
+            vm.onAllocationPercentChanged(3, "50")
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.save()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.saved)
+        assertNull(preferencesRepository.riskProfile.first())
+    }
+
+    @Test
+    fun `save persisterar bade fordelning och svar nar enkaten ar fullstandig`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
@@ -161,7 +201,8 @@ class RiskProfilViewModelTest {
             vm.onReactionSelected(DownturnReaction.GOR_INGET)
             awaitItem()
             vm.onGoalSelected(PrimaryGoal.BALANSERAD)
-            awaitItem()
+            state = awaitItem()
+            assertTrue(state.canSave) // enkätens förslag summerar redan till 100 %
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -170,13 +211,14 @@ class RiskProfilViewModelTest {
 
         val saved = preferencesRepository.riskProfile.first()
         assertEquals(RiskProfileAnswers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD), saved?.answers)
+        assertEquals(RiskProfileCalc.suggest(saved!!.answers!!, knownLevels), saved.targetAllocation)
     }
 
     @Test
-    fun `en tidigare sparad profil forifyller enkaten och nivan`() = runTest(dispatcher) {
+    fun `en tidigare sparad profil forifyller enkaten och fordelningen`() = runTest(dispatcher) {
         preferencesRepository.setRiskProfile(
             RiskProfile(
-                targetRiskLevel = 5,
+                targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
                 answers = RiskProfileAnswers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
             ),
         )
@@ -184,9 +226,9 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.selectedLevel == null) state = awaitItem()
-            assertEquals(5, state.selectedLevel)
+            while (state.allocationSumPercent != 100) state = awaitItem()
             assertEquals(TimeHorizon.OVER_15_AR, state.horizon)
+            assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), state.effectiveAllocation)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -204,25 +246,9 @@ class RiskProfilViewModelTest {
             awaitItem()
             vm.onGoalSelected(PrimaryGoal.BALANSERAD)
             state = awaitItem()
-            assertNull(state.suggestedLevel)
-            assertNull(state.selectedLevel)
+            assertNull(state.suggestedAllocation)
+            assertFalse(state.canSave)
             cancelAndIgnoreRemainingEvents()
         }
-    }
-
-    @Test
-    fun `save gor ingenting utan en vald niva`() = runTest(dispatcher) {
-        knownLevels = emptyList()
-        val vm = viewModel()
-        vm.uiState.test {
-            awaitItem()
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        vm.save()
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.saved)
-        assertNull(preferencesRepository.riskProfile.first())
     }
 }

@@ -22,6 +22,7 @@ class PortfolioExposureCalcTest {
         regionCategory: String = FundTag.CATEGORY_COMMON_REGION,
         indexFund: Boolean = false,
         fundType: String? = "EQUITY_FUND",
+        risk: Int? = null,
     ): FundMetadata {
         val tags = buildList {
             typeTitle?.let { add(FundTag(title = it, category = FundTag.CATEGORY_TYPE)) }
@@ -29,7 +30,7 @@ class PortfolioExposureCalcTest {
         }
         return FundMetadata(
             isin = isin, name = isin, orderbookId = isin, totalFee = 1.0, managementFee = 1.0,
-            category = null, fundType = fundType, companyName = null, risk = null, indexFund = indexFund,
+            category = null, fundType = fundType, companyName = null, risk = risk, indexFund = indexFund,
             startDateEpochDay = null, minimumBuy = null, tags = tags,
         )
     }
@@ -220,5 +221,62 @@ class PortfolioExposureCalcTest {
         assertEquals(0.2, rantefond.fraction, 1e-9)
         assertEquals(200.0, result.byRegion.unknownValueKr, 1e-9)
         assertEquals(1, result.byRegion.unknownCount)
+    }
+
+    // --- Risknivå-dimension (POR-9, issue #71) ---
+
+    @Test
+    fun `byRiskLevel sorterar stigande pa niva, inte fallande pa varde`() {
+        val holdings = listOf(
+            holding("Liten", currentValue = 100.0),
+            holding("Stor", currentValue = 900.0),
+        )
+        val metadataByIsin = mapOf(
+            "SELiten" to metadata("SELiten", risk = 6),
+            "SEStor" to metadata("SEStor", risk = 3),
+        )
+
+        val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
+
+        // Fallande på värde hade gett ["3", "6"] ändå här (900 > 100) — testa med omvänt värde också.
+        assertEquals(listOf("3", "6"), result.byRiskLevel.buckets.map { it.label })
+    }
+
+    @Test
+    fun `byRiskLevel sorterar stigande pa niva aven nar det motsager fallande varde`() {
+        val holdings = listOf(
+            holding("Stor", currentValue = 900.0),
+            holding("Liten", currentValue = 100.0),
+        )
+        val metadataByIsin = mapOf(
+            "SEStor" to metadata("SEStor", risk = 6),
+            "SELiten" to metadata("SELiten", risk = 3),
+        )
+
+        val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
+
+        // Störst värde (900 kr) ligger på nivå 6 — en fallande värde-sortering hade gett
+        // ["6", "3"], men skalan ska visas i sin egen, stigande ordning (POR-9).
+        assertEquals(listOf("3", "6"), result.byRiskLevel.buckets.map { it.label })
+    }
+
+    @Test
+    fun `fond utan kand risk hamnar i byRiskLevels okand-hink`() {
+        val holdings = listOf(
+            holding("A", currentValue = 700.0),
+            holding("B", currentValue = 300.0),
+        )
+        val metadataByIsin = mapOf(
+            "SEA" to metadata("SEA", risk = 4),
+            "SEB" to metadata("SEB", risk = null),
+        )
+
+        val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
+
+        assertEquals(0, result.excludedCount)
+        assertEquals(listOf("4"), result.byRiskLevel.buckets.map { it.label })
+        assertEquals(300.0, result.byRiskLevel.unknownValueKr, 1e-9)
+        assertEquals(1, result.byRiskLevel.unknownCount)
+        assertEquals(0.3, result.byRiskLevel.unknownFraction, 1e-9)
     }
 }

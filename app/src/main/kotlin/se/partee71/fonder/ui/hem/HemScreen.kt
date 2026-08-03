@@ -25,6 +25,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
@@ -64,7 +65,13 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
             item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
             item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
             state.riskProfile?.let { riskProfile ->
-                item { RiskCard(riskProfile = riskProfile, portfolioRisk = state.portfolioRisk) }
+                item {
+                    RiskCard(
+                        riskProfile = riskProfile,
+                        portfolioRisk = state.portfolioRisk,
+                        levelDeviations = state.riskLevelDeviations,
+                    )
+                }
             }
         }
     }
@@ -282,13 +289,22 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
 }
 
 /**
- * Målrisknivå (SET-3) mot innehavens faktiska, värdeviktade risknivå (HEM-7, issue #68) — ren
- * läsvy, ingen åtgärdsknapp. Återanvänder [PeriodRow]s `valueText`-läge (regel 4, samma
- * användning som ANA-7:s riskmått) i stället för en ny komponent, eftersom en risknivå är ett
- * neutralt, icke-avkastningsfärgat mått — inte en andel som [se.partee71.fonder.ui.components.ExposureBar] (#66) visar.
+ * Målfördelning (SET-3) mot innehavens faktiska fördelning per risknivå (HEM-7, uppgraderad
+ * från en enskild målnivå till en fördelning i issue #71) — ren läsvy, ingen åtgärdsknapp.
+ * Det värdeviktade snittet ([RiskProfile.weightedTargetLevel] mot
+ * [PortfolioRiskCalc.Result.weightedAverageRisk]) visas kvar som en sammanfattning överst
+ * (samma [PeriodRow]-mönster som tidigare, regel 4), men huvudinnehållet är nu per-nivå-raderna
+ * längre ned — en enda skalär kan inte skilja en 50/50-mix av nivå 1 och 6 från 100 % nivå
+ * 3,5, se [PortfolioRiskCalc]s precisionsanmärkning. Per-nivå-raderna återanvänder
+ * [se.partee71.fonder.ui.components.ExposureBar] (regel 4) — här är den rätt komponenten,
+ * till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel.
  */
 @Composable
-private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.Result) {
+private fun RiskCard(
+    riskProfile: RiskProfile,
+    portfolioRisk: PortfolioRiskCalc.Result,
+    levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
+) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(stringResource(R.string.hem_risk_title), style = MaterialTheme.typography.labelMedium)
@@ -296,7 +312,7 @@ private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.
                 label = stringResource(R.string.hem_risk_target_label),
                 amount = null,
                 fraction = null,
-                valueText = riskProfile.targetRiskLevel.toString(),
+                valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
                 modifier = Modifier.padding(top = 8.dp),
             )
             PeriodRow(
@@ -319,6 +335,26 @@ private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+            if (levelDeviations.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.hem_risk_distribution_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                levelDeviations.sortedBy { it.level }.forEach { deviation ->
+                    Text(
+                        stringResource(R.string.format_hem_risk_level, deviation.level),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
+                    ExposureBar(
+                        label = stringResource(R.string.hem_risk_actual_bar_label),
+                        fraction = deviation.actualFraction,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
             }
         }
     }
