@@ -114,4 +114,47 @@ class PortfolioRiskCalcTest {
         assertEquals(500.0, result.includedValueKr, 1e-9)
         assertEquals(1, result.excludedCount)
     }
+
+    // --- Avvikelse per risknivå (HEM-7, issue #71) ---
+
+    @Test
+    fun `deviationByLevel racknar mal minus faktisk per niva`() {
+        val deviations = PortfolioRiskCalc.deviationByLevel(
+            targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
+            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40),
+        )
+
+        val byLevel = deviations.associateBy { it.level }
+        assertEquals(0.15, byLevel.getValue(3).deviationFraction, 1e-9)
+        assertEquals(0.0, byLevel.getValue(4).deviationFraction, 1e-9)
+        assertEquals(-0.15, byLevel.getValue(5).deviationFraction, 1e-9)
+    }
+
+    @Test
+    fun `deviationByLevel sorterar storst undervikning forst`() {
+        val deviations = PortfolioRiskCalc.deviationByLevel(
+            targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
+            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40),
+        )
+
+        assertEquals(listOf(3, 4, 5), deviations.map { it.level })
+    }
+
+    @Test
+    fun `deviationByLevel tar med niva som bara finns pa ena sidan med full avvikelse`() {
+        val deviations = PortfolioRiskCalc.deviationByLevel(
+            targetAllocation = mapOf(4 to 1.0),
+            actualAllocation = mapOf(4 to 0.6, 6 to 0.4),
+        )
+
+        val byLevel = deviations.associateBy { it.level }
+        assertEquals(0.4, byLevel.getValue(4).deviationFraction, 1e-9)
+        assertEquals(0.0, byLevel.getValue(6).targetFraction, 1e-9)
+        assertEquals(-0.4, byLevel.getValue(6).deviationFraction, 1e-9)
+    }
+
+    @Test
+    fun `deviationByLevel med tomma fordelningar ger en tom lista`() {
+        assertEquals(emptyList<PortfolioRiskCalc.LevelDeviation>(), PortfolioRiskCalc.deviationByLevel(emptyMap(), emptyMap()))
+    }
 }

@@ -25,50 +25,107 @@ class RiskProfileCalcTest {
     }
 
     @Test
-    fun `forslaget hamnar alltid inom den tillgangliga skalan`() {
-        // En skala som bara går till 6 ska aldrig ge 7, oavsett svarskombination.
+    fun `alla fem fordelningar summerar till 100 procent`() {
+        for (profile in RiskProfileCalc.Profile.entries) {
+            assertTrue("${profile.name} summerar till ${profile.allocation.values.sum()}", RiskProfileCalc.isCompleteAllocation(profile.allocation))
+        }
+    }
+
+    @Test
+    fun `isCompleteAllocation avvisar en fordelning som inte summerar till 100`() {
+        assertTrue(RiskProfileCalc.isCompleteAllocation(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25)))
+        assertTrue(RiskProfileCalc.isCompleteAllocation(mapOf(3 to 0.5, 4 to 0.5)))
+
+        assertTrue(!RiskProfileCalc.isCompleteAllocation(mapOf(3 to 0.5, 4 to 0.2)))
+        assertTrue(!RiskProfileCalc.isCompleteAllocation(mapOf(3 to 0.6, 4 to 0.6)))
+        assertTrue(!RiskProfileCalc.isCompleteAllocation(emptyMap()))
+    }
+
+    @Test
+    fun `horisontspargen kan inte havas av risktolerans`() {
+        // "Köper mer" + "maximal tillväxt" är högsta möjliga risktolerans, men under 3 års
+        // horisont ger ändå Bevarande — motiverat av uppmätt återhämtningstid (issue #71).
+        val level = RiskProfileCalc.suggest(
+            answers(TimeHorizon.UNDER_3_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
+            fullScale,
+        )
+        assertEquals(RiskProfileCalc.Profile.BEVARANDE.allocation, level)
+    }
+
+    @Test
+    fun `under 3 ar ger alltid Bevarande oavsett svar`() {
+        for (reaction in DownturnReaction.entries) {
+            for (goal in PrimaryGoal.entries) {
+                val level = RiskProfileCalc.suggest(answers(TimeHorizon.UNDER_3_AR, reaction, goal), fullScale)
+                assertEquals(RiskProfileCalc.Profile.BEVARANDE.allocation, level)
+            }
+        }
+    }
+
+    @Test
+    fun `3-7 ar tar aldrig hogre an Balanserad`() {
+        val level = RiskProfileCalc.suggest(
+            answers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
+            fullScale,
+        )
+        assertEquals(RiskProfileCalc.Profile.BALANSERAD.allocation, level)
+    }
+
+    @Test
+    fun `7-15 ar tar aldrig hogre an Tillvaxt`() {
+        val level = RiskProfileCalc.suggest(
+            answers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
+            fullScale,
+        )
+        assertEquals(RiskProfileCalc.Profile.TILLVAXT.allocation, level)
+    }
+
+    @Test
+    fun `over 15 ar och hogsta risktolerans ger Offensiv`() {
+        val level = RiskProfileCalc.suggest(
+            answers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
+            fullScale,
+        )
+        assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, level)
+    }
+
+    @Test
+    fun `lagsta risktoleransen ger Bevarande aven med lang horisont`() {
+        val level = RiskProfileCalc.suggest(
+            answers(TimeHorizon.OVER_15_AR, DownturnReaction.SALJER_ALLT, PrimaryGoal.BEVARA),
+            fullScale,
+        )
+        assertEquals(RiskProfileCalc.Profile.BEVARANDE.allocation, level)
+    }
+
+    @Test
+    fun `forslaget hamnar alltid inom den tillgangliga skalan och summerar till 100`() {
         for (horizon in TimeHorizon.entries) {
             for (reaction in DownturnReaction.entries) {
                 for (goal in PrimaryGoal.entries) {
-                    val level = RiskProfileCalc.suggest(answers(horizon, reaction, goal), fullScale)
-                    assertTrue("level=$level utanför skalan", level != null && level in fullScale)
+                    val suggestion = RiskProfileCalc.suggest(answers(horizon, reaction, goal), fullScale)
+                    assertTrue(suggestion != null && suggestion.keys.all { it in fullScale })
+                    assertTrue(RiskProfileCalc.isCompleteAllocation(suggestion!!))
                 }
             }
         }
     }
 
     @Test
-    fun `lagsta svarskombinationen ger lagsta nivan`() {
-        val level = RiskProfileCalc.suggest(
-            answers(TimeHorizon.UNDER_3_AR, DownturnReaction.SALJER_ALLT, PrimaryGoal.BEVARA),
-            fullScale,
-        )
-        assertEquals(1, level)
+    fun `en enda tillganglig niva samlar hela fordelningen dar`() {
+        val suggestion = RiskProfileCalc.suggest(answers(), listOf(3))
+        assertEquals(mapOf(3 to 1.0), suggestion)
     }
 
     @Test
-    fun `hogsta svarskombinationen ger hogsta nivan`() {
-        val level = RiskProfileCalc.suggest(
-            answers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            fullScale,
+    fun `nivaer som saknas i skalan klamms mot narmaste tillgangliga och slas ihop`() {
+        // Försiktig = {2: 0,40, 3: 0,40, 4: 0,20}. En skala utan 2 klämmer den nivån mot 3.
+        val suggestion = RiskProfileCalc.suggest(
+            answers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BEVARA),
+            listOf(3, 4, 5, 6),
         )
-        assertEquals(6, level)
-    }
-
-    @Test
-    fun `forslaget klampas till narmaste tillgangliga niva vid en skala med luckor`() {
-        // En skala utan 4 och 5 (hypotetiskt) ska aldrig få förslaget att hamna där.
-        val sparseScale = listOf(1, 2, 3, 6)
-        val level = RiskProfileCalc.suggest(
-            answers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
-            sparseScale,
-        )
-        assertTrue(level in sparseScale)
-    }
-
-    @Test
-    fun `en enda tillganglig niva ger alltid den nivan`() {
-        assertEquals(3, RiskProfileCalc.suggest(answers(), listOf(3)))
+        assertEquals(RiskProfileCalc.Profile.FORSIKTIG.allocation, mapOf(2 to 0.40, 3 to 0.40, 4 to 0.20))
+        assertEquals(mapOf(3 to 0.80, 4 to 0.20), suggestion)
     }
 
     @Test
@@ -77,6 +134,6 @@ class RiskProfileCalcTest {
             answers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
             listOf(6, 6, 6, 1, 2, 3, 4, 5),
         )
-        assertEquals(6, level)
+        assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, level)
     }
 }

@@ -442,4 +442,55 @@ class HemViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `riskLevelDeviations jamfor malfordelningen mot innehavens faktiska niva-fordelning`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+        // Ett enda innehav på nivå 4 -> hela portföljvärdet är den faktiska fördelningen {4: 100 %}.
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 0.5, 4 to 0.5)))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskLevelDeviations.isEmpty()) state = awaitItem()
+            val byLevel = state.riskLevelDeviations.associateBy { it.level }
+            assertEquals(0.5, byLevel.getValue(3).targetFraction, 1e-9)
+            assertEquals(0.0, byLevel.getValue(3).actualFraction, 1e-9)
+            assertEquals(0.5, byLevel.getValue(4).targetFraction, 1e-9)
+            assertEquals(1.0, byLevel.getValue(4).actualFraction, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `riskLevelDeviations ar tom utan en sparad profil`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.riskLevelDeviations.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

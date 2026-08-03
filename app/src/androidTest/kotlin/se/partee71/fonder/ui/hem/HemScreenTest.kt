@@ -413,8 +413,38 @@ class HemScreenTest {
         }
 
         composeRule.onNodeWithText("Riskprofil").assertExists()
-        composeRule.onNodeWithText("5").assertExists()
+        composeRule.onNodeWithText("5,00").assertExists()
         composeRule.onNodeWithText("3,50").assertExists()
+    }
+
+    @Test
+    fun riskkortet_visar_mal_mot_faktisk_per_niva() {
+        // Andelarna är medvetet olika sinsemellan — annars kan flera ExposureBar-rader råka
+        // rendera samma procenttext, vilket gör onNodeWithText tvetydig (kräver exakt en träff).
+        val target = mapOf(3 to 0.31, 4 to 0.46, 5 to 0.23)
+        val actual = mapOf(3 to 0.12, 4 to 0.53, 5 to 0.35)
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = target),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
+            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Mål mot faktisk fördelning").assertExists()
+        composeRule.onNodeWithText("Nivå 3").assertExists()
+        composeRule.onNodeWithText("Nivå 4").assertExists()
+        composeRule.onNodeWithText("Nivå 5").assertExists()
+        composeRule.onNodeWithText("31,0 %").assertExists()
+        composeRule.onNodeWithText("46,0 %").assertExists()
+        composeRule.onNodeWithText("23,0 %").assertExists()
+        composeRule.onNodeWithText("12,0 %").assertExists()
+        composeRule.onNodeWithText("53,0 %").assertExists()
+        composeRule.onNodeWithText("35,0 %").assertExists()
     }
 
     @Test

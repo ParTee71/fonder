@@ -251,6 +251,39 @@ class PortfoljScreenTest {
     }
 
     @Test
+    fun risknivadimensionen_visas_stigande_pa_niva() {
+        // Störst värde ligger medvetet på den högsta nivån — en fallande värde-sortering hade
+        // gett omvänd radordning; POR-9 kräver stigande på nivå i stället (issue #71).
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposure = PortfolioExposureCalc.Result(
+            byType = emptyDimension,
+            byRegion = emptyDimension,
+            byRiskLevel = PortfolioExposureCalc.Dimension(
+                buckets = listOf(
+                    PortfolioExposureCalc.Bucket("3", 100.0, 0.1),
+                    PortfolioExposureCalc.Bucket("6", 900.0, 0.9),
+                ),
+                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+            ),
+            indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0,
+            excludedCount = 0,
+        )
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposure)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risknivå").assertExists()
+        val riskLevelNodes = composeRule.onAllNodesWithText("3", substring = false)
+        riskLevelNodes.assertCountEquals(1)
+        composeRule.onNodeWithText("6").assertExists()
+        composeRule.onNodeWithText("10,0 %").assertExists()
+        composeRule.onNodeWithText("90,0 %").assertExists()
+    }
+
+    @Test
     fun okand_region_visas_separat_och_tydligt_markt() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
         val exposure = PortfolioExposureCalc.Result(

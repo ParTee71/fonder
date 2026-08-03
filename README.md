@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
 
-> Version: 0.30.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.31.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -38,6 +38,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (HEM-6, #61)
 - [x] Exponeringskarta i Portfölj — andel per fondtyp, region, index/aktivt (POR-9, #66)
 - [x] Riskprofil — enkät, målrisknivå och jämförelse mot innehavens faktiska risk (SET-3/HEM-7, #68)
+- [x] Riskprofil som målfördelning över flera risknivåer, i stället för en enda nivå (SET-3/HEM-7/POR-9, #71)
 - [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
 

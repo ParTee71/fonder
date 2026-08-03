@@ -3,6 +3,8 @@ package se.partee71.fonder.data.datastore
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -77,5 +79,31 @@ class PreferencesRepositoryTest {
         val loaded = repository.riskProfile.first()
 
         assertEquals(5, loaded?.targetRiskLevel)
+    }
+
+    @Test
+    fun `en malfordelning rundturar genom DataStore`() = runTest {
+        val profile = RiskProfile(
+            targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
+            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
+        )
+
+        repository.setRiskProfile(profile)
+
+        assertEquals(profile, repository.riskProfile.first())
+        assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), repository.riskProfile.first()?.effectiveAllocation)
+    }
+
+    @Test
+    fun `en rastext sparad i det gamla SET-3-formatet avkodas till en migrerad fordelning, aldrig till null`() = runTest {
+        // Regressionstest för dataförlustbuggen i issue #71: RiskProfile.riskProfile sväljer
+        // avkodningsfel tyst (runCatching { … }.getOrNull()) — en profil sparad av #68:s app-
+        // version (bara targetRiskLevel, aldrig targetAllocation) måste fortsätta avkodas.
+        val riskProfileKey = stringPreferencesKey("risk_profile")
+        dataStore.edit { it[riskProfileKey] = """{"targetRiskLevel":4}""" }
+
+        val loaded = repository.riskProfile.first()
+
+        assertEquals(mapOf(4 to 1.0), loaded?.effectiveAllocation)
     }
 }

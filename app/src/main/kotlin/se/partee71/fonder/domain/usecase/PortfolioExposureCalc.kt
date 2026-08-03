@@ -5,9 +5,10 @@ import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.Holding
 
 /**
- * Portföljens exponeringskarta (POR-9, issue #66) — andel av portföljens värde per
- * **fondtyp**, **region** och **index vs. aktivt förvaltat**, viktat på innehavens aktuella
- * värde. Ren inventering, ingen köp- eller rebalanseringsrekommendation. Samma anda som
+ * Portföljens exponeringskarta (POR-9, issue #66, risknivådimensionen tillagd i issue #71) —
+ * andel av portföljens värde per **fondtyp**, **region**, **risknivå** och **index vs. aktivt
+ * förvaltat**, viktat på innehavens aktuella värde. Ren inventering, ingen köp- eller
+ * rebalanseringsrekommendation. Samma anda som
  * [PortfolioFeeCalc]: tar innehav-med-värde + fondmetadata (TP-21), returnerar ett rent,
  * testbart resultat.
  *
@@ -37,7 +38,11 @@ object PortfolioExposureCalc {
      * Etiketten för okänd-hinken sätts av UI:t (t.ex. "Okänd region"), inte här — samma
      * princip som att domänlagret aldrig äger visningstext.
      */
-    data class Dimension(val buckets: List<Bucket>, val unknownValueKr: Double, val unknownFraction: Double, val unknownCount: Int)
+    data class Dimension(val buckets: List<Bucket>, val unknownValueKr: Double, val unknownFraction: Double, val unknownCount: Int) {
+        companion object {
+            val EMPTY = Dimension(buckets = emptyList(), unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0)
+        }
+    }
 
     /**
      * Index/aktivt är alltid känt för ett innehav som har metadata över huvud taget
@@ -48,6 +53,14 @@ object PortfolioExposureCalc {
     data class Result(
         val byType: Dimension,
         val byRegion: Dimension,
+        /**
+         * Andel av portföljens värde per **risknivå** (källans egen skala, [FundMetadata.risk],
+         * TP-21), till skillnad från [byType]/[byRegion] sorterad **stigande på nivå** i stället
+         * för fallande på värde — en ordnad skala ska visas i sin egen ordning, inte om-sorterad
+         * efter storlek (POR-9, issue #71). Konsumeras av HEM-7:s mål-mot-faktisk-jämförelse via
+         * [PortfolioRiskCalc.deviationByLevel].
+         */
+        val byRiskLevel: Dimension = Dimension.EMPTY,
         val indexStatus: IndexStatusSplit,
         /** Summan av alla medräknade innehavs värde — nämnaren för varje [Bucket.fraction]/[Dimension.unknownFraction]. */
         val includedValueKr: Double,
@@ -77,19 +90,27 @@ object PortfolioExposureCalc {
             byRegion = dimension(eligible, includedValueKr) { h ->
                 h.metadata.tags.firstOrNull { it.category == FundTag.CATEGORY_COMMON_REGION || it.category == FundTag.CATEGORY_OTHER_REGION }?.title
             },
+            byRiskLevel = dimension(eligible, includedValueKr, sortAscendingByLabel = true) { h -> h.metadata.risk?.toString() },
             indexStatus = indexStatusSplit(eligible, includedValueKr),
             includedValueKr = includedValueKr,
             excludedCount = excludedCount,
         )
     }
 
-    private fun dimension(eligible: List<EligibleHolding>, includedValueKr: Double, labelOf: (EligibleHolding) -> String?): Dimension {
+    private fun dimension(
+        eligible: List<EligibleHolding>,
+        includedValueKr: Double,
+        sortAscendingByLabel: Boolean = false,
+        labelOf: (EligibleHolding) -> String?,
+    ): Dimension {
         val grouped = eligible.groupBy(labelOf)
         val unknown = grouped[null].orEmpty()
-        val buckets = grouped
-            .mapNotNull { (label, items) -> label?.let { it to items.sumOf { item -> item.valueKr } } }
-            .map { (label, valueKr) -> Bucket(label, valueKr, fractionOf(valueKr, includedValueKr)) }
-            .sortedByDescending { it.valueKr }
+        val labeledSums = grouped.mapNotNull { (label, items) -> label?.let { it to items.sumOf { item -> item.valueKr } } }
+        val buckets = if (sortAscendingByLabel) {
+            labeledSums.sortedBy { (label, _) -> label.toIntOrNull() ?: Int.MAX_VALUE }
+        } else {
+            labeledSums.sortedByDescending { (_, valueKr) -> valueKr }
+        }.map { (label, valueKr) -> Bucket(label, valueKr, fractionOf(valueKr, includedValueKr)) }
         val unknownValueKr = unknown.sumOf { it.valueKr }
         return Dimension(buckets, unknownValueKr, fractionOf(unknownValueKr, includedValueKr), unknown.size)
     }

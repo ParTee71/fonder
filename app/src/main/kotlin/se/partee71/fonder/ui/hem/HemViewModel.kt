@@ -22,6 +22,7 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
@@ -61,6 +62,8 @@ data class HemUiState(
     val riskProfile: RiskProfile? = null,
     /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
+    /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
+    val riskLevelDeviations: List<PortfolioRiskCalc.LevelDeviation> = emptyList(),
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -105,6 +108,8 @@ class HemViewModel @Inject constructor(
                 }
                 val isins = enriched.mapNotNull { it.fund.isin }
                 val metadataByIsin = fundMetadataRepository.metadataFor(isins)
+                val riskProfile = preferencesRepository.riskProfile.first()
+                val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -116,8 +121,12 @@ class HemViewModel @Inject constructor(
                     analysisSummary = buildAnalysisSummary(enriched, transactions, today),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
-                    riskProfile = preferencesRepository.riskProfile.first(),
+                    riskProfile = riskProfile,
                     portfolioRisk = PortfolioRiskCalc.compute(enriched, metadataByIsin),
+                    riskLevelDeviations = riskProfile?.let {
+                        val actualAllocation = exposure.byRiskLevel.buckets.associate { bucket -> bucket.label.toInt() to bucket.fraction }
+                        PortfolioRiskCalc.deviationByLevel(it.effectiveAllocation, actualAllocation)
+                    }.orEmpty(),
                 )
             }
         }.stateIn(
