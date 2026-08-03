@@ -16,6 +16,11 @@ package se.partee71.fonder.domain.model
  * @param planIndex platsen i den rangordnade bytesplanen (0 = först) — gör det mätbart om
  *   lägre rankade byten presterar sämre än de högst rankade, innan taket på antal byten
  *   per plan höjs.
+ * @param switchValueKr beloppet förslaget avser — bytet storleksbestäms till gapet, inte till
+ *   hela positionen ([se.partee71.fonder.domain.usecase.SwitchPlanCalc]), så beloppet är en
+ *   del av rådet och måste visas. Null bara för rader inspelade före issue #75, då bytet
+ *   alltid avsåg hela positionen men beloppet inte sparades — visas då utan belopp i stället
+ *   för med ett påhittat.
  * @param followed null tills en framtida "markera som genomförd"-funktion (utanför det här
  *   issuets scope) sätter den.
  */
@@ -27,5 +32,6 @@ data class SuggestionRecord(
     val buyIsin: String,
     val sellNavAtSuggestion: Double,
     val buyNavAtSuggestion: Double,
+    val switchValueKr: Double? = null,
     val followed: Boolean? = null,
 )

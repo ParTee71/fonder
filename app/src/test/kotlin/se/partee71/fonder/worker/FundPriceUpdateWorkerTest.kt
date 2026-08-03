@@ -69,6 +69,14 @@ class FundPriceUpdateWorkerTest {
     /** ISIN-uppslag för [scanSwitchPlan]s köpkandidat-NAV-upplösning ([FundPriceRepository.findFundByIsin]). */
     private val fundByIsin = mutableMapOf<String, Fund>()
 
+    /**
+     * Kurser som **ISIN-källkedjan** kan leverera, per ISIN — speglar produktionens
+     * ansvarsfördelning: `refreshSince` går via ISIN-kedjan och når fonder utan
+     * Handelsbanken-FundId, medan `refresh` frågar fondlista med `fundId` rakt av och därför
+     * aldrig ger någon kurs för en fond vars identitet är ett ISIN (issue #75, punkt 2).
+     */
+    private val isinChainPrices = mutableMapOf<String, FundPrice>()
+
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
         override fun observeTransactions(): Flow<List<Transaction>> = transactions
@@ -92,6 +100,7 @@ class FundPriceUpdateWorkerTest {
         }
         override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
             refreshSinceCalls.add(Triple(fundId, isin, since))
+            isinChainPrices[isin]?.let { cachedPrices[fundId] = it.copy(fundId = fundId) }
             return refreshSinceResult
         }
         override suspend fun suggestIsin(fundName: String): String? = null
@@ -379,7 +388,9 @@ class FundPriceUpdateWorkerTest {
         // Målet är 100 % nivå 3 — hela innehavet är alltså överviktat på nivå 5.
         switchCandidatesByLevel[3] = listOf(SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND", risk = 3, totalFee = 0.3, developmentOneYear = 0.1), 0.1))
         fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat SE_CAND", isin = "SE_CAND")
-        cachedPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = LocalDate.now().toEpochDay(), nav = 50.0)
+        // Kandidatens kurs finns bara via ISIN-kedjan — precis som skarpt, där fonden saknar
+        // Handelsbanken-FundId. Förseedas den i cachen döljs buggen i issue #75, punkt 2.
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = LocalDate.now().toEpochDay(), nav = 50.0)
     }
 
     @Test
@@ -432,6 +443,42 @@ class FundPriceUpdateWorkerTest {
         assertEquals(100.0, record.sellNavAtSuggestion, 1e-9)
         assertEquals(50.0, record.buyNavAtSuggestion, 1e-9)
         assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), record.suggestedAtEpochDay)
+        // Hela innehavet är överviktat (mål 100 % nivå 3), så bytet omfattar hela 10 000 kr.
+        assertEquals(10_000.0, record.switchValueKr ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `scanSwitchPlan loser kopkandidatens NAV via ISIN-kedjan, inte via fondlista-refresh`() = runTest {
+        // Regression, issue #75 punkt 2: köpkandidaten saknar Handelsbanken-FundId (identiteten
+        // är ISIN:et), så refresh() skulle fråga fondlista med ISIN:et som fondnyckel och aldrig
+        // ge någon kurs — facit-inspelningen föll då tyst och HEM-8 blev en no-op skarpt.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertEquals(
+            "kandidatens NAV ska hämtas via ISIN-grenen",
+            listOf("SE_CAND" to "SE_CAND"),
+            refreshSinceCalls.map { it.first to it.second },
+        )
+        assertFalse("refresh() når aldrig en fond utan plattformskod", refreshedFundIds.contains("SE_CAND"))
+    }
+
+    @Test
+    fun `scanSwitchPlan spelar inte in nar kandidatens NAV inte gar att losa upp`() = runTest {
+        setUpOverweightedPortfolio()
+        isinChainPrices.remove("SE_CAND") // ingen källa i kedjan känner kandidaten
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
     }
 
     @Test

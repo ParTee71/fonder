@@ -652,6 +652,49 @@ class FundMetadataRepositoryTest {
         assertEquals(5, result.size)
     }
 
+    @Test
+    fun `findSwitchCandidates fragar kallan sorterad pa hogst 12-manadersavkastning`() = runTest {
+        // Källans sida rymmer bara 20 träffar (TP-21), så sorteringen avgör vilken ände av
+        // risknivån som ens blir synlig. Hämtades den billigaste änden kunde SwitchPlanCalcs
+        // kvartilregel bara särskilja de billigaste fonderna inbördes (issue #75, punkt 3).
+        val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
+        val repository = repo(source)
+
+        repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        val body = source.lastRequestBody.orEmpty()
+        assertTrue("ska sortera på developmentOneYear", body.contains("\"sortField\":\"developmentOneYear\""))
+        assertTrue("ska sortera fallande", body.contains("\"sortDirection\":\"DESCENDING\""))
+    }
+
+    @Test
+    fun `findSwitchCandidates rangordnar pa avkastning aven om kallan ignorerar sorteringen`() = runTest {
+        // Ett okänt sortField ignoreras tyst av källan ("fail open", samma verifierade beteende
+        // som filtren) — utan lokal omrangordning vore urvalet då sorterat på något annat.
+        // Källan svarar här medvetet i stigande avkastningsordning.
+        val views = listOf(
+            fundView("SE_LAG", "Låg avkastning", totalFee = 0.1, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.02),
+            fundView("SE_MELLAN", "Mellan", totalFee = 0.2, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.10),
+            fundView("SE_HOG", "Hög avkastning", totalFee = 0.9, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.30),
+        )
+        val source = FakeAvanzaSource(fullListJson(3, views))
+        val catalogFunds = listOf(
+            Fund(fundId = "X1", name = "Låg avkastning", currency = "SEK"),
+            Fund(fundId = "X2", name = "Mellan", currency = "SEK"),
+            Fund(fundId = "X3", name = "Hög avkastning", currency = "SEK"),
+        )
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
+            isinByFundId = mapOf("X1" to "SE_LAG", "X2" to "SE_MELLAN", "X3" to "SE_HOG"),
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertEquals(listOf("SE_HOG", "SE_MELLAN", "SE_LAG"), result.map { it.metadata.isin })
+    }
+
     private fun fundMetadataEntity(
         isin: String,
         name: String,

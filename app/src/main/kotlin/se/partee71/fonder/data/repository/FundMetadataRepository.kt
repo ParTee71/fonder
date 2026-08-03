@@ -86,9 +86,11 @@ interface FundMetadataRepository {
     /**
      * Köpkandidater på [level] för bytesplanen (HEM-8, issue #70) — samma
      * köpbarhetsverifieringsmekanik som [suggestCheaperAlternatives]/ANA-9 (issue #59): frågar
-     * källan för risknivån (sorterad på lägst avgift), behåller bara kandidater med känd
-     * [FundMetadata.developmentOneYear] (annars ingen signal att rangordna på, se
-     * [SwitchPlanCalc]) och känd avgift, och ISIN-verifierar köpbarhet budgeterat.
+     * källan för risknivån **sorterad på högst 12-månadersavkastning** (källans sida rymmer
+     * bara 20 träffar, TP-21 — sorteringen avgör därför vilken ände av nivån som blir synlig,
+     * se issue #75), behåller bara kandidater med känd [FundMetadata.developmentOneYear]
+     * (annars ingen signal att rangordna på, se [SwitchPlanCalc]) och känd avgift, och
+     * ISIN-verifierar köpbarhet budgeterat. Resultatet är rangordnat på avkastning, fallande.
      * [excludeIsins] hoppas över innan verifiering (redan sålda/köpta i samma plan, eller
      * redan innehavda fonder). Tom lista om inga kvalificerade, köpbara kandidater hittades —
      * aldrig en gissad kandidat.
@@ -291,10 +293,26 @@ class AvanzaFundMetadataRepository @Inject constructor(
     }
 
     override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
+        // Källans sida är hårt låst till 20 träffar (TP-21), så sorteringen avgör *vilken ände*
+        // av nivån som ens blir synlig. Tidigare hämtades den billigaste änden, varpå
+        // SwitchPlanCalcs kvartilregel bara kunde särskilja de billigaste fonderna inbördes och
+        // den uppmätta avkastningskanten (#72) aldrig applicerades — issue #75, punkt 3.
         val results = query(
-            FundScreenQuery(risk = listOf(level.toString()), sortField = "totalFee", sortDirection = FundScreenSortDirection.ASCENDING),
+            FundScreenQuery(
+                risk = listOf(level.toString()),
+                sortField = SORT_FIELD_DEVELOPMENT_ONE_YEAR,
+                sortDirection = FundScreenSortDirection.DESCENDING,
+            ),
         )
-        val eligible = results.filter { it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null }
+        // Rangordna om lokalt oavsett vad källan gav: ett okänt sortField ignoreras tyst av
+        // källan ("fail open", samma verifierade beteende som filtren i [query]), och då vore
+        // sidan sorterad på något helt annat utan att något syntes.
+        val eligible = results
+            .filter { it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null }
+            .sortedByDescending { it.developmentOneYear }
+        if (!results.isSortedByOneYearDescending()) {
+            Log.w(TAG, "Källan verkar ha ignorerat sorteringen på $SORT_FIELD_DEVELOPMENT_ONE_YEAR — rangordnar kandidaterna lokalt")
+        }
 
         val verified = mutableListOf<SwitchPlanCalc.Candidate>()
         for (metadata in eligible.take(MAX_SWITCH_VERIFICATION_ATTEMPTS)) {
@@ -306,12 +324,31 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return verified
     }
 
+    /**
+     * Sant om sidan faktiskt kom avkastningssorterad (fallande) från källan — rader utan känd
+     * `developmentOneYear` hoppas över, de säger inget om ordningen. Bara en signal till loggen:
+     * rangordningen görs lokalt ändå, se [findSwitchCandidates].
+     */
+    private fun List<FundMetadata>.isSortedByOneYearDescending(): Boolean {
+        val known = mapNotNull { it.developmentOneYear }
+        return known.zipWithNext().all { (first, second) -> first >= second }
+    }
+
     private companion object {
         const val TAG = "FundMetadataRepository"
         const val MAX_ISIN_VERIFICATIONS = 5
         const val MAX_VERIFIED_ALTERNATIVES = 3
         const val MAX_VERIFICATION_ATTEMPTS = 10
         const val RISK_VOCABULARY_KEY = "risk"
+
+        /**
+         * Källans sorteringsnyckel för 12-månadersavkastning — samma namn som fältet i svaret
+         * ([AvanzaFundListParser]). En **transportnyckel**, i samma kategori som filternamnen i
+         * [se.partee71.fonder.data.network.AvanzaFundListRequestBuilder]: skulle källan inte
+         * känna igen den ignoreras den tyst, vilket [findSwitchCandidates] både loggar och
+         * kompenserar för genom att rangordna lokalt.
+         */
+        const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = "developmentOneYear"
 
         /** Tak på antal verifierat köpbara kandidater per risknivå (HEM-8, issue #70) — samma budgetprincip som ANA-9. */
         const val MAX_SWITCH_CANDIDATES = 5

@@ -80,7 +80,55 @@ class SwitchPlanCalcTest {
         assertEquals(2, plan.switches.size)
         assertEquals("A" to 3, plan.switches[0].sellFund.fundId to plan.switches[0].toLevel)
         assertEquals("B" to 2, plan.switches[1].sellFund.fundId to plan.switches[1].toLevel)
-        assertEquals(100.0, plan.gapClosedPp, 1e-9)
+        // Byte 1 fyller nivå 3 helt (5 000 kr), byte 2 begränsas till nivå 2:s gap (3 000 kr av
+        // B:s 5 000) i stället för att sälja hela positionen — se överskjutningstesterna nedan.
+        assertEquals(5_000.0, plan.switches[0].sellValueKr, 1e-9)
+        assertEquals(3_000.0, plan.switches[1].sellValueKr, 1e-9)
+        assertEquals(80.0, plan.gapClosedPp, 1e-9)
+    }
+
+    @Test
+    fun `bytet begransas till gapet och skjuter inte forbi malet`() {
+        // Mål 50/50 på nivå 3 och 5, nivå 5 överviktad med 10 pp. Säljs hela nivå 5-positionen
+        // (6 000 kr) blir nivå 3 i stället 100 % och avvikelsen 50 pp åt andra hållet — planen
+        // gjorde portföljen sämre mot sitt eget mål (issue #75, punkt 1). Bytet ska begränsas
+        // till gapets 1 000 kr.
+        val holdings = listOf(holding("Lag", 4_000.0, isin = "SELAG"), holding("Hog", 6_000.0, isin = "SEHOG"))
+        val metadataByIsin = mapOf(
+            "SELAG" to metadata("SELAG", risk = 3, fee = 0.5),
+            "SEHOG" to metadata("SEHOG", risk = 5, fee = 1.0),
+        )
+        val candidates = listOf(candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
+
+        val switch = plan.switches.single()
+        assertEquals("Hog", switch.sellFund.fundId)
+        assertEquals(1_000.0, switch.sellValueKr, 1e-9)
+        // Ett enda byte som stänger gapet helt — ingen andra rad som säljer tillbaka.
+        assertEquals(10.0, plan.gapClosedPp, 1e-9)
+    }
+
+    @Test
+    fun `delvis sald position ligger kvar och kan fylla en annan underviktad niva`() {
+        // Hela portföljen på nivå 5, mål 20/30/50 över nivå 2/3/5. Positionen räcker till båda
+        // de underviktade nivåerna — den ska säljas i två delar (3 000 + 2 000), inte tömmas på
+        // det första bytet.
+        val holdings = listOf(holding("Enda", 10_000.0, isin = "SEENDA"))
+        val metadataByIsin = mapOf("SEENDA" to metadata("SEENDA", risk = 5, fee = 1.0))
+        val candidates = listOf(
+            candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.15),
+            candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05),
+        )
+
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.2, 3 to 0.3, 5 to 0.5))
+
+        assertEquals(2, plan.switches.size)
+        assertTrue("båda bytena säljer ur samma position", plan.switches.all { it.sellFund.fundId == "Enda" })
+        assertEquals(3_000.0, plan.switches[0].sellValueKr, 1e-9)
+        assertEquals(3, plan.switches[0].toLevel)
+        assertEquals(2_000.0, plan.switches[1].sellValueKr, 1e-9)
+        assertEquals(2, plan.switches[1].toLevel)
     }
 
     @Test

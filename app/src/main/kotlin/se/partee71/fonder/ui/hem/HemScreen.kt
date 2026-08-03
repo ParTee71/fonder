@@ -383,9 +383,13 @@ private fun RiskCard(
 }
 
 /**
- * En rad i bytesplanen (HEM-8, issue #70) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus
- * avgiftsskillnaden. Ren läsvy, ingen åtgärdsknapp (samma princip som resten av kortet):
+ * En rad i bytesplanen (HEM-8, issue #70) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus belopp
+ * och avgiftsskillnad. Ren läsvy, ingen åtgärdsknapp (samma princip som resten av kortet):
  * planen är ett rangordnat förslag, inte en knapp att trycka på.
+ *
+ * Beloppsraden är inte kosmetisk: bytet storleksbestäms till gapet, inte till hela positionen
+ * (issue #75), så "Sälj X" utan belopp vore ett annat — och sämre — råd än det planen räknat
+ * fram. Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
  */
 @Composable
 private fun SwitchSuggestionRow(index: Int, switch: SwitchSuggestionUi) {
@@ -401,6 +405,13 @@ private fun SwitchSuggestionRow(index: Int, switch: SwitchSuggestionUi) {
             ),
             style = MaterialTheme.typography.bodySmall,
         )
+        switch.switchValueKr?.let { valueKr ->
+            Text(
+                stringResource(R.string.format_hem_switch_plan_amount, MoneyFormat.kr(valueKr)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Text(
             stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
             style = MaterialTheme.typography.bodySmall,
