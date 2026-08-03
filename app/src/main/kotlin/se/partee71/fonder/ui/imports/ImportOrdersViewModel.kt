@@ -91,7 +91,8 @@ class ImportOrdersViewModel @Inject constructor(
                 return@launch
             }
 
-            val catalog = fundPriceRepository.fetchFundCatalog()
+            // Tom katalog vid hämtningsfel — se motsvarande kommentar i ImportHoldingsViewModel.
+            val catalog = fundPriceRepository.fetchFundCatalog() ?: FundCatalog(companies = emptyList(), funds = emptyList())
             val trackedFunds = transactionRepository.observeFunds().first()
             val rows = transactions.map { tx -> buildRowState(tx, catalog, trackedFunds) }
 

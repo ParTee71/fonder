@@ -75,12 +75,14 @@ class FundSearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
+            // krascha (samma degraderingsprincip som onCompanySelected nedan).
             val catalog = fundPriceRepository.fetchFundCatalog()
-            allFunds.value = catalog.funds
-            visibleFunds.value = catalog.funds
-            companies.value = catalog.companies
+            allFunds.value = catalog?.funds.orEmpty()
+            visibleFunds.value = catalog?.funds.orEmpty()
+            companies.value = catalog?.companies.orEmpty()
             loading.value = false
-            catalog.companies.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
+            catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
                 ?.let(::onCompanySelected)
         }
     }

@@ -121,7 +121,9 @@ class ImportHoldingsViewModel @Inject constructor(
                 return@launch
             }
 
-            val catalog = fundPriceRepository.fetchFundCatalog()
+            // Tom katalog vid hämtningsfel: raderna matchas då bara mot redan bevakade fonder
+            // och användarens egna val, i stället för att importen avbryts (ÖV-6).
+            val catalog = fundPriceRepository.fetchFundCatalog() ?: FundCatalog(companies = emptyList(), funds = emptyList())
             val trackedFunds = transactionRepository.observeFunds().first()
             val rowStates = parsedRows.map { row -> buildRowState(row, catalog, trackedFunds) }
             _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }

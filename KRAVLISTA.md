@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.33.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.34.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -160,6 +160,40 @@ Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnit
 implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
 
 ## Historik
+
+- **Sex tysta datafel ur kodgranskningen av hela projektet (#75):** Inget nytt krav — sex
+  buggar som alla gjorde fel *utan att synas*, åtgärdade tillsammans eftersom de delar
+  grundmönster: frånvaro av data behandlades som ett svar.
+  1. **NAV-datum en dag fel, och varje måndagskurs borttappad (TP-14).** Avanzas
+     chart-stämplar är lokal midnatt i Stockholm, inte UTC — `AvanzaJsonParser` tolkade dem
+     som UTC, daterade varje kurs en dag för tidigt och lät helgfiltret från #39 kasta
+     måndagarna (de blev söndagar). Fondlista daterar samma fond rätt, så en fond som växlade
+     källa fick två olika NAV på angränsande dagar.
+  2. **`upsertFund` raderade ett bekräftat ISIN (NAV-2/TP-14).** `@Insert(REPLACE)` skrev hela
+     raden, så en fond från katalogen (`isin = null`) nollade det ISIN användaren själv skrivit
+     in — och därmed kurskedjan. Repositoryt slår nu ihop mot lagrad rad och bevarar
+     `isin`/`fondlistaFundId` när det inkommande värdet är null.
+  3. **Sparad avgiftsjämförelse tappades vid omhämtning (HEM-6/ANA-9).** `findByIsin`
+     returnerade källans livesvar, som aldrig bär appens härledda fält — jämförelsen låg kvar
+     i databasen men försvann på vägen ut, så Hem visade "0 av N jämförda" och 0 kr
+     besparingspotential trots en färsk jämförelse. Returnerar nu den lagrade raden.
+  4. **Nätverksfel tolkades som "fonden går inte att köpa" (ANA-9/HEM-8).** En misslyckad
+     kataloghämtning gav en tom katalog, som blev ett `false` och cachades i 30 dygn — en enda
+     offline-körning kunde tyst släcka både billigare-alternativ och hela bytesplanen en månad
+     framåt. `fetchFundCatalog` returnerar nu **null vid fel** (samma princip som
+     `fetchFundsForCompany`), och köpbarheten lämnas oavgjord i stället för att cachas.
+  5. **Fondbyte i transaktionsformuläret lämnade kvar föregående fonds kurs (NAV-4).** Fältet
+     nollas nu vid bytet och ett pågående uppslag avbryts — annars kunde en transaktion sparas
+     till fel fonds NAV, med tyst fel i GAV, realiserat resultat och all analys.
+  6. **En trasig inställningsfil låste appen på splash-skärmen (NFR-1).** DataStore saknade
+     `ReplaceFileCorruptionHandler`, och flödena i `PreferencesRepository` fångade inga
+     I/O-fel; en trunkerad fil (t.ex. efter en Auto Backup-återställning) kastade in i
+     `MainViewModel.themeMode`, som splash-skärmen väntar på. Nu återställs standard­värden
+     i stället, och Room-databasen förblir åtkomlig.
+
+  Ingen migrering, ingen ny persisterad data — men punkt 2 och 6 skyddar data som redan
+  omfattas av backup-kontraktet, och punkt 6 är precis den återställningsväg NFR-1 vilar på
+  tills Drive-backup (TP-7) finns.
 
 - **Handelsdagsmedveten kursuppdatering, bakgrundsindikator och "Värde per datum" (#27):**
   Kursuppdateringen räknas om kring handelsdagar i stället för fasta tidsintervall — ny ren

@@ -3,10 +3,12 @@ package se.partee71.fonder.ui.transaktioner
 import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -33,6 +35,10 @@ class TransactionFormViewModelTest {
     private val funds = MutableStateFlow(listOf(fund))
     private val addedTransactions = mutableListOf<Transaction>()
     private var latestPriceValue: FundPrice? = null
+    private val pricesByFundId = mutableMapOf<String, FundPrice>()
+
+    /** Fonden vars kursuppslag är långsamt — se testet om avbrutet uppslag. */
+    private var slowFundId: String? = null
 
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
@@ -48,7 +54,10 @@ class TransactionFormViewModelTest {
     }
 
     private val fakePriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = latestPriceValue
+        override suspend fun latestPrice(fundId: String): FundPrice? {
+            if (fundId == slowFundId) delay(1_000)
+            return pricesByFundId[fundId] ?: latestPriceValue
+        }
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
@@ -97,6 +106,64 @@ class TransactionFormViewModelTest {
             state = awaitItem()
             while (state.priceText.isEmpty()) state = awaitItem()
             assertEquals("175.5", state.priceText)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `byte till en fond utan kurs lamnar inte kvar foregaende fonds kurs`() = runTest(dispatcher) {
+        // Fältet nollades tidigare aldrig: valde användaren först en fond med cachad kurs och
+        // sedan en utan, stod den första fondens NAV kvar — formuläret var giltigt och
+        // transaktionen kunde sparas på fel fonds kurs (tyst fel i GAV och realiserat resultat).
+        val utanKurs = Fund(fundId = "SHB0000999", name = "Handelsbanken Global Index Criteria")
+        funds.value = listOf(fund, utanKurs)
+        pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
+        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.funds.isEmpty()) state = awaitItem()
+
+            vm.onFundSelected(fund)
+            state = awaitItem()
+            while (state.priceText.isEmpty()) state = awaitItem()
+            assertEquals("175.5", state.priceText)
+
+            vm.onFundSelected(utanKurs)
+            state = awaitItem()
+            while (state.selectedFund?.fundId != utanKurs.fundId) state = awaitItem()
+
+            assertEquals("", state.priceText)
+            assertFalse(state.valid)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett langsamt kursuppslag skriver inte over den fond som valts under tiden`() = runTest(dispatcher) {
+        // Uppslaget för den övergivna fonden avbryts vid bytet — annars kunde det landa efter
+        // att användaren redan bytt fond och skriva över den nya fondens kurs.
+        val annanFond = Fund(fundId = "SHB0000999", name = "Handelsbanken Global Index Criteria")
+        funds.value = listOf(fund, annanFond)
+        pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
+        pricesByFundId[annanFond.fundId] = FundPrice(fundId = annanFond.fundId, epochDay = 100, nav = 99.0, currency = "SEK")
+        slowFundId = fund.fundId
+        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.funds.isEmpty()) state = awaitItem()
+
+            vm.onFundSelected(fund)
+            vm.onFundSelected(annanFond)
+
+            state = awaitItem()
+            while (state.priceText.isEmpty()) state = awaitItem()
+            assertEquals("99.0", state.priceText)
+
+            // Även efter att det långsamma uppslaget skulle ha hunnit svara.
+            advanceTimeBy(5_000)
+            assertEquals("99.0", vm.uiState.value.priceText)
             cancelAndIgnoreRemainingEvents()
         }
     }

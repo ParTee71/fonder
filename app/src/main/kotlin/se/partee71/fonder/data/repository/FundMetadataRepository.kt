@@ -187,7 +187,10 @@ class AvanzaFundMetadataRepository @Inject constructor(
             return cached.availableAtHandelsbanken
         }
 
-        val available = resolveViaFondlistaCatalog(cached.name, isin)
+        // Null = katalogen gick inte att hämta. Då är svaret okänt, inte "nej": skriv ingen
+        // cache, så nästa körning försöker igen i stället för att låsa fast en påhittad miss
+        // i AVAILABILITY_TTL_DAYS dygn.
+        val available = resolveViaFondlistaCatalog(cached.name, isin) ?: return null
         dao.upsert(
             cached.copy(
                 availableAtHandelsbanken = available,
@@ -203,9 +206,13 @@ class AvanzaFundMetadataRepository @Inject constructor(
      * `HandelsbankenFundPriceRepository.resolveFondlistaFundId`/`ImportFundMatcher` (regel 4).
      * Ren namnmatchning räcker inte: en andelsklassfamilj kan rangordna fel syskonfond högst
      * (issue #45), så bara en ISIN-bekräftad träff räknas som köpbar.
+     *
+     * **Null när katalogen inte kunde hämtas** — ett obesvarat "vet inte", skilt från ett
+     * verifierat `false`. Tidigare gav en tom katalog vid nätverksfel ett `false` som såg
+     * auktoritativt ut, cachades i 30 dygn och tyst slog ut både ANA-9 och hela bytesplanen.
      */
-    private suspend fun resolveViaFondlistaCatalog(fundName: String, isin: String): Boolean {
-        val catalog = fundPriceRepository.fetchFundCatalog()
+    private suspend fun resolveViaFondlistaCatalog(fundName: String, isin: String): Boolean? {
+        val catalog = fundPriceRepository.fetchFundCatalog() ?: return null
         val candidates = FundNameMatcher.rankedMatches(fundName, catalog.funds)
         return candidates
             .take(MAX_ISIN_VERIFICATIONS)
@@ -260,13 +267,20 @@ class AvanzaFundMetadataRepository @Inject constructor(
      * filtret tyst" är bara meningsfull för kategoriska frågor — ett ISIN-uppslag skulle
      * annars förorena [lastKnownUnfilteredTotal] med totalen för en enda fond. Faller
      * tillbaka på cachen direkt vid nätverksfel, precis som [query].
+     *
+     * Returnerar alltid den **lagrade** raden, aldrig livesvaret rakt av: källan känner inte
+     * till appens härledda fält ([FundMetadata.availableAtHandelsbanken],
+     * `cheapestAlternative*`, [FundMetadata.comparisonResolvedAtEpochDay]), så ett livesvar
+     * bär dem alltid som null. [toEntityPreservingDerivedState] bevarar dem i databasen —
+     * men returnerades livesvaret tappades de ändå på vägen ut, och HEM-6 rapporterade
+     * "0 av N jämförda" trots en färsk sparad jämförelse.
      */
     private suspend fun findByIsin(isin: String): FundMetadata? {
         val live = fetchLive(FundScreenQuery(nameContains = isin))
         if (live != null && live.funds.isNotEmpty()) {
             dao.upsertAll(live.funds.map { it.toEntityPreservingDerivedState() })
         }
-        return live?.funds?.firstOrNull { it.isin == isin } ?: dao.getByIsin(isin)?.toDomain()
+        return dao.getByIsin(isin)?.toDomain()
     }
 
     override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {

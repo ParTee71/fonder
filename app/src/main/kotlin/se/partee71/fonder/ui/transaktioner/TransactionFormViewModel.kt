@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.transaktioner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +59,9 @@ class TransactionFormViewModel @Inject constructor(
     private val feeText = MutableStateFlow("")
     private val saved = MutableStateFlow(false)
 
+    /** Pågående kursuppslag för vald fond — avbryts vid fondbyte, se [onFundSelected]. */
+    private var priceLookupJob: Job? = null
+
     // combine() saknar en 6-parametersvariant — kombinerar därför i två steg.
     private val baseFields = combine(selectedFund, type, date) { fund, type, date -> Triple(fund, type, date) }
     private val amountFields = combine(sharesText, priceText, feeText) { shares, price, fee -> Triple(shares, price, fee) }
@@ -91,9 +95,17 @@ class TransactionFormViewModel @Inject constructor(
         transactionRepository.observeFunds().onEach { funds.value = it }.launchIn(viewModelScope)
     }
 
+    /**
+     * Byter fond och förifyller kursen. Fältet **nollas först**, och ett pågående uppslag
+     * avbryts: annars stod föregående fonds NAV kvar när den nya fonden saknar cachad kurs
+     * (eller skrevs över av ett långsamt uppslag som landade efter bytet), och transaktionen
+     * kunde sparas på fel fonds kurs — ett tyst fel i GAV, realiserat resultat och analys.
+     */
     fun onFundSelected(fund: Fund) {
+        priceLookupJob?.cancel()
         selectedFund.value = fund
-        viewModelScope.launch {
+        priceText.value = ""
+        priceLookupJob = viewModelScope.launch {
             fundPriceRepository.latestPrice(fund.fundId)?.let { priceText.value = it.nav.toString() }
         }
     }

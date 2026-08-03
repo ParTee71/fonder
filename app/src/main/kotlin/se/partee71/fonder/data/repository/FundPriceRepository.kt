@@ -96,8 +96,14 @@ interface FundPriceRepository {
      */
     suspend fun lookupIsin(fundId: String): String?
 
-    /** Alla fondbolag + **hela plattformens** fondkatalog (en hämtning) för fondsök-UI. */
-    suspend fun fetchFundCatalog(): FundCatalog
+    /**
+     * Alla fondbolag + **hela plattformens** fondkatalog (en hämtning) för fondsök-UI.
+     * **Null vid fel** — samma princip som [fetchFundsForCompany]. Skillnaden mot en tom
+     * katalog är avgörande för anropare som tolkar frånvaro som ett svar: en tom katalog vid
+     * nätverksfel fick `FundMetadataRepository.resolveHandelsbankenAvailability` att slå fast
+     * "fonden går inte att köpa" och cacha den missen i 30 dygn.
+     */
+    suspend fun fetchFundCatalog(): FundCatalog?
 
     /**
      * Fonderna som fondbolaget [companyId] har på plattformen — källans eget filter
@@ -418,15 +424,13 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     // Utan `company` levererar källan hela plattformens katalog, inte bara Handelsbankens egna
     // fonder (KRAVLISTA TP-18) — bolagslistan finns med i samma svar.
-    override suspend fun fetchFundCatalog(): FundCatalog =
-        fetchCatalogPage(company = null)
-            ?.let { html ->
-                FundCatalog(
-                    companies = HandelsbankenHtmlParser.parseFundCompanies(html),
-                    funds = HandelsbankenHtmlParser.parseFundCatalog(html),
-                )
-            }
-            ?: FundCatalog(companies = emptyList(), funds = emptyList())
+    override suspend fun fetchFundCatalog(): FundCatalog? =
+        fetchCatalogPage(company = null)?.let { html ->
+            FundCatalog(
+                companies = HandelsbankenHtmlParser.parseFundCompanies(html),
+                funds = HandelsbankenHtmlParser.parseFundCatalog(html),
+            )
+        }
 
     override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
         fetchCatalogPage(company = companyId)?.let(HandelsbankenHtmlParser::parseFundCatalog)

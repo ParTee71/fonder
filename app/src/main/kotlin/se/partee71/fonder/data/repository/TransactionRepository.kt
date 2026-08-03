@@ -19,6 +19,15 @@ interface TransactionRepository {
     fun observeFunds(): Flow<List<Fund>>
     fun observeTransactions(): Flow<List<Transaction>>
     fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>>
+
+    /**
+     * Sparar fonden. [Fund.isin] och [Fund.fondlistaFundId] **bevaras** från den lagrade raden
+     * när det inkommande värdet är null — de fylls i över tid (användarens egen inmatning i
+     * Fonddetalj, NAV-2, eller ett maskinellt uppslag) medan flera anropare bara har den
+     * magra katalog-/sökträffen i handen. Utan sammanslagningen raderade ett andra "Lägg till"
+     * från Fondsök ett bekräftat ISIN och därmed kurskedjan för fonden. Samma princip som
+     * [se.partee71.fonder.data.repository.FundMetadataRepository]s `toEntityPreservingDerivedState`.
+     */
     suspend fun upsertFund(fund: Fund)
     suspend fun addTransaction(tx: Transaction): Long
     suspend fun deleteTransaction(id: Long)
@@ -44,8 +53,17 @@ class RoomTransactionRepository @Inject constructor(
     override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> =
         transactionDao.observeForFund(fundId).map { list -> list.map(TransactionEntity::toDomain) }
 
-    override suspend fun upsertFund(fund: Fund) =
-        fundDao.upsert(FundEntity.fromDomain(fund))
+    override suspend fun upsertFund(fund: Fund) {
+        val stored = fundDao.getByFundId(fund.fundId)
+        fundDao.upsert(
+            FundEntity.fromDomain(
+                fund.copy(
+                    isin = fund.isin ?: stored?.isin,
+                    fondlistaFundId = fund.fondlistaFundId ?: stored?.fondlistaFundId,
+                ),
+            ),
+        )
+    }
 
     override suspend fun addTransaction(tx: Transaction): Long =
         transactionDao.insert(TransactionEntity.fromDomain(tx))
