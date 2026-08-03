@@ -102,7 +102,10 @@ class RiskProfilScreenTest {
             FonderTheme { RiskProfilContent(state = state, onSave = { saved = true }) }
         }
 
-        composeRule.onNodeWithText("Spara").performClick()
+        // Sex procentfält (en per nivå i fullScale) trycker ner Spara-knappen under den
+        // initiala viewporten — performClick() dispatchar en riktig touch och kräver att
+        // noden faktiskt är synlig, till skillnad från assertIsEnabled() (jfr skarmen_ar_skrollbar).
+        composeRule.onNodeWithText("Spara").performScrollTo().performClick()
 
         assertTrue(saved)
     }
