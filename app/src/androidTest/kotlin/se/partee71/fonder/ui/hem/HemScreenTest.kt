@@ -455,7 +455,10 @@ class HemScreenTest {
             riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
-                SwitchSuggestionUi(sellFundName = "Dyr fond", buyFundName = "Billig fond", fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7),
+                SwitchSuggestionUi(
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 2_500.0,
+                ),
             ),
         )
 
@@ -465,7 +468,32 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("Bytesplan").assertExists()
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
+        // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75).
+        composeRule.onNodeWithText("Belopp: 2 500,00 kr").assertExists()
         composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
+    }
+
+    @Test
+    fun riskkortet_visar_bytesplan_utan_belopp_for_forslag_inspelade_fore_beloppsfaltet() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
+            switchPlan = listOf(
+                SwitchSuggestionUi(
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = null,
+                ),
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
+        composeRule.onNodeWithText("Belopp:", substring = true).assertDoesNotExist()
     }
 
     @Test

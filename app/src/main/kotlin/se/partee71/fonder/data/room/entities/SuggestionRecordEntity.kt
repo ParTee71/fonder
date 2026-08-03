@@ -17,6 +17,7 @@ data class SuggestionRecordEntity(
     val buyIsin: String,
     val sellNavAtSuggestion: Double,
     val buyNavAtSuggestion: Double,
+    val switchValueKr: Double?,
     val followed: Boolean?,
 ) {
     fun toDomain() = SuggestionRecord(
@@ -27,6 +28,7 @@ data class SuggestionRecordEntity(
         buyIsin = buyIsin,
         sellNavAtSuggestion = sellNavAtSuggestion,
         buyNavAtSuggestion = buyNavAtSuggestion,
+        switchValueKr = switchValueKr,
         followed = followed,
     )
 
@@ -39,6 +41,7 @@ data class SuggestionRecordEntity(
             buyIsin = record.buyIsin,
             sellNavAtSuggestion = record.sellNavAtSuggestion,
             buyNavAtSuggestion = record.buyNavAtSuggestion,
+            switchValueKr = record.switchValueKr,
             followed = record.followed,
         )
     }

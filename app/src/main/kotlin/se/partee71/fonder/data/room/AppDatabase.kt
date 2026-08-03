@@ -26,7 +26,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundMetadataEntity::class,
         SuggestionRecordEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -257,6 +257,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 10 → 11 (issue #75, punkt 1): `switchValueKr` (nullable) på
+         * `suggestion_records` — beloppet ett bytesförslag avser. Bytet storleksbestäms numera
+         * till gapet i stället för till hela positionen
+         * ([se.partee71.fonder.domain.usecase.SwitchPlanCalc]), så beloppet är en del av rådet
+         * och måste både sparas och visas.
+         *
+         * Nullable, inte `NOT NULL DEFAULT 0`: en rad inspelad före den här versionen avsåg
+         * hela positionen med ett belopp som aldrig sparades, och 0 kr hade varit ett påhittat
+         * värde som inte gick att skilja från ett verkligt (samma princip som att aldrig gissa
+         * en okänd avgift, HEM-5). Befintliga rader rörs i övrigt inte.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `switchValueKr` REAL")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -267,6 +285,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
+            MIGRATION_10_11,
         )
     }
 }

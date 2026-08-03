@@ -535,6 +535,7 @@ class HemViewModelTest {
                 suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
                 sellIsin = "SE_HELD", buyIsin = "SE_CAND",
                 sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
+                switchValueKr = 2_500.0,
             ),
         )
     }
@@ -554,6 +555,9 @@ class HemViewModelTest {
             assertEquals(5, switch.fromLevel)
             assertEquals(3, switch.toLevel)
             assertEquals(0.3 - 1.0, switch.feeDeltaPercent, 1e-9)
+            // Beloppet är en del av rådet (bytet storleksbestäms till gapet, issue #75) och
+            // måste nå UI-lagret — annars är raden tvetydig.
+            assertEquals(2_500.0, switch.switchValueKr ?: -1.0, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }

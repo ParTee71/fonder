@@ -48,6 +48,12 @@ data class SwitchSuggestionUi(
     val fromLevel: Int,
     val toLevel: Int,
     val feeDeltaPercent: Double,
+    /**
+     * Beloppet förslaget avser — bytet storleksbestäms till gapet, inte till hela positionen
+     * (issue #75), så utan beloppet vore raden tvetydig. Null bara för rader inspelade före
+     * dess; raden visas då utan beloppstext i stället för med ett gissat belopp.
+     */
+    val switchValueKr: Double? = null,
 )
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
@@ -234,6 +240,7 @@ class HemViewModel @Inject constructor(
                 fromLevel = sellLevel,
                 toLevel = buyLevel,
                 feeDeltaPercent = buyFee - sellFee,
+                switchValueKr = record.switchValueKr,
             )
         }
     }

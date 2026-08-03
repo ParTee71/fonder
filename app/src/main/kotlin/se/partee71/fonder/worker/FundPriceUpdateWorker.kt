@@ -93,6 +93,13 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val MAX_COMPARISONS_PER_RUN = 2
 
         /**
+         * Hur långt bak [resolveBuyNav] hämtar historik för en köpkandidat. Bara den senaste
+         * kursen behövs — fönstret ska bara vara långt nog att överleva helger och röda dagar,
+         * inte backfilla en historik appen ändå aldrig haft för fonden.
+         */
+        private const val BUY_NAV_LOOKBACK_DAYS = 30L
+
+        /**
          * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
          * kodgranskning fann att den dagliga uppdateringen aldrig hämtade kurser för
          * ISIN-matchade fonder, se KRAVLISTA TP-14 — [FundPriceRepository.refresh] nycklas på
@@ -232,7 +239,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
 
                 val sellNav = sellNavOf(switch, withValue) ?: return@forEachIndexed
-                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository) ?: return@forEachIndexed
+                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: return@forEachIndexed
 
                 suggestionRecordRepository.record(
                     SuggestionRecord(
@@ -242,6 +249,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                         buyIsin = switch.buyIsin,
                         sellNavAtSuggestion = sellNav,
                         buyNavAtSuggestion = buyNav,
+                        switchValueKr = switch.sellValueKr,
                     ),
                 )
             }
@@ -254,10 +262,21 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             return value / holding.netShares
         }
 
-        /** Löser upp en köpkandidats aktuella NAV via samma ISIN-uppslagskedja som importflödena (TP-13/TP-14) — null om källan inte kan slå upp fonden eller sakna en kurs. */
-        private suspend fun resolveBuyNav(isin: String, fundPriceRepository: FundPriceRepository): Double? {
+        /**
+         * Löser upp en köpkandidats aktuella NAV via samma ISIN-uppslagskedja som importflödena
+         * (TP-13/TP-14) — null om källan inte kan slå upp fonden eller sakna en kurs.
+         *
+         * **[FundPriceRepository.refreshSince], inte [FundPriceRepository.refresh]:** en
+         * köpkandidat är per definition en fond appen aldrig ägt, så den saknar Handelsbankens
+         * FundId och har ISIN:et som identitet ([FundPriceRepository.findFundByIsin]). `refresh`
+         * frågar fondlista med `fundId` rakt av och skulle alltså skicka ISIN:et som fondnyckel
+         * — det ger aldrig någon kurs, och hela facit-inspelningen föll tyst på den raden (issue
+         * #75, punkt 2). `refreshSince` går via ISIN-källkedjan, som är byggd just för fonder
+         * utan plattformskod.
+         */
+        private suspend fun resolveBuyNav(isin: String, fundPriceRepository: FundPriceRepository, today: LocalDate): Double? {
             val fund = fundPriceRepository.findFundByIsin(isin) ?: return null
-            fundPriceRepository.refresh(fund.fundId)
+            fundPriceRepository.refreshSince(fund.fundId, isin, today.minusDays(BUY_NAV_LOOKBACK_DAYS))
             return fundPriceRepository.latestPrice(fund.fundId)?.nav
         }
     }

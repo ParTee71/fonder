@@ -14,9 +14,19 @@ import kotlin.math.ceil
  * räkna om gapet, föreslå nästa — annars kan två byten fylla samma hink och tillsammans skjuta
  * över målet. Säljkandidaten tas ur den mest **överviktade** nivån (högst avgift bland flera
  * innehav på samma nivå), köpkandidaten ur den mest **underviktade** — bland
- * ISIN-verifierat köpbara fonder (redan filtrerat av repository-lagret): översta kvartilen på
- * 12-månadersavkastning, därefter lägst avgift (se issue #70/#72 för underlaget — riskjustering
- * och kortare/längre lookback-fönster testades och gav ingen förbättring).
+ * ISIN-verifierat köpbara fonder (redan filtrerat och **avkastningsrangordnat** av
+ * repository-lagret, se [se.partee71.fonder.data.repository.FundMetadataRepository.findSwitchCandidates]):
+ * översta kvartilen på 12-månadersavkastning, därefter lägst avgift (se issue #70/#72 för
+ * underlaget — riskjustering och kortare/längre lookback-fönster testades och gav ingen
+ * förbättring).
+ *
+ * Varje byte **storleksbestäms till gapet**, inte till hela positionen ([Switch.sellValueKr]):
+ * det minsta av positionens värde, underviktens underskott och överviktens överskott. Utan den
+ * begränsningen kunde ett enda byte skjuta rakt förbi målet — en 10 pp avvikelse med ett stort
+ * innehav på den överviktade nivån blev 50 pp åt andra hållet, och nästa byte sålde tillbaka
+ * (issue #75, punkt 1). Den sekventiella omräkningen ovan skyddade bara mot att *två* byten
+ * fyllde samma hink, aldrig mot att *ett* gjorde det. En delvis såld position ligger kvar med
+ * sitt återstående värde och kan användas till en annan underviktad nivå.
  *
  * Ingen plan ges (tom [Plan]) om ingen nivå avviker minst [MIN_GAP_PP], eller om ingen
  * kvalificerad köp-/säljkandidat finns för den mest avvikande nivån.
@@ -26,7 +36,13 @@ object SwitchPlanCalc {
     /** En köpkandidat på [metadata]s risknivå, med källans 12-månadersavkastning ([twelveMonthReturn], t.ex. 0.083 = 8,3 %). */
     data class Candidate(val metadata: FundMetadata, val twelveMonthReturn: Double)
 
-    /** Ett enskilt föreslaget byte: sälj hela [sellFund]s position, köp [buyIsin] för samma belopp. [feeDelta] = köpkandidatens avgift minus säljfondens (positivt = dyrare). */
+    /**
+     * Ett enskilt föreslaget byte: sälj [sellValueKr] ur [sellFund]s position, köp [buyIsin] för
+     * samma belopp. [sellValueKr] är **inte** nödvändigtvis hela positionen — den är begränsad
+     * till gapet, se klassens KDoc — så beloppet måste visas för användaren; annars är rådet
+     * tvetydigt ("sälj fonden" ≠ "sälj för 4 000 kr"). [feeDelta] = köpkandidatens avgift minus
+     * säljfondens (positivt = dyrare).
+     */
     data class Switch(
         val sellFund: Fund,
         val sellValueKr: Double,
@@ -93,7 +109,13 @@ object SwitchPlanCalc {
             val sellSlot = sellSlots.filter { it.level == overEntry.key }.maxByOrNull { it.feePercent } ?: break
             val buyCandidate = pickBuyCandidate(candidates, underEntry.key, usedBuyIsins) ?: break
 
-            val switchValueKr = sellSlot.valueKr
+            // Storleksbestäm bytet till gapet — se klassens KDoc. Båda gapen är uttryckta i
+            // procentenheter av portföljen, så de räknas om till kronor mot samma total.
+            val underShortfallKr = underEntry.value / 100.0 * totalValueKr
+            val overExcessKr = -overEntry.value / 100.0 * totalValueKr
+            val switchValueKr = minOf(sellSlot.valueKr, underShortfallKr, overExcessKr)
+            if (switchValueKr <= 0.0) break
+
             switches += Switch(
                 sellFund = sellSlot.holding.fund,
                 sellValueKr = switchValueKr,
@@ -104,7 +126,15 @@ object SwitchPlanCalc {
                 feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent,
             )
             usedBuyIsins += buyCandidate.metadata.isin
-            sellSlots.remove(sellSlot)
+
+            // Såldes hela positionen är slotten förbrukad; annars ligger resten kvar och kan
+            // fylla en annan underviktad nivå i en senare iteration.
+            val remainingKr = sellSlot.valueKr - switchValueKr
+            if (remainingKr <= 0.0) {
+                sellSlots.remove(sellSlot)
+            } else {
+                sellSlots[sellSlots.indexOf(sellSlot)] = sellSlot.copy(valueKr = remainingKr)
+            }
             levelValues[sellSlot.level] = (levelValues[sellSlot.level] ?: 0.0) - switchValueKr
             levelValues[underEntry.key] = (levelValues[underEntry.key] ?: 0.0) + switchValueKr
         }
@@ -114,7 +144,12 @@ object SwitchPlanCalc {
         return Plan(switches, gapClosedPp)
     }
 
-    /** Översta kvartilen på [Candidate.twelveMonthReturn], därefter lägst avgift — se klassens KDoc. */
+    /**
+     * Översta kvartilen på [Candidate.twelveMonthReturn], därefter lägst avgift — se klassens
+     * KDoc. Regeln förutsätter att [candidates] är nivåns **avkastningsrangordnade** köpbara
+     * fonder; hämtas de i avgiftsordning blir avkastningen bara en särskiljare mellan de
+     * billigaste och den uppmätta kanten uteblir (issue #75, punkt 3).
+     */
     private fun pickBuyCandidate(candidates: List<Candidate>, level: Int, excludeIsins: Set<String>): Candidate? {
         val atLevel = candidates.filter { it.metadata.risk == level && it.metadata.isin !in excludeIsins && it.metadata.totalFee != null }
         if (atLevel.isEmpty()) return null
