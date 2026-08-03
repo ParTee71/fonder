@@ -31,7 +31,7 @@ class Migration910Test {
     }
 
     @Test
-    fun `migration_9_10 lagger till developmentOneYear och suggestion_records, ror inte befintlig data`() = runTest {
+    fun `migration_9_10 lagger till developmentOneYear och suggestion_records - ror inte befintlig data`() = runTest {
         context.deleteDatabase(dbName)
         val dbFile = context.getDatabasePath(dbName)
 
