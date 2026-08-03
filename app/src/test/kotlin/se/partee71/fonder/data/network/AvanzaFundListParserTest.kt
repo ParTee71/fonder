@@ -26,6 +26,7 @@ class AvanzaFundListParserTest {
               "companyName": "Handelsbanken",
               "risk": 4,
               "sharpeRatio": 0.73,
+              "developmentOneYear": 0.083,
               "indexFund": true,
               "startDate": "2005-06-28",
               "minimumBuy": 100.0,
@@ -77,6 +78,7 @@ class AvanzaFundListParserTest {
         assertEquals("EQUITY_FUND", fund.fundType)
         assertEquals("Handelsbanken", fund.companyName)
         assertEquals(4, fund.risk)
+        assertEquals(0.083, fund.developmentOneYear ?: -1.0, 1e-9)
         assertTrue(fund.indexFund)
         assertEquals(LocalDate.of(2005, 6, 28).toEpochDay(), fund.startDateEpochDay)
         assertEquals(100.0, fund.minimumBuy ?: -1.0, 1e-9)
@@ -93,6 +95,7 @@ class AvanzaFundListParserTest {
         assertNull(fund.risk)
         assertNull(fund.startDateEpochDay)
         assertNull(fund.minimumBuy)
+        assertNull(fund.developmentOneYear)
     }
 
     @Test

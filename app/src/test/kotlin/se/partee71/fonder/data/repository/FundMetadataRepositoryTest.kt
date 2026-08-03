@@ -132,11 +132,21 @@ class FundMetadataRepositoryTest {
         """.trimIndent()
     }
 
-    /** Full kontroll över en enskild rad (avgift, indexstatus, godtyckliga taggar) — issue #59. */
-    private fun fundView(isin: String, name: String, totalFee: Double?, indexFund: Boolean, tags: List<Pair<String, String>>): String {
+    /** Full kontroll över en enskild rad (avgift, indexstatus, godtyckliga taggar) — issue #59. Risknivå/12-månadersavkastning tillagda i issue #70 (bytesplanen). */
+    private fun fundView(
+        isin: String,
+        name: String,
+        totalFee: Double?,
+        indexFund: Boolean,
+        tags: List<Pair<String, String>>,
+        risk: Int? = null,
+        developmentOneYear: Double? = null,
+    ): String {
         val feeField = if (totalFee != null) "\"totalFee\":$totalFee," else ""
+        val riskField = if (risk != null) "\"risk\":$risk," else ""
+        val developmentField = if (developmentOneYear != null) "\"developmentOneYear\":$developmentOneYear," else ""
         val tagList = tags.joinToString(",") { (title, category) -> """{"title":"$title","fundTagCategory":"$category"}""" }
-        return """{"isin":"$isin","name":"$name","orderbookId":"$isin",$feeField"indexFund":$indexFund,"tagList":[$tagList]}"""
+        return """{"isin":"$isin","name":"$name","orderbookId":"$isin",$feeField$riskField$developmentField"indexFund":$indexFund,"tagList":[$tagList]}"""
     }
 
     private fun fullListJson(totalNoFunds: Int, views: List<String>): String =
@@ -564,6 +574,82 @@ class FundMetadataRepositoryTest {
         val repository = repo(FakeAvanzaSource())
 
         assertEquals(listOf(1, 4, 6), repository.knownRiskLevels())
+    }
+
+    // --- findSwitchCandidates (HEM-8, issue #70) ---
+
+    @Test
+    fun `findSwitchCandidates fragar ratt risknivå och verifierar kopbarhet`() = runTest {
+        val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Kandidatfond", currency = "SEK"))),
+            isinByFundId = mapOf("X1" to "SE_CAND"),
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        val candidate = result.single()
+        assertEquals("SE_CAND", candidate.metadata.isin)
+        assertEquals(0.12, candidate.twelveMonthReturn, 1e-9)
+        assertTrue("frågan mot källan ska filtrera på risknivå 3", source.lastRequestBody?.contains("\"riskFilter\":[\"3\"]") == true)
+    }
+
+    @Test
+    fun `findSwitchCandidates utesluter kandidat utan kand 12-manadersavkastning`() = runTest {
+        val candidateView = fundView("SE_CAND", "Utan avkastning", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3)
+        val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Utan avkastning", currency = "SEK"))),
+            isinByFundId = mapOf("X1" to "SE_CAND"),
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `findSwitchCandidates utesluter isin i excludeIsins`() = runTest {
+        val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
+        val repository = repo(source)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = setOf("SE_CAND"))
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `findSwitchCandidates ger tom lista nar ingen kandidat ar kopbar`() = runTest {
+        val candidateView = fundView("SE_CAND", "Ej köpbar", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
+        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `findSwitchCandidates stannar vid fem bekraftade kandidater`() = runTest {
+        val views = (1..8).map { i ->
+            fundView("SE_C$i", "Kandidat $i", totalFee = 0.2, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.1)
+        }
+        val source = FakeAvanzaSource(fullListJson(8, views))
+        val catalogFunds = (1..8).map { i -> Fund(fundId = "X$i", name = "Kandidat $i", currency = "SEK") }
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
+            isinByFundId = (1..8).associate { i -> "X$i" to "SE_C$i" },
+        )
+        val repository = repo(source, fundPriceRepo)
+
+        val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertEquals(5, result.size)
     }
 
     private fun fundMetadataEntity(

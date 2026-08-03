@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
@@ -21,6 +22,8 @@ data class SettingsUiState(
     val databaseCleared: Boolean = false,
     /** Epoch-millisekunder för senaste lyckade kursuppdatering, null om ingen skett än (SET-2, issue #27). */
     val lastPriceSyncEpochMillis: Long? = null,
+    /** Kontotypen fondinnehaven ligger i, null om inget val gjorts (SET-4, issue #70) — styr om bytesplanen (HEM-8) ges alls. */
+    val accountType: AccountType? = null,
 )
 
 @HiltViewModel
@@ -33,8 +36,13 @@ class SettingsViewModel @Inject constructor(
     private val databaseCleared = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(preferences.themeMode, databaseCleared, preferences.lastPriceSyncEpochMillis) { themeMode, cleared, lastSync ->
-            SettingsUiState(themeMode = themeMode, databaseCleared = cleared, lastPriceSyncEpochMillis = lastSync)
+        combine(
+            preferences.themeMode,
+            databaseCleared,
+            preferences.lastPriceSyncEpochMillis,
+            preferences.accountType,
+        ) { themeMode, cleared, lastSync, accountType ->
+            SettingsUiState(themeMode = themeMode, databaseCleared = cleared, lastPriceSyncEpochMillis = lastSync, accountType = accountType)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -43,6 +51,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { preferences.setThemeMode(mode) }
+    }
+
+    fun setAccountType(type: AccountType) {
+        viewModelScope.launch { preferences.setAccountType(type) }
     }
 
     /** Tömmer hela databasen (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1. */

@@ -30,6 +30,7 @@ import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
 
@@ -103,6 +104,7 @@ class FondDetaljViewModelTest {
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
             suggestCheaperAlternativesCall = isin to holdingValue
             return suggestCheaperAlternativesReturn

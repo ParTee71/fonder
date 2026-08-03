@@ -12,10 +12,12 @@ import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.FundScreenSortDirection
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.FundScreenFilter
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -80,6 +82,18 @@ interface FundMetadataRepository {
      * aldrig en hårdkodad skala.
      */
     suspend fun knownRiskLevels(): List<Int>
+
+    /**
+     * Köpkandidater på [level] för bytesplanen (HEM-8, issue #70) — samma
+     * köpbarhetsverifieringsmekanik som [suggestCheaperAlternatives]/ANA-9 (issue #59): frågar
+     * källan för risknivån (sorterad på lägst avgift), behåller bara kandidater med känd
+     * [FundMetadata.developmentOneYear] (annars ingen signal att rangordna på, se
+     * [SwitchPlanCalc]) och känd avgift, och ISIN-verifierar köpbarhet budgeterat.
+     * [excludeIsins] hoppas över innan verifiering (redan sålda/köpta i samma plan, eller
+     * redan innehavda fonder). Tom lista om inga kvalificerade, köpbara kandidater hittades —
+     * aldrig en gissad kandidat.
+     */
+    suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate>
 }
 
 @Singleton
@@ -276,11 +290,33 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return (fromVocabulary + fromCache).distinct().sorted()
     }
 
+    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
+        val results = query(
+            FundScreenQuery(risk = listOf(level.toString()), sortField = "totalFee", sortDirection = FundScreenSortDirection.ASCENDING),
+        )
+        val eligible = results.filter { it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null }
+
+        val verified = mutableListOf<SwitchPlanCalc.Candidate>()
+        for (metadata in eligible.take(MAX_SWITCH_VERIFICATION_ATTEMPTS)) {
+            if (verified.size >= MAX_SWITCH_CANDIDATES) break
+            if (resolveHandelsbankenAvailability(metadata.isin) == true) {
+                verified += SwitchPlanCalc.Candidate(metadata, metadata.developmentOneYear!!)
+            }
+        }
+        return verified
+    }
+
     private companion object {
         const val TAG = "FundMetadataRepository"
         const val MAX_ISIN_VERIFICATIONS = 5
         const val MAX_VERIFIED_ALTERNATIVES = 3
         const val MAX_VERIFICATION_ATTEMPTS = 10
         const val RISK_VOCABULARY_KEY = "risk"
+
+        /** Tak på antal verifierat köpbara kandidater per risknivå (HEM-8, issue #70) — samma budgetprincip som ANA-9. */
+        const val MAX_SWITCH_CANDIDATES = 5
+
+        /** Tak på antal prövade kandidater innan verifieringen ger upp för nivån, även om inga bekräftas. */
+        const val MAX_SWITCH_VERIFICATION_ATTEMPTS = 10
     }
 }

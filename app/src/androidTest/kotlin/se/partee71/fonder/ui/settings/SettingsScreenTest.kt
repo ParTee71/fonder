@@ -4,10 +4,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
@@ -83,5 +85,31 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Öppna riskprofil").performClick()
         assertTrue(called)
+    }
+
+    // --- Kontotyp (SET-4, issue #70) ---
+
+    @Test
+    fun kontotypvaljaren_visar_bada_alternativen() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState()) }
+        }
+
+        composeRule.onNodeWithText("ISK/KF").assertExists()
+        composeRule.onNodeWithText("Depå/AF").assertExists()
+    }
+
+    @Test
+    fun kontotypvaljaren_anropar_onAccountTypeSelected() {
+        var selected: AccountType? = null
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(state = SettingsUiState(), onAccountTypeSelected = { selected = it })
+            }
+        }
+
+        composeRule.onNodeWithText("ISK/KF").performClick()
+
+        assertEquals(AccountType.ISK_KF, selected)
     }
 }

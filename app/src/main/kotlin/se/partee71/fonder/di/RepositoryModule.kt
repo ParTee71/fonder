@@ -23,8 +23,10 @@ import se.partee71.fonder.data.repository.BackupRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
+import se.partee71.fonder.data.repository.RoomSuggestionRecordRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
 import se.partee71.fonder.data.repository.StubBackupRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.fonder.worker.WorkManagerFundPriceRefreshScheduler
@@ -42,6 +44,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFundMetadataRepository(impl: AvanzaFundMetadataRepository): FundMetadataRepository
+
+    @Binds
+    abstract fun bindSuggestionRecordRepository(impl: RoomSuggestionRecordRepository): SuggestionRecordRepository
 
     @Binds
     abstract fun bindFondlistaHtmlSource(impl: HandelsbankenFondlistaClient): FondlistaHtmlSource

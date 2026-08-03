@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -128,5 +129,32 @@ class SettingsViewModelTest {
         vm.refreshPricesNow()
 
         assertTrue(manualRefreshCalled)
+    }
+
+    // --- Kontotyp (SET-4, issue #70) ---
+
+    @Test
+    fun `accountType ar null innan nagot val gjorts`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            assertEquals(null, awaitItem().accountType)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setAccountType sparar valet och speglas i uiState`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.setAccountType(AccountType.ISK_KF)
+            var state = awaitItem()
+            while (state.accountType == null) state = awaitItem()
+
+            assertEquals(AccountType.ISK_KF, state.accountType)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

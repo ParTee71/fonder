@@ -70,6 +70,7 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
                         riskProfile = riskProfile,
                         portfolioRisk = state.portfolioRisk,
                         levelDeviations = state.riskLevelDeviations,
+                        switchPlan = state.switchPlan,
                     )
                 }
             }
@@ -298,12 +299,17 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
  * 3,5, se [PortfolioRiskCalc]s precisionsanmärkning. Per-nivå-raderna återanvänder
  * [se.partee71.fonder.ui.components.ExposureBar] (regel 4) — här är den rätt komponenten,
  * till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel.
+ *
+ * [switchPlan] (HEM-8, issue #70) visas längst ned, bara i ISK/KF med en avvikelse stor nog
+ * att motivera ett förslag — läst ur den senast inspelade facit-batchen
+ * ([se.partee71.fonder.ui.hem.HemViewModel.buildSwitchPlan]), inte omräknad live.
  */
 @Composable
 private fun RiskCard(
     riskProfile: RiskProfile,
     portfolioRisk: PortfolioRiskCalc.Result,
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
+    switchPlan: List<SwitchSuggestionUi>,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -356,6 +362,49 @@ private fun RiskCard(
                     )
                 }
             }
+            if (switchPlan.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.hem_switch_plan_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                switchPlan.forEachIndexed { index, switch ->
+                    SwitchSuggestionRow(index = index, switch = switch)
+                }
+                Text(
+                    stringResource(R.string.hem_switch_plan_disclaimer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
         }
+    }
+}
+
+/**
+ * En rad i bytesplanen (HEM-8, issue #70) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus
+ * avgiftsskillnaden. Ren läsvy, ingen åtgärdsknapp (samma princip som resten av kortet):
+ * planen är ett rangordnat förslag, inte en knapp att trycka på.
+ */
+@Composable
+private fun SwitchSuggestionRow(index: Int, switch: SwitchSuggestionUi) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            stringResource(
+                R.string.format_hem_switch_plan_row,
+                index + 1,
+                switch.sellFundName,
+                switch.fromLevel,
+                switch.buyFundName,
+                switch.toLevel,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

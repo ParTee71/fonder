@@ -22,6 +22,10 @@ class StubBackupRepository @Inject constructor() : BackupRepository {
     // (se.partee71.fonder.data.datastore.PreferencesRepository.riskProfile, SET-3/issue #68) —
     // genuin användardata, till skillnad från samma repositorys lastPriceSyncEpochMillis/
     // fundFilterVocabulary som medvetet är cache-metadata utanför kontraktet.
+    // Sedan issue #70 även: PreferencesRepository.accountType (SET-4) och samtliga rader i
+    // Room-tabellen suggestion_records (se.partee71.fonder.domain.model.SuggestionRecord,
+    // HEM-8) — förslagstidpunkten och NAV-utgångsläget kan inte återskapas ur NAV-historiken
+    // i efterhand, till skillnad från fund_metadata som medvetet är cache utanför kontraktet.
     override suspend fun backup(): Result<Unit> = Result.success(Unit)
     override suspend fun restore(): Result<Unit> = Result.success(Unit)
 }

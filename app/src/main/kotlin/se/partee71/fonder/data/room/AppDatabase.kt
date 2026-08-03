@@ -8,11 +8,13 @@ import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
+import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
@@ -22,8 +24,9 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundPriceEntity::class,
         FxRateEntity::class,
         FundMetadataEntity::class,
+        SuggestionRecordEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fundPriceDao(): FundPriceDao
     abstract fun fxRateDao(): FxRateDao
     abstract fun fundMetadataDao(): FundMetadataDao
+    abstract fun suggestionRecordDao(): SuggestionRecordDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -218,6 +222,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 9 → 10 (issue #70), två delar:
+         *
+         * 1. Lägger till `developmentOneYear` (nullable) på `fund_metadata` — källans
+         *    12-månadersavkastning, enda undantaget från principen att inte cacha källans
+         *    avkastningsmått (se [se.partee71.fonder.domain.model.FundMetadata]s KDoc):
+         *    behövs för att rangordna köpkandidater bytesplanen (HEM-8) aldrig själv har hållit
+         *    NAV-historik för. Befintliga rader (inklusive #61:s jämförelsefält) rörs inte.
+         *
+         * 2. Ny tabell `suggestion_records` — facit-inspelningen för varje föreslaget byte
+         *    (datum, plats i planen, sälj-/köp-ISIN, NAV-utgångsläge). Till skillnad från
+         *    `fund_metadata` är det här **genuin användardata** (samma kategori som
+         *    `RiskProfile`, NFR-1): förslagstidpunkten kan inte återskapas ur NAV-historiken i
+         *    efterhand om den går förlorad.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `developmentOneYear` REAL")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `suggestion_records` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `suggestedAtEpochDay` INTEGER NOT NULL,
+                        `planIndex` INTEGER NOT NULL,
+                        `sellIsin` TEXT NOT NULL,
+                        `buyIsin` TEXT NOT NULL,
+                        `sellNavAtSuggestion` REAL NOT NULL,
+                        `buyNavAtSuggestion` REAL NOT NULL,
+                        `followed` INTEGER
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -227,6 +266,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
+            MIGRATION_9_10,
         )
     }
 }

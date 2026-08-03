@@ -10,10 +10,15 @@ import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 
 /**
@@ -25,6 +30,10 @@ import java.time.LocalDate
  * inkrementellt, [KEY_SCAN_COMPARISONS] satt — se [scanComparisons]. Ingen ny worker eller
  * schemaläggare: den här itererar redan alla bevakade fonder på ett schema som redan är
  * koalescerat, så jämförelsen rider med i stället för att duplicera den mekaniken.
+ *
+ * Räknar sedan issue #70 även fram bytesplanen (HEM-8) och spelar in dess facit,
+ * [KEY_SCAN_SWITCH_PLAN] satt — se [scanSwitchPlan]. Samma princip: rider med på det redan
+ * koalescerade schemat i stället för en egen mekanism.
  */
 @HiltWorker
 class FundPriceUpdateWorker @AssistedInject constructor(
@@ -34,6 +43,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val suggestionRecordRepository: SuggestionRecordRepository,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -43,6 +53,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
 
         if (inputData.getBoolean(KEY_SCAN_COMPARISONS, false)) {
             scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
+        }
+
+        if (inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false)) {
+            scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
         }
 
         return if (success) Result.success() else Result.retry()
@@ -61,6 +75,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * vägrade göra.
          */
         const val KEY_SCAN_COMPARISONS = "scan_comparisons"
+
+        /**
+         * Input-data-nyckel som slår på [scanSwitchPlan] (HEM-8, issue #70) — satt **bara** av
+         * [FundPriceRefreshScheduler.scheduleBackstop], av samma skäl som [KEY_SCAN_COMPARISONS]:
+         * en plan kräver en källfråga plus budgeterad köpbarhetsverifiering per underviktad
+         * nivå, för dyrt för launch-gaten eller den manuella knappen.
+         */
+        const val KEY_SCAN_SWITCH_PLAN = "scan_switch_plan"
 
         /**
          * Högst så här många innehav jämförs per körning — inkrementell ifyllnad i stället för
@@ -162,6 +184,81 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             targets.forEach { holding ->
                 fundMetadataRepository.suggestCheaperAlternatives(holding.fund.isin!!, holding.currentValue!!)
             }
+        }
+
+        /**
+         * Räknar fram bytesplanen (SwitchPlanCalc, HEM-8/issue #70) och spelar in varje nytt
+         * byte i facit ([SuggestionRecordRepository]) — ren logik utan `CoroutineWorker`-
+         * beroende, samma mönster som [refreshAll]/[scanComparisons]. Ingen plan alls utan
+         * kontotyp ISK/KF (SET-4) eller utan satt riskprofil (SET-3/#71) — appen gissar aldrig
+         * någotdera.
+         *
+         * Köpkandidatens NAV ([Holding.currentValue] finns bara för redan bevakade fonder)
+         * löses upp här, inte i [se.partee71.fonder.ui.hem.HemViewModel] — precis den
+         * nätverkskostnaden (ISIN-uppslag + kursuppdatering för en fond appen aldrig ägt) är
+         * skälet till att facit-inspelningen ligger på backstopen och inte körs live vid varje
+         * öppning av Hem, se [KEY_SCAN_SWITCH_PLAN].
+         */
+        internal suspend fun scanSwitchPlan(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+            preferencesRepository: PreferencesRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+            today: LocalDate = LocalDate.now(),
+        ) {
+            if (preferencesRepository.accountType.first() != AccountType.ISK_KF) return
+            val riskProfile = preferencesRepository.riskProfile.first() ?: return
+            val targetAllocation = riskProfile.effectiveAllocation
+            if (targetAllocation.isEmpty()) return
+
+            val funds = transactionRepository.observeFunds().first()
+            if (funds.isEmpty()) return
+            val holdings = PortfolioCalc.computeHoldings(funds, transactionRepository.observeTransactions().first())
+            if (holdings.isEmpty()) return
+
+            val prices = fundPriceRepository.observeLatestPrices(holdings.map { it.fund.fundId }).first()
+            val withValue = PortfolioCalc.withCurrentValue(holdings, prices)
+            val heldIsins = withValue.mapNotNull { it.fund.isin }.toSet()
+            val metadataByIsin = fundMetadataRepository.metadataFor(heldIsins.toList())
+
+            val candidates = targetAllocation.keys.flatMap { level ->
+                fundMetadataRepository.findSwitchCandidates(level, excludeIsins = heldIsins)
+            }
+            val plan = SwitchPlanCalc.plan(withValue, metadataByIsin, candidates, targetAllocation)
+
+            plan.switches.forEachIndexed { index, switch ->
+                val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
+                if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
+
+                val sellNav = sellNavOf(switch, withValue) ?: return@forEachIndexed
+                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository) ?: return@forEachIndexed
+
+                suggestionRecordRepository.record(
+                    SuggestionRecord(
+                        suggestedAtEpochDay = today.toEpochDay(),
+                        planIndex = index,
+                        sellIsin = sellIsin,
+                        buyIsin = switch.buyIsin,
+                        sellNavAtSuggestion = sellNav,
+                        buyNavAtSuggestion = buyNav,
+                    ),
+                )
+            }
+        }
+
+        private fun sellNavOf(switch: SwitchPlanCalc.Switch, holdings: List<Holding>): Double? {
+            val holding = holdings.firstOrNull { it.fund.fundId == switch.sellFund.fundId } ?: return null
+            val value = holding.currentValue ?: return null
+            if (holding.netShares == 0.0) return null
+            return value / holding.netShares
+        }
+
+        /** Löser upp en köpkandidats aktuella NAV via samma ISIN-uppslagskedja som importflödena (TP-13/TP-14) — null om källan inte kan slå upp fonden eller sakna en kurs. */
+        private suspend fun resolveBuyNav(isin: String, fundPriceRepository: FundPriceRepository): Double? {
+            val fund = fundPriceRepository.findFundByIsin(isin) ?: return null
+            fundPriceRepository.refresh(fund.fundId)
+            return fundPriceRepository.latestPrice(fund.fundId)?.nav
         }
     }
 }

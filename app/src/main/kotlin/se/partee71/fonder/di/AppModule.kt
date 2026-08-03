@@ -15,6 +15,7 @@ import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
+import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import javax.inject.Singleton
 
@@ -50,4 +51,7 @@ object AppModule {
 
     @Provides
     fun provideFundMetadataDao(db: AppDatabase): FundMetadataDao = db.fundMetadataDao()
+
+    @Provides
+    fun provideSuggestionRecordDao(db: AppDatabase): SuggestionRecordDao = db.suggestionRecordDao()
 }
