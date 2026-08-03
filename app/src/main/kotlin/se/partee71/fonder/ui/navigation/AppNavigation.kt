@@ -27,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.components.WorkerStatusIcon
+import se.partee71.fonder.ui.facit.FacitScreen
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.hem.HemScreen
@@ -134,6 +135,7 @@ fun AppNavigation() {
                     onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
                     onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
                     onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
+                    onOpenFacit = { navController.navigate(Routes.FACIT) },
                 )
             }
             composable(
@@ -156,6 +158,9 @@ fun AppNavigation() {
             }
             composable(Routes.RISK_PROFILE) {
                 RiskProfilScreen(onSaved = { navController.popBackStack() })
+            }
+            composable(Routes.FACIT) {
+                FacitScreen()
             }
         }
     }

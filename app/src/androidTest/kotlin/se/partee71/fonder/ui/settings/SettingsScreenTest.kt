@@ -56,7 +56,12 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Uppdatera nu").performClick()
+        // performScrollTo före varje knappklick i den här filen: Inställningar är en
+        // `verticalScroll`-kolumn som växer med varje nytt kort, och en knapp som hamnar under
+        // skärmkanten är fortfarande *komponerad* — assertExists passerar, performClick kastar
+        // inget, men klicket landar utanför noden och callbacken uteblir. Det har nu bitit två
+        // gånger (issue #78:s "Stäng", och den här när facit-kortet lades in ovanför, #80).
+        composeRule.onNodeWithText("Uppdatera nu").performScrollTo().performClick()
         assertTrue(called)
     }
 
@@ -84,7 +89,7 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Öppna riskprofil").performClick()
+        composeRule.onNodeWithText("Öppna riskprofil").performScrollTo().performClick()
         assertTrue(called)
     }
 
@@ -112,6 +117,20 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("ISK/KF").performClick()
 
         assertEquals(AccountType.ISK_KF, selected)
+    }
+
+    @Test
+    fun facit_knappen_anropar_callback() {
+        // SET-5 (issue #80): facit nås som egen undersida från Inställningar, samma mönster som
+        // Riskprofil (SET-3).
+        var opened = false
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onOpenFacit = { opened = true }) }
+        }
+
+        composeRule.onNodeWithText("Öppna facit").performScrollTo().performClick()
+
+        assertTrue(opened)
     }
 
     @Test

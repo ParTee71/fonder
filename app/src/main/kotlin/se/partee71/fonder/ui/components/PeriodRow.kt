@@ -30,6 +30,11 @@ import se.partee71.fonder.ui.theme.ReturnColors
  *   aldrig har ett kr-belopp (rent procentuellt, om [fraction] är satt).
  * @param partial sant om totalen är delvis osäker (något innehav saknade historik men andra
  *   kunde beräknas) — irrelevant för ett enskilt innehavs rad.
+ * @param stackValue lägger kr-beloppet på **egen rad under** procenten i stället för bredvid den
+ *   (facit, SET-5/issue #80 — där procenten är huvudmåttet och kronorna dess konsekvens). Opt-in
+ *   just för att varje befintligt anropsställe ska rendera exakt som förut; utan flaggan är den
+ *   här komponenten oförändrad. Ignoreras om inte både [amount] och [fraction] finns — då finns
+ *   det bara ett tal att visa.
  * @param valueText ett färdigformaterat, neutralfärgat värde att visa i stället för
  *   kr/procent-formateringen (issue #24) — för nyckeltal som inte är avkastningar och därför
  *   inte ska tecken-/färgkodas som vinst/förlust (t.ex. volatilitet, Sharpe-kvot). Är det null
@@ -42,6 +47,7 @@ fun PeriodRow(
     fraction: Double?,
     modifier: Modifier = Modifier,
     partial: Boolean = false,
+    stackValue: Boolean = false,
     valueText: String? = null,
 ) {
     Row(
@@ -75,7 +81,9 @@ fun PeriodRow(
             )
         } else {
             Column(horizontalAlignment = Alignment.End) {
+                val stacked = stackValue && amount != null && fraction != null
                 val text = when {
+                    stacked -> MoneyFormat.percentSigned(fraction!!)
                     amount != null && fraction != null -> "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(amount)}"
                     amount != null -> MoneyFormat.kr(amount)
                     else -> MoneyFormat.percentSigned(fraction!!)
@@ -89,6 +97,13 @@ fun PeriodRow(
                     // 30 % under GAV grönt (issue #78). Tecken och färg ska alltid följas åt.
                     color = ReturnColors.forAmount(fraction ?: amount!!),
                 )
+                if (stacked) {
+                    Text(
+                        MoneyFormat.kr(amount!!),
+                        style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (partial) {
                     Text(
                         stringResource(R.string.period_partial_data),

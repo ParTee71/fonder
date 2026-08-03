@@ -46,6 +46,8 @@ data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysi
  * bakgrundsworkerns backstop, inte på varje Hem-öppning.
  */
 data class SwitchSuggestionUi(
+    /** Raden i facit-inspelningen ([SuggestionRecord.id]) — nyckeln "Genomförd" skriver mot (SET-5, issue #80). */
+    val recordId: Long,
     /**
      * Platsen i den rangordnade planen (0 = först). Bärs hela vägen till UI:t i stället för att
      * härledas ur listpositionen: planen är girig och sekventiell, så ett byte måste visas med
@@ -64,6 +66,8 @@ data class SwitchSuggestionUi(
      * dess; raden visas då utan beloppstext i stället för med ett gissat belopp.
      */
     val switchValueKr: Double? = null,
+    /** Sant om användaren markerat bytet som genomfört (SET-5, issue #80) — null i inspelningen betyder "inte markerat", inte "inte genomfört". */
+    val followed: Boolean = false,
 )
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
@@ -292,6 +296,7 @@ class HemViewModel @Inject constructor(
             val sellFee = sellMeta.totalFee ?: return@mapNotNull null
             val buyFee = buyMeta.totalFee ?: return@mapNotNull null
             SwitchSuggestionUi(
+                recordId = record.id,
                 planIndex = record.planIndex,
                 sellFundName = sellMeta.name,
                 buyFundName = buyMeta.name,
@@ -299,6 +304,7 @@ class HemViewModel @Inject constructor(
                 toLevel = buyLevel,
                 feeDeltaPercent = buyFee - sellFee,
                 switchValueKr = record.switchValueKr,
+                followed = record.followed == true,
             )
         }
 
@@ -307,6 +313,15 @@ class HemViewModel @Inject constructor(
             .withIndex()
             .takeWhile { (position, suggestion) -> suggestion.planIndex == position }
             .map { it.value }
+    }
+
+    /**
+     * Markerar ett förslag i den visade planen som genomfört (HEM-8/SET-5, issue #80). Skriver
+     * bara flaggan — inget byte utförs, appen rör aldrig användarens innehav. Facit (SET-5)
+     * läser den för att mäta följda råd separat från alla givna råd.
+     */
+    fun setSwitchFollowed(recordId: Long, followed: Boolean) {
+        viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
     }
 
     private data class Settings(val riskProfile: RiskProfile?, val accountType: AccountType?)

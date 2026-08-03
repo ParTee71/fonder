@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,7 +44,12 @@ fun HemScreen(
     viewModel: HemViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    HemContent(state = state, onFundClick = onFundClick, modifier = modifier)
+    HemContent(
+        state = state,
+        onFundClick = onFundClick,
+        onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -51,7 +60,12 @@ fun HemScreen(
  * stället för att göra det nåbart (UI-5, issue #63).
  */
 @Composable
-fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: Modifier = Modifier) {
+fun HemContent(
+    state: HemUiState,
+    onFundClick: (String) -> Unit = {},
+    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
+) {
     when {
         state.isEmpty -> EmptyState(
             title = stringResource(R.string.hem_empty_title),
@@ -71,6 +85,7 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
                         portfolioRisk = state.portfolioRisk,
                         levelDeviations = state.riskLevelDeviations,
                         switchPlan = state.switchPlan,
+                        onSwitchFollowedChange = onSwitchFollowedChange,
                     )
                 }
             }
@@ -310,6 +325,7 @@ private fun RiskCard(
     portfolioRisk: PortfolioRiskCalc.Result,
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
     switchPlan: List<SwitchSuggestionUi>,
+    onSwitchFollowedChange: (Long, Boolean) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -368,7 +384,7 @@ private fun RiskCard(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                switchPlan.forEach { switch -> SwitchSuggestionRow(switch) }
+                switchPlan.forEach { switch -> SwitchSuggestionRow(switch, onSwitchFollowedChange) }
                 Text(
                     stringResource(R.string.hem_switch_plan_disclaimer),
                     style = MaterialTheme.typography.bodySmall,
@@ -391,9 +407,14 @@ private fun RiskCard(
  *
  * Rangordningen kommer ur [SwitchSuggestionUi.planIndex], aldrig ur listpositionen — planen är
  * girig och sekventiell, så numret är en del av rådet.
+ *
+ * "Genomförd" är den enda interaktionen (SET-5, issue #80) och är fortfarande inte en
+ * åtgärdsknapp: den utför inget byte, den **registrerar** att användaren gjorde det, så facit
+ * kan mäta följda råd separat från alla givna råd. Utan den skillnaden vore ett hypotetiskt och
+ * ett verkligt utfall samma siffra.
  */
 @Composable
-private fun SwitchSuggestionRow(switch: SwitchSuggestionUi) {
+private fun SwitchSuggestionRow(switch: SwitchSuggestionUi, onFollowedChange: (Long, Boolean) -> Unit) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(
             stringResource(
@@ -418,5 +439,21 @@ private fun SwitchSuggestionRow(switch: SwitchSuggestionUi) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // `toggleable` på hela raden, inte bara på rutan — klickbar etikett, 48 dp träffyta
+        // och **en** nod med rollen kryssruta för skärmläsaren.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .toggleable(
+                    value = switch.followed,
+                    role = Role.Checkbox,
+                    onValueChange = { checked -> onFollowedChange(switch.recordId, checked) },
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(checked = switch.followed, onCheckedChange = null)
+            Text(stringResource(R.string.facit_followed_label), style = MaterialTheme.typography.bodySmall)
+        }
     }
 }

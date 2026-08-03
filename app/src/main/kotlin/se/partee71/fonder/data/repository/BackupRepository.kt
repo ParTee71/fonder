@@ -31,6 +31,10 @@ class StubBackupRepository @Inject constructor() : BackupRepository {
     // som den såg ut just den dagen — samt batchEpochMillis, som håller ihop raderna från
     // *en* körning till en plan. Utan det fältet i en återställning smälter två körningar
     // samma dygn ihop till en plan som aldrig räknats fram.
+    // Sedan issue #80 fylls samma raders followed i av användaren (SET-5, "Genomförd") — den
+    // enda kolumnen i tabellen som är ett *val* snarare än en mätning, och därmed den som är
+    // helt omöjlig att härleda: tappas den kan facit aldrig skilja ett följt råd från ett bara
+    // givet igen. Rundturstestet ska täcka den explicit, inte bara "en rad överlever".
     override suspend fun backup(): Result<Unit> = Result.success(Unit)
     override suspend fun restore(): Result<Unit> = Result.success(Unit)
 }

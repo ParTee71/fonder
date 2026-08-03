@@ -456,7 +456,7 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
@@ -487,7 +487,7 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    planIndex = 1, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 1, sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
@@ -509,7 +509,7 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = null,
                 ),
             ),
@@ -521,6 +521,35 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
         composeRule.onNodeWithText("Belopp:", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun genomford_markeringen_i_bytesplanen_anropar_callbacken() {
+        // SET-5 (issue #80): markeringen utför inget byte, den registrerar att användaren gjorde
+        // det — annars kan facit inte skilja ett följt råd från ett bara givet.
+        var callback: Pair<Long, Boolean>? = null
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
+            switchPlan = listOf(
+                SwitchSuggestionUi(
+                    recordId = 42, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
+                ),
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme {
+                HemContent(state = state, onSwitchFollowedChange = { id, followed -> callback = id to followed })
+            }
+        }
+
+        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+
+        assertEquals(42L to true, callback)
     }
 
     @Test

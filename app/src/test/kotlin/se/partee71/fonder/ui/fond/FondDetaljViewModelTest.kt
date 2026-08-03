@@ -110,6 +110,7 @@ class FondDetaljViewModelTest {
             return suggestCheaperAlternativesReturn
         }
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
     }
 
     private fun viewModel() =

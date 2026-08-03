@@ -32,6 +32,7 @@ fun titleResFor(route: String?): Int? = when (route) {
     Routes.IMPORT_HOLDINGS -> se.partee71.fonder.R.string.import_title
     Routes.IMPORT_ORDERS -> se.partee71.fonder.R.string.import_orders_title
     Routes.RISK_PROFILE -> se.partee71.fonder.R.string.riskprofil_title
+    Routes.FACIT -> se.partee71.fonder.R.string.facit_title
     else -> null
 }
 
@@ -54,4 +55,7 @@ object Routes {
 
     /** Riskprofil — engångsenkät + målrisknivå, nås från Inställningar (SET-3, issue #68). */
     const val RISK_PROFILE = "risk-profile"
+
+    /** Facit — utfallet av bytesplanens inspelade förslag, nås från Inställningar (SET-5, issue #80). */
+    const val FACIT = "facit"
 }

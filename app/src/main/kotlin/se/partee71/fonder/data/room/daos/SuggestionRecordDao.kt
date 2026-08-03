@@ -31,6 +31,28 @@ interface SuggestionRecordDao {
     )
     fun observeLatestBatch(): Flow<List<SuggestionRecordEntity>>
 
+    /**
+     * Hela historiken, nyast först (SET-5, issue #80) — facit-vyns läsväg, till skillnad från
+     * [observeLatestBatch] som medvetet bara ger Hem den senaste körningen. Sorteringen är
+     * dygn, sedan körning, sedan plats i planen, så en batch alltid hänger ihop i listan även
+     * när två körningar landat samma dygn.
+     */
+    @Query(
+        """
+        SELECT * FROM suggestion_records
+        ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, planIndex ASC
+        """,
+    )
+    fun observeHistory(): Flow<List<SuggestionRecordEntity>>
+
+    /**
+     * Markerar (eller avmarkerar) ett förslag som genomfört (HEM-8/SET-5, issue #80). Kolumnen
+     * har funnits sedan tabellen skapades (Room 9→10) men saknade skrivväg — utan den kan facit
+     * inte skilja rådets träffsäkerhet från det faktiska utfallet.
+     */
+    @Query("UPDATE suggestion_records SET followed = :followed WHERE id = :id")
+    suspend fun setFollowed(id: Long, followed: Boolean)
+
     /** Sant om exakt det här bytet (samma sälj-/köp-ISIN) redan spelats in [epochDay] — dedupspärr mot upprepad inspelning samma dag. */
     @Query("SELECT EXISTS(SELECT 1 FROM suggestion_records WHERE sellIsin = :sellIsin AND buyIsin = :buyIsin AND suggestedAtEpochDay = :epochDay)")
     suspend fun existsForDay(sellIsin: String, buyIsin: String, epochDay: Long): Boolean
