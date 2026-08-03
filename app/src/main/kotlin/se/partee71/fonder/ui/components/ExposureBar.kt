@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.theme.MonoAmountStyle
@@ -42,7 +43,15 @@ fun ExposureBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+            // Vikt + ellips av samma skäl som i [PeriodRow] (issue #78): utan dem kunde en lång
+            // kategorietikett äta upp hela raden och lämna noll bredd till procenten.
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+            )
             Text(MoneyFormat.percent(fraction), style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium))
         }
         Box(

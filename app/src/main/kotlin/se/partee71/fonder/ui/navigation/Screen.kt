@@ -21,6 +21,20 @@ enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
     }
 }
 
+/**
+ * Rubrik för en icke-toppnivårutt (toppnivåernas titlar bor i [Screen.labelRes]). Null för en
+ * okänd rutt — då visas ingen `TopAppBar` alls, i stället för en tom.
+ */
+fun titleResFor(route: String?): Int? = when (route) {
+    Routes.FOND -> se.partee71.fonder.R.string.fond_title
+    Routes.FUND_SEARCH -> se.partee71.fonder.R.string.fondsok_title
+    Routes.TRANSACTION_FORM -> se.partee71.fonder.R.string.transaktionsform_title
+    Routes.IMPORT_HOLDINGS -> se.partee71.fonder.R.string.import_title
+    Routes.IMPORT_ORDERS -> se.partee71.fonder.R.string.import_orders_title
+    Routes.RISK_PROFILE -> se.partee71.fonder.R.string.riskprofil_title
+    else -> null
+}
+
 object Routes {
     /** Fonddetalj för ett givet fundId (Handelsbankens fondlista-id, se issue #2/#3). */
     const val FOND = "fond/{fundId}"

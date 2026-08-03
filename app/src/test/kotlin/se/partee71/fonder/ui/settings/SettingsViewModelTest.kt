@@ -97,6 +97,27 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onClearedMessageDismissed kvitterar handelsen sa den inte spelas upp igen`() = runTest(dispatcher) {
+        // Regression (issue #78): flaggan nollställdes aldrig, så meddelandet kom tillbaka vid
+        // varje rotation och — eftersom uiState är WhileSubscribed — vid varje återbesök i
+        // Inställningar. En engångshändelse får inte ligga kvar som bestående tillstånd.
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.clearDatabase()
+            var state = awaitItem()
+            while (!state.databaseCleared) state = awaitItem()
+
+            vm.onClearedMessageDismissed()
+            state = awaitItem()
+            while (state.databaseCleared) state = awaitItem()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `lastPriceSyncEpochMillis ar null innan nagon uppdatering skett (SET-2)`() = runTest(dispatcher) {
         val vm = viewModel()
 

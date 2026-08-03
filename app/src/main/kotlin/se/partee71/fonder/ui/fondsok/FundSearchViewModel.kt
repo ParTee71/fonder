@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -22,7 +24,17 @@ data class FundSearchUiState(
     val companies: List<FundCompany> = emptyList(),
     val selectedCompany: FundCompany? = null,
     val results: List<Fund> = emptyList(),
+    /**
+     * Fonder som redan bevakas — både de som lagts till i den här sessionen och de som redan
+     * fanns i portföljen. Tidigare bara det förstnämnda, så en fond man redan ägde visades utan
+     * bock och med "Lägg till" kvar (issue #78).
+     */
     val addedFundIds: Set<String> = emptySet(),
+    /**
+     * Sant om fondkatalogen inte gick att hämta. Skilt från "sökningen gav inga träffar" —
+     * annars ser ett nätverksfel ut som ett tomt sökresultat (issue #78).
+     */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -47,7 +59,14 @@ class FundSearchViewModel @Inject constructor(
     private val selectedCompany = MutableStateFlow<FundCompany?>(null)
     private val query = MutableStateFlow("")
     private val loading = MutableStateFlow(true)
-    private val addedFundIds = MutableStateFlow<Set<String>>(emptySet())
+    private val loadFailed = MutableStateFlow(false)
+
+    /** Fonder tillagda i den här sessionen — slås ihop med de redan bevakade, se [uiState]. */
+    private val addedThisSession = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Redan bevakade fonder, reaktivt ur Room — så en fond man äger aldrig erbjuds som ny. */
+    private val trackedFundIds: Flow<Set<String>> =
+        transactionRepository.observeFunds().map { funds -> funds.mapTo(mutableSetOf()) { it.fundId } }
 
     /** Ett bolagsbyte i taget — ett snabbt byte ska inte kunna skriva över resultatet av ett senare. */
     private var companyLoadJob: Job? = null
@@ -66,7 +85,9 @@ class FundSearchViewModel @Inject constructor(
                 selectedCompany = selected,
                 results = filtered,
             )
-        }.combine(addedFundIds) { state, added -> state.copy(addedFundIds = added) }
+        }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
+            state.copy(addedFundIds = added)
+        }.combine(loadFailed) { state, failed -> state.copy(loadFailed = failed) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -81,6 +102,7 @@ class FundSearchViewModel @Inject constructor(
             allFunds.value = catalog?.funds.orEmpty()
             visibleFunds.value = catalog?.funds.orEmpty()
             companies.value = catalog?.companies.orEmpty()
+            loadFailed.value = catalog == null
             loading.value = false
             catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
                 ?.let(::onCompanySelected)
@@ -118,7 +140,7 @@ class FundSearchViewModel @Inject constructor(
             // Fonddetalj (TP-14/NAV-2). Bästa-försök: misslyckas uppslaget läggs fonden till ändå.
             val isin = fund.isin ?: fundPriceRepository.lookupIsin(fund.fundId)
             transactionRepository.upsertFund(fund.copy(isin = isin))
-            addedFundIds.value = addedFundIds.value + fund.fundId
+            addedThisSession.value = addedThisSession.value + fund.fundId
         }
     }
 }

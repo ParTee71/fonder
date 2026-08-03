@@ -58,6 +58,13 @@ fun FundSearchScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             )
 
+            // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
+            // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).
+            state.loadFailed -> EmptyState(
+                title = stringResource(R.string.fondsok_load_failed_title),
+                body = stringResource(R.string.fondsok_load_failed_body),
+            )
+
             state.results.isEmpty() -> EmptyState(
                 title = stringResource(R.string.fondsok_empty_title),
                 body = stringResource(R.string.fondsok_empty_body),

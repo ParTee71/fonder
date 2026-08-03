@@ -15,10 +15,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -53,6 +52,7 @@ fun SettingsScreen(
         onAccountTypeSelected = viewModel::setAccountType,
         onRefreshPricesNow = viewModel::refreshPricesNow,
         onClearDatabase = viewModel::clearDatabase,
+        onClearedMessageDismissed = viewModel::onClearedMessageDismissed,
         modifier = modifier,
     )
 }
@@ -68,14 +68,11 @@ fun SettingsContent(
     onAccountTypeSelected: (AccountType) -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
+    onClearedMessageDismissed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var showClearConfirm by remember { mutableStateOf(false) }
-    var showClearedMessage by remember { mutableStateOf(false) }
-
-    LaunchedEffect(state.databaseCleared) {
-        if (state.databaseCleared) showClearedMessage = true
-    }
+    // rememberSaveable: en bekräftelsedialog ska inte försvinna tyst vid rotation (issue #78).
+    var showClearConfirm by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -199,13 +196,21 @@ fun SettingsContent(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
-                if (showClearedMessage) {
+                // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en — ingen
+                // lokal spegling via LaunchedEffect, som fick engångshändelsen att spelas upp
+                // igen vid varje rotation och återbesök (issue #78). Kvitteringen är också
+                // meddelandets enda väg ut; tidigare fanns ingen.
+                if (state.databaseCleared) {
                     Text(
                         stringResource(R.string.settings_clear_database_success),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
+                    TextButton(
+                        onClick = onClearedMessageDismissed,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    ) { Text(stringResource(R.string.close)) }
                 }
                 Button(
                     onClick = { showClearConfirm = true },
@@ -222,7 +227,6 @@ fun SettingsContent(
             text = { Text(stringResource(R.string.clear_database_confirm_body)) },
             confirmButton = {
                 TextButton(onClick = {
-                    showClearedMessage = false
                     onClearDatabase()
                     showClearConfirm = false
                 }) { Text(stringResource(R.string.settings_clear_database_button)) }

@@ -3,10 +3,10 @@
     <string name="app_name">Fonder</string>
 
     <!-- Gemensamma åtgärder -->
-    <string name="back">Tillbaka</string>
     <string name="save">Spara</string>
     <string name="delete">Ta bort</string>
     <string name="cancel">Avbryt</string>
+    <string name="back">Tillbaka</string>
     <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
@@ -82,6 +82,10 @@
     <string name="format_transaktion_rad">%1$s andelar à %2$s</string>
     <string name="transaktion_delete_title">Ta bort transaktion?</string>
     <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
+    <string name="date_field_not_set">inget datum valt</string>
+    <string name="date_field_open_picker">Välj datum</string>
+    <string name="format_date_field_description">%1$s: %2$s</string>
+    <string name="transaktionsform_title">Ny transaktion</string>
     <string name="transaktionsform_fund_label">Fond</string>
     <string name="transaktionsform_date_label">Datum</string>
     <string name="transaktionsform_shares_label">Antal andelar</string>
@@ -106,6 +110,8 @@
     <string name="fond_isin_label">ISIN</string>
     <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
+    <string name="fond_chart_description_empty">Kursdiagram utan data för vald period</string>
+    <string name="format_fond_chart_description">Kursdiagram, %1$s, %2$d kurspunkter mellan %3$s och %4$s</string>
     <string name="fond_chart_period_1man">1 mån</string>
     <string name="fond_chart_period_3man">3 mån</string>
     <string name="fond_chart_period_1ar">1 år</string>
@@ -120,6 +126,7 @@
     <string name="analys_period_sedan_kop">Sedan köp</string>
     <string name="analys_cagr_label">Årlig snittavkastning (CAGR)</string>
     <string name="analys_gav_label">GAV</string>
+    <string name="format_analys_gav_label">GAV %1$s</string>
     <string name="analys_portfolio_share_label">Andel av portföljen</string>
     <string name="analys_status_gron">Inga signaler</string>
     <string name="analys_status_gul">Värt att se över</string>
@@ -191,7 +198,10 @@
     <string name="analys_glossary_sharpe_def">Avkastningen delad på volatiliteten — hur mycket avkastning fonden gett per enhet risk. Högre är bättre; gör det möjligt att jämföra fonder med olika svängningar rättvist.</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
+    <string name="fondsok_title">Lägg till fond</string>
     <string name="fondsok_label">Sök fond</string>
+    <string name="fondsok_load_failed_title">Kunde inte hämta fondlistan</string>
+    <string name="fondsok_load_failed_body">Kontrollera uppkopplingen och försök igen. Redan bevakade fonder påverkas inte.</string>
     <string name="fondsok_empty_title">Inga fonder hittades</string>
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
     <string name="fondsok_added">Tillagd</string>
@@ -217,6 +227,7 @@
     <string name="settings_import_body">Importera befintliga fondinnehav från Handelsbankens Excel-export (\"Innehav Fonder\").</string>
     <string name="settings_import_button">Importera innehav</string>
     <!-- Riskprofil (SET-3, issue #68) -->
+    <string name="riskprofil_title">Riskprofil</string>
     <string name="settings_riskprofile_section">Riskprofil</string>
     <string name="settings_riskprofile_body">Sätt en målfördelning för portföljen och jämför den mot dina innehav.</string>
     <string name="settings_riskprofile_button">Öppna riskprofil</string>

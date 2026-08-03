@@ -15,9 +15,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
@@ -51,6 +54,7 @@ import com.patrykandpatrick.vico.core.common.data.ExtraStore
 import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.ChartPeriodFilter
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -84,7 +88,9 @@ fun FundLineChart(
     purchaseEpochDays: List<Long> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
-    var period by remember { mutableStateOf(ChartPeriodFilter.Period.EN_MANAD) }
+    // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
+    // tillbaka till 1 månad mitt i en jämförelse (issue #78).
+    var period by rememberSaveable { mutableStateOf(ChartPeriodFilter.Period.EN_MANAD) }
     val windowedPoints = remember(points, period) { ChartPeriodFilter.apply(points, period) }
     val markerEpochDays = remember(windowedPoints, purchaseEpochDays) {
         PurchaseMarkerFilter.apply(windowedPoints, purchaseEpochDays)
@@ -98,6 +104,22 @@ fun FundLineChart(
                 series(x = windowedPoints.map { it.first }, y = windowedPoints.map { it.second })
             }
         }
+    }
+
+    // Diagrammet är en ren canvas — utan semantik är kursutvecklingen osynlig för en
+    // skärmläsare, i strid med att appen annars aldrig bär information i enbart färg/form
+    // (issue #78). Beskrivningen sammanfattar det diagrammet faktiskt visar: vald period,
+    // antal punkter och kursspannet.
+    val chartDescription = if (windowedPoints.isEmpty()) {
+        stringResource(R.string.fond_chart_description_empty)
+    } else {
+        stringResource(
+            R.string.format_fond_chart_description,
+            stringResource(periodLabelRes(period)),
+            windowedPoints.size,
+            MoneyFormat.kr(windowedPoints.minOf { it.second }),
+            MoneyFormat.kr(windowedPoints.maxOf { it.second }),
+        )
     }
 
     Column(modifier = modifier) {
@@ -121,19 +143,29 @@ fun FundLineChart(
                 // närmast slutet i stället för hela den valda perioden. `Zoom.Content` ensamt
                 // visar alltid ALLA punkter som skickats in, oavsett antal.
                 zoomState = rememberVicoZoomState(initialZoom = Zoom.Content),
-                modifier = Modifier.fillMaxWidth().height(220.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .semantics { contentDescription = chartDescription },
             )
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(top = 8.dp),
         ) {
-            PeriodChip(ChartPeriodFilter.Period.EN_MANAD, period, R.string.fond_chart_period_1man) { period = it }
-            PeriodChip(ChartPeriodFilter.Period.TRE_MANADER, period, R.string.fond_chart_period_3man) { period = it }
-            PeriodChip(ChartPeriodFilter.Period.ETT_AR, period, R.string.fond_chart_period_1ar) { period = it }
-            PeriodChip(ChartPeriodFilter.Period.ALLT, period, R.string.fond_chart_period_allt) { period = it }
+            ChartPeriodFilter.Period.entries.forEach { option ->
+                PeriodChip(option, period, periodLabelRes(option)) { period = it }
+            }
         }
     }
+}
+
+/** Etikett för en diagramperiod — delad mellan chipparna och diagrammets semantik. */
+private fun periodLabelRes(period: ChartPeriodFilter.Period): Int = when (period) {
+    ChartPeriodFilter.Period.EN_MANAD -> R.string.fond_chart_period_1man
+    ChartPeriodFilter.Period.TRE_MANADER -> R.string.fond_chart_period_3man
+    ChartPeriodFilter.Period.ETT_AR -> R.string.fond_chart_period_1ar
+    ChartPeriodFilter.Period.ALLT -> R.string.fond_chart_period_allt
 }
 
 @Composable

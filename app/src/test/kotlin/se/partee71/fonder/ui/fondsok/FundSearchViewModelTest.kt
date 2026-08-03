@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -63,7 +64,8 @@ class FundSearchViewModelTest {
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = "SE000$fundId"
-        override suspend fun fetchFundCatalog(): FundCatalog = catalog
+        // Nullbar som i kontraktet, så en subklass kan simulera en misslyckad hämtning.
+        override suspend fun fetchFundCatalog(): FundCatalog? = catalog
         override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? {
             companyCalls.add(companyId)
             return fundsByCompany[companyId]
@@ -72,8 +74,11 @@ class FundSearchViewModelTest {
 
     private val fakePriceRepo = FakePriceRepo()
 
+    /** Redan bevakade fonder — Fondsök ska aldrig erbjuda dem som nya (issue #78). */
+    private val trackedFunds = MutableStateFlow<List<Fund>>(emptyList())
+
     private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = MutableStateFlow(emptyList())
+        override fun observeFunds(): Flow<List<Fund>> = trackedFunds
         override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
         override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = MutableStateFlow(emptyList())
         override suspend fun upsertFund(fund: Fund) { addedFunds.add(fund) }
@@ -188,6 +193,72 @@ class FundSearchViewModelTest {
             // ISIN hämtas från fondsidan direkt vid tillägg (TP-18) — inget namnbaserat
             // förslag behöver bekräftas i Fonddetalj först.
             assertEquals(listOf(handelsbankenFond.copy(isin = "SE000SHB0000442")), addedFunds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en redan bevakad fond visas som tillagd utan att laggas till igen`() = runTest(dispatcher) {
+        // Regression (issue #78): addedFundIds fylldes bara av den här sessionens tillägg, så en
+        // fond man redan ägde visades utan bock och med "Lägg till" kvar — samma väg som #75:s
+        // fynd H (raderat ISIN) gick.
+        trackedFunds.value = listOf(handelsbankenFond)
+        val vm = FundSearchViewModel(fakePriceRepo, fakeTransactionRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (handelsbankenFond.fundId !in state.addedFundIds) state = awaitItem()
+
+            assertTrue(handelsbankenFond2.fundId !in state.addedFundIds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en fond som bevakas senare markeras utan att vyn behover skapas om`() = runTest(dispatcher) {
+        val vm = FundSearchViewModel(fakePriceRepo, fakeTransactionRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.addedFundIds.isEmpty())
+
+            trackedFunds.value = listOf(handelsbankenFond)
+
+            state = awaitItem()
+            while (handelsbankenFond.fundId !in state.addedFundIds) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `misslyckad kataloghamtning markeras som fel, inte som noll traffar`() = runTest(dispatcher) {
+        // Regression (issue #78): samma tomma vy visades för nätverksfel och "inga träffar", så
+        // ett trasigt nät såg ut som att fonden inte fanns.
+        val failingRepo = object : FakePriceRepo() {
+            override suspend fun fetchFundCatalog(): FundCatalog? = null
+        }
+        val vm = FundSearchViewModel(failingRepo, fakeTransactionRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertTrue(state.loadFailed)
+            assertTrue(state.results.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `lyckad kataloghamtning markeras inte som fel`() = runTest(dispatcher) {
+        val vm = FundSearchViewModel(fakePriceRepo, fakeTransactionRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertFalse(state.loadFailed)
             cancelAndIgnoreRemainingEvents()
         }
     }
