@@ -64,7 +64,8 @@ class FundSearchViewModelTest {
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = "SE000$fundId"
-        override suspend fun fetchFundCatalog(): FundCatalog = catalog
+        // Nullbar som i kontraktet, så en subklass kan simulera en misslyckad hämtning.
+        override suspend fun fetchFundCatalog(): FundCatalog? = catalog
         override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? {
             companyCalls.add(companyId)
             return fundsByCompany[companyId]
