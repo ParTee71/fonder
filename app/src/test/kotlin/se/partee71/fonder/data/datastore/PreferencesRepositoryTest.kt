@@ -13,6 +13,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
@@ -105,5 +106,27 @@ class PreferencesRepositoryTest {
         val loaded = repository.riskProfile.first()
 
         assertEquals(mapOf(4 to 1.0), loaded?.effectiveAllocation)
+    }
+
+    // --- Kontotyp (SET-4, issue #70) ---
+
+    @Test
+    fun `accountType ar null innan nagot val gjorts`() = runTest {
+        assertNull(repository.accountType.first())
+    }
+
+    @Test
+    fun `accountType rundturar genom DataStore`() = runTest {
+        repository.setAccountType(AccountType.ISK_KF)
+
+        assertEquals(AccountType.ISK_KF, repository.accountType.first())
+    }
+
+    @Test
+    fun `en ny sparning ersatter den gamla kontotypen`() = runTest {
+        repository.setAccountType(AccountType.DEPA_AF)
+        repository.setAccountType(AccountType.ISK_KF)
+
+        assertEquals(AccountType.ISK_KF, repository.accountType.first())
     }
 }

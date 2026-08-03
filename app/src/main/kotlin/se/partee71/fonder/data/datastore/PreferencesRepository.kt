@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.RiskProfile
 import javax.inject.Inject
@@ -27,6 +28,7 @@ class PreferencesRepository @Inject constructor(
     private val lastPriceSyncKey = longPreferencesKey("last_price_sync_epoch_millis")
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
+    private val accountTypeKey = stringPreferencesKey("account_type")
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -77,5 +79,19 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setRiskProfile(profile: RiskProfile) {
         dataStore.edit { it[riskProfileKey] = Json.encodeToString(RiskProfile.serializer(), profile) }
+    }
+
+    /**
+     * Kontotypen fondinnehaven ligger i (SET-4, issue #70), null om inget val gjorts —
+     * bytesplanen (HEM-8) ges då aldrig, appen gissar aldrig kontotyp. Genuin användardata,
+     * samma kategori som [riskProfile] — ska ingå i backup-kontraktet (NFR-1), se
+     * [se.partee71.fonder.data.repository.StubBackupRepository].
+     */
+    val accountType: Flow<AccountType?> = dataStore.data.map { prefs ->
+        prefs[accountTypeKey]?.let { runCatching { AccountType.valueOf(it) }.getOrNull() }
+    }
+
+    suspend fun setAccountType(type: AccountType) {
+        dataStore.edit { it[accountTypeKey] = type.name }
     }
 }

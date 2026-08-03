@@ -44,6 +44,8 @@ data class FundMetadataEntity(
     val cheapestAlternativeFee: Double? = null,
     /** Null = aldrig jämfört. Satt (oavsett [cheapestAlternativeIsin]) = jämfört den dagen. */
     val comparisonResolvedAtEpochDay: Long? = null,
+    /** Källans 12-månadersavkastning (issue #70) — se [FundMetadata.developmentOneYear]. */
+    val developmentOneYear: Double? = null,
 ) {
     fun toDomain() = FundMetadata(
         isin = isin,
@@ -63,6 +65,7 @@ data class FundMetadataEntity(
         cheapestAlternativeIsin = cheapestAlternativeIsin,
         cheapestAlternativeFee = cheapestAlternativeFee,
         comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay,
+        developmentOneYear = developmentOneYear,
     )
 
     companion object {
@@ -90,6 +93,7 @@ data class FundMetadataEntity(
             cheapestAlternativeIsin = metadata.cheapestAlternativeIsin,
             cheapestAlternativeFee = metadata.cheapestAlternativeFee,
             comparisonResolvedAtEpochDay = metadata.comparisonResolvedAtEpochDay,
+            developmentOneYear = metadata.developmentOneYear,
         )
     }
 }

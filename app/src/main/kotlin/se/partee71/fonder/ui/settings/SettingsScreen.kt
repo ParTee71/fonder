@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.data.datastore.ThemeMode
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import java.time.Instant
 import java.time.ZoneId
@@ -49,6 +50,7 @@ fun SettingsScreen(
         onImportHoldings = onImportHoldings,
         onImportOrders = onImportOrders,
         onOpenRiskProfile = onOpenRiskProfile,
+        onAccountTypeSelected = viewModel::setAccountType,
         onRefreshPricesNow = viewModel::refreshPricesNow,
         onClearDatabase = viewModel::clearDatabase,
         modifier = modifier,
@@ -63,6 +65,7 @@ fun SettingsContent(
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
+    onAccountTypeSelected: (AccountType) -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -102,6 +105,24 @@ fun SettingsContent(
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
                 Button(onClick = onOpenRiskProfile) { Text(stringResource(R.string.settings_riskprofile_button)) }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_account_type_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_account_type_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                ChoiceChipRow(
+                    options = AccountType.entries,
+                    selected = state.accountType,
+                    optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
+                    onSelect = onAccountTypeSelected,
+                )
             }
         }
 
@@ -224,4 +245,9 @@ private fun themeModeLabelRes(mode: ThemeMode): Int = when (mode) {
     ThemeMode.LIGHT -> R.string.theme_light
     ThemeMode.DARK -> R.string.theme_dark
     ThemeMode.AUTO -> R.string.theme_auto
+}
+
+private fun accountTypeLabelRes(type: AccountType): Int = when (type) {
+    AccountType.ISK_KF -> R.string.account_type_isk_kf
+    AccountType.DEPA_AF -> R.string.account_type_depa_af
 }

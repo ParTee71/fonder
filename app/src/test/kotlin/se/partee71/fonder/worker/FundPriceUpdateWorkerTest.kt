@@ -1,5 +1,8 @@
 package se.partee71.fonder.worker
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -7,19 +10,28 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 
 /**
@@ -31,6 +43,18 @@ import java.time.LocalDate
  */
 class FundPriceUpdateWorkerTest {
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    private lateinit var dataStore: DataStore<Preferences>
+    private lateinit var preferencesRepository: PreferencesRepository
+
+    @Before
+    fun setUp() {
+        dataStore = PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("worker_test.preferences_pb") })
+        preferencesRepository = PreferencesRepository(dataStore)
+    }
+
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
     private val refreshedFundIds = mutableListOf<String>()
@@ -41,6 +65,9 @@ class FundPriceUpdateWorkerTest {
 
     /** Cachad kurs per fundId — null (standard) = ingen cachad kurs alls, alltid inaktuellt. */
     private val cachedPrices = mutableMapOf<String, FundPrice>()
+
+    /** ISIN-uppslag för [scanSwitchPlan]s köpkandidat-NAV-upplösning ([FundPriceRepository.findFundByIsin]). */
+    private val fundByIsin = mutableMapOf<String, Fund>()
 
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
@@ -68,7 +95,7 @@ class FundPriceUpdateWorkerTest {
             return refreshSinceResult
         }
         override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = fundByIsin[isin]
         override suspend fun lookupIsin(fundId: String): String? = null
         override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
@@ -216,12 +243,15 @@ class FundPriceUpdateWorkerTest {
 
     private val metadataByIsin = mutableMapOf<String, FundMetadata>()
     private val suggestCheaperAlternativesCalls = mutableListOf<Pair<String, Double>>()
+    private val switchCandidatesByLevel = mutableMapOf<Int, List<SwitchPlanCalc.Candidate>>()
 
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> =
+            switchCandidatesByLevel[level].orEmpty()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
             suggestCheaperAlternativesCalls.add(isin to holdingValue)
             return emptyList()
@@ -312,5 +342,120 @@ class FundPriceUpdateWorkerTest {
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, today)
 
         assertEquals(setOf("SE_UTGANGEN", "SE_ALDRIG"), suggestCheaperAlternativesCalls.map { it.first }.toSet())
+    }
+
+    // --- scanSwitchPlan: bytesplanens facit-inspelning (HEM-8, issue #70) ---
+
+    private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
+        val recorded = mutableListOf<SuggestionRecord>()
+        private val recordedDays = mutableSetOf<Triple<String, String, Long>>()
+        override fun observeAll(): Flow<List<SuggestionRecord>> = flowOf(recorded)
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean =
+            Triple(sellIsin, buyIsin, epochDay) in recordedDays
+        override suspend fun record(record: SuggestionRecord) {
+            recorded += record
+            recordedDays += Triple(record.sellIsin, record.buyIsin, record.suggestedAtEpochDay)
+        }
+    }
+
+    private fun heldMetadata(isin: String, risk: Int, totalFee: Double) = FundMetadata(
+        isin = isin, name = isin, orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
+        category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+    )
+
+    private fun candidateMetadata(isin: String, risk: Int, totalFee: Double, developmentOneYear: Double) = FundMetadata(
+        isin = isin, name = "Kandidat $isin", orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
+        category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), developmentOneYear = developmentOneYear,
+    )
+
+    private fun setUpOverweightedPortfolio() {
+        val held = Fund(fundId = "HELD", name = "Innehav", isin = "SE_HELD")
+        funds.value = listOf(held)
+        transactions.value = listOf(buy(held.fundId, 100.0, 100.0)) // 10 000 kr, allt på nivå 5
+        cachedPrices[held.fundId] = FundPrice(fundId = held.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0)
+        // Målet är 100 % nivå 3 — hela innehavet är alltså överviktat på nivå 5.
+        switchCandidatesByLevel[3] = listOf(SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND", risk = 3, totalFee = 0.3, developmentOneYear = 0.1), 0.1))
+        fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat SE_CAND", isin = "SE_CAND")
+        cachedPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = LocalDate.now().toEpochDay(), nav = 50.0)
+    }
+
+    @Test
+    fun `scanSwitchPlan gor inget utan vald kontotyp`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    @Test
+    fun `scanSwitchPlan gor inget i depa-AF`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    @Test
+    fun `scanSwitchPlan gor inget utan sparad riskprofil`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    @Test
+    fun `scanSwitchPlan spelar in ett byte med NAV-utgangslage i ISK-KF`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, LocalDate.of(2026, 1, 1))
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_HELD", record.sellIsin)
+        assertEquals("SE_CAND", record.buyIsin)
+        assertEquals(0, record.planIndex)
+        assertEquals(100.0, record.sellNavAtSuggestion, 1e-9)
+        assertEquals(50.0, record.buyNavAtSuggestion, 1e-9)
+        assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), record.suggestedAtEpochDay)
+    }
+
+    @Test
+    fun `scanSwitchPlan spelar inte in samma byte tva ganger samma dag`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val today = LocalDate.of(2026, 1, 1)
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, today)
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, today)
+
+        assertEquals(1, suggestionRepo.recorded.size)
+    }
+
+    @Test
+    fun `scanSwitchPlan gor inget utan bevakade fonder`() = runTest {
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
     }
 }

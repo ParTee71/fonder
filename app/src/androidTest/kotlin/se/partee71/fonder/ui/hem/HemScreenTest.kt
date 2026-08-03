@@ -448,6 +448,43 @@ class HemScreenTest {
     }
 
     @Test
+    fun riskkortet_visar_bytesplanen_med_ratt_rangordning_och_avgiftsskillnad() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
+            switchPlan = listOf(
+                SwitchSuggestionUi(sellFundName = "Dyr fond", buyFundName = "Billig fond", fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7),
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Bytesplan").assertExists()
+        composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
+        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
+    }
+
+    @Test
+    fun riskkortet_visar_ingen_bytesplan_utan_forslag() {
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("Bytesplan").assertDoesNotExist()
+    }
+
+    @Test
     fun riskkortet_visar_otillrackligt_data_nar_ingen_faktisk_niva_kunde_beraknas() {
         val state = HemUiState(
             loading = false,

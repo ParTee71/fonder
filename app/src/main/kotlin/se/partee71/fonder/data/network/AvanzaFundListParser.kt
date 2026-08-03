@@ -37,6 +37,7 @@ object AvanzaFundListParser {
         val indexFund: Boolean = false,
         val startDate: String? = null,
         val minimumBuy: Double? = null,
+        val developmentOneYear: Double? = null,
         val tagList: List<TagView> = emptyList(),
     )
 
@@ -91,5 +92,6 @@ object AvanzaFundListParser {
         startDateEpochDay = startDate?.let { runCatching { LocalDate.parse(it).toEpochDay() }.getOrNull() },
         minimumBuy = minimumBuy,
         tags = tagList.map { FundTag(title = it.title, category = it.fundTagCategory) },
+        developmentOneYear = developmentOneYear,
     )
 }

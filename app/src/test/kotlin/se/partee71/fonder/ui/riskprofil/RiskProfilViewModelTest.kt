@@ -35,6 +35,7 @@ import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiskProfilViewModelTest {
@@ -54,6 +55,7 @@ class RiskProfilViewModelTest {
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
         override suspend fun knownRiskLevels(): List<Int> = knownLevels
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
     @Before

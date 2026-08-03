@@ -27,7 +27,9 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -35,11 +37,13 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -96,9 +100,19 @@ class HemViewModelTest {
             return metadataByIsin.filterKeys { it in isins }
         }
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
-    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+    private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
+        val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
+        override fun observeAll(): Flow<List<SuggestionRecord>> = records
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
+        override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+    }
+
+    private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
+
+    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, fakeSuggestionRecordRepo)
 
     @Before
     fun setUp() {
@@ -490,6 +504,83 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertTrue(state.riskLevelDeviations.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- switchPlan: läser senaste inspelade facit-batch (HEM-8, issue #70) ---
+
+    private fun setUpHoldingWithMetadataForSwitchPlan() {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_HELD")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataByIsin = mapOf(
+            "SE_HELD" to FundMetadata(
+                isin = "SE_HELD", name = "Innehav", orderbookId = "X", totalFee = 1.0, managementFee = 1.0,
+                category = null, fundType = null, companyName = null, risk = 5, indexFund = false,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+            "SE_CAND" to FundMetadata(
+                isin = "SE_CAND", name = "Kandidat", orderbookId = "Y", totalFee = 0.3, managementFee = 0.3,
+                category = null, fundType = null, companyName = null, risk = 3, indexFund = false,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
+                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
+            ),
+        )
+    }
+
+    @Test
+    fun `switchPlan visar senaste inspelade byte i ISK-KF`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            val switch = state.switchPlan.single()
+            assertEquals("Innehav", switch.sellFundName)
+            assertEquals("Kandidat", switch.buyFundName)
+            assertEquals(5, switch.fromLevel)
+            assertEquals(3, switch.toLevel)
+            assertEquals(0.3 - 1.0, switch.feeDeltaPercent, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan ar tom utan vald kontotyp`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan ar tom i depa-AF`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }

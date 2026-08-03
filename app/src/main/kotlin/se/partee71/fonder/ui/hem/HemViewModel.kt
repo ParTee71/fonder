@@ -15,10 +15,14 @@ import kotlinx.coroutines.flow.stateIn
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
@@ -31,6 +35,20 @@ import javax.inject.Inject
 
 /** Ett innehav flaggat gul eller röd i analysen (HEM-4), med det underliggande resultatet för visning av triggade signaler. */
 data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysis)
+
+/**
+ * Ett enskilt föreslaget byte i bytesplanen, redo för visning (HEM-8, issue #70) —
+ * härlett ur redan inspelade [SuggestionRecord] (se [HemViewModel.buildSwitchPlan]), inte
+ * omräknat live: samma nätverkskostnadsskäl som gör att facit-inspelningen själv ligger på
+ * bakgrundsworkerns backstop, inte på varje Hem-öppning.
+ */
+data class SwitchSuggestionUi(
+    val sellFundName: String,
+    val buyFundName: String,
+    val fromLevel: Int,
+    val toLevel: Int,
+    val feeDeltaPercent: Double,
+)
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
 data class AnalysisSummary(
@@ -64,6 +82,8 @@ data class HemUiState(
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
     /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
     val riskLevelDeviations: List<PortfolioRiskCalc.LevelDeviation> = emptyList(),
+    /** Rangordnad bytesplan mot målfördelningen (HEM-8, issue #70) — tom utom i ISK/KF med en avvikelse som passerat [se.partee71.fonder.domain.usecase.SwitchPlanCalc.MIN_GAP_PP]. */
+    val switchPlan: List<SwitchSuggestionUi> = emptyList(),
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -86,6 +106,7 @@ class HemViewModel @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val suggestionRecordRepository: SuggestionRecordRepository,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -110,6 +131,8 @@ class HemViewModel @Inject constructor(
                 val metadataByIsin = fundMetadataRepository.metadataFor(isins)
                 val riskProfile = preferencesRepository.riskProfile.first()
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
+                val accountType = preferencesRepository.accountType.first()
+                val switchPlan = buildSwitchPlan(accountType, metadataByIsin)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -127,6 +150,7 @@ class HemViewModel @Inject constructor(
                         val actualAllocation = exposure.byRiskLevel.buckets.associate { bucket -> bucket.label.toInt() to bucket.fraction }
                         PortfolioRiskCalc.deviationByLevel(it.effectiveAllocation, actualAllocation)
                     }.orEmpty(),
+                    switchPlan = switchPlan,
                 )
             }
         }.stateIn(
@@ -180,5 +204,37 @@ class HemViewModel @Inject constructor(
                 .filter { it.analysis.status == FundAnalysisCalc.SignalLevel.GUL || it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
                 .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD },
         )
+    }
+
+    /**
+     * Läser den senast inspelade bytesplanen ur facit ([SuggestionRecordRepository], HEM-8,
+     * issue #70) för visning — räknar **inte** om planen live, se [SwitchSuggestionUi]s KDoc.
+     * Tom lista utan ISK/KF (SET-4) eller innan bakgrundsworkerns backstop hunnit spela in
+     * något än — appen väntar hellre än att gissa.
+     */
+    private suspend fun buildSwitchPlan(accountType: AccountType?, heldMetadataByIsin: Map<String, FundMetadata>): List<SwitchSuggestionUi> {
+        if (accountType != AccountType.ISK_KF) return emptyList()
+        val records = suggestionRecordRepository.observeAll().first()
+        if (records.isEmpty()) return emptyList()
+
+        val latestDay = records.maxOf { it.suggestedAtEpochDay }
+        val latestBatch = records.filter { it.suggestedAtEpochDay == latestDay }.sortedBy { it.planIndex }
+        val buyMetadataByIsin = fundMetadataRepository.metadataFor(latestBatch.map { it.buyIsin }.distinct())
+
+        return latestBatch.mapNotNull { record ->
+            val sellMeta = heldMetadataByIsin[record.sellIsin] ?: return@mapNotNull null
+            val buyMeta = buyMetadataByIsin[record.buyIsin] ?: return@mapNotNull null
+            val sellLevel = sellMeta.risk ?: return@mapNotNull null
+            val buyLevel = buyMeta.risk ?: return@mapNotNull null
+            val sellFee = sellMeta.totalFee ?: return@mapNotNull null
+            val buyFee = buyMeta.totalFee ?: return@mapNotNull null
+            SwitchSuggestionUi(
+                sellFundName = sellMeta.name,
+                buyFundName = buyMeta.name,
+                fromLevel = sellLevel,
+                toLevel = buyLevel,
+                feeDeltaPercent = buyFee - sellFee,
+            )
+        }
     }
 }
