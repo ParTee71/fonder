@@ -40,7 +40,7 @@ object FeeComparisonCalc {
             interestType = titlesFor(FundTag.CATEGORY_INTEREST),
             misc = titlesFor(FundTag.CATEGORY_MISC),
             maxTotalFee = held.totalFee,
-            sortField = "totalFee",
+            sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
             sortDirection = FundScreenSortDirection.ASCENDING,
         )
     }

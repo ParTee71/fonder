@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.portfolj
 import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -80,6 +81,9 @@ class PortfoljViewModelTest {
 
     private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
 
+    /** Låter metadata-uppslaget hänga, som ett sekventiellt nätverksanrop utan svar. */
+    private var metadataForBlocks = false
+
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
@@ -87,7 +91,11 @@ class PortfoljViewModelTest {
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
+            // Simulerar det sekventiella nätverksuppslaget som aldrig svarar (offline/hängande).
+            if (metadataForBlocks) awaitCancellation()
+            return metadataByIsin.filterKeys { it in isins }
+        }
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
@@ -339,12 +347,46 @@ class PortfoljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
+            // Metadata hämtas i ett eget flöde (issue #75) — innehav och värden ritas direkt,
+            // exponeringskartan fylls i när uppslaget landar.
+            assertEquals(1200.0, state.totalValue, 1e-9)
+
+            state = awaitItem()
+            while (state.exposure.byType.buckets.isEmpty()) state = awaitItem()
+
             // 10 andelar × 120 kr = 1200 kr innehavsvärde, helt i "Aktiefond".
             assertEquals(1200.0, state.exposure.includedValueKr, 1e-9)
             assertEquals(0, state.exposure.excludedCount)
             assertEquals(listOf("Aktiefond"), state.exposure.byType.buckets.map { it.label })
             assertEquals(1.0, state.exposure.byType.buckets.single().fraction, 1e-9)
             assertEquals(1.0, state.exposure.indexStatus.indexFraction, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `innehav och totalvarde ritas utan att vanta pa metadata-uppslaget`() = runTest(dispatcher) {
+        // Regression (issue #75): metadataFor gör ett sekventiellt nätverksuppslag per ISIN och
+        // låg inne i tillståndets map — hela vyn blockerades på nätverket och visade "0,00 kr ·
+        // Kurs saknas" så länge uppkopplingen hängde, trots att värdena fanns lokalt.
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataForBlocks = true
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            // Uppslaget hänger fortfarande — men innehavet är redan ritat.
+            assertEquals(1, state.holdings.size)
+            assertEquals(1200.0, state.totalValue, 1e-9)
+            assertTrue(state.exposure.byType.buckets.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }

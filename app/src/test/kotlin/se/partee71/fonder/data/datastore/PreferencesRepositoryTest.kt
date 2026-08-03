@@ -1,11 +1,15 @@
 package se.partee71.fonder.data.datastore
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,6 +23,7 @@ import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
+import java.io.IOException
 
 /**
  * Riskprofilens DataStore-rundtur (SET-3, issue #68) — genuin användardata, till skillnad
@@ -129,4 +134,49 @@ class PreferencesRepositoryTest {
 
         assertEquals(AccountType.ISK_KF, repository.accountType.first())
     }
+
+    // --- Trasig inställningsfil ---
+
+    @Test
+    fun `en korrupt installningsfil ger standardvarden i stallet for ett undantag`() = runTest {
+        // Filen ingår i Android Auto Backup och kan komma trunkerad tillbaka vid en
+        // återställning. Utan `corruptionHandler` (AppModule) kastar `data` en
+        // CorruptionException in i MainViewModel.themeMode, och eftersom MainActivity håller
+        // kvar splash-skärmen tills temat lästs startade appen aldrig igen.
+        val corruptFile = tempFolder.newFile("corrupt.preferences_pb")
+        corruptFile.writeBytes(byteArrayOf(0x42, 0x00, 0x13, 0x37, 0x7F))
+        val corruptStore = PreferenceDataStoreFactory.create(
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            produceFile = { corruptFile },
+        )
+
+        val repo = PreferencesRepository(corruptStore)
+
+        assertEquals(ThemeMode.AUTO, repo.themeMode.first())
+        assertNull(repo.riskProfile.first())
+        assertNull(repo.accountType.first())
+        // Och den återställda filen går att skriva till igen.
+        repo.setAccountType(AccountType.ISK_KF)
+        assertEquals(AccountType.ISK_KF, repo.accountType.first())
+    }
+
+    @Test
+    fun `ett IO-fel vid lasning ger standardvarden i stallet for att kastas vidare`() = runTest {
+        // Sista skyddet: även om filen inte är korrupt kan själva läsningen fela (t.ex. under
+        // en pågående återställning). Flödena får aldrig kasta — de samlas i viewModelScope.
+        val repo = PreferencesRepository(FailingDataStore())
+
+        assertEquals(ThemeMode.AUTO, repo.themeMode.first())
+        assertNull(repo.riskProfile.first())
+        assertNull(repo.accountType.first())
+        assertNull(repo.lastPriceSyncEpochMillis.first())
+    }
+}
+
+/** DataStore vars läsning alltid felar — se testet ovan. */
+private class FailingDataStore : DataStore<Preferences> {
+    override val data: Flow<Preferences> = flow { throw IOException("kunde inte läsa inställningarna") }
+
+    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+        throw IOException("kunde inte skriva inställningarna")
 }

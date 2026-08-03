@@ -368,9 +368,7 @@ private fun RiskCard(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                switchPlan.forEachIndexed { index, switch ->
-                    SwitchSuggestionRow(index = index, switch = switch)
-                }
+                switchPlan.forEach { switch -> SwitchSuggestionRow(switch) }
                 Text(
                     stringResource(R.string.hem_switch_plan_disclaimer),
                     style = MaterialTheme.typography.bodySmall,
@@ -390,14 +388,17 @@ private fun RiskCard(
  * Beloppsraden är inte kosmetisk: bytet storleksbestäms till gapet, inte till hela positionen
  * (issue #75), så "Sälj X" utan belopp vore ett annat — och sämre — råd än det planen räknat
  * fram. Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
+ *
+ * Rangordningen kommer ur [SwitchSuggestionUi.planIndex], aldrig ur listpositionen — planen är
+ * girig och sekventiell, så numret är en del av rådet.
  */
 @Composable
-private fun SwitchSuggestionRow(index: Int, switch: SwitchSuggestionUi) {
+private fun SwitchSuggestionRow(switch: SwitchSuggestionUi) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(
             stringResource(
                 R.string.format_hem_switch_plan_row,
-                index + 1,
+                switch.planIndex + 1,
                 switch.sellFundName,
                 switch.fromLevel,
                 switch.buyFundName,

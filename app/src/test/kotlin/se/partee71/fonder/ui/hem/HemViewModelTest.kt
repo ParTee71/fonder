@@ -11,7 +11,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -105,7 +107,17 @@ class HemViewModelTest {
 
     private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
         val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeAll(): Flow<List<SuggestionRecord>> = records
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { all ->
+            // Speglar DAO:ns SQL: senaste dygnets senaste körning, sorterad på plats i planen.
+            if (all.isEmpty()) return@map emptyList()
+            val latestDay = all.maxOf { it.suggestedAtEpochDay }
+            val sameDay = all.filter { it.suggestedAtEpochDay == latestDay }
+            val latestBatch = sameDay.maxOf { it.batchEpochMillis }
+            sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex }
+        }
+
+        var prunedBefore: LocalDate? = null
+        override suspend fun prune(today: LocalDate) { prunedBefore = today }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
     }
@@ -299,7 +311,8 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            // Metadata hämtas i ett eget flöde (issue #75) — vänta in dess emission.
+            while (state.loading || state.feeSummary.comparableCount == 0) state = awaitItem()
             // 10 andelar × 120 kr = 1200 kr innehavsvärde; 0,73 % av 1200 = 8,76 kr/år.
             assertEquals(8.76, state.feeSummary.totalAnnualFeeKr, 0.01)
             assertEquals(0, state.feeSummary.unknownFeeCount)
@@ -374,7 +387,7 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            while (state.loading || state.feeSummary.comparedCount == 0) state = awaitItem()
             // 1200 kr innehavsvärde × (0,73−0,21)% = 6,24 kr/år.
             assertEquals(6.24, state.feeSummary.totalAnnualSavingsKr, 0.01)
             assertEquals(1, state.feeSummary.comparedCount)
@@ -426,7 +439,7 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.riskProfile == null) state = awaitItem()
+            while (state.loading || state.riskProfile == null || state.portfolioRisk.weightedAverageRisk == null) state = awaitItem()
             assertEquals(5, state.riskProfile?.targetRiskLevel)
             // Ett enda innehav -> det värdeviktade snittet är exakt fondens egen risknivå.
             assertEquals(4.0, state.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
@@ -479,7 +492,8 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.riskLevelDeviations.isEmpty()) state = awaitItem()
+            // Vänta tills metadatan landat — den faktiska fördelningen är tom innan dess.
+            while (state.loading || state.riskLevelDeviations.none { it.actualFraction > 0.0 }) state = awaitItem()
             val byLevel = state.riskLevelDeviations.associateBy { it.level }
             assertEquals(0.5, byLevel.getValue(3).targetFraction, 1e-9)
             assertEquals(0.0, byLevel.getValue(3).actualFraction, 1e-9)
@@ -558,6 +572,147 @@ class HemViewModelTest {
             // Beloppet är en del av rådet (bytet storleksbestäms till gapet, issue #75) och
             // måste nå UI-lagret — annars är raden tvetydig.
             assertEquals(2_500.0, switch.switchValueKr ?: -1.0, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan reagerar nar kontotypen andras under prenumeration`() = runTest(dispatcher) {
+        // Regression (issue #75): riskProfile/accountType lästes med first() inne i map-kroppen,
+        // så uiState emitterade aldrig om på en inställningsändring. Bottennavigeringen sparar
+        // ViewModel:ens tillstånd, så Hem kunde ligga kvar med det gamla valet i upp till 12
+        // timmar — tills en kursuppdatering eller en ny transaktion råkade trigga flödet.
+        setUpHoldingWithMetadataForSwitchPlan()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.switchPlan.isEmpty())
+
+            preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+            state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+            assertEquals("Innehav", state.switchPlan.single().sellFundName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan visar bara den senaste korningens plan, inte hela dygnets`() = runTest(dispatcher) {
+        // Regression (issue #75): backstopen kör var 12:e timme, så två körningar landar samma
+        // dygn. "Senaste dygnet" slog ihop två planer — samma fond kunde säljas två gånger och
+        // två rader bära planIndex 0. Batch-id:t håller ihop en körning.
+        setUpHoldingWithMetadataForSwitchPlan()
+        // Den äldre körningens köpkandidat har metadata, så raden *skulle* renderas om
+        // batch-filtret inte fungerade — annars vore testet grönt av fel skäl.
+        metadataByIsin = metadataByIsin + mapOf(
+            "SE_ANNAN" to FundMetadata(
+                isin = "SE_ANNAN", name = "Annan kandidat", orderbookId = "Z", totalFee = 0.4, managementFee = 0.4,
+                category = null, fundType = null, companyName = null, risk = 3, indexFund = false,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+        val today = LocalDate.now().toEpochDay()
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                suggestedAtEpochDay = today, planIndex = 0,
+                sellIsin = "SE_HELD", buyIsin = "SE_ANNAN",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 70.0,
+                switchValueKr = 1_000.0, batchEpochMillis = 1_000,
+            ),
+            SuggestionRecord(
+                suggestedAtEpochDay = today, planIndex = 0,
+                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
+                switchValueKr = 2_500.0, batchEpochMillis = 2_000,
+            ),
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+
+            // Bara den senare körningens rad — inte båda, och inte den äldre.
+            val switch = state.switchPlan.single()
+            assertEquals("Kandidat", switch.buyFundName)
+            assertEquals(2_500.0, switch.switchValueKr ?: -1.0, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan visas inte alls nar det forsta bytet inte gar att sla upp`() = runTest(dispatcher) {
+        // Planen är girig och sekventiell: byte 1 förutsätter att byte 0 genomförts. Faller
+        // byte 0 bort får resten inte visas som om det vore fristående (issue #75).
+        setUpHoldingWithMetadataForSwitchPlan()
+        val today = LocalDate.now().toEpochDay()
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                suggestedAtEpochDay = today, planIndex = 0,
+                sellIsin = "SE_HELD", buyIsin = "SE_UTAN_METADATA",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 70.0,
+                switchValueKr = 1_000.0, batchEpochMillis = 2_000,
+            ),
+            SuggestionRecord(
+                suggestedAtEpochDay = today, planIndex = 1,
+                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
+                switchValueKr = 2_500.0, batchEpochMillis = 2_000,
+            ),
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan doljs nar den inspelade planen blivit for gammal`() = runTest(dispatcher) {
+        // Regression (issue #75, punkt 5): planen visades oavsett ålder. Slutar backstopen köra
+        // (inget nät, batterioptimering, appen inte öppnad) låg ett gammalt "Sälj X → Köp Y"
+        // kvar på Hem, prissatt mot en portfölj som sedan dess rört sig. HEM-6 gör uttryckligen
+        // tvärtom för avgiftsjämförelsen; ett bytesförslag är samma sorts råd.
+        setUpHoldingWithMetadataForSwitchPlan()
+        val gammalt = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS + 1).toEpochDay()
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
+            it.copy(suggestedAtEpochDay = gammalt)
+        }
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `switchPlan visas fortfarande dagen innan farskhetsgransen loper ut`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        val precisInomGransen = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS).toEpochDay()
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
+            it.copy(suggestedAtEpochDay = precisInomGransen)
+        }
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            assertEquals("Innehav", state.switchPlan.single().sellFundName)
             cancelAndIgnoreRemainingEvents()
         }
     }

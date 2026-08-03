@@ -26,7 +26,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundMetadataEntity::class,
         SuggestionRecordEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -275,6 +275,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 11 → 12 (issue #75, fynd B): `batchEpochMillis` (NOT NULL DEFAULT 0) på
+         * `suggestion_records` — vilken **körning** raden hör till.
+         *
+         * Hem visade "den senast inspelade planen" som *alla rader från det senaste dygnet*,
+         * men backstopen kör var 12:e timme, så två körningar landar normalt samma dygn. Ändras
+         * portföljen däremellan räknas en annan plan fram, och dygnsdedupen (`existsForDay`)
+         * spärrar bara identiska sälj-/köp-par — resultatet blev en visad "plan" som var två
+         * planer sammanslagna: samma fond kunde säljas två gånger och två rader bära
+         * `planIndex 0`. Med ett körnings-id kan den senaste batchen läsas för sig.
+         *
+         * `DEFAULT 0` för befintliga rader: de saknar körnings-id, och att gruppera dem per
+         * dygn (som förut) är den enda tolkning som finns — ingen data går förlorad, och
+         * historiska rader beter sig exakt som tidigare. Inspelade förslag är genuin
+         * användardata (NFR-1); tabellen utökas bara.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `batchEpochMillis` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -286,6 +308,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
+            MIGRATION_11_12,
         )
     }
 }

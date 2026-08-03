@@ -99,16 +99,50 @@ class PortfolioCalcTest {
     }
 
     @Test
-    fun `firstPurchaseEpochDay ar den tidigaste transaktionens epochDay, oavsett ordning (POR-6)`() {
+    fun `firstPurchaseEpochDay ar aldsta kvarvarande kop-lott, oavsett transaktionsordning (POR-6)`() {
+        // Köpen ligger i omvänd ordning i listan — FIFO ska ändå konsumera det äldsta först.
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 1.0, pricePerShare = 90.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 2.0, pricePerShare = 90.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 60, shares = 1.0, pricePerShare = 110.0),
         )
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
 
+        // Säljet konsumerade en av två andelar ur 10-lotten — resten av den lotten finns kvar.
         assertEquals(10L, holding.firstPurchaseEpochDay)
+    }
+
+    @Test
+    fun `firstPurchaseEpochDay hoppar over en helt konsumerad kop-lott (POR-6)`() {
+        // Regression (issue #75): datumet togs ur *alla* transaktioner, medan netInvested bara
+        // gäller kvarvarande lotter. En position som sålts av helt och köpts igen visade då
+        // "investerat sedan 2020" för pengar som placerats i år — och ANA-1 annualiserade
+        // "sedan köp" över år positionen inte funnits.
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 400, shares = 10.0, pricePerShare = 150.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 900, shares = 10.0, pricePerShare = 200.0),
+        )
+
+        val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
+
+        assertEquals(900L, holding.firstPurchaseEpochDay)
+        assertEquals(2000.0, holding.netInvested, 1e-9)
+    }
+
+    @Test
+    fun `firstPurchaseEpochDay paverkas inte av en salj-rad utan matchande kop (POR-6)`() {
+        // En importerad avräkningsnota kan ge ett sälj vars köp saknas i historiken; den raden
+        // är inget köp och ska aldrig bli positionens "första köp".
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 5, shares = 1.0, pricePerShare = 80.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 100, shares = 2.0, pricePerShare = 90.0),
+        )
+
+        val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
+
+        assertEquals(100L, holding.firstPurchaseEpochDay)
     }
 
     @Test

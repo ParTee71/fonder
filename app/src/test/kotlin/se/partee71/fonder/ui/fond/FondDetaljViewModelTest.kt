@@ -339,6 +339,38 @@ class FondDetaljViewModelTest {
     }
 
     @Test
+    fun `feeComparison kommer aven nar kurserna landar forst efter forsta tillstandet`() = runTest(dispatcher) {
+        // Regression (issue #75): jobbet låste på `first { !it.loading }`. För ett innehav vars
+        // kurscache ännu var tom var analysen null just då, jobbet gav upp för gott — och
+        // ANA-9-kortet dök aldrig upp trots att refreshSince i samma init fyllde cachen strax
+        // efter. Här seedas innehavet *utan* kurser, som i verkligheten vid en nyimport.
+        val today = LocalDate.now()
+        funds.value = listOf(fund.copy(isin = "SE0004297927"))
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull("Utan kurser finns ingen analys ännu", state.analysis)
+            assertNull(state.feeComparison)
+
+            // Kurserna landar (motsvarar att refreshSince fyllt cachen).
+            history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+            latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+            state = awaitItem()
+            while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
+
+            assertEquals(FeeComparisonUiState.NoCheaperAlternative, state.feeComparison)
+            assertEquals("SE0004297927", suggestCheaperAlternativesCall?.first)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `feeComparison forblir null om fonden inte ar ett kvarvarande innehav`() = runTest(dispatcher) {
         // Inga transaktioner — inget innehav, inget kort ska visas alls (skiljs från "Unavailable").
         val vm = viewModel()

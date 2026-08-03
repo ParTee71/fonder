@@ -72,7 +72,13 @@ object PortfolioFeeCalc {
             val isFresh = resolvedAt != null && !FundMetadataFreshness.isStale(resolvedAt, today, FundMetadataFreshness.COMPARISON_TTL_DAYS)
             if (isFresh) comparedCount++
             val cheaperFee = if (isFresh) metadata.cheapestAlternativeFee else null
-            val savings = cheaperFee?.let { FeeComparisonCalc.annualFeeKr(fee, value) - FeeComparisonCalc.annualFeeKr(it, value) }
+            // Den sparade alternativavgiften är en ögonblicksbild som bevaras i
+            // COMPARISON_TTL_DAYS. Sjunker innehavets egen avgift under den inom fönstret blir
+            // differensen negativ — och HEM-6 skrev ut "du kan spara -180,00 kr per år". En
+            // icke-positiv besparing är ingen besparing: den räknas som "inget billigare".
+            val savings = cheaperFee
+                ?.let { FeeComparisonCalc.annualFeeKr(fee, value) - FeeComparisonCalc.annualFeeKr(it, value) }
+                ?.takeIf { it > 0.0 }
 
             byHolding += HoldingFee(holding.fund, FeeComparisonCalc.annualFeeKr(fee, value), savings, wasCompared = isFresh)
         }

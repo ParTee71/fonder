@@ -51,6 +51,26 @@ object PortfolioRiskCalc {
     }
 
     /**
+     * Innehavens faktiska fördelning per risknivå, som andelar av det **klassificerade**
+     * värdet — den fördelning [deviationByLevel] ska jämföra en målfördelning mot.
+     *
+     * [PortfolioExposureCalc.Bucket.fraction] duger inte rakt av: den divideras med
+     * `includedValueKr`, som också rymmer innehav vars risknivå är okänd (de hamnar i
+     * dimensionens okänd-hink, inte utanför nämnaren). Andelarna summerade då till mindre än
+     * 1 medan målet summerar till exakt 1, så *varje* nivå såg underviktad ut — en portfölj
+     * med 700 kr på nivå 4 och 300 kr utan känd risknivå rapporterades som 30 pp under målet
+     * trots att 100 % av det klassificerade värdet redan låg rätt. Samma nämnare som
+     * [compute] använder för sitt viktade snitt.
+     */
+    fun actualAllocation(byRiskLevel: PortfolioExposureCalc.Dimension): Map<Int, Double> {
+        val classifiedValueKr = byRiskLevel.buckets.sumOf { it.valueKr }
+        if (classifiedValueKr <= 0.0) return emptyMap()
+        return byRiskLevel.buckets.mapNotNull { bucket ->
+            bucket.label.toIntOrNull()?.let { level -> level to bucket.valueKr / classifiedValueKr }
+        }.toMap()
+    }
+
+    /**
      * Avvikelse per risknivå (HEM-7/issue #71) — målfördelningen
      * ([se.partee71.fonder.domain.model.RiskProfile.effectiveAllocation]) mot innehavens
      * faktiska fördelning (t.ex. [PortfolioExposureCalc.Result.byRiskLevel]).

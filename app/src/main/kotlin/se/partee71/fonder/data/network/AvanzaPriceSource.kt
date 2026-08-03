@@ -28,9 +28,14 @@ class AvanzaPriceSource @Inject constructor(
      * Punkterna märks därför [FundPrice.VALUE_CURRENCY], inte valutan ur `guide` (som är
      * fondens egen och tidigare sattes här — en felmärkning som inte märktes så länge allt
      * ändå var kronor, men som gör det omöjligt att sålla bort kurser i fel valuta, issue #41).
+     *
+     * Av samma skäl hämtas `guide` **inte** här: valutan används inte, men anropet kunde fälla
+     * hela kurshämtningen. Svarade källan 500/404 på `/guide` medan `/chart` var friskt kastade
+     * `fetchHistory` i stället för att lämna kursdatan, och fonden slutade uppdateras på grund
+     * av en endpoint vars svar ändå kastades bort. Bara [findFund] behöver valutan.
      */
     override suspend fun fetchHistory(isin: String, from: LocalDate, to: LocalDate): List<IsinPricePoint> {
-        val (match, _) = resolve(isin) ?: return emptyList()
+        val match = AvanzaJsonParser.findByIsin(source.search(isin), isin) ?: return emptyList()
         return AvanzaJsonParser.parseChart(
             source.fetchChart(match.orderbookId, from, to),
             FundPrice.VALUE_CURRENCY,

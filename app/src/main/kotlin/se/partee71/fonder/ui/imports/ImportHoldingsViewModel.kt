@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.imports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,8 +87,10 @@ data class ImportHoldingsUiState(
     val catalogFunds: List<Fund> = emptyList(),
     val imported: Boolean = false,
     val error: ImportError? = null,
+    /** Importen pågår — knappen ska vara släckt, se [ImportHoldingsViewModel.import]. */
+    val importing: Boolean = false,
 ) {
-    val canImport: Boolean get() = rows.any { it.readyToImport }
+    val canImport: Boolean get() = rows.any { it.readyToImport } && !importing
 }
 
 /**
@@ -105,6 +108,9 @@ class ImportHoldingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ImportHoldingsUiState())
     val uiState: StateFlow<ImportHoldingsUiState> = _uiState.asStateFlow()
 
+    /** Pågående import — se [import]. */
+    private var importJob: Job? = null
+
     /** [bytes] är hela filens innehåll — läst av anropande skärm (Storage Access Framework). */
     fun onFileSelected(bytes: ByteArray) {
         viewModelScope.launch {
@@ -121,7 +127,9 @@ class ImportHoldingsViewModel @Inject constructor(
                 return@launch
             }
 
-            val catalog = fundPriceRepository.fetchFundCatalog()
+            // Tom katalog vid hämtningsfel: raderna matchas då bara mot redan bevakade fonder
+            // och användarens egna val, i stället för att importen avbryts (ÖV-6).
+            val catalog = fundPriceRepository.fetchFundCatalog() ?: FundCatalog(companies = emptyList(), funds = emptyList())
             val trackedFunds = transactionRepository.observeFunds().first()
             val rowStates = parsedRows.map { row -> buildRowState(row, catalog, trackedFunds) }
             _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }
@@ -221,8 +229,17 @@ class ImportHoldingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Skriver de importklara raderna. **Idempotent under pågående import:** utan spärren
+     * startade ett andra tryck (importen ger ingen synlig återkoppling förrän `imported`
+     * slår om, och skrivningarna tar en stund för en fil med många rader) en andra
+     * genomkörning av samma lista — varje transaktion lades då in två gånger, med dubbla
+     * andelar och dubbelt investerat belopp som följd.
+     */
     fun import() {
-        viewModelScope.launch {
+        if (importJob?.isActive == true) return
+        _uiState.update { it.copy(importing = true) }
+        importJob = viewModelScope.launch {
             _uiState.value.rows
                 .filter { it.readyToImport }
                 .forEach { rowState ->
@@ -243,7 +260,7 @@ class ImportHoldingsViewModel @Inject constructor(
                         )
                     }
                 }
-            _uiState.update { it.copy(imported = true) }
+            _uiState.update { it.copy(imported = true, importing = false) }
         }
     }
 }

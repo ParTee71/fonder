@@ -3,14 +3,17 @@ package se.partee71.fonder.data.datastore
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.RiskProfile
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,13 +27,25 @@ enum class ThemeMode { LIGHT, DARK, AUTO }
 class PreferencesRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) {
+    /**
+     * Alla läsningar går via det här flödet i stället för `dataStore.data` direkt: en oläsbar
+     * inställningsfil ska ge **standardvärden**, inte ett undantag som kastas in i varje
+     * prenumerant. `ReplaceFileCorruptionHandler` i `AppModule` täcker en trasig fil på disk,
+     * men ett I/O-fel vid läsningen (t.ex. under en Auto Backup-återställning) kan fortfarande
+     * nå hit — och `MainViewModel.themeMode` samlas i `viewModelScope`, där ett undantag
+     * annars låser appen på splash-skärmen.
+     */
+    private val preferences: Flow<Preferences> = dataStore.data.catch { e ->
+        if (e is IOException) emit(emptyPreferences()) else throw e
+    }
+
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val lastPriceSyncKey = longPreferencesKey("last_price_sync_epoch_millis")
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
 
-    val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
+    val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: ThemeMode.AUTO
     }
@@ -44,7 +59,7 @@ class PreferencesRepository @Inject constructor(
      * uppdatering skett än — visas som "Senast uppdaterad" i Inställningar (SET-2, issue #27).
      * Ren cache-metadata, ingår medvetet inte i backup-kontraktet (se issue #27).
      */
-    val lastPriceSyncEpochMillis: Flow<Long?> = dataStore.data.map { prefs -> prefs[lastPriceSyncKey] }
+    val lastPriceSyncEpochMillis: Flow<Long?> = preferences.map { prefs -> prefs[lastPriceSyncKey] }
 
     suspend fun setLastPriceSyncEpochMillis(epochMillis: Long) {
         dataStore.edit { it[lastPriceSyncKey] = epochMillis }
@@ -57,7 +72,7 @@ class PreferencesRepository @Inject constructor(
      * aldrig hårdkodad. Tom vokabulär om ingen fråga körts än. Ren cache-metadata, ingår
      * medvetet inte i backup-kontraktet (samma princip som [lastPriceSyncEpochMillis]).
      */
-    val fundFilterVocabulary: Flow<FundFilterVocabulary> = dataStore.data.map { prefs ->
+    val fundFilterVocabulary: Flow<FundFilterVocabulary> = preferences.map { prefs ->
         prefs[fundFilterVocabularyKey]
             ?.let { runCatching { Json.decodeFromString(FundFilterVocabulary.serializer(), it) }.getOrNull() }
             ?: FundFilterVocabulary()
@@ -73,7 +88,7 @@ class PreferencesRepository @Inject constructor(
      * inte härledd ur någon källa — och ska ingå i backup-kontraktet när Drive-backup (TP-7)
      * byggs, se [se.partee71.fonder.data.repository.StubBackupRepository].
      */
-    val riskProfile: Flow<RiskProfile?> = dataStore.data.map { prefs ->
+    val riskProfile: Flow<RiskProfile?> = preferences.map { prefs ->
         prefs[riskProfileKey]?.let { runCatching { Json.decodeFromString(RiskProfile.serializer(), it) }.getOrNull() }
     }
 
@@ -87,7 +102,7 @@ class PreferencesRepository @Inject constructor(
      * samma kategori som [riskProfile] — ska ingå i backup-kontraktet (NFR-1), se
      * [se.partee71.fonder.data.repository.StubBackupRepository].
      */
-    val accountType: Flow<AccountType?> = dataStore.data.map { prefs ->
+    val accountType: Flow<AccountType?> = preferences.map { prefs ->
         prefs[accountTypeKey]?.let { runCatching { AccountType.valueOf(it) }.getOrNull() }
     }
 

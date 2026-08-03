@@ -109,7 +109,7 @@ class Migration1011Test {
         db.openHelper.writableDatabase
 
         // Den gamla raden överlever oförändrad, med okänt belopp — inte 0 kr.
-        val existing = db.suggestionRecordDao().observeAll().first().single()
+        val existing = db.suggestionRecordDao().getAll().single()
         assertEquals("SE0000581434", existing.sellIsin)
         assertEquals("SE0001466368", existing.buyIsin)
         assertEquals(100.0, existing.sellNavAtSuggestion, 1e-9)
@@ -125,7 +125,7 @@ class Migration1011Test {
                 switchValueKr = 1_000.0, followed = null,
             ),
         )
-        val nyast = db.suggestionRecordDao().observeAll().first().first()
+        val nyast = db.suggestionRecordDao().getAll().maxBy { it.id }
         assertEquals(1_000.0, nyast.switchValueKr ?: -1.0, 1e-9)
 
         // Befintliga fonder och transaktioner rörs inte.

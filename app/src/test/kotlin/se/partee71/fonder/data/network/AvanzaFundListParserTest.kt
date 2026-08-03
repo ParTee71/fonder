@@ -66,7 +66,7 @@ class AvanzaFundListParserTest {
 
     @Test
     fun `parse laser alla falt for en fullstandig rad`() {
-        val page = AvanzaFundListParser.parse(response)
+        val page = AvanzaFundListParser.parse(response)!!
 
         val fund = page.funds.first()
         assertEquals("SE0001466368", fund.isin)
@@ -89,7 +89,7 @@ class AvanzaFundListParserTest {
 
     @Test
     fun `parse ger null-falt for en rad utan risk, startdatum och minimumBuy`() {
-        val page = AvanzaFundListParser.parse(response)
+        val page = AvanzaFundListParser.parse(response)!!
 
         val fund = page.funds.first { it.isin == "SE0000581434" }
         assertNull(fund.risk)
@@ -100,12 +100,12 @@ class AvanzaFundListParserTest {
 
     @Test
     fun `parse tar med totalNoFunds`() {
-        assertEquals(1499, AvanzaFundListParser.parse(response).totalNoFunds)
+        assertEquals(1499, AvanzaFundListParser.parse(response)?.totalNoFunds)
     }
 
     @Test
     fun `parse bygger vokabular enbart ur svarets egna type-falt, ingen hardkodning`() {
-        val vocabulary = AvanzaFundListParser.parse(response).vocabulary
+        val vocabulary = AvanzaFundListParser.parse(response)!!.vocabulary
 
         assertEquals(listOf("Aktiefond", "Räntefond"), vocabulary.filters["fundType"])
         assertEquals(listOf("Sverige"), vocabulary.filters["commonRegion"])
@@ -119,17 +119,24 @@ class AvanzaFundListParserTest {
             "\"minimumBuy\": 100.0, \"esgScore\": 19.09, \"nagotHeltNytt\": {\"x\": 1},",
         )
 
-        val page = AvanzaFundListParser.parse(medOkantFalt)
+        val page = AvanzaFundListParser.parse(medOkantFalt)!!
 
         assertEquals(2, page.funds.size)
     }
 
     @Test
-    fun `parse av trasig json ger ett tomt resultat i stallet for en krasch`() {
-        val page = AvanzaFundListParser.parse("inte json")
+    fun `parse av trasig json ger null i stallet for en krasch eller en tom sida`() {
+        // Null, inte en tom sida: ett otolkbart svar ska falla tillbaka på cachen hos
+        // anroparen, inte se ut som ett giltigt svar med noll fonder (issue #75).
+        assertNull(AvanzaFundListParser.parse("inte json"))
+    }
 
-        assertTrue(page.funds.isEmpty())
-        assertEquals(0, page.totalNoFunds)
-        assertTrue(page.vocabulary.filters.isEmpty())
+    @Test
+    fun `parse av ett svar dar en fondpost saknar obligatoriskt falt ger null`() {
+        // FundListView.isin är obligatorisk, så en enda ofullständig post fäller avkodningen av
+        // hela svaret — det får inte tolkas som "källan hittade inga fonder".
+        val utanIsin = response.replace("\"isin\": \"SE0001466368\",", "")
+
+        assertNull(AvanzaFundListParser.parse(utanIsin))
     }
 }

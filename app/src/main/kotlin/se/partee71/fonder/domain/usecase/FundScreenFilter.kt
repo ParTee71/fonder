@@ -23,6 +23,14 @@ object FundScreenFilter {
     /** Källans egen sidstorlek — hårt låst, går inte att ändra (verifierat, TP-21). */
     const val PAGE_SIZE = 20
 
+    /**
+     * Källans egna sorteringsnycklar (verifierade live, TP-21) — exakt de strängar som skickas
+     * i frågan. Ligger här, hos den enda kod som också kan sortera *lokalt* på dem, så en ny
+     * nyckel inte kan införas i en fråga utan att offline-vägen förstår den (se [sort]).
+     */
+    const val SORT_FIELD_TOTAL_FEE = "totalFee"
+    const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = "developmentOneYear"
+
     /** Filtrerar, sorterar och sidbryter [all] enligt [query] — samma resultatform som ett källsvar. */
     fun apply(all: List<FundMetadata>, query: FundScreenQuery): List<FundMetadata> =
         sort(all.filter { matches(it, query) }, query)
@@ -56,11 +64,33 @@ object FundScreenFilter {
     private fun hasTag(metadata: FundMetadata, category: String, allowedTitles: List<String>): Boolean =
         metadata.tags.any { it.category == category && it.title in allowedTitles }
 
+    /**
+     * Sorterar som källan gör. Två fällor som båda gav tyst fel urval — offline-vägen
+     * sidbryter (`take(PAGE_SIZE)`) **efter** sorteringen, så en fel sortering betyder att rätt
+     * fonder aldrig ens hamnar på sidan, och en lokal omrangordning hos anroparen kan inte
+     * rädda det:
+     * 1. Ett okänt [FundScreenQuery.sortField] föll till namnsortering. `findSwitchCandidates`
+     *    sorterar på `developmentOneYear` (issue #75) — offline gav det reverst alfabetisk
+     *    ordning, alltså 20 godtyckliga fonder i stället för nivåns bästa.
+     * 2. `asReversed()` inverterade även `nullsLast`, så fonder med **okänt** värde hamnade
+     *    först i fallande ordning. Riktningen läggs därför på komparatorn, och okänt värde
+     *    sorteras alltid sist oavsett riktning.
+     */
     private fun sort(list: List<FundMetadata>, query: FundScreenQuery): List<FundMetadata> {
-        val sorted = when (query.sortField) {
-            "totalFee" -> list.sortedWith(compareBy(nullsLast<Double>()) { it.totalFee })
-            else -> list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        val descending = query.sortDirection == FundScreenSortDirection.DESCENDING
+        val numeric: ((FundMetadata) -> Double?)? = when (query.sortField) {
+            SORT_FIELD_TOTAL_FEE -> FundMetadata::totalFee
+            SORT_FIELD_DEVELOPMENT_ONE_YEAR -> FundMetadata::developmentOneYear
+            else -> null
         }
-        return if (query.sortDirection == FundScreenSortDirection.DESCENDING) sorted.asReversed() else sorted
+        if (numeric == null) {
+            val byName = list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            return if (descending) byName.asReversed() else byName
+        }
+        // Ett nullsLast i komparatorn skulle vändas med riktningen — dela i stället upp listan,
+        // så okänt värde alltid hamnar sist.
+        val (known, unknown) = list.partition { numeric(it) != null }
+        val sortedKnown = known.sortedBy { numeric(it) }.let { if (descending) it.asReversed() else it }
+        return sortedKnown + unknown.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }
 }

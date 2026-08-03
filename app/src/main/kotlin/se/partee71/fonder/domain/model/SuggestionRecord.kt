@@ -21,6 +21,11 @@ package se.partee71.fonder.domain.model
  *   del av rådet och måste visas. Null bara för rader inspelade före issue #75, då bytet
  *   alltid avsåg hela positionen men beloppet inte sparades — visas då utan belopp i stället
  *   för med ett påhittat.
+ * @param batchEpochMillis identifierar den **körning** som spelade in raden, så en plan kan
+ *   läsas som en enhet. Dygnet räcker inte: backstopen kör var 12:e timme, så två körningar
+ *   landar normalt samma dygn och kan ha räknat fram olika planer — visades de ihop blev det
+ *   en "plan" som aldrig räknats fram (issue #75). 0 = inspelad före den här versionen, då
+ *   bara dygnet är känt.
  * @param followed null tills en framtida "markera som genomförd"-funktion (utanför det här
  *   issuets scope) sätter den.
  */
@@ -34,4 +39,5 @@ data class SuggestionRecord(
     val buyNavAtSuggestion: Double,
     val switchValueKr: Double? = null,
     val followed: Boolean? = null,
+    val batchEpochMillis: Long = 0,
 )

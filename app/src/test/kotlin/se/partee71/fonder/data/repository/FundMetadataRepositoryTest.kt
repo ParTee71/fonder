@@ -69,7 +69,8 @@ private class FakeFundMetadataDao : FundMetadataDao {
 }
 
 private class FakeFundPriceRepository(
-    private val catalog: FundCatalog = FundCatalog(companies = emptyList(), funds = emptyList()),
+    /** Null = katalogen kunde inte hämtas (nätverksfel), skilt från en tom katalog. */
+    var catalog: FundCatalog? = FundCatalog(companies = emptyList(), funds = emptyList()),
     private val isinByFundId: Map<String, String> = emptyMap(),
 ) : FundPriceRepository {
     var fetchFundCatalogCallCount = 0
@@ -89,7 +90,7 @@ private class FakeFundPriceRepository(
         return isinByFundId[fundId]
     }
 
-    override suspend fun fetchFundCatalog(): FundCatalog {
+    override suspend fun fetchFundCatalog(): FundCatalog? {
         fetchFundCatalogCallCount++
         return catalog
     }
@@ -254,6 +255,8 @@ class FundMetadataRepositoryTest {
 
     @Test
     fun `resolveHandelsbankenAvailability ingen verifierad traff ger false och cachar missen`() = runTest {
+        // Katalogen hämtades men innehöll ingen fond som ISIN-verifierade — ett riktigt svar,
+        // som därför får cachas. Jämför testet nedan, där katalogen inte gick att hämta alls.
         dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Helt Okänd Fond")
         val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
@@ -262,6 +265,29 @@ class FundMetadataRepositoryTest {
 
         assertEquals(false, available)
         assertEquals(false, dao.stored["SE1"]?.availableAtHandelsbanken)
+    }
+
+    @Test
+    fun `resolveHandelsbankenAvailability utan katalog ger null, cachar inget och forsoker igen`() = runTest {
+        // Regression: en katalog som inte kunde hämtas gav tidigare ett `false` som såg
+        // auktoritativt ut och cachades i AVAILABILITY_TTL_DAYS dygn — en enda offline-körning
+        // kunde därmed tyst slå ut både ANA-9 och hela bytesplanen i en månad.
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Länsförsäkringar Sverige Index")
+        val fundPriceRepo = FakeFundPriceRepository(catalog = null, isinByFundId = mapOf("X1" to "SE1"))
+        val repository = repo(FakeAvanzaSource(), fundPriceRepo)
+
+        assertNull(repository.resolveHandelsbankenAvailability("SE1"))
+        assertNull(dao.stored["SE1"]?.availableAtHandelsbanken)
+        assertNull(dao.stored["SE1"]?.availabilityResolvedAtEpochDay)
+
+        // Ingen cachad miss står i vägen när katalogen är tillgänglig igen.
+        fundPriceRepo.catalog = FundCatalog(
+            companies = emptyList(),
+            funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+        )
+
+        assertEquals(true, repository.resolveHandelsbankenAvailability("SE1"))
+        assertEquals(true, dao.stored["SE1"]?.availableAtHandelsbanken)
     }
 
     @Test
@@ -493,6 +519,35 @@ class FundMetadataRepositoryTest {
 
         assertEquals(0.21, result["SE1"]?.totalFee ?: -1.0, 1e-9)
         assertEquals(1, source.fetchFundListCallCount)
+    }
+
+    @Test
+    fun `metadataFor behaller sparad jamforelse nar avgiftsdatan hamtas om`() = runTest {
+        // Regression: omhämtningen returnerade livesvaret rakt av, och källan känner inte till
+        // appens härledda fält — jämförelsen fanns kvar i databasen men försvann på vägen ut,
+        // så HEM-6 rapporterade "0 av N jämförda" och besparingen nollades trots färsk data.
+        val today = LocalDate.now()
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Fond Ett").copy(
+            totalFee = 0.73,
+            fetchedAtEpochDay = today.minusDays(FundMetadataFreshness.FEE_TTL_DAYS + 1).toEpochDay(),
+            availableAtHandelsbanken = true,
+            availabilityResolvedAtEpochDay = today.minusDays(3).toEpochDay(),
+            cheapestAlternativeIsin = "SE2",
+            cheapestAlternativeFee = 0.21,
+            comparisonResolvedAtEpochDay = today.minusDays(3).toEpochDay(),
+        )
+        val source = FakeAvanzaSource(fullListJson(1, listOf(fundView("SE1", "Fond Ett", totalFee = 0.5, indexFund = false, tags = emptyList()))))
+        val repository = repo(source)
+
+        val metadata = repository.metadataFor(listOf("SE1"))["SE1"]
+
+        // Färsk avgift från källan …
+        assertEquals(0.5, metadata?.totalFee ?: -1.0, 1e-9)
+        // … men det härledda tillståndet är kvar hela vägen ut till anroparen.
+        assertEquals("SE2", metadata?.cheapestAlternativeIsin)
+        assertEquals(0.21, metadata?.cheapestAlternativeFee ?: -1.0, 1e-9)
+        assertEquals(today.minusDays(3).toEpochDay(), metadata?.comparisonResolvedAtEpochDay)
+        assertEquals(true, metadata?.availableAtHandelsbanken)
     }
 
     @Test

@@ -51,13 +51,16 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         val success = refreshAll(transactionRepository, fundPriceRepository, force)
         if (success) preferencesRepository.setLastPriceSyncEpochMillis(System.currentTimeMillis())
 
-        if (inputData.getBoolean(KEY_SCAN_COMPARISONS, false)) {
-            scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
-        }
-
-        if (inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false)) {
-            scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
-        }
+        runScans(
+            refreshSucceeded = success,
+            scanComparisons = inputData.getBoolean(KEY_SCAN_COMPARISONS, false),
+            scanSwitchPlan = inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false),
+            transactionRepository = transactionRepository,
+            fundPriceRepository = fundPriceRepository,
+            fundMetadataRepository = fundMetadataRepository,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRecordRepository,
+        )
 
         return if (success) Result.success() else Result.retry()
     }
@@ -98,6 +101,44 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * inte backfilla en historik appen ändå aldrig haft för fonden.
          */
         private const val BUY_NAV_LOOKBACK_DAYS = 30L
+
+        /**
+         * Historikhorisont för en ISIN-fond **utan** köphistorik (bevakad men aldrig köpt) — se
+         * grenvalet i [refreshAll]. Samma princip som [BUY_NAV_LOOKBACK_DAYS]: bara den senaste
+         * kursen behövs, fönstret ska överleva helger och röda dagar, inte backfilla en historik
+         * appen ändå aldrig haft.
+         */
+        private const val ISIN_FALLBACK_LOOKBACK_DAYS = 30L
+
+        /**
+         * Kör de begärda skanningarna — men **bara** efter en lyckad kursuppdatering.
+         *
+         * Misslyckades [refreshSucceeded] läser skanningarna ur en cache workern precis bevisat
+         * att den inte kunde uppdatera, och [scanSwitchPlan] skriver då en `SuggestionRecord`
+         * vars NAV-utgångsläge är flera dagar gammalt — ett korrumperat facit som inte går att
+         * rätta i efterhand, och hela poängen med tabellen är att mäta utfallet mot NAV *vid
+         * förslagstillfället* (HEM-8). Körningen returnerar dessutom `Result.retry()` i det läget,
+         * så hela skanningen inklusive dess källfrågor skulle köras om vid varje backoff-försök
+         * (issue #75). Ren logik utan `CoroutineWorker`-beroende, av samma skäl som [refreshAll].
+         */
+        internal suspend fun runScans(
+            refreshSucceeded: Boolean,
+            scanComparisons: Boolean,
+            scanSwitchPlan: Boolean,
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+            preferencesRepository: PreferencesRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+        ) {
+            if (!refreshSucceeded) return
+            if (scanComparisons) {
+                scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
+            }
+            if (scanSwitchPlan) {
+                scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
+            }
+        }
 
         /**
          * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
@@ -142,8 +183,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 // men aldrig köpt fond behöver bara en färsk kurs, inte trettio år bakåt
                 // (TP-18). Repositoryt hämtar då bara sitt korta fönster.
                 val since = earliestPurchaseByFund[fund.fundId]
-                val success = if (isin != null && since != null) {
-                    fundPriceRepository.refreshSince(fund.fundId, isin, since)
+                // Villkoret är **bara** `isin != null`. Med `&& since != null` föll en fond vars
+                // fundId *är* dess ISIN (findFundByIsin-vägen, TP-13/TP-14) men som saknar
+                // transaktioner ner i else-grenen, där `refresh` frågar fondlista med ISIN:et som
+                // fondnyckel utan ISIN-fallback — samma dödläge som issue #75 punkt 2 beskrev,
+                // och fonden fick aldrig någon kurs. `refreshSince` degraderar korrekt utan
+                // historikhorisont: `since` används bara i fondlista-grenen, som hoppas över för
+                // en fond utan plattformskod.
+                val success = if (isin != null) {
+                    fundPriceRepository.refreshSince(fund.fundId, isin, since ?: LocalDate.now().minusDays(ISIN_FALLBACK_LOOKBACK_DAYS))
                 } else {
                     fundPriceRepository.refresh(fund.fundId, since)
                 }
@@ -213,6 +261,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate = LocalDate.now(),
+            /** Körnings-id som grupperar den här skanningens rader till **en** plan — se [SuggestionRecord.batchEpochMillis]. */
+            batchEpochMillis: Long = System.currentTimeMillis(),
         ) {
             if (preferencesRepository.accountType.first() != AccountType.ISK_KF) return
             val riskProfile = preferencesRepository.riskProfile.first() ?: return
@@ -229,7 +279,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             val heldIsins = withValue.mapNotNull { it.fund.isin }.toSet()
             val metadataByIsin = fundMetadataRepository.metadataFor(heldIsins.toList())
 
-            val candidates = targetAllocation.keys.flatMap { level ->
+            // Bara **underviktade** nivåer, inte varje nivå i målfördelningen: gapen räknas ur
+            // redan känd data utan nätverk, medan varje nivå kostar en källfråga plus upp till
+            // MAX_SWITCH_VERIFICATION_ATTEMPTS köpbarhetsuppslag. En femnivåfördelning gav
+            // tidigare 5 frågor och upp till 50 verifieringar var 12:e timme, för nivåer planen
+            // ändå aldrig skulle köpa på — i strid med den budget KEY_SCAN_SWITCH_PLAN
+            // dokumenterar (issue #75, punkt 4).
+            val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation)
+            if (levels.isEmpty()) return
+            val candidates = levels.flatMap { level ->
                 fundMetadataRepository.findSwitchCandidates(level, excludeIsins = heldIsins)
             }
             val plan = SwitchPlanCalc.plan(withValue, metadataByIsin, candidates, targetAllocation)
@@ -238,7 +296,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
                 if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
 
-                val sellNav = sellNavOf(switch, withValue) ?: return@forEachIndexed
+                // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
+                // `currentValue / netShares` gav exakt samma tal via en division som krävde en
+                // nollvakt och införde flyttalsfel utan vinst (issue #75, punkt 9).
+                val sellNav = prices[switch.sellFund.fundId]?.nav ?: return@forEachIndexed
                 val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: return@forEachIndexed
 
                 suggestionRecordRepository.record(
@@ -250,16 +311,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                         sellNavAtSuggestion = sellNav,
                         buyNavAtSuggestion = buyNav,
                         switchValueKr = switch.sellValueKr,
+                        batchEpochMillis = batchEpochMillis,
                     ),
                 )
             }
-        }
 
-        private fun sellNavOf(switch: SwitchPlanCalc.Switch, holdings: List<Holding>): Double? {
-            val holding = holdings.firstOrNull { it.fund.fundId == switch.sellFund.fundId } ?: return null
-            val value = holding.currentValue ?: return null
-            if (holding.netShares == 0.0) return null
-            return value / holding.netShares
+            // Tak mot obegränsad tillväxt — se SuggestionRecordRepository.prune. Körs efter
+            // inspelningen, så dagens rader aldrig kan falla offer för sin egen gallring.
+            suggestionRecordRepository.prune(today)
         }
 
         /**

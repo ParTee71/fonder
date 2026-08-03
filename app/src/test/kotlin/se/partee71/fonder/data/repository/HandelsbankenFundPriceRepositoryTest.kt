@@ -249,7 +249,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val client = RecordingSource(html)
         val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
-        val catalog = repo.fetchFundCatalog()
+        val catalog = repo.fetchFundCatalog()!!
 
         // Inget fondbolag i anropet — annars kapas katalogen till det bolagets fonder (TP-18).
         assertNull(client.calls.first().company)
@@ -311,14 +311,14 @@ class HandelsbankenFundPriceRepositoryTest {
     }
 
     @Test
-    fun `fetchFundCatalog vid natverksfel returnerar tom katalog utan att krascha`() = runTest {
+    fun `fetchFundCatalog vid natverksfel ger null utan att krascha`() = runTest {
+        // Null, inte en tom katalog: anropare som tolkar frånvaro som ett svar (t.ex.
+        // FundMetadataRepository.resolveHandelsbankenAvailability) måste kunna skilja
+        // "hämtningen misslyckades" från "källan känner inte till någon sådan fond".
         val failingClient = FondlistaHtmlSource { _, _, _, _ -> throw IOException("nätverksfel") }
         val repo = HandelsbankenFundPriceRepository(client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
-        val catalog = repo.fetchFundCatalog()
-
-        assertEquals(0, catalog.companies.size)
-        assertEquals(0, catalog.funds.size)
+        assertNull(repo.fetchFundCatalog())
     }
 
     private class FakeIsinSource(

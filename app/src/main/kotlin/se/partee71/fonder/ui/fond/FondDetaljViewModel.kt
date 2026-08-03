@@ -232,7 +232,12 @@ class FondDetaljViewModel @Inject constructor(
         // saknar det ISIN eller känt värde visas kortet ändå, men som "kunde inte jämföras"
         // (ANA-4-principen) — det ska inte se ut som att inget hände.
         viewModelScope.launch {
-            val loaded = uiState.first { !it.loading }
+            // Vänta på ett tillstånd som faktiskt är *avgjort*. `first { !it.loading }` räckte
+            // inte: för ett innehav vars kurscache ännu är tom är analysen null i den första
+            // icke-laddande emissionen, och jobbet gav upp för gott — kortet dök aldrig upp
+            // trots att refreshSince i samma init fyllde cachen sekunder senare. Saknas
+            // netInvested är fonden inget kvarvarande innehav, och då finns inget att jämföra.
+            val loaded = uiState.first { !it.loading && (it.analysis != null || it.netInvested == null) }
             if (loaded.analysis == null) return@launch
 
             val isin = loaded.isin

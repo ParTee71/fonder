@@ -9,21 +9,20 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 
 /**
- * Migration 9→10 (issue #70), två delar: `developmentOneYear` på `fund_metadata` och den nya
- * tabellen `suggestion_records` — befintliga rader (inklusive #61:s jämförelsefält) ska
- * överleva oförändrade. Samma mönster som [Migration89Test].
+ * Migration 11→12 (issue #75, fynd B): `batchEpochMillis` på `suggestion_records`. Rader
+ * inspelade före migreringen saknar körnings-id och ska överleva med 0 — den enda tolkning som
+ * finns för dem är dygnet, precis som förut. Samma mönster som [Migration1011Test].
  */
 @RunWith(AndroidJUnit4::class)
-class Migration910Test {
+class Migration1112Test {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val dbName = "migration910-test.db"
+    private val dbName = "migration1112-test.db"
 
     @After
     fun tearDown() {
@@ -31,7 +30,7 @@ class Migration910Test {
     }
 
     @Test
-    fun `migration_9_10 lagger till developmentOneYear och suggestion_records - ror inte befintlig data`() = runTest {
+    fun `migration_11_12 lagger till batchEpochMillis utan att rora befintliga forslag`() = runTest {
         context.deleteDatabase(dbName)
         val dbFile = context.getDatabasePath(dbName)
 
@@ -64,8 +63,24 @@ class Migration910Test {
                     `availableAtHandelsbanken` INTEGER, `availabilityResolvedAtEpochDay` INTEGER,
                     `fetchedAtEpochDay` INTEGER NOT NULL,
                     `cheapestAlternativeIsin` TEXT, `cheapestAlternativeFee` REAL,
-                    `comparisonResolvedAtEpochDay` INTEGER,
+                    `comparisonResolvedAtEpochDay` INTEGER, `developmentOneYear` REAL,
                     PRIMARY KEY(`isin`)
+                )
+                """.trimIndent(),
+            )
+            // Version 11:s suggestion_records — med switchValueKr, utan batchEpochMillis.
+            db.execSQL(
+                """
+                CREATE TABLE `suggestion_records` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `suggestedAtEpochDay` INTEGER NOT NULL,
+                    `planIndex` INTEGER NOT NULL,
+                    `sellIsin` TEXT NOT NULL,
+                    `buyIsin` TEXT NOT NULL,
+                    `sellNavAtSuggestion` REAL NOT NULL,
+                    `buyNavAtSuggestion` REAL NOT NULL,
+                    `followed` INTEGER,
+                    `switchValueKr` REAL
                 )
                 """.trimIndent(),
             )
@@ -77,19 +92,12 @@ class Migration910Test {
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
                     "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)",
             )
-            db.execSQL("INSERT INTO fund_prices VALUES ('SHB0000442', 20658, 164.35, 'SEK')")
-            db.execSQL("INSERT INTO fx_rates VALUES ('USD', 20658, 9.73973)")
-            // Redan uppslagen jämförelse (#61) — måste överleva migreringen oförändrad.
             db.execSQL(
-                "INSERT INTO fund_metadata (isin, name, orderbookId, totalFee, managementFee, " +
-                    "category, fundType, companyName, risk, indexFund, startDateEpochDay, minimumBuy, " +
-                    "tagsJson, availableAtHandelsbanken, availabilityResolvedAtEpochDay, fetchedAtEpochDay, " +
-                    "cheapestAlternativeIsin, cheapestAlternativeFee, comparisonResolvedAtEpochDay) " +
-                    "VALUES ('SE0000581434', 'Länsförsäkringar Sverige Index', '12345', 0.21, 0.2, " +
-                    "'Sverige', 'EQUITY_FUND', 'Länsförsäkringar', 4, 1, NULL, 100.0, " +
-                    "'[]', 1, 20600, 20658, 'SE0001466368', 0.73, 20658)",
+                "INSERT INTO suggestion_records (suggestedAtEpochDay, planIndex, sellIsin, buyIsin, " +
+                    "sellNavAtSuggestion, buyNavAtSuggestion, followed, switchValueKr) " +
+                    "VALUES (20658, 0, 'SE0000581434', 'SE0001466368', 100.0, 50.0, NULL, 42000.0)",
             )
-            db.version = 9
+            db.version = 11
         }
 
         val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
@@ -98,35 +106,27 @@ class Migration910Test {
 
         db.openHelper.writableDatabase
 
-        // developmentOneYear är skrivbar direkt efter migreringen, resten av raden orörd.
-        val existing = db.fundMetadataDao().getByIsin("SE0000581434")!!
-        db.fundMetadataDao().upsert(existing.copy(developmentOneYear = 0.083))
-        val updated = db.fundMetadataDao().getByIsin("SE0000581434")
-        assertEquals(0.083, updated?.developmentOneYear ?: -1.0, 1e-9)
-        assertEquals("SE0001466368", updated?.cheapestAlternativeIsin)
-        assertEquals(0.73, updated?.cheapestAlternativeFee ?: -1.0, 1e-9)
-        assertEquals(true, updated?.availableAtHandelsbanken)
+        // Den gamla raden överlever oförändrad, utan körnings-id.
+        val existing = db.suggestionRecordDao().getAll().single()
+        assertEquals("SE0000581434", existing.sellIsin)
+        assertEquals(42_000.0, existing.switchValueKr ?: -1.0, 1e-9)
+        assertEquals(0L, existing.batchEpochMillis)
 
-        // suggestion_records finns och är skrivbar (HEM-8, genuin användardata — NFR-1).
+        // Nya förslag bär körnings-id, så två körningar samma dygn går att skilja åt.
         db.suggestionRecordDao().insert(
             SuggestionRecordEntity(
                 suggestedAtEpochDay = 20658, planIndex = 0,
                 sellIsin = "SE0000581434", buyIsin = "SE0001466368",
-                sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0, followed = null,
+                sellNavAtSuggestion = 101.0, buyNavAtSuggestion = 51.0,
+                switchValueKr = 1_000.0, followed = null, batchEpochMillis = 1_785_000_000_000,
             ),
         )
-        val records = db.suggestionRecordDao().getAll()
-        assertEquals(1, records.size)
-        assertEquals("SE0000581434", records.single().sellIsin)
+        val nyast = db.suggestionRecordDao().getAll().maxBy { it.id }
+        assertEquals(1_785_000_000_000L, nyast.batchEpochMillis)
 
-        // Befintliga fonder, transaktioner, kurser och växelkurser rörs inte.
+        // Befintliga fonder och transaktioner rörs inte.
         assertEquals("Handelsbanken Amerika Småbolag Tema", db.fundDao().getByFundId("SHB0000442")?.name)
         assertEquals(1, db.transactionDao().observeForFund("SHB0000442").first().size)
-        assertTrue(
-            db.fundPriceDao().getRange("SHB0000442", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-                .isNotEmpty(),
-        )
-        assertEquals(9.73973, db.fxRateDao().getLatest("USD")?.rate ?: -1.0, 1e-9)
 
         db.close()
     }
