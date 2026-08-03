@@ -56,7 +56,12 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Uppdatera nu").performClick()
+        // performScrollTo före varje knappklick i den här filen: Inställningar är en
+        // `verticalScroll`-kolumn som växer med varje nytt kort, och en knapp som hamnar under
+        // skärmkanten är fortfarande *komponerad* — assertExists passerar, performClick kastar
+        // inget, men klicket landar utanför noden och callbacken uteblir. Det har nu bitit två
+        // gånger (issue #78:s "Stäng", och den här när facit-kortet lades in ovanför, #80).
+        composeRule.onNodeWithText("Uppdatera nu").performScrollTo().performClick()
         assertTrue(called)
     }
 
@@ -84,7 +89,7 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Öppna riskprofil").performClick()
+        composeRule.onNodeWithText("Öppna riskprofil").performScrollTo().performClick()
         assertTrue(called)
     }
 
