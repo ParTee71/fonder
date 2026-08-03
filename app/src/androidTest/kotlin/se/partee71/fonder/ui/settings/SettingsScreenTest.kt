@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.settings
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -129,7 +130,10 @@ class SettingsScreenTest {
         }
 
         composeRule.onNodeWithText("Databasen har tömts.").assertExists()
-        composeRule.onNodeWithText("Stäng").performClick()
+        // Farozonen ligger sist i en `verticalScroll`-kolumn (UI-5). Utan scroll är knappen
+        // komponerad men klippt, och klicket landar utanför den — `assertExists` hade passerat
+        // och `performClick` kastat inget, men callbacken uteblev.
+        composeRule.onNodeWithText("Stäng").performScrollTo().performClick()
         assertTrue(dismissed)
     }
 
