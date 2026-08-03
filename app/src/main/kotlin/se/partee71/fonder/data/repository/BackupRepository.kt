@@ -28,7 +28,9 @@ class StubBackupRepository @Inject constructor() : BackupRepository {
     // i efterhand, till skillnad från fund_metadata som medvetet är cache utanför kontraktet.
     // Sedan issue #75 bär samma rader även switchValueKr (beloppet förslaget avsåg) — lika
     // oåterskapbart som NAV-utgångsläget, eftersom planen storleksbestäms mot portföljen så
-    // som den såg ut just den dagen.
+    // som den såg ut just den dagen — samt batchEpochMillis, som håller ihop raderna från
+    // *en* körning till en plan. Utan det fältet i en återställning smälter två körningar
+    // samma dygn ihop till en plan som aldrig räknats fram.
     override suspend fun backup(): Result<Unit> = Result.success(Unit)
     override suspend fun restore(): Result<Unit> = Result.success(Unit)
 }

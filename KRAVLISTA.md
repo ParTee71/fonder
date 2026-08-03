@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.34.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.35.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -239,9 +239,49 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
       spärrade en nyberäknad plan. `fund_metadata`/`fx_rates` rensas fortsatt medvetet inte —
       ren cache.
 
-  Ingen migrering, ingen ny persisterad data — men punkt 2, 6 och 17 rör data som omfattas av
-  backup-kontraktet, och punkt 6 är precis den återställningsväg NFR-1 vilar på tills
-  Drive-backup (TP-7) finns.
+  Slutligen resten av granskningens fynd, inklusive bytesplanskedjan:
+
+  18. **Bytesplanen räknade mot en omnormaliserad delportfölj (HEM-8).** Ett innehav utan känd
+      `totalFee` föll ur *hela* beräkningen — även ur nämnaren och ur sin egen nivås vikt. En
+      perfekt balanserad 50/50-portfölj såg då ut som 0/100 och fick ett byte som gjorde den
+      75/25. Avgiften krävs nu bara för att *sälja* en position, inte för att räkna med den.
+  19. **"Senaste inspelade planen" var hela senaste dygnet (HEM-8).** Backstopen kör var 12:e
+      timme, så två körningar landar samma dygn; dygnsdedupen spärrar bara identiska
+      sälj-/köp-par. Hem kunde därför visa två sammanslagna planer — samma fond såld två
+      gånger, två rader med samma rangordning. Nytt fält `batchEpochMillis` (migrering 11→12)
+      identifierar körningen; rader från före dess har 0 och grupperas per dygn som förut.
+  20. **Rangordningen i UI:t var listpositionen (HEM-8).** Föll byte 0 bort visades byte 1 som
+      "1." — fast planen är girig och sekventiell, så att följa byte 1 ensamt flyttar
+      portföljen *bort* från målet. `planIndex` bärs nu till UI:t, och saknas det första bytet
+      visas ingen plan alls.
+  21. **Hem reagerade inte på ändrad riskprofil eller kontotyp (SET-3/SET-4).** Värdena lästes
+      med `first()` inne i tillståndsflödet, så inget emitterades om vid en ändring — och
+      eftersom bottennavigeringen sparar skärmens tillstånd kunde SET-4-gaten stå kvar på det
+      gamla valet i upp till 12 timmar. Inställningarna ingår nu i flödet, och metadata hämtas
+      i ett eget flöde (samma fix som punkt 12 gav Portfölj).
+  22. **Skanningarna körde även när kursuppdateringen misslyckats (HEM-6/HEM-8).** De läste då
+      ur en cache workern precis bevisat att den inte kunde uppdatera, och spelade in ett
+      NAV-utgångsläge som var flera dagar gammalt — ett korrumperat facit som inte går att
+      rätta i efterhand. Dessutom kördes hela skanningen om vid varje backoff-försök.
+  23. **En ISIN-fond utan köphistorik fick aldrig någon kurs (TP-13/TP-14).** Grenvalet i den
+      dagliga uppdateringen var villkorat på både ISIN *och* känt köpdatum; en bevakad men
+      aldrig köpt ISIN-fond föll därför i grenen som frågar fondlista med ISIN:et som
+      fondnyckel — samma dödläge som punkt 2 beskrev.
+  24. **Besparingspotentialen kunde bli negativ (HEM-6).** Den sparade alternativavgiften är en
+      ögonblicksbild; sjunker den egna avgiften under den inom jämförelsens TTL skrev Hem ut
+      "du kan spara -180,00 kr per år". En icke-positiv besparing räknas nu som "inget
+      billigare hittades".
+  25. **En gulflaggad fond kunde bli helt utan vägledning (ANA-6).** Låg fonden under toppen
+      *och* under GAV gav `AnalysisGuidance` en tom lista — samma utfall som "otillräcklig
+      data", i just det läge där sammanhanget behövs mest. Ny kontextnyckel för det läget.
+  26. **ISIN-fältet i Fonddetalj tappades vid rotation (NAV-2).** Ett handinskrivet ISIN
+      återställdes tyst till maskinens förslag, som kan vara fel — sparades det utan omläsning
+      hamnade fel ISIN på fonden.
+
+  Migrering 11→12 (`batchEpochMillis`) med rundturstest; fältet är med i backup-kontraktet av
+  samma skäl som resten av `suggestion_records`. I övrigt ingen ny persisterad data — men
+  punkt 2, 6 och 17 rör data som omfattas av kontraktet, och punkt 6 är precis den
+  återställningsväg NFR-1 vilar på tills Drive-backup (TP-7) finns.
 
 - **Handelsdagsmedveten kursuppdatering, bakgrundsindikator och "Värde per datum" (#27):**
   Kursuppdateringen räknas om kring handelsdagar i stället för fasta tidsintervall — ny ren

@@ -179,7 +179,7 @@ class SwitchPlanCalcTest {
     }
 
     @Test
-    fun `innehav utan kand risknivastraffas ur planen och rakas inte in i totalen`() {
+    fun `innehav utan kand riskniva utesluts ur planen och rakas inte in i totalen`() {
         val holdings = listOf(holding("OkandRisk", 5_000.0, isin = "SEOKAND"), holding("KandRisk", 5_000.0, isin = "SEKAND"))
         val metadataByIsin = mapOf(
             "SEOKAND" to metadata("SEOKAND", risk = null, fee = 1.0),
@@ -193,6 +193,37 @@ class SwitchPlanCalcTest {
         assertEquals("KandRisk", switch.sellFund.fundId)
         // Bara det kända innehavets värde räknas som portföljbas — inte 10 000.
         assertEquals(5_000.0, switch.sellValueKr, 1e-9)
+    }
+
+    @Test
+    fun `innehav utan kand avgift raknas med i sin nivas vikt men kan inte saljas`() {
+        // Regression (issue #75, fynd A): ett innehav utan `totalFee` föll ur *hela* beräkningen,
+        // alltså även ur nämnaren och ur sin egen nivås vikt. En perfekt balanserad 50/50-portfölj
+        // såg då ut som 0/100 och fick ett byte som gjorde den 75/25 — planen gjorde portföljen
+        // mätbart sämre mot sitt eget mål.
+        val holdings = listOf(holding("UtanAvgift", 5_000.0, isin = "SEU"), holding("MedAvgift", 5_000.0, isin = "SEM"))
+        val metadataByIsin = mapOf(
+            "SEU" to metadata("SEU", risk = 3, fee = null),
+            "SEM" to metadata("SEM", risk = 5, fee = 1.0),
+        )
+        val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
+
+        assertTrue("portföljen ligger redan på målet — inget byte ska föreslås", plan.switches.isEmpty())
+    }
+
+    @Test
+    fun `overvikt som bara ligger i en fond utan kand avgift ger ingen plan`() {
+        // Värdet räknas med i nivåns vikt, men utan avgiftsuppgift går fonden inte att välja som
+        // säljkandidat (avgiften avgör vilken position som säljs och ingår i feeDelta).
+        val holdings = listOf(holding("UtanAvgift", 10_000.0, isin = "SEU"))
+        val metadataByIsin = mapOf("SEU" to metadata("SEU", risk = 5, fee = null))
+        val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+
+        assertTrue(plan.switches.isEmpty())
     }
 
     @Test

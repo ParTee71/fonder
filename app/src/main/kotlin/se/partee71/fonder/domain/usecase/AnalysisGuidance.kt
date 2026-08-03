@@ -20,6 +20,9 @@ object AnalysisGuidance {
         /** Fonden ligger under toppen men fortfarande i plus mot ditt snittpris (GAV). */
         NEDGANG_MEN_PLUS_MOT_GAV,
 
+        /** Fonden ligger under toppen **och** under ditt snittpris (GAV) — vad det betyder och inte. */
+        NEDGANG_OCH_MINUS_MOT_GAV,
+
         /** Djup nedgång (röd avståndssignal) — säljer du nu låser du in nedgången; tidshorisonten spelar roll. */
         DJUP_NEDGANG_TIDSHORISONT,
 
@@ -46,8 +49,12 @@ object AnalysisGuidance {
         val belowHigh = distance != null && distance.level != SignalLevel.GRON
         val gavFraction = analysis.keyFigures.gavFraction
 
-        if (belowHigh && gavFraction != null && gavFraction > 0.0) {
-            keys += GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV
+        // Under toppen: läget mot GAV är kontexten som betyder mest, i båda riktningarna.
+        // Tidigare gavs bara plus-varianten, så en GUL fond som *också* låg under GAV kunde få
+        // en tom lista — samma utfall som "otillräcklig data", fast för det läge där
+        // vägledningen behövs mest (issue #75).
+        if (belowHigh && gavFraction != null) {
+            keys += if (gavFraction > 0.0) GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV else GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV
         }
         if (distance != null && distance.level == SignalLevel.ROD) {
             keys += GuidanceKey.DJUP_NEDGANG_TIDSHORISONT

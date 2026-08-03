@@ -116,4 +116,22 @@ class AnalysisGuidanceTest {
             keys,
         )
     }
+
+    @Test
+    fun `under toppen och under GAV ger kontext, aldrig en tom lista`() {
+        // Regression (issue #75): bara plus-varianten gav en nyckel, så en GUL fond som *också*
+        // låg under GAV fick tom lista — samma utfall som "otillräcklig data" (ANA-6), i just det
+        // läge där vägledningen behövs mest.
+        val keys = AnalysisGuidance.guidanceFor(
+            analysis(
+                distanceLevel = SignalLevel.GUL,
+                trendLevel = SignalLevel.GRON,
+                momentumLevel = SignalLevel.GRON,
+                gavFraction = -0.05,
+                status = SignalLevel.GUL,
+            ),
+        )
+
+        assertEquals(listOf(GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV), keys)
+    }
 }

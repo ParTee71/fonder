@@ -28,6 +28,11 @@ import kotlin.math.ceil
  * fyllde samma hink, aldrig mot att *ett* gjorde det. En delvis såld position ligger kvar med
  * sitt återstående värde och kan användas till en annan underviktad nivå.
  *
+ * Fördelningen räknas mot portföljens **klassificerade** värde — innehav med känd risknivå och
+ * känd kurs — precis som [PortfolioRiskCalc.actualAllocation], så planen och riskkortet ovanför
+ * den beskriver samma procenttal. Ett innehav som saknar avgiftsuppgift räknas med i sin nivås
+ * vikt men kan inte väljas som säljkandidat (avgiften avgör vilken position som säljs).
+ *
  * Ingen plan ges (tom [Plan]) om ingen nivå avviker minst [MIN_GAP_PP], eller om ingen
  * kvalificerad köp-/säljkandidat finns för den mest avvikande nivån.
  */
@@ -73,7 +78,12 @@ object SwitchPlanCalc {
      */
     const val MAX_SWITCHES_PER_PLAN = 3
 
-    private data class SellSlot(val holding: Holding, val isin: String, val level: Int, val feePercent: Double, val valueKr: Double)
+    /**
+     * Ett innehav vars risknivå går att avgöra — alltså med i fördelningen. [feePercent] null
+     * betyder att fonden **inte** kan väljas som säljkandidat (avgiften avgör vilken position på
+     * nivån som säljs, och ingår i [Switch.feeDelta]), men värdet räknas ändå med i nivåns vikt.
+     */
+    private data class Position(val holding: Holding, val isin: String, val level: Int, val feePercent: Double?, val valueKr: Double)
 
     fun plan(
         holdings: List<Holding>,
@@ -83,20 +93,27 @@ object SwitchPlanCalc {
     ): Plan {
         if (targetAllocation.isEmpty()) return EMPTY_PLAN
 
-        val sellSlots = holdings.mapNotNull { holding ->
+        // Klassificerbart = känd risknivå och känt värde. Avgiften krävs bara för att *sälja*.
+        // Tidigare föll ett innehav utan känd `totalFee` ur hela beräkningen, alltså även ur
+        // nämnaren och ur sin egen nivås vikt — en perfekt balanserad 50/50-portfölj där ena
+        // fonden saknade avgift såg då ut som 0/100 och fick ett byte som gjorde den 75/25
+        // (issue #75). Nämnaren är portföljens klassificerade värde, samma som
+        // [PortfolioRiskCalc.actualAllocation] använder, så procenttalen i planen och i
+        // riskkortet ovanför beskriver samma fördelning.
+        val positions = holdings.mapNotNull { holding ->
             val isin = holding.fund.isin ?: return@mapNotNull null
             val value = holding.currentValue ?: return@mapNotNull null
             val metadata = metadataByIsin[isin] ?: return@mapNotNull null
             val level = metadata.risk ?: return@mapNotNull null
-            val fee = metadata.totalFee ?: return@mapNotNull null
-            SellSlot(holding, isin, level, fee, value)
-        }.toMutableList()
+            Position(holding, isin, level, metadata.totalFee, value)
+        }
 
-        val totalValueKr = sellSlots.sumOf { it.valueKr }
+        val totalValueKr = positions.sumOf { it.valueKr }
         if (totalValueKr <= 0.0) return EMPTY_PLAN
 
-        val levelValues = sellSlots.groupBy { it.level }.mapValues { (_, s) -> s.sumOf { it.valueKr } }.toMutableMap()
-        val usedBuyIsins = sellSlots.mapTo(mutableSetOf()) { it.isin }
+        val sellSlots = positions.filter { it.feePercent != null }.toMutableList()
+        val levelValues = positions.groupBy { it.level }.mapValues { (_, p) -> p.sumOf { it.valueKr } }.toMutableMap()
+        val usedBuyIsins = positions.mapTo(mutableSetOf()) { it.isin }
         val switches = mutableListOf<Switch>()
 
         while (switches.size < MAX_SWITCHES_PER_PLAN) {
@@ -106,7 +123,9 @@ object SwitchPlanCalc {
             val underEntry = gapsPp.filterValues { it >= MIN_GAP_PP }.maxByOrNull { it.value } ?: break
             val overEntry = gapsPp.filter { it.key != underEntry.key && it.value <= -MIN_GAP_PP }.minByOrNull { it.value } ?: break
 
-            val sellSlot = sellSlots.filter { it.level == overEntry.key }.maxByOrNull { it.feePercent } ?: break
+            // Bara positioner med känd avgift kan säljas — ligger hela överviktens värde i en
+            // fond utan avgiftsuppgift ges ingen plan alls, hellre än ett byte på en gissning.
+            val sellSlot = sellSlots.filter { it.level == overEntry.key }.maxByOrNull { it.feePercent!! } ?: break
             val buyCandidate = pickBuyCandidate(candidates, underEntry.key, usedBuyIsins) ?: break
 
             // Storleksbestäm bytet till gapet — se klassens KDoc. Båda gapen är uttryckta i
@@ -123,7 +142,7 @@ object SwitchPlanCalc {
                 buyName = buyCandidate.metadata.name,
                 fromLevel = sellSlot.level,
                 toLevel = underEntry.key,
-                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent,
+                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent!!,
             )
             usedBuyIsins += buyCandidate.metadata.isin
 

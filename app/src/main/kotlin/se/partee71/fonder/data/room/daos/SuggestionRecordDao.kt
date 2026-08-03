@@ -9,7 +9,7 @@ import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 @Dao
 interface SuggestionRecordDao {
 
-    @Query("SELECT * FROM suggestion_records ORDER BY suggestedAtEpochDay DESC, planIndex ASC, id DESC")
+    @Query("SELECT * FROM suggestion_records ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, planIndex ASC, id DESC")
     fun observeAll(): Flow<List<SuggestionRecordEntity>>
 
     /** Sant om exakt det här bytet (samma sälj-/köp-ISIN) redan spelats in [epochDay] — dedupspärr mot upprepad inspelning samma dag. */

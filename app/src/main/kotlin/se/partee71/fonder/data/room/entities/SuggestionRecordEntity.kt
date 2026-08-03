@@ -19,6 +19,8 @@ data class SuggestionRecordEntity(
     val buyNavAtSuggestion: Double,
     val switchValueKr: Double?,
     val followed: Boolean?,
+    /** Körningen raden hör till — se [SuggestionRecord.batchEpochMillis]. 0 = inspelad före issue #75. */
+    val batchEpochMillis: Long = 0,
 ) {
     fun toDomain() = SuggestionRecord(
         id = id,
@@ -30,6 +32,7 @@ data class SuggestionRecordEntity(
         buyNavAtSuggestion = buyNavAtSuggestion,
         switchValueKr = switchValueKr,
         followed = followed,
+        batchEpochMillis = batchEpochMillis,
     )
 
     companion object {
@@ -43,6 +46,7 @@ data class SuggestionRecordEntity(
             buyNavAtSuggestion = record.buyNavAtSuggestion,
             switchValueKr = record.switchValueKr,
             followed = record.followed,
+            batchEpochMillis = record.batchEpochMillis,
         )
     }
 }

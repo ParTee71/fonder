@@ -456,7 +456,7 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
@@ -476,6 +476,31 @@ class HemScreenTest {
     }
 
     @Test
+    fun bytesplanens_rangordning_kommer_ur_planIndex_inte_listpositionen() {
+        // Regression (issue #75): numret togs ur listpositionen, så ett byte vars föregångare
+        // fallit bort presenterades som "1." — fast planen är girig och sekventiell, och att
+        // följa byte 1 utan byte 0 flyttar portföljen bort från målet.
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
+            switchPlan = listOf(
+                SwitchSuggestionUi(
+                    planIndex = 1, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
+                ),
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithText("2. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
+    }
+
+    @Test
     fun riskkortet_visar_bytesplan_utan_belopp_for_forslag_inspelade_fore_beloppsfaltet() {
         val state = HemUiState(
             loading = false,
@@ -484,7 +509,7 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = null,
                 ),
             ),

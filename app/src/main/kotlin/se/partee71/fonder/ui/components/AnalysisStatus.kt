@@ -55,6 +55,7 @@ fun guidanceMessages(analysis: FundAnalysisCalc.Analysis): List<String> =
     AnalysisGuidance.guidanceFor(analysis).map { key ->
         when (key) {
             AnalysisGuidance.GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV -> stringResource(R.string.analys_guidance_plus_mot_gav)
+            AnalysisGuidance.GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV -> stringResource(R.string.analys_guidance_minus_mot_gav)
             AnalysisGuidance.GuidanceKey.DJUP_NEDGANG_TIDSHORISONT -> stringResource(R.string.analys_guidance_djup_nedgang)
             AnalysisGuidance.GuidanceKey.UNDER_TREND_INTE_SALJBUD -> stringResource(R.string.analys_guidance_under_trend)
             AnalysisGuidance.GuidanceKey.SVAG_MOT_PORTFOLJ -> stringResource(R.string.analys_guidance_svag_portfolj)

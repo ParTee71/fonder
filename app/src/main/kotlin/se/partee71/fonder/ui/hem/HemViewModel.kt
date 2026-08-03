@@ -4,14 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -43,6 +44,13 @@ data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysi
  * bakgrundsworkerns backstop, inte på varje Hem-öppning.
  */
 data class SwitchSuggestionUi(
+    /**
+     * Platsen i den rangordnade planen (0 = först). Bärs hela vägen till UI:t i stället för att
+     * härledas ur listpositionen: planen är girig och sekventiell, så ett byte måste visas med
+     * sin **egen** rangordning — annars kunde byte 1 presenteras som "1." när byte 0 fallit bort,
+     * och att följa det ensamt flyttar portföljen bort från målet (issue #75).
+     */
+    val planIndex: Int,
     val sellFundName: String,
     val buyFundName: String,
     val fromLevel: Int,
@@ -120,10 +128,46 @@ class HemViewModel @Inject constructor(
             PortfolioCalc.computeHoldings(funds, transactions) to transactions
         }
 
+    /**
+     * Inställningarna **i** flödet, inte lästa med `first()` inne i `map`. Bottennavigeringen
+     * använder `popUpTo(saveState = true)`, så den här ViewModel:en överlever ett besök i
+     * Inställningar: läste vi värdena i map-kroppen emitterade uppströmsflödet aldrig om på en
+     * ändring, och SET-4-gaten utvärderades mot det gamla valet tills en kursuppdatering eller
+     * en ny transaktion råkade trigga flödet — upp till 12 timmar senare (issue #75).
+     */
+    private val settings: Flow<Settings> =
+        combine(preferencesRepository.riskProfile, preferencesRepository.accountType) { riskProfile, accountType ->
+            Settings(riskProfile, accountType)
+        }
+
+    /**
+     * Fondmetadata i ett eget flöde — samma skäl som i
+     * [se.partee71.fonder.ui.portfolj.PortfoljViewModel]: [FundMetadataRepository.metadataFor]
+     * gör ett sekventiellt nätverksuppslag per okänd/inaktuell ISIN, och låg det i `map`
+     * blockerades hela Hem på nätverket. Slår upp både innehavens och den visade planens
+     * köpkandidater i **ett** anrop.
+     */
+    private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
+    private var metadataJob: Job? = null
+    private var metadataIsins: List<String>? = null
+
+    private fun refreshMetadata(isins: List<String>) {
+        val distinct = isins.distinct().sorted()
+        if (distinct == metadataIsins) return
+        metadataIsins = distinct
+        metadataJob?.cancel()
+        metadataJob = viewModelScope.launch { metadata.value = fundMetadataRepository.metadataFor(distinct) }
+    }
+
     val uiState: StateFlow<HemUiState> =
         baseHoldings.flatMapLatest { (holdings, transactions) ->
             val fundIds = holdings.map { it.fund.fundId }
-            fundPriceRepository.observeLatestPrices(fundIds).map { prices ->
+            combine(
+                fundPriceRepository.observeLatestPrices(fundIds),
+                metadata,
+                settings,
+                suggestionRecordRepository.observeAll(),
+            ) { prices, metadataByIsin, currentSettings, records ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
                 val historyByFundId = enriched.associate { holding ->
@@ -133,12 +177,11 @@ class HemViewModel @Inject constructor(
                         toEpochDay = today.toEpochDay(),
                     )
                 }
-                val isins = enriched.mapNotNull { it.fund.isin }
-                val metadataByIsin = fundMetadataRepository.metadataFor(isins)
-                val riskProfile = preferencesRepository.riskProfile.first()
+                val latestBatch = latestBatchOf(records)
+                refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
+                val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
-                val accountType = preferencesRepository.accountType.first()
-                val switchPlan = buildSwitchPlan(accountType, metadataByIsin)
+                val switchPlan = buildSwitchPlan(currentSettings.accountType, latestBatch, metadataByIsin)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -215,28 +258,51 @@ class HemViewModel @Inject constructor(
     }
 
     /**
-     * Läser den senast inspelade bytesplanen ur facit ([SuggestionRecordRepository], HEM-8,
+     * Den senast inspelade **planen** — en enskild körning, inte ett helt dygn.
+     *
+     * Backstopen kör var 12:e timme, så två körningar landar normalt samma kalenderdygn, och
+     * dygnsdedupen spärrar bara identiska sälj-/köp-par. Ändras portföljen däremellan räknas en
+     * annan plan fram, och "alla rader från senaste dygnet" blev då två planer sammanslagna:
+     * samma fond kunde säljas två gånger och två rader bära `planIndex 0` (issue #75).
+     * [SuggestionRecord.batchEpochMillis] grupperar körningen; rader inspelade före det fältet
+     * har 0 och grupperas per dygn som förut.
+     */
+    private fun latestBatchOf(records: List<SuggestionRecord>): List<SuggestionRecord> {
+        if (records.isEmpty()) return emptyList()
+        val latestDay = records.maxOf { it.suggestedAtEpochDay }
+        val sameDay = records.filter { it.suggestedAtEpochDay == latestDay }
+        val latestBatchMillis = sameDay.maxOf { it.batchEpochMillis }
+        return sameDay.filter { it.batchEpochMillis == latestBatchMillis }.sortedBy { it.planIndex }
+    }
+
+    /**
+     * Formaterar den senast inspelade bytesplanen ur facit ([SuggestionRecordRepository], HEM-8,
      * issue #70) för visning — räknar **inte** om planen live, se [SwitchSuggestionUi]s KDoc.
      * Tom lista utan ISK/KF (SET-4) eller innan bakgrundsworkerns backstop hunnit spela in
      * något än — appen väntar hellre än att gissa.
+     *
+     * Planen är **girig och sekventiell**: byte n är framräknat under antagandet att byte 0…n−1
+     * genomförts. Kan en rad inte slås upp (metadata saknas) visas därför inte resten som om den
+     * vore fristående — listan kapas vid första luckan, och saknas `planIndex 0` visas ingen
+     * plan alls. Annars kunde byte 1 presenteras som "1." och att följa det ensamt flyttade
+     * portföljen **bort** från målet (issue #75).
      */
-    private suspend fun buildSwitchPlan(accountType: AccountType?, heldMetadataByIsin: Map<String, FundMetadata>): List<SwitchSuggestionUi> {
+    private fun buildSwitchPlan(
+        accountType: AccountType?,
+        latestBatch: List<SuggestionRecord>,
+        metadataByIsin: Map<String, FundMetadata>,
+    ): List<SwitchSuggestionUi> {
         if (accountType != AccountType.ISK_KF) return emptyList()
-        val records = suggestionRecordRepository.observeAll().first()
-        if (records.isEmpty()) return emptyList()
 
-        val latestDay = records.maxOf { it.suggestedAtEpochDay }
-        val latestBatch = records.filter { it.suggestedAtEpochDay == latestDay }.sortedBy { it.planIndex }
-        val buyMetadataByIsin = fundMetadataRepository.metadataFor(latestBatch.map { it.buyIsin }.distinct())
-
-        return latestBatch.mapNotNull { record ->
-            val sellMeta = heldMetadataByIsin[record.sellIsin] ?: return@mapNotNull null
-            val buyMeta = buyMetadataByIsin[record.buyIsin] ?: return@mapNotNull null
+        val resolved = latestBatch.mapNotNull { record ->
+            val sellMeta = metadataByIsin[record.sellIsin] ?: return@mapNotNull null
+            val buyMeta = metadataByIsin[record.buyIsin] ?: return@mapNotNull null
             val sellLevel = sellMeta.risk ?: return@mapNotNull null
             val buyLevel = buyMeta.risk ?: return@mapNotNull null
             val sellFee = sellMeta.totalFee ?: return@mapNotNull null
             val buyFee = buyMeta.totalFee ?: return@mapNotNull null
             SwitchSuggestionUi(
+                planIndex = record.planIndex,
                 sellFundName = sellMeta.name,
                 buyFundName = buyMeta.name,
                 fromLevel = sellLevel,
@@ -245,5 +311,13 @@ class HemViewModel @Inject constructor(
                 switchValueKr = record.switchValueKr,
             )
         }
+
+        // Behåll bara den obrutna prefixen från och med planIndex 0.
+        return resolved.sortedBy { it.planIndex }
+            .withIndex()
+            .takeWhile { (position, suggestion) -> suggestion.planIndex == position }
+            .map { it.value }
     }
+
+    private data class Settings(val riskProfile: RiskProfile?, val accountType: AccountType?)
 }

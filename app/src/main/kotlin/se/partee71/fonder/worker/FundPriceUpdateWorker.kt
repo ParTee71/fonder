@@ -51,13 +51,16 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         val success = refreshAll(transactionRepository, fundPriceRepository, force)
         if (success) preferencesRepository.setLastPriceSyncEpochMillis(System.currentTimeMillis())
 
-        if (inputData.getBoolean(KEY_SCAN_COMPARISONS, false)) {
-            scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
-        }
-
-        if (inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false)) {
-            scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
-        }
+        runScans(
+            refreshSucceeded = success,
+            scanComparisons = inputData.getBoolean(KEY_SCAN_COMPARISONS, false),
+            scanSwitchPlan = inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false),
+            transactionRepository = transactionRepository,
+            fundPriceRepository = fundPriceRepository,
+            fundMetadataRepository = fundMetadataRepository,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRecordRepository,
+        )
 
         return if (success) Result.success() else Result.retry()
     }
@@ -100,6 +103,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val BUY_NAV_LOOKBACK_DAYS = 30L
 
         /**
+         * Historikhorisont för en ISIN-fond **utan** köphistorik (bevakad men aldrig köpt) — se
+         * grenvalet i [refreshAll]. Samma princip som [BUY_NAV_LOOKBACK_DAYS]: bara den senaste
+         * kursen behövs, fönstret ska överleva helger och röda dagar, inte backfilla en historik
+         * appen ändå aldrig haft.
+         */
+        private const val ISIN_FALLBACK_LOOKBACK_DAYS = 30L
+
+        /**
          * Ren logik utan `CoroutineWorker`-beroende, så den kan enhetstestas direkt (issue:
          * kodgranskning fann att den dagliga uppdateringen aldrig hämtade kurser för
          * ISIN-matchade fonder, se KRAVLISTA TP-14 — [FundPriceRepository.refresh] nycklas på
@@ -120,6 +131,36 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          *   misslyckades (troligen ett tillfälligt nätverksfel), så [CoroutineWorker.Result.retry]
          *   kan användas i stället för att vänta på nästa schemalagda körning.
          */
+        /**
+         * Kör de begärda skanningarna — men **bara** efter en lyckad kursuppdatering.
+         *
+         * Misslyckades [refreshSucceeded] läser skanningarna ur en cache workern precis bevisat
+         * att den inte kunde uppdatera, och [scanSwitchPlan] skriver då en `SuggestionRecord`
+         * vars NAV-utgångsläge är flera dagar gammalt — ett korrumperat facit som inte går att
+         * rätta i efterhand, och hela poängen med tabellen är att mäta utfallet mot NAV *vid
+         * förslagstillfället* (HEM-8). Körningen returnerar dessutom `Result.retry()` i det läget,
+         * så hela skanningen inklusive dess källfrågor skulle köras om vid varje backoff-försök
+         * (issue #75). Ren logik utan `CoroutineWorker`-beroende, av samma skäl som [refreshAll].
+         */
+        internal suspend fun runScans(
+            refreshSucceeded: Boolean,
+            scanComparisons: Boolean,
+            scanSwitchPlan: Boolean,
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+            preferencesRepository: PreferencesRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+        ) {
+            if (!refreshSucceeded) return
+            if (scanComparisons) {
+                scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
+            }
+            if (scanSwitchPlan) {
+                scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
+            }
+        }
+
         internal suspend fun refreshAll(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
@@ -142,8 +183,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 // men aldrig köpt fond behöver bara en färsk kurs, inte trettio år bakåt
                 // (TP-18). Repositoryt hämtar då bara sitt korta fönster.
                 val since = earliestPurchaseByFund[fund.fundId]
-                val success = if (isin != null && since != null) {
-                    fundPriceRepository.refreshSince(fund.fundId, isin, since)
+                // Villkoret är **bara** `isin != null`. Med `&& since != null` föll en fond vars
+                // fundId *är* dess ISIN (findFundByIsin-vägen, TP-13/TP-14) men som saknar
+                // transaktioner ner i else-grenen, där `refresh` frågar fondlista med ISIN:et som
+                // fondnyckel utan ISIN-fallback — samma dödläge som issue #75 punkt 2 beskrev,
+                // och fonden fick aldrig någon kurs. `refreshSince` degraderar korrekt utan
+                // historikhorisont: `since` används bara i fondlista-grenen, som hoppas över för
+                // en fond utan plattformskod.
+                val success = if (isin != null) {
+                    fundPriceRepository.refreshSince(fund.fundId, isin, since ?: LocalDate.now().minusDays(ISIN_FALLBACK_LOOKBACK_DAYS))
                 } else {
                     fundPriceRepository.refresh(fund.fundId, since)
                 }
@@ -213,6 +261,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate = LocalDate.now(),
+            /** Körnings-id som grupperar den här skanningens rader till **en** plan — se [SuggestionRecord.batchEpochMillis]. */
+            batchEpochMillis: Long = System.currentTimeMillis(),
         ) {
             if (preferencesRepository.accountType.first() != AccountType.ISK_KF) return
             val riskProfile = preferencesRepository.riskProfile.first() ?: return
@@ -250,6 +300,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                         sellNavAtSuggestion = sellNav,
                         buyNavAtSuggestion = buyNav,
                         switchValueKr = switch.sellValueKr,
+                        batchEpochMillis = batchEpochMillis,
                     ),
                 )
             }

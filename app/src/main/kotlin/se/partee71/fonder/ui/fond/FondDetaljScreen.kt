@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -313,7 +314,11 @@ private fun IsinInput(
     onConfirm: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var text by remember { mutableStateOf(suggestedIsin.orEmpty()) }
+    // rememberSaveable, inte remember: ISIN:et skrivs in för hand (NAV-2) och ska överleva en
+    // rotation eller ett tema-/språkbyte. Med remember återställdes fältet till maskinens
+    // *förslag*, som kan vara fel — sparade användaren utan att läsa om hamnade fel ISIN på
+    // fonden och kurscachen började fyllas från en annan fonds historik (issue #75).
+    var text by rememberSaveable { mutableStateOf(suggestedIsin.orEmpty()) }
     LaunchedEffect(suggestedIsin) {
         if (text.isEmpty()) text = suggestedIsin.orEmpty()
     }

@@ -138,6 +138,7 @@
     <string name="info_collapse">Dölj förklaring</string>
     <!-- Neutral kontext härledd ur analysen (AnalysisGuidance) — aldrig ett köp-/säljråd (ANA-3) -->
     <string name="analys_guidance_plus_mot_gav">Fonden ligger under sin topp, men du är fortfarande i plus mot ditt snittpris (GAV) — du har alltså inte förlorat pengar på innehavet, även om det tappat från toppen.</string>
+    <string name="analys_guidance_minus_mot_gav">Fonden ligger under sin topp och under ditt snittpris (GAV) — innehavet är alltså i minus just nu. Ett orealiserat minus blir en förlust först när du säljer; hur länge du tänkt spara spelar större roll än dagens kurs.</string>
     <string name="analys_guidance_djup_nedgang">Fonden har fallit rejält från toppen. Att sälja nu gör nedgången verklig; för en långsiktig sparare kan det vara läge att låta tiden verka i stället för att agera på ett fall som redan skett.</string>
     <string name="analys_guidance_under_trend">Kursen ligger under sin långa trend (200-dagarssnittet). Det är ett svaghetstecken att hålla ögonen på — inte ett besked om att sälja.</string>
     <string name="analys_guidance_svag_portfolj">Fonden har gått svagare än dina övriga fonder de senaste 3 månaderna. En kort period säger lite på egen hand — värt att följa över tid.</string>
