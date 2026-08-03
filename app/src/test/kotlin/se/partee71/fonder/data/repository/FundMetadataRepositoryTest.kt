@@ -63,6 +63,7 @@ private class FakeFundMetadataDao : FundMetadataDao {
     val stored = mutableMapOf<String, FundMetadataEntity>()
     override suspend fun getAll(): List<FundMetadataEntity> = stored.values.toList()
     override suspend fun getByIsin(isin: String): FundMetadataEntity? = stored[isin]
+    override suspend fun getByIsins(isins: List<String>): List<FundMetadataEntity> = isins.mapNotNull { stored[it] }
     override suspend fun upsert(row: FundMetadataEntity) { stored[row.isin] = row }
     override suspend fun upsertAll(rows: List<FundMetadataEntity>) { rows.forEach { stored[it.isin] = it } }
     override suspend fun deleteAll() { stored.clear() }
@@ -150,8 +151,63 @@ class FundMetadataRepositoryTest {
         return """{"isin":"$isin","name":"$name","orderbookId":"$isin",$feeField$riskField$developmentField"indexFund":$indexFund,"tagList":[$tagList]}"""
     }
 
+    /** En redan cachad metadatarad — för cache-bara läsvägar (SET-5, issue #80). */
+    private fun cachedEntity(isin: String, name: String, fetchedAtEpochDay: Long = LocalDate.now().toEpochDay()) =
+        FundMetadataEntity(
+            isin = isin, name = name, orderbookId = isin, totalFee = 0.2, managementFee = 0.2,
+            category = null, fundType = null, companyName = null, risk = 4, indexFund = false,
+            startDateEpochDay = null, minimumBuy = null, tagsJson = "[]",
+            availableAtHandelsbanken = null, availabilityResolvedAtEpochDay = null,
+            fetchedAtEpochDay = fetchedAtEpochDay,
+        )
+
     private fun fullListJson(totalNoFunds: Int, views: List<String>): String =
         """{"fundListViews":[${views.joinToString(",")}],"totalNoFunds":$totalNoFunds,"filterCounts":{}}"""
+
+    // --- cachedMetadataFor: cache-bara uppslag för facit (SET-5, issue #80) ---
+
+    @Test
+    fun `cachedMetadataFor laser ur cachen utan att rora kallan`() = runTest {
+        // Facit slår upp fondnamn för varje inspelat förslag, och historiken kan innehålla
+        // hundratals ISIN — en cache-först-läsning hade blivit en burst av nätverksuppslag
+        // varje gång skärmen öppnas. Källan här kastar vid varje anrop: skulle metoden gå dit
+        // fallerar testet i stället för att tyst degradera.
+        val source = FailingAvanzaSource()
+        dao.upsert(cachedEntity("SE1", "Fond Ett"))
+        dao.upsert(cachedEntity("SE2", "Fond Två"))
+
+        val result = repo(source).cachedMetadataFor(listOf("SE1", "SE2"))
+
+        assertEquals(setOf("SE1", "SE2"), result.keys)
+        assertEquals("Fond Ett", result["SE1"]?.name)
+    }
+
+    @Test
+    fun `cachedMetadataFor utelamnar okanda isin i stallet for att hamta dem`() = runTest {
+        val source = FailingAvanzaSource()
+        dao.upsert(cachedEntity("SE1", "Fond Ett"))
+
+        val result = repo(source).cachedMetadataFor(listOf("SE1", "SAKNAS"))
+
+        assertEquals(setOf("SE1"), result.keys)
+    }
+
+    @Test
+    fun `cachedMetadataFor hamtar aldrig om en inaktuell rad`() = runTest {
+        // Till skillnad från metadataFor, som har en färskhetsgate: ett inaktuellt *namn* är
+        // fortfarande rätt namn, och namnet är allt facit behöver.
+        val source = FailingAvanzaSource()
+        dao.upsert(cachedEntity("SE1", "Fond Ett", fetchedAtEpochDay = 0))
+
+        val result = repo(source).cachedMetadataFor(listOf("SE1"))
+
+        assertEquals("Fond Ett", result["SE1"]?.name)
+    }
+
+    @Test
+    fun `cachedMetadataFor med tom lista ger tom karta`() = runTest {
+        assertTrue(repo(FailingAvanzaSource()).cachedMetadataFor(emptyList()).isEmpty())
+    }
 
     @Test
     fun `query utan filter cachar traffarna och persisterar vokabularen`() = runTest {
