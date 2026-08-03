@@ -112,4 +112,35 @@ class SettingsScreenTest {
 
         assertEquals(AccountType.ISK_KF, selected)
     }
+
+    @Test
+    fun tomningsmeddelandet_visas_ur_tillstandet_och_gar_att_kvittera() {
+        // Regression (issue #78): meddelandet speglades lokalt via ett LaunchedEffect och
+        // ViewModel:ens flagga nollställdes aldrig, så engångshändelsen spelades upp igen vid
+        // varje rotation och varje återbesök. Nu läses den ur tillståndet och kvitteras.
+        var dismissed = false
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(databaseCleared = true),
+                    onClearedMessageDismissed = { dismissed = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Databasen har tömts.").assertExists()
+        composeRule.onNodeWithText("Stäng").performClick()
+        assertTrue(dismissed)
+    }
+
+    @Test
+    fun tomningsmeddelandet_visas_inte_utan_tomd_databas() {
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(state = SettingsUiState(databaseCleared = false))
+            }
+        }
+
+        composeRule.onNodeWithText("Databasen har tömts.").assertDoesNotExist()
+    }
 }

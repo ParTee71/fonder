@@ -99,8 +99,16 @@ fun FondDetaljContent(
                     state.feeComparison?.let { feeComparison ->
                         FeeComparisonSection(state = feeComparison, modifier = Modifier.padding(top = 16.dp))
                     }
+                    // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här
+                    // är en ren omvändning + mappning — men utan remember kördes den vid varje
+                    // recomposition, och eftersom listans identitet då ändrades triggades hela
+                    // Vico-kedjan (periodfilter, LaunchedEffect, ny transaktion) på nytt vid
+                    // varje kurstick. En backfillad fond har flera tusen punkter (issue #78).
+                    val chartPoints = remember(state.prices) {
+                        state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
+                    }
                     FundLineChart(
-                        points = state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav },
+                        points = chartPoints,
                         purchaseEpochDays = state.purchaseEpochDays,
                         modifier = Modifier.padding(top = 16.dp),
                     )
@@ -150,9 +158,17 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                 PeriodRow(label = stringResource(R.string.analys_cagr_label), amount = null, fraction = analysis.keyFigures.cagr)
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_gav_explain)) {
+                // GAV per andel hör hemma i **etiketten**, inte i beloppsplatsen: den platsen
+                // bär vinst/förlust i kronor på varje annan rad, så ett pris där lästes som en
+                // vinst — och färgade dessutom raden grön även för ett innehav under GAV, eftersom
+                // priset alltid är positivt (issue #78). Procenten är den enda avkastningen på
+                // raden och är det som tecken- och färgkodas.
                 PeriodRow(
-                    label = stringResource(R.string.analys_gav_label),
-                    amount = analysis.keyFigures.gavPerShare,
+                    label = stringResource(
+                        R.string.format_analys_gav_label,
+                        MoneyFormat.kr(analysis.keyFigures.gavPerShare),
+                    ),
+                    amount = null,
                     fraction = analysis.keyFigures.gavFraction,
                 )
             }

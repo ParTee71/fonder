@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.components
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -95,5 +96,40 @@ class PeriodRowTest {
         composeRule.onNodeWithText("18,0 %").assertExists()
         // valueText har företräde — ingen "otillräcklig data"-text trots att amount/fraction är null.
         composeRule.onNodeWithText("Otillräcklig data").assertDoesNotExist()
+    }
+
+    @Test
+    fun ett_langt_fondnamn_tranger_inte_undan_beloppet() {
+        // Regression (issue #78): etiketten saknade weight, och en Row mäter oviktade barn i tur
+        // och ordning — ett långt fondnamn åt upp hela bredden och HEM-5:s årsavgift försvann
+        // ur vyn. Etiketten ska kapas, inte värdet.
+        composeRule.setContent {
+            FonderTheme {
+                PeriodRow(
+                    label = "Handelsbanken Amerika Småbolag Tema Criteria A1 SEK Ackumulerande",
+                    amount = null,
+                    fraction = null,
+                    valueText = "1 234,00 kr",
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("1 234,00 kr", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fargen_foljer_procenten_aven_nar_beloppet_ar_ett_pris() {
+        // Regression (issue #78): GAV-raden skickar in ett *pris* som belopp (alltid positivt)
+        // och en negativ procent. Raden färgades då grön trots förlust. Testet låser fast att
+        // procenten är det som visas och tecken-kodas — färgen i sig går inte att assertera,
+        // men den härleds numera ur samma värde.
+        composeRule.setContent {
+            FonderTheme {
+                PeriodRow(label = "GAV 100,00 kr", amount = null, fraction = -0.30)
+            }
+        }
+
+        composeRule.onNodeWithText("GAV 100,00 kr").assertExists()
+        composeRule.onNodeWithText("−30,0 %").assertExists()
     }
 }

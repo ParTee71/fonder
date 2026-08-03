@@ -65,6 +65,16 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Kvitterar "databasen tömd"-meddelandet. Tömningen är en **händelse**, inte ett
+     * tillstånd: utan kvittering låg flaggan kvar sann för ViewModel:ens livstid, och eftersom
+     * uiState är `WhileSubscribed` kom meddelandet tillbaka vid varje rotation och vid varje
+     * återbesök i Inställningar efter fem sekunder (issue #78).
+     */
+    fun onClearedMessageDismissed() {
+        databaseCleared.update { false }
+    }
+
     /** Forcerar en kursuppdatering oavsett staleness-gate — den manuella "Uppdatera nu"-knappen (SET-2, issue #27). */
     fun refreshPricesNow() {
         fundPriceRefreshScheduler.triggerManualRefresh()

@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.36.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.37.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -61,6 +61,10 @@
 | UI-2 | Rubriker/UI i **Space Grotesk**; belopp och sifferkolumner med **tabulära siffror**. |
 | UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. |
 | UI-4 | Tema kan väljas: **Ljust / Mörkt / Auto** (sparas i DataStore). |
+| UI-6 | Ingen text får tränga undan ett värde: i en rad med etikett och värde är **etiketten** det som kapas (`weight` + ellips), aldrig beloppet. Långa fondnamn är normalfallet, inte ett kantfall (issue #78). |
+| UI-7 | Tangentbordet får aldrig ligga över det fält som skrivs i eller knappen som sparar. Appen kör edge-to-edge, så IME-insetet konsumeras centralt i `AppNavigation` (`imePadding`) i stället för per skärm (issue #78). |
+| UI-8 | Varje skärm som inte är en toppnivåflik har **rubrik och bakåtknapp** i `TopAppBar` — systemets bakåtgest är aldrig den enda vägen tillbaka (issue #78). |
+| UI-9 | Tillstånd som användaren skulle förlora vid en rotation — öppna bekräftelsedialoger, valda filter/perioder, egen inmatning — sparas med `rememberSaveable` (issue #75/#78). |
 | UI-5 | Varje skärm vars innehåll kan överstiga skärmhöjden är **skrollbar** (`LazyColumn`, eller `verticalScroll` för korta fasta vyer) — innehåll får aldrig klippas bort utan att gå att nå. Gäller särskilt vyer med kort/sektioner som växer med antalet innehav eller flaggade fonder (t.ex. HEM-4, HEM-5). Ett tillstånd som får plats i en testviewport kan ändå klippas i den riktiga appen, där `Scaffold`s topp- och bottenfält tar bort utrymme — instrumenterade tester för sådana vyer ska därför verifiera skrollbarhet, inte bara att en nod finns i semantikträdet (`assertExists()`, som inte fångar avklippt men komponerat innehåll, issue #63). Metoden beror på om innehållet är genuint lazy-virtualiserat: `onNodeWithText(...).performScrollTo().assertIsDisplayed()` kräver att noden **redan är komponerad** (fungerar för rader samlade under en enda icke-lazy `Column` inuti ett `item {}`, t.ex. HEM-4:s flaggade fonder) — för en riktig lazy `items()`-lista (t.ex. Portföljs innehavsrader) är sista raden inte komponerad förrän listan skrollats dit, och testet måste i stället tagga `LazyColumn`n (`Modifier.testTag`) och använda `onNodeWithTag(...).performScrollToIndex(n)` (issue #66 — fångad i CI, inte antagen). |
 
 ---
@@ -160,6 +164,44 @@ Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnit
 implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
 
 ## Historik
+
+- **Kodgranskning av UI-lagret (#78):** Elva fynd i `ui/`, varav två som visade fel siffra
+  eller fel färg. Fyra nya krav (UI-6–UI-9) formaliserar det som saknades.
+
+  1. **Långa fondnamn klämde bort beloppet (UI-6).** `PeriodRow`s etikett saknade `weight`, och
+     en `Row` mäter oviktade barn i tur och ordning — ett fondnamn som fyllde raden lämnade noll
+     bredd till värdet, så HEM-5:s årsavgift och ANA-9:s besparing försvann ur vyn. Etiketten
+     kapas nu med ellips i både `PeriodRow` och `ExposureBar`.
+  2. **GAV-raden färgades grön även vid förlust (UI-3).** Raden skickade in GAV **per andel** —
+     ett pris, alltid positivt — i beloppsplatsen, och `PeriodRow` färgade efter beloppet. Ett
+     innehav 30 % under GAV visades som "−30,0 % · 100,00 kr" i grönt. Färgen tas nu ur
+     procenten, och GAV-priset står i etiketten i stället för på den plats som bär vinst/förlust
+     i kronor på varje annan rad.
+  3. **Tangentbordet täckte formulären (UI-7).** Appen kör `enableEdgeToEdge`, där IME är en
+     inset appen själv måste konsumera — `adjustResize` räcker inte på API 30+. Det fanns ingen
+     inset-hantering alls, så Spara-knappen i transaktionsformuläret låg under tangentbordet.
+  4. **Detaljskärmarna saknade rubrik och bakåtknapp (UI-8).** `TopAppBar` renderades bara för
+     toppnivåflikarna, och ingen skärm hade en egen `Scaffold`.
+  5. **"Databasen tömd" spelades upp igen.** Flaggan i `SettingsViewModel` nollställdes aldrig
+     och speglades lokalt via ett `LaunchedEffect` — meddelandet kom tillbaka vid varje rotation
+     och varje återbesök. Nu läses det ur tillståndet och kvitteras, och har därmed också en väg ut.
+  6. **Dialogtillstånd tappades vid rotation (UI-9).** Bekräftelsedialogerna för radering och
+     databastömning samt diagrammets valda period använde `remember`.
+  7. **Fondsök erbjöd fonder som redan bevakas.** "Tillagd" byggde bara på sessionens egna
+     tillägg; det härleds nu ur Room.
+  8. **Diagramkedjan räknades om vid varje kurstick.** Punktlistan sorterades och mappades om i
+     composition utan `remember`, vilket triggade periodfilter, `LaunchedEffect` och en ny
+     Vico-transaktion även när det visade fönstret var oförändrat.
+  9. **`DateField` läckte dialogen vid rotation** (`WindowLeaked`) och presenterade ett
+     skrivskyddat textfält utan aktiverbar åtgärd för skärmläsare. Dialogen stängs nu vid
+     `onDispose`, och komponenten presenteras som en knapp med etikett och värde.
+  10. **Fondsök skilde inte nätverksfel från "inga träffar".** Sedan #75 returnerar
+      `fetchFundCatalog()` null vid fel — signalen når nu UI:t som ett eget tillstånd.
+  11. **Kursdiagrammet var osynligt för skärmläsare (UI-3:s anda).** Vico-canvasen har nu en
+      `contentDescription` med vald period, antal punkter och kursspann.
+
+  Ingen persisterad data och ingen migrering — rent presentationslager.
+
 
 - **Tysta fel ur kodgranskningen av hela projektet (#75):** Inget nytt krav — buggar som alla
   gjorde fel *utan att synas*. De sex första delar grundmönster: frånvaro av data behandlades
