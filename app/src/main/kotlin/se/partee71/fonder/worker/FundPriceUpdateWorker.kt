@@ -96,6 +96,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val MAX_COMPARISONS_PER_RUN = 2
 
         /**
+         * Högst så här många köpkandidat-NAV fylls på per körning för facit (SET-5, issue #80),
+         * nyast förslag först — se [scanOutcomeNavs]. Samma inkrementella princip som
+         * [MAX_COMPARISONS_PER_RUN], men lite generösare: varje ISIN kostar ett uppslag plus en
+         * kort kursuppdatering, inte en hel kandidatsökning med köpbarhetsverifiering.
+         */
+        private const val MAX_OUTCOME_NAVS_PER_RUN = 4
+
+        /**
          * Hur långt bak [resolveBuyNav] hämtar historik för en köpkandidat. Bara den senaste
          * kursen behövs — fönstret ska bara vara långt nog att överleva helger och röda dagar,
          * inte backfilla en historik appen ändå aldrig haft för fonden.
@@ -137,7 +145,45 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             }
             if (scanSwitchPlan) {
                 scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
+                scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
             }
+        }
+
+        /**
+         * Håller kurscachen färsk för de **köpkandidater** facit (SET-5, issue #80) ska
+         * utvärderas mot — fonder appen aldrig ägt och som därför inte nås av [refreshAll].
+         * Utan den här ifyllnaden hade facit-skärmen behövt hämta dem själv vid varje öppning,
+         * och en historik på hundratals förslag gör den kostnaden orimlig (samma skäl som
+         * lägger HEM-6/HEM-8 här i stället för på skärmen).
+         *
+         * Gated av [KEY_SCAN_SWITCH_PLAN], inte av en egen nyckel: det är samma HEM-8-familj,
+         * samma budgetresonemang och samma backstop — en till input-nyckel hade bara gett två
+         * flaggor som alltid sätts ihop.
+         *
+         * Säljsidan hoppas över: den är per definition en bevakad fond, vars kurs [refreshAll]
+         * redan uppdaterat under fondens *egen* fundId. Att hämta den igen via ISIN-vägen hade
+         * kostat ett nätverksanrop till och lagt en dubblettrad i cachen under en annan nyckel.
+         *
+         * Nyast först och högst [MAX_OUTCOME_NAVS_PER_RUN] per körning — samma inkrementella
+         * princip som [scanComparisons]. En lång historik blir därför komplett över några dygns
+         * bakgrundskörningar i stället för i en dyr engångs-burst.
+         */
+        internal suspend fun scanOutcomeNavs(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+            today: LocalDate = LocalDate.now(),
+        ) {
+            val history = suggestionRecordRepository.observeHistory().first()
+            if (history.isEmpty()) return
+
+            val trackedIsins = transactionRepository.observeFunds().first().mapNotNull { it.isin }.toSet()
+            val targets = history.map { it.buyIsin }
+                .filterNot { it in trackedIsins }
+                .distinct()
+                .take(MAX_OUTCOME_NAVS_PER_RUN)
+
+            targets.forEach { isin -> resolveBuyNav(isin, fundPriceRepository, today) }
         }
 
         /**

@@ -101,6 +101,7 @@ class HemViewModelTest {
             metadataForCall = isins
             return metadataByIsin.filterKeys { it in isins }
         }
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
@@ -116,10 +117,17 @@ class HemViewModelTest {
             sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex }
         }
 
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { all ->
+            all.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex })
+        }
+
         var prunedBefore: LocalDate? = null
         override suspend fun prune(today: LocalDate) { prunedBefore = today }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+        override suspend fun setFollowed(id: Long, followed: Boolean) {
+            records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
+        }
     }
 
     private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
@@ -546,12 +554,65 @@ class HemViewModelTest {
         )
         fakeSuggestionRecordRepo.records.value = listOf(
             SuggestionRecord(
+                id = 42,
                 suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
                 sellIsin = "SE_HELD", buyIsin = "SE_CAND",
                 sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
                 switchValueKr = 2_500.0,
             ),
         )
+    }
+
+    @Test
+    fun `switchPlan bar med radens id och genomford-markering`() = runTest(dispatcher) {
+        // SET-5 (issue #80): utan id:t finns ingen nyckel att skriva "Genomförd" mot, och utan
+        // markeringen kan facit inte skilja ett följt råd från ett bara givet.
+        setUpHoldingWithMetadataForSwitchPlan()
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map { it.copy(followed = true) }
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            val switch = state.switchPlan.single()
+            assertEquals(42L, switch.recordId)
+            assertTrue(switch.followed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `omarkerat forslag ar inte genomfort - null betyder inte markerat`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            assertFalse(state.switchPlan.single().followed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setSwitchFollowed skriver mot inspelningen och speglas i planen`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
+            assertFalse(state.switchPlan.single().followed)
+
+            vm.setSwitchFollowed(42, true)
+
+            while (!state.switchPlan.single().followed) state = awaitItem()
+            assertTrue(fakeSuggestionRecordRepo.records.value.single { it.id == 42L }.followed == true)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

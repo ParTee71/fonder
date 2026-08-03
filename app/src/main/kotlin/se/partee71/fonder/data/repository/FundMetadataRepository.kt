@@ -73,6 +73,16 @@ interface FundMetadataRepository {
     suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata>
 
     /**
+     * Som [metadataFor], men **enbart ur cachen** — läser aldrig nätverket, ens för en saknad
+     * eller inaktuell rad (SET-5/facit, issue #80). Facit slår upp fondnamn för varje inspelat
+     * förslag, och historiken kan innehålla hundratals ISIN: en cache-först-läsning hade blivit
+     * en burst av uppslag varje gång skärmen öppnas, exakt den kostnad HEM-5/HEM-8 redan lagt
+     * på bakgrundsworkerns backstop. Saknas raden utelämnas ISIN:et ur kartan — anroparen ska
+     * visa det som okänt, aldrig gissa.
+     */
+    suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata>
+
+    /**
      * Kända risknivåer på källans skala (TP-21, SET-3/issue #68) — unionen av senast kända
      * filtervokabulär ([se.partee71.fonder.data.datastore.PreferencesRepository.fundFilterVocabulary],
      * som bara fylls av Fondsök/ANA-9:s frågeflöden och därför kan vara tom för en användare
@@ -296,6 +306,15 @@ class AvanzaFundMetadataRepository @Inject constructor(
             if (metadata != null) result[isin] = metadata
         }
         return result
+    }
+
+    override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> {
+        val distinct = isins.distinct()
+        if (distinct.isEmpty()) return emptyMap()
+        // Ingen färskhetsgate här, till skillnad från metadataFor: en inaktuell rad är fortfarande
+        // rätt *namn* på fonden, och namnet är allt facit behöver. Att kasta den och hämta om vore
+        // just nätverkskostnaden metoden finns för att undvika.
+        return dao.getByIsins(distinct).associate { it.isin to it.toDomain() }
     }
 
     override suspend fun knownRiskLevels(): List<Int> {

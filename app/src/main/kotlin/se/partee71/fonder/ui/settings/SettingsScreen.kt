@@ -40,6 +40,7 @@ fun SettingsScreen(
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
+    onOpenFacit: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -49,6 +50,7 @@ fun SettingsScreen(
         onImportHoldings = onImportHoldings,
         onImportOrders = onImportOrders,
         onOpenRiskProfile = onOpenRiskProfile,
+        onOpenFacit = onOpenFacit,
         onAccountTypeSelected = viewModel::setAccountType,
         onRefreshPricesNow = viewModel::refreshPricesNow,
         onClearDatabase = viewModel::clearDatabase,
@@ -65,6 +67,7 @@ fun SettingsContent(
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
+    onOpenFacit: () -> Unit = {},
     onAccountTypeSelected: (AccountType) -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
@@ -120,6 +123,19 @@ fun SettingsContent(
                     optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
                     onSelect = onAccountTypeSelected,
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_facit_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_facit_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                Button(onClick = onOpenFacit) { Text(stringResource(R.string.settings_facit_button)) }
             }
         }
 

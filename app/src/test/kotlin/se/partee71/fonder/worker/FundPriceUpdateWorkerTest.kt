@@ -280,6 +280,8 @@ class FundPriceUpdateWorkerTest {
         }
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> =
             metadataByIsin.filterKeys { it in isins }
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> =
+            metadataByIsin.filterKeys { it in isins }
     }
 
     private fun buy(fundId: String, shares: Double, pricePerShare: Double) = Transaction(
@@ -381,6 +383,11 @@ class FundPriceUpdateWorkerTest {
             recorded += record
             recordedDays += Triple(record.sellIsin, record.buyIsin, record.suggestedAtEpochDay)
         }
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = flowOf(
+            recorded.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex }),
+        )
+        /** Workern skriver aldrig markeringen — den ägs av användaren (SET-5, issue #80). */
+        override suspend fun setFollowed(id: Long, followed: Boolean) = Unit
     }
 
     private fun heldMetadata(isin: String, risk: Int, totalFee: Double) = FundMetadata(
@@ -636,5 +643,72 @@ class FundPriceUpdateWorkerTest {
         FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    // --- scanOutcomeNavs: håller köpsidans kurser färska för facit (SET-5, issue #80) ---
+
+    private fun outcomeRecord(id: Long, buyIsin: String, suggestedAtEpochDay: Long) = SuggestionRecord(
+        id = id,
+        suggestedAtEpochDay = suggestedAtEpochDay,
+        planIndex = 0,
+        sellIsin = "SE_HELD",
+        buyIsin = buyIsin,
+        sellNavAtSuggestion = 100.0,
+        buyNavAtSuggestion = 50.0,
+    )
+
+    @Test
+    fun `scanOutcomeNavs hamtar kurs for kopkandidaten via ISIN-kedjan`() = runTest {
+        val today = LocalDate.now()
+        fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat", isin = "SE_CAND")
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        suggestionRepo.record(outcomeRecord(1, "SE_CAND", today.toEpochDay()))
+
+        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, suggestionRepo, today)
+
+        // refreshSince, inte refresh: en köpkandidat är per definition en fond appen aldrig ägt
+        // och saknar Handelsbanken-FundId (samma skäl som scanSwitchPlans resolveBuyNav).
+        assertEquals(listOf("SE_CAND"), refreshSinceCalls.map { it.second })
+        assertTrue(refreshCalls.isEmpty())
+    }
+
+    @Test
+    fun `scanOutcomeNavs hoppar over redan bevakade fonder`() = runTest {
+        // Säljsidan (och varje annan bevakad fond) uppdateras redan av refreshAll under fondens
+        // egen fundId — att hämta den igen via ISIN-vägen hade kostat ett anrop till och lagt en
+        // dubblettrad i cachen under en annan nyckel.
+        val today = LocalDate.now()
+        funds.value = listOf(Fund(fundId = "SHB1", name = "Bevakad", isin = "SE_TRACKED"))
+        fundByIsin["SE_TRACKED"] = Fund(fundId = "SE_TRACKED", name = "Bevakad", isin = "SE_TRACKED")
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        suggestionRepo.record(outcomeRecord(1, "SE_TRACKED", today.toEpochDay()))
+
+        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, suggestionRepo, today)
+
+        assertTrue(refreshSinceCalls.isEmpty())
+    }
+
+    @Test
+    fun `scanOutcomeNavs ar budgeterad och tar de nyaste forslagen forst`() = runTest {
+        val today = LocalDate.now()
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        // Sex distinkta köpkandidater, äldst inspelad först — budgeten är fyra per körning.
+        (1..6).forEach { n ->
+            val isin = "SE_C$n"
+            fundByIsin[isin] = Fund(fundId = isin, name = "Kandidat $n", isin = isin)
+            suggestionRepo.record(outcomeRecord(n.toLong(), isin, today.minusDays((6 - n).toLong()).toEpochDay()))
+        }
+
+        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, suggestionRepo, today)
+
+        assertEquals(listOf("SE_C6", "SE_C5", "SE_C4", "SE_C3"), refreshSinceCalls.map { it.second })
+    }
+
+    @Test
+    fun `scanOutcomeNavs gor ingenting utan inspelad historik`() = runTest {
+        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, FakeSuggestionRecordRepository(), LocalDate.now())
+
+        assertTrue(refreshSinceCalls.isEmpty())
+        assertTrue(refreshCalls.isEmpty())
     }
 }

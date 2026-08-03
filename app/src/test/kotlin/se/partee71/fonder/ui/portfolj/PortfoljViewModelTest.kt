@@ -96,6 +96,7 @@ class PortfoljViewModelTest {
             if (metadataForBlocks) awaitCancellation()
             return metadataByIsin.filterKeys { it in isins }
         }
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)

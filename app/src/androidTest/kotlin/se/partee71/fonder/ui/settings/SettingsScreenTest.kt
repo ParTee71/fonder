@@ -115,6 +115,20 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun facit_knappen_anropar_callback() {
+        // SET-5 (issue #80): facit nås som egen undersida från Inställningar, samma mönster som
+        // Riskprofil (SET-3).
+        var opened = false
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onOpenFacit = { opened = true }) }
+        }
+
+        composeRule.onNodeWithText("Öppna facit").performScrollTo().performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
     fun tomningsmeddelandet_visas_ur_tillstandet_och_gar_att_kvittera() {
         // Regression (issue #78): meddelandet speglades lokalt via ett LaunchedEffect och
         // ViewModel:ens flagga nollställdes aldrig, så engångshändelsen spelades upp igen vid

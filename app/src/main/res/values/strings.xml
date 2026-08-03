@@ -236,6 +236,30 @@
     <string name="settings_account_type_body">Styr om Hem föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
     <string name="account_type_isk_kf">ISK/KF</string>
     <string name="account_type_depa_af">Depå/AF</string>
+    <!-- Facit för bytesplanen (SET-5, issue #80) -->
+    <string name="facit_title">Facit</string>
+    <string name="settings_facit_section">Facit</string>
+    <string name="settings_facit_body">Se hur bytesförslagen på Hem gick jämfört med att ha behållit innehavet.</string>
+    <string name="settings_facit_button">Öppna facit</string>
+    <string name="facit_empty_title">Inget facit än</string>
+    <string name="facit_empty_body">Här visas utfallet av bytesförslagen från Hem. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
+    <string name="facit_summary_title">Meravkastning mot att ha behållit</string>
+    <string name="facit_summary_all_label">Alla förslag</string>
+    <string name="facit_summary_followed_label">Enbart genomförda</string>
+    <string name="format_facit_evaluated_count">%1$d av %2$d förslag utvärderade</string>
+    <string name="facit_by_plan_index_title">Per plats i planen</string>
+    <string name="format_facit_plan_index_label">Plats %1$d</string>
+    <string name="facit_by_plan_index_explain">Planen är rangordnad, så det första bytet ska vara det starkaste. Presterar de lägre platserna sämre är det ett skäl att inte föreslå fler byten per plan.</string>
+    <string name="format_facit_row_funds">%1$s → %2$s</string>
+    <string name="facit_row_excess_label">Meravkastning</string>
+    <string name="format_facit_plan_index_detail">Plats %1$d i planen</string>
+    <string name="format_facit_amount">Belopp: %1$s</string>
+    <string name="format_facit_legs">Såld fond %1$s · köpt fond %2$s sedan förslaget</string>
+    <string name="facit_not_evaluated_explain">Kunde inte utvärderas än — kursen för någon av fonderna är inte hämtad. Bakgrundsuppdateringen fyller på den efter hand.</string>
+    <string name="facit_followed_label">Genomförd</string>
+    <string name="facit_expand">Visa detaljer</string>
+    <string name="facit_collapse">Dölj detaljer</string>
+    <string name="facit_disclaimer">Måttet jämför de två fondernas kursutveckling sedan förslagsdagen. Det är inte din faktiska avkastning: den beror på vilken dag du bytte och på eventuella avgifter, och skatt räknas inte alls (bytesförslag ges bara i ISK/KF, där ett byte inte utlöser skatt). Bara förslag som faktiskt gavs mäts här — perioder utan plan syns inte.</string>
     <string name="settings_about_section">Om appen</string>
 
     <!-- Importera innehav (issue #8) -->
