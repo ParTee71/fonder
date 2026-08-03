@@ -457,7 +457,7 @@ class HemScreenTest {
             switchPlan = listOf(
                 SwitchSuggestionUi(
                     sellFundName = "Dyr fond", buyFundName = "Billig fond",
-                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 2_500.0,
+                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
         )
@@ -468,8 +468,10 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("Bytesplan").assertExists()
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
-        // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75).
-        composeRule.onNodeWithText("Belopp: 2 500,00 kr").assertExists()
+        // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75). Belopp
+        // under tusen — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg beroende på
+        // JVM/lokal (se MoneyFormatTest), och ett test som beror på vilket vore flakigt.
+        composeRule.onNodeWithText("Belopp: 250,00 kr", substring = true).assertExists()
         composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
     }
 
