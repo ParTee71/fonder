@@ -21,4 +21,8 @@ interface SuggestionRecordDao {
 
     @Query("SELECT * FROM suggestion_records")
     suspend fun getAll(): List<SuggestionRecordEntity>
+
+    /** Töms tillsammans med fonder/transaktioner/kurser (SET-1) — inspelade förslag är användardata, inte cache. */
+    @Query("DELETE FROM suggestion_records")
+    suspend fun deleteAll()
 }

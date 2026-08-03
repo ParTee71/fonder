@@ -80,7 +80,7 @@
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
 | POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Måttet är förankrat i fondens **senaste kända NAV-dag** (referensdagen), inte väggklockans "idag": "En dag" är referensdagens NAV mot dagen före, "senaste veckan/månaden" mot 7/30 dagar före referensdagen. Det gör raderna beräkningsbara även innan dagens NAV publicerats eller för fonder vars NAV släpar (utländska fonder rapporterar med fördröjning) — då visas den senaste faktiska rörelsen, och hur färsk referensdagen är framgår av "Värde per \<datum\>" (POR-7). Räcker inte kurshistoriken [Period.days] dagar bak från referensdagen (t.ex. nytillagd fond, eller bara en enda känd kurs) markeras just den perioden som otillräcklig data i stället för ett gissat `0` (issue #14/#18). ~~Är fondens senast kända kurs äldre än periodens start visas i stället "Kurs ej uppdaterad".~~ *(borttaget — periodmåttet ankras nu i senaste NAV, inte "idag", så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad; färskheten visas via POR-7)* |
-| POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
+| POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Datumet avser den **äldsta kvarvarande** köp-lotten, samma position som anskaffningsvärdet beskriver — en fond som sålts av helt och köpts igen räknas från det nya köpet. Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
 | POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
 | POR-8 | Varje innehavsrad i Portfölj visar den befintliga säljsignal-statusen (`StatusDot`, ANA-3) och en ev. triggad vinstsignal (ANA-8) direkt på kortet, utan att behöva öppna Fonddetalj (issue #26). Visas inget om analysen saknar tillräcklig data (ANA-4). |
 | POR-9 | Portfölj visar en **exponeringskarta**: andel av portföljens värde per **fondtyp**, **region**, **risknivå** och **index vs. aktivt förvaltat**, viktat på innehavens aktuella värde. Fondtypen läses ur källans `TYPE`-tagg (exakt en per fond, verifierat 999/999) — **inte** ur `FundMetadata.fundType`, som är en engelsk kod vars gruppering dessutom skiljer sig från taggens. Region slår ihop `COMMON_REGION` och `OTHER_REGION` (verifierat aldrig samtidiga, och aldrig fler än en per fond); index/aktiv läses ur `FundMetadata.indexFund` (alltid satt). Risknivå läses ur `FundMetadata.risk` (TP-21) och är, till skillnad från övriga dimensioner, sorterad **stigande på nivå** i stället för fallande på värde — en ordnad skala ska visas i sin egen ordning (issue #71). Etiketterna är källans egna svenska titlar, oöversatta, så en ny kategori källan inför inte tappas bort. Procenten räknas på hela det medräknade värdet inklusive okänt, så varje dimension summerar till 100 %. Innehav utan ISIN, metadataträff eller känd kurs exkluderas helt och räknas separat (samma princip som HEM-5); ett känt innehav utan regiontagg eller känd risknivå (vanligt för ränte-, bland- och alternativa fonder) hamnar i en egen "okänd"-hink, aldrig gissad eller dold. `MISC`/`INTEREST` ingår inte — flera fonder bär mer än en tagg där, vilket skulle dubbelräkna värde; `INDUSTRY`/`ALIGNMENT` ingår inte heller på grund av låg täckning. Att öppna Portfölj utlöser aldrig en köpbarhets- eller alternativskanning (samma avgränsning som HEM-5) — bara cache-först-uppslag via `metadataFor`. Ingen köp- eller rebalanseringsrekommendation — ren inventering (issue #66, risknivådimensionen issue #71). |
@@ -161,9 +161,9 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
 
 ## Historik
 
-- **Sex tysta datafel ur kodgranskningen av hela projektet (#75):** Inget nytt krav — sex
-  buggar som alla gjorde fel *utan att synas*, åtgärdade tillsammans eftersom de delar
-  grundmönster: frånvaro av data behandlades som ett svar.
+- **Tysta fel ur kodgranskningen av hela projektet (#75):** Inget nytt krav — buggar som alla
+  gjorde fel *utan att synas*. De sex första delar grundmönster: frånvaro av data behandlades
+  som ett svar.
   1. **NAV-datum en dag fel, och varje måndagskurs borttappad (TP-14).** Avanzas
      chart-stämplar är lokal midnatt i Stockholm, inte UTC — `AvanzaJsonParser` tolkade dem
      som UTC, daterade varje kurs en dag för tidigt och lät helgfiltret från #39 kasta
@@ -191,9 +191,57 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
      `MainViewModel.themeMode`, som splash-skärmen väntar på. Nu återställs standard­värden
      i stället, och Room-databasen förblir åtkomlig.
 
-  Ingen migrering, ingen ny persisterad data — men punkt 2 och 6 skyddar data som redan
-  omfattas av backup-kontraktet, och punkt 6 är precis den återställningsväg NFR-1 vilar på
-  tills Drive-backup (TP-7) finns.
+  Därefter elva fel av medelgrad, i samma granskning:
+
+  7. **Riskavvikelsen på Hem räknades mot fel nämnare (HEM-7).** Målfördelningen summerar till
+     1, men den faktiska fördelningen kom från `PortfolioExposureCalc`, vars andelar divideras
+     med ett värde som *också* rymmer innehav med okänd risknivå — varje nivå såg därför
+     underviktad ut. Ny `PortfolioRiskCalc.actualAllocation` normaliserar mot det
+     klassificerade värdet, samma nämnare som riskmåttet redan använder.
+  8. **"Datum för första köp" avsåg fel position (POR-6).** Datumet togs ur *alla* fondens
+     transaktioner medan anskaffningsvärdet bara gäller kvarvarande lotter. En fond som sålts
+     av helt och köpts igen visade "investerat sedan" flera år tillbaka, och ANA-1
+     annualiserade "sedan köp" över år positionen inte funnits. `RemainingPosition` bär nu
+     den äldsta kvarvarande lottens datum.
+  9. **Offline-sorteringen förstod bara avgift (TP-21/ÖV-6).** Ett okänt `sortField` föll tyst
+     till namnsortering — bytesplanens kandidatfråga (`developmentOneYear`) gav offline
+     omvänt alfabetisk ordning, och eftersom sidan klipps till 20 rader *efter* sorteringen
+     kom nivåns bästa fonder aldrig med. Dessutom vände `asReversed()` även null-hanteringen,
+     så fonder med okänd avgift hamnade först i fallande ordning.
+  10. **Vinst-/förlustfärgerna följde systemets tema, inte appens (UI-1).** `ReturnColors`/
+      `StatusColors` läste `isSystemInDarkTheme()` i stället för det läge `FonderTheme`
+      faktiskt applicerade: valde användaren "Ljust" på en telefon i mörkt läge ritades varje
+      belopp och statusprick i en ljus lågkontrastfärg på vit bakgrund.
+  11. **Billigare-alternativ-kortet kunde utebli helt (ANA-9).** Jobbet låste på det första
+      icke-laddande tillståndet; för ett innehav med tom kurscache var analysen null just då
+      och kortet dök aldrig upp, trots att kurserna landade sekunder senare.
+  12. **Portföljvyn blockerades på nätverket (POR-1/POR-9).** Metadatauppslaget (ett
+      sekventiellt anrop per ISIN) låg inne i tillståndsflödet, så vyn stod kvar i laddläge
+      och visade "0,00 kr · Kurs saknas" så länge uppkopplingen hängde — trots att innehav
+      och värden fanns lokalt. Metadata hämtas nu i ett eget flöde och fyller på när den
+      landar.
+  13. **Ett fel på ett oanvänt anrop fällde hela kurshämtningen (TP-14).** `AvanzaPriceSource`
+      hämtade fondens valuta trots att punkterna alltid märks i kronor; svarade den endpointen
+      fel slutade fonden uppdateras.
+  14. **Ett otolkbart svar såg ut som "inga fonder" (TP-21/ÖV-6).** Fondlisteparsern gav en tom
+      sida i stället för null, så offline-fallbacken hoppades över: fondsöket visade tomt trots
+      full cache, och baslinjen för "källan ignorerade filtret" förgiftades till 0.
+  15. **HTML-parsningen körde på anroparens tråd (TP-18).** En backfill kan vara flera MB HTML
+      och startas från Fonddetalj/Portfölj/Fondsök — DOM-bygget frös UI:t. Parsningen ligger nu
+      på en bakgrundsdispatcher, som HTTP-anropet redan gjorde.
+  16. **Dubbeltryck importerade allt två gånger (IMP-1/NAV-4).** Varken importflödena eller
+      transaktionsformuläret hade någon spärr, och knappen släcktes först när allt var skrivet
+      — ett andra tryck gav dubbla andelar och dubbelt investerat belopp. Anropen är nu
+      idempotenta under pågående skrivning.
+  17. **"Töm databasen" lämnade kvar inspelade bytesförslag (SET-1).** `suggestion_records` är
+      genuin användardata (samma skäl som att den ingår i backup-kontraktet) men rensades
+      aldrig: Hem visade råd prissatta mot en portfölj som inte längre fanns, och dygnsdedupen
+      spärrade en nyberäknad plan. `fund_metadata`/`fx_rates` rensas fortsatt medvetet inte —
+      ren cache.
+
+  Ingen migrering, ingen ny persisterad data — men punkt 2, 6 och 17 rör data som omfattas av
+  backup-kontraktet, och punkt 6 är precis den återställningsväg NFR-1 vilar på tills
+  Drive-backup (TP-7) finns.
 
 - **Handelsdagsmedveten kursuppdatering, bakgrundsindikator och "Värde per datum" (#27):**
   Kursuppdateringen räknas om kring handelsdagar i stället för fasta tidsintervall — ny ren

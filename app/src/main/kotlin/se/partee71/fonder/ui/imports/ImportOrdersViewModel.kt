@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.imports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,8 +52,10 @@ data class ImportOrdersUiState(
     val unparsedFileNames: List<String> = emptyList(),
     val error: ImportOrdersError? = null,
     val imported: Boolean = false,
+    /** Importen pågår — knappen ska vara släckt, se [ImportOrdersViewModel.import]. */
+    val importing: Boolean = false,
 ) {
-    val canImport: Boolean get() = rows.any { it.readyToImport }
+    val canImport: Boolean get() = rows.any { it.readyToImport } && !importing
 }
 
 /**
@@ -70,6 +73,9 @@ class ImportOrdersViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ImportOrdersUiState())
     val uiState: StateFlow<ImportOrdersUiState> = _uiState.asStateFlow()
+
+    /** Pågående import — se [import]. */
+    private var importJob: Job? = null
 
     /** [files] är (filnamn, filinnehåll) för varje vald PDF — flera filer väljs samtidigt via SAF. */
     fun onFilesSelected(files: List<Pair<String, ByteArray>>) {
@@ -165,8 +171,11 @@ class ImportOrdersViewModel @Inject constructor(
         }
     }
 
+    /** Idempotent under pågående import — se [ImportHoldingsViewModel.import] för varför. */
     fun import() {
-        viewModelScope.launch {
+        if (importJob?.isActive == true) return
+        _uiState.update { it.copy(importing = true) }
+        importJob = viewModelScope.launch {
             _uiState.value.rows
                 .filter { it.readyToImport }
                 .forEach { rowState ->
@@ -182,7 +191,7 @@ class ImportOrdersViewModel @Inject constructor(
                         ),
                     )
                 }
-            _uiState.update { it.copy(imported = true) }
+            _uiState.update { it.copy(imported = true, importing = false) }
         }
     }
 }

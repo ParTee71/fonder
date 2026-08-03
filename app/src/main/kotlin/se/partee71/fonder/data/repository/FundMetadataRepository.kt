@@ -360,9 +360,10 @@ class AvanzaFundMetadataRepository @Inject constructor(
          * ([AvanzaFundListParser]). En **transportnyckel**, i samma kategori som filternamnen i
          * [se.partee71.fonder.data.network.AvanzaFundListRequestBuilder]: skulle källan inte
          * känna igen den ignoreras den tyst, vilket [findSwitchCandidates] både loggar och
-         * kompenserar för genom att rangordna lokalt.
+         * kompenserar för genom att rangordna lokalt. Delas med [FundScreenFilter], som
+         * sorterar på samma nyckel när frågan besvaras ur cachen (ÖV-6).
          */
-        const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = "developmentOneYear"
+        const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = FundScreenFilter.SORT_FIELD_DEVELOPMENT_ONE_YEAR
 
         /** Tak på antal verifierat köpbara kandidater per risknivå (HEM-8, issue #70) — samma budgetprincip som ANA-9. */
         const val MAX_SWITCH_CANDIDATES = 5

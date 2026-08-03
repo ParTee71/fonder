@@ -157,4 +157,38 @@ class PortfolioRiskCalcTest {
     fun `deviationByLevel med tomma fordelningar ger en tom lista`() {
         assertEquals(emptyList<PortfolioRiskCalc.LevelDeviation>(), PortfolioRiskCalc.deviationByLevel(emptyMap(), emptyMap()))
     }
+
+    @Test
+    fun `actualAllocation normaliserar mot det klassificerade vardet, inte hela portfoljen`() {
+        // Regression (issue #75): Bucket.fraction divideras med includedValueKr, som också rymmer
+        // innehav med okänd risknivå. Andelarna summerade då till mindre än 1 medan målet
+        // summerar till exakt 1 — så varje nivå såg underviktad ut.
+        val holdings = listOf(
+            holding("A", currentValue = 700.0),
+            holding("B", currentValue = 300.0),
+        )
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 4), "SEB" to metadata("SEB", risk = null))
+        val exposure = PortfolioExposureCalc.compute(holdings, metadataByIsin)
+
+        // Förutsättningen: okänd risknivå ligger i okänd-hinken men *innanför* nämnaren.
+        assertEquals(0.7, exposure.byRiskLevel.buckets.single().fraction, 1e-9)
+        assertEquals(0.3, exposure.byRiskLevel.unknownFraction, 1e-9)
+
+        val actual = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel)
+
+        assertEquals(mapOf(4 to 1.0), actual)
+        // 100 % av det klassificerade värdet ligger på målnivån — ingen avvikelse att åtgärda.
+        val deviation = PortfolioRiskCalc.deviationByLevel(mapOf(4 to 1.0), actual).single()
+        assertEquals(0.0, deviation.deviationFraction, 1e-9)
+    }
+
+    @Test
+    fun `actualAllocation ger en tom fordelning utan klassificerat varde`() {
+        val exposure = PortfolioExposureCalc.compute(
+            listOf(holding("A", currentValue = 1000.0)),
+            mapOf("SEA" to metadata("SEA", risk = null)),
+        )
+
+        assertEquals(emptyMap<Int, Double>(), PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel))
+    }
 }

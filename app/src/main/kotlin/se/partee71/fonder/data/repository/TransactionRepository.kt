@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
@@ -32,7 +33,16 @@ interface TransactionRepository {
     suspend fun addTransaction(tx: Transaction): Long
     suspend fun deleteTransaction(id: Long)
 
-    /** Tömmer all bevakad data (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1. */
+    /**
+     * Tömmer all bevakad data (fonder, transaktioner, cachade kurser och inspelade
+     * bytesförslag) — irreversibelt, se SET-1. `suggestion_records` ingår eftersom raderna är
+     * genuin, ej rekonstruerbar användardata (samma skäl som de ingår i backup-kontraktet):
+     * lämnades de kvar visade Hem efter en tömning fortfarande "Sälj X → Köp Y" för en
+     * portfölj som inte längre finns, och dygnsdedupen spärrade en nyberäknad plan.
+     *
+     * `fund_metadata` och `fx_rates` rensas medvetet **inte** — ren cache som hämtas om vid
+     * behov (se `FundMetadataEntity`s KDoc), utan koppling till vad användaren har bevakat.
+     */
     suspend fun clearAll()
 }
 
@@ -42,6 +52,7 @@ class RoomTransactionRepository @Inject constructor(
     private val fundDao: FundDao,
     private val transactionDao: TransactionDao,
     private val fundPriceDao: FundPriceDao,
+    private val suggestionRecordDao: SuggestionRecordDao,
 ) : TransactionRepository {
 
     override fun observeFunds(): Flow<List<Fund>> =
@@ -75,6 +86,7 @@ class RoomTransactionRepository @Inject constructor(
         database.withTransaction {
             transactionDao.deleteAll()
             fundPriceDao.deleteAll()
+            suggestionRecordDao.deleteAll()
             fundDao.deleteAll()
         }
     }

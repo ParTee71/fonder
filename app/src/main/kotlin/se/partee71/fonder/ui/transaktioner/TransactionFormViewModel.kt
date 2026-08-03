@@ -62,6 +62,9 @@ class TransactionFormViewModel @Inject constructor(
     /** Pågående kursuppslag för vald fond — avbryts vid fondbyte, se [onFundSelected]. */
     private var priceLookupJob: Job? = null
 
+    /** Pågående sparning — se [save]. */
+    private var saveJob: Job? = null
+
     // combine() saknar en 6-parametersvariant — kombinerar därför i två steg.
     private val baseFields = combine(selectedFund, type, date) { fund, type, date -> Triple(fund, type, date) }
     private val amountFields = combine(sharesText, priceText, feeText) { shares, price, fee -> Triple(shares, price, fee) }
@@ -130,13 +133,15 @@ class TransactionFormViewModel @Inject constructor(
         feeText.value = text
     }
 
+    /** Idempotent under pågående sparning — två snabba tryck ska inte ge två transaktioner. */
     fun save() {
         val fund = selectedFund.value ?: return
         val shares = SwedishNumberFormat.parse(sharesText.value) ?: return
         val price = SwedishNumberFormat.parse(priceText.value) ?: return
         val fee = parseFee(feeText.value) ?: return
         if (!TransactionFormValidator.isValid(fund.fundId, shares, price, date.value, fee)) return
-        viewModelScope.launch {
+        if (saveJob?.isActive == true) return
+        saveJob = viewModelScope.launch {
             transactionRepository.addTransaction(
                 Transaction(
                     fundId = fund.fundId,

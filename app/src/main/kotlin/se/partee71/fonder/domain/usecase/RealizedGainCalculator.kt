@@ -38,7 +38,18 @@ data class RealizedSale(
  * först. Underlag för [PortfolioCalc] (POR-1), skiljt från [RealizedSale] som gäller de
  * sålda andelarna.
  */
-data class RemainingPosition(val shares: Double, val costBasis: Double)
+data class RemainingPosition(
+    val shares: Double,
+    val costBasis: Double,
+    /**
+     * Köpdatum för den **äldsta kvarvarande** lotten — inte fondens äldsta transaktion.
+     * En position som sålts av helt och köpts igen ska räknas från det nya köpet: både
+     * [costBasis] och "sedan köp"-avkastningen (ANA-1) beskriver annars två olika positioner.
+     * Null bara om positionen saknar köp-lott helt (osannolikt, men [shares] kan täckas av
+     * `uncoveredShares`-fallet).
+     */
+    val firstPurchaseEpochDay: Long?,
+)
 
 /**
  * FIFO-motor (äldsta köp-lott konsumeras först) som ger både realiserat resultat per
@@ -50,7 +61,7 @@ data class RemainingPosition(val shares: Double, val costBasis: Double)
  */
 object RealizedGainCalculator {
 
-    private data class Lot(var shares: Double, val pricePerShare: Double)
+    private data class Lot(var shares: Double, val pricePerShare: Double, val epochDay: Long)
 
     private class FundFifoResult(val sales: List<RealizedSale>, val remainingLots: List<Lot>)
 
@@ -64,7 +75,7 @@ object RealizedGainCalculator {
 
         for (tx in sorted) {
             when (tx.type) {
-                TransactionType.KOP -> lots.addLast(Lot(tx.shares, tx.pricePerShare))
+                TransactionType.KOP -> lots.addLast(Lot(tx.shares, tx.pricePerShare, tx.epochDay))
                 TransactionType.SALJ -> {
                     var remaining = tx.shares
                     var costBasis = 0.0
@@ -111,6 +122,12 @@ object RealizedGainCalculator {
         transactions
             .groupBy { it.fundId }
             .mapValues { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).remainingLots }
-            .mapValues { (_, lots) -> RemainingPosition(lots.sumOf { it.shares }, lots.sumOf { it.shares * it.pricePerShare }) }
+            .mapValues { (_, lots) ->
+                RemainingPosition(
+                    shares = lots.sumOf { it.shares },
+                    costBasis = lots.sumOf { it.shares * it.pricePerShare },
+                    firstPurchaseEpochDay = lots.minOfOrNull { it.epochDay },
+                )
+            }
             .filterValues { it.shares > SHARE_EPSILON }
 }

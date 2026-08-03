@@ -153,8 +153,10 @@ class HemViewModel @Inject constructor(
                     riskProfile = riskProfile,
                     portfolioRisk = PortfolioRiskCalc.compute(enriched, metadataByIsin),
                     riskLevelDeviations = riskProfile?.let {
-                        val actualAllocation = exposure.byRiskLevel.buckets.associate { bucket -> bucket.label.toInt() to bucket.fraction }
-                        PortfolioRiskCalc.deviationByLevel(it.effectiveAllocation, actualAllocation)
+                        PortfolioRiskCalc.deviationByLevel(
+                            targetAllocation = it.effectiveAllocation,
+                            actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel),
+                        )
                     }.orEmpty(),
                     switchPlan = switchPlan,
                 )

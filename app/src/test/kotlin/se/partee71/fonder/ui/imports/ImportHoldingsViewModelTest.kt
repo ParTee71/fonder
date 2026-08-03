@@ -495,6 +495,32 @@ class ImportHoldingsViewModelTest {
     }
 
     @Test
+    fun `tva snabba tryck pa importera ger inte dubbla transaktioner`() = runTest(dispatcher) {
+        // Regression (issue #75): importen gav ingen synlig återkoppling förrän `imported` slog
+        // om, så ett andra tryck under skrivningarna startade en andra genomkörning av samma
+        // lista — dubbla andelar och dubbelt investerat belopp för varje importerad fond.
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.canImport)
+
+            vm.import()
+            // Knappen är släckt medan importen pågår, och ett andra tryck är verkningslöst.
+            assertFalse(vm.uiState.value.canImport)
+            vm.import()
+
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(1, addedTransactions.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `import sparar exportradens ISIN pa den matchade fonden`() = runTest(dispatcher) {
         // Exportens ISIN (kolumn A i sampleSheetXml, "SE0000582033") ska sparas på fonden
         // vid import — inte kasseras — så full kurshistorik sedan köpdatum kan hämtas från

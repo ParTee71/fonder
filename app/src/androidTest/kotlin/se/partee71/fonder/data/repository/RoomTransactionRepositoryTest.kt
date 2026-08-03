@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import se.partee71.fonder.domain.model.Fund
 
@@ -33,14 +34,14 @@ class RoomTransactionRepositoryTest {
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java,
         ).build()
-        repository = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao())
+        repository = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao())
     }
 
     @After
     fun tearDown() = db.close()
 
     @Test
-    fun clearAll_tommer_fonder_transaktioner_och_cachade_kurser() = runTest {
+    fun clearAll_tommer_fonder_transaktioner_kurser_och_inspelade_forslag() = runTest {
         db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033"))
         db.transactionDao().insert(
             TransactionEntity(fundId = "SHB0000442", type = "KOP", epochDay = 100, shares = 3.0, pricePerShare = 50.0),
@@ -48,12 +49,27 @@ class RoomTransactionRepositoryTest {
         db.fundPriceDao().upsertAll(
             listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 50.0, currency = "SEK")),
         )
+        // Inspelade bytesförslag (HEM-8) är användardata, inte cache — de måste med i tömningen,
+        // annars visar Hem råd som prissatts mot en portfölj som inte längre finns.
+        db.suggestionRecordDao().insert(
+            SuggestionRecordEntity(
+                suggestedAtEpochDay = 100,
+                planIndex = 0,
+                sellIsin = "SE0000582033",
+                buyIsin = "SE0001466368",
+                sellNavAtSuggestion = 50.0,
+                buyNavAtSuggestion = 120.0,
+                switchValueKr = 1_000.0,
+                followed = null,
+            ),
+        )
 
         repository.clearAll()
 
         assertTrue(repository.observeFunds().first().isEmpty())
         assertTrue(repository.observeTransactions().first().isEmpty())
         assertTrue(db.fundPriceDao().getRange("SHB0000442", 0, 200).isEmpty())
+        assertTrue(db.suggestionRecordDao().getAll().isEmpty())
     }
 
     @Test

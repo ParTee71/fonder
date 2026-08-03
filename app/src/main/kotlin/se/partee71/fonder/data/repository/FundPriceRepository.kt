@@ -1,9 +1,11 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.FxRateSource
@@ -212,7 +214,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     ): List<FundPrice>? =
         runCatching {
             val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
-            toValueCurrency(HandelsbankenHtmlParser.parseHistory(html, cacheFundId))
+            // Parsningen (inte bara HTTP-anropet) måste av anroparens tråd: en backfill kan vara
+            // flera MB HTML, och FondDetalj/Portfölj anropar det här från viewModelScope
+            // (Main.immediate) — DOM-bygget och radselektionen frös då UI:t i sekunder.
+            val prices = withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
+            toValueCurrency(prices)
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
@@ -418,22 +424,31 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     }
 
     override suspend fun lookupIsin(fundId: String): String? =
-        runCatching { HandelsbankenHtmlParser.parseIsin(fundPageClient.fetchFundPage(fundId)) }
+        runCatching {
+            val html = fundPageClient.fetchFundPage(fundId)
+            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseIsin(html) }
+        }
             .onFailure { e -> Log.w(TAG, "Kunde inte slå upp ISIN för fund $fundId", e) }
             .getOrNull()
 
     // Utan `company` levererar källan hela plattformens katalog, inte bara Handelsbankens egna
     // fonder (KRAVLISTA TP-18) — bolagslistan finns med i samma svar.
+    // Parsningen körs av anroparens tråd, se fetchAndCacheFromFondlista — katalogsvaret är
+    // drygt hundra kilobyte HTML och hämtas från Fondsöks viewModelScope.
     override suspend fun fetchFundCatalog(): FundCatalog? =
         fetchCatalogPage(company = null)?.let { html ->
-            FundCatalog(
-                companies = HandelsbankenHtmlParser.parseFundCompanies(html),
-                funds = HandelsbankenHtmlParser.parseFundCatalog(html),
-            )
+            withContext(Dispatchers.Default) {
+                FundCatalog(
+                    companies = HandelsbankenHtmlParser.parseFundCompanies(html),
+                    funds = HandelsbankenHtmlParser.parseFundCatalog(html),
+                )
+            }
         }
 
     override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
-        fetchCatalogPage(company = companyId)?.let(HandelsbankenHtmlParser::parseFundCatalog)
+        fetchCatalogPage(company = companyId)?.let { html ->
+            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseFundCatalog(html) }
+        }
 
     /** Katalogsidan för ett (eller inget) fondbolag. Null vid fel — anroparen behåller då sin nuvarande lista. */
     private suspend fun fetchCatalogPage(company: String?): String? =
