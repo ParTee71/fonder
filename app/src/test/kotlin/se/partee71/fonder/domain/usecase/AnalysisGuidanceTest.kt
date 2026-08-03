@@ -134,4 +134,15 @@ class AnalysisGuidanceTest {
 
         assertEquals(listOf(GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV), keys)
     }
+
+    @Test
+    fun `djup nedgang under GAV ger bara tidshorisont-kontexten, inte bada`() {
+        // Den röda nyckeln säger redan samma sak starkare ("att sälja nu gör nedgången
+        // verklig"); två överlappande stycken i samma kort vore sämre än ett träffsäkert.
+        val keys = AnalysisGuidance.guidanceFor(
+            analysis(distanceLevel = SignalLevel.ROD, distanceFraction = -0.25, gavFraction = -0.1, status = SignalLevel.ROD),
+        )
+
+        assertEquals(listOf(GuidanceKey.DJUP_NEDGANG_TIDSHORISONT), keys)
+    }
 }

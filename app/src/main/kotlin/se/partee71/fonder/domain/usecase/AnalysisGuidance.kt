@@ -49,14 +49,23 @@ object AnalysisGuidance {
         val belowHigh = distance != null && distance.level != SignalLevel.GRON
         val gavFraction = analysis.keyFigures.gavFraction
 
+        val djupNedgang = distance != null && distance.level == SignalLevel.ROD
+
         // Under toppen: läget mot GAV är kontexten som betyder mest, i båda riktningarna.
         // Tidigare gavs bara plus-varianten, så en GUL fond som *också* låg under GAV kunde få
         // en tom lista — samma utfall som "otillräcklig data", fast för det läge där
         // vägledningen behövs mest (issue #75).
+        //
+        // Minus-varianten ges bara när nedgången *inte* är röd: [DJUP_NEDGANG_TIDSHORISONT]
+        // säger redan samma sak starkare och mer specifikt ("att sälja nu gör nedgången
+        // verklig"), och två överlappande stycken i samma kort är sämre än ett träffsäkert.
         if (belowHigh && gavFraction != null) {
-            keys += if (gavFraction > 0.0) GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV else GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV
+            when {
+                gavFraction > 0.0 -> keys += GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV
+                !djupNedgang -> keys += GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV
+            }
         }
-        if (distance != null && distance.level == SignalLevel.ROD) {
+        if (djupNedgang) {
             keys += GuidanceKey.DJUP_NEDGANG_TIDSHORISONT
         }
         if (analysis.trend?.level == SignalLevel.GUL) {
