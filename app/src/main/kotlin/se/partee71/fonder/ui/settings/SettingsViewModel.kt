@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -90,8 +91,23 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setThemeMode(mode) }
     }
 
+    /**
+     * Sparar kontotypen (SET-4) och, vid byte **till** ISK/KF, ber om en omräkning av
+     * bytesplanen (HEM-8, issue #88): SET-4-gaten gör att ingen plan alls ges i depå/AF, så
+     * det är först i och med bytet hit som en plan kan finnas — utan triggern dröjer den till
+     * nästa backstop, upp till 12 timmar bort.
+     *
+     * Bara vid faktiskt byte: att välja samma kontotyp igen ska inte kosta en skanning. Byte
+     * *till* depå/AF triggar ingenting alls — där ges ingen plan att räkna om.
+     */
     fun setAccountType(type: AccountType) {
-        viewModelScope.launch { preferences.setAccountType(type) }
+        viewModelScope.launch {
+            val previous = preferences.accountType.first()
+            preferences.setAccountType(type)
+            if (type == AccountType.ISK_KF && previous != AccountType.ISK_KF) {
+                fundPriceRefreshScheduler.triggerSwitchPlanScan()
+            }
+        }
     }
 
     /** Tömmer hela databasen (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1. */

@@ -26,6 +26,7 @@ class WorkerStatusViewModelTest {
         override fun scheduleOnLaunch() {}
         override fun scheduleBackstop() {}
         override fun triggerManualRefresh() {}
+        override fun triggerSwitchPlanScan() {}
         override fun observeIsRunning(): Flow<Boolean> = isRunning
     }
 

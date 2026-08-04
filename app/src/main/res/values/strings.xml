@@ -354,6 +354,9 @@
     <string name="format_hem_switch_plan_row">%1$d. Sälj %2$s (nivå %3$d) → Köp %4$s (nivå %5$d)</string>
     <string name="format_hem_switch_plan_amount">Belopp: %1$s</string>
     <string name="format_hem_switch_plan_fee_delta">Avgiftsskillnad: %1$s</string>
+    <string name="hem_switch_plan_recompute">Räkna om bytesplanen</string>
+    <string name="hem_switch_plan_recompute_running">Räknar om …</string>
+    <string name="hem_switch_plan_recompute_explain">Planen räknas normalt om automatiskt några gånger per dygn, och direkt när du ändrar riskprofil eller kontotyp. Avviker ingen risknivå tillräckligt mycket från ditt mål ges inget förslag — då ändras ingenting här.</string>
     <string name="hem_switch_plan_disclaimer">Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria.</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>

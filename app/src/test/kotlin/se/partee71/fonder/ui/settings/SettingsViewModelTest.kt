@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -41,6 +42,7 @@ class SettingsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private var clearAllCalled = false
     private var manualRefreshCalled = false
+    private var switchPlanScans = 0
     private lateinit var dataStore: DataStore<Preferences>
 
     private val fakeTransactionRepo = object : TransactionRepository {
@@ -60,6 +62,9 @@ class SettingsViewModelTest {
         override fun scheduleBackstop() {}
         override fun triggerManualRefresh() {
             manualRefreshCalled = true
+        }
+        override fun triggerSwitchPlanScan() {
+            switchPlanScans++
         }
         override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
     }
@@ -316,5 +321,42 @@ class SettingsViewModelTest {
             assertEquals(1, reads)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Omräkning av bytesplanen vid kontotypsbyte (HEM-8, issue #88) ---
+
+    @Test
+    fun `byte till ISK eller KF ber om en omrakning av bytesplanen`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.setAccountType(AccountType.ISK_KF)
+        advanceUntilIdle()
+
+        assertEquals(1, switchPlanScans)
+    }
+
+    @Test
+    fun `samma kontotyp igen kostar ingen ny skanning`() = runTest(dispatcher) {
+        // Skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per underviktad
+        // nivå — den ska följa faktiska byten, inte antalet tryck.
+        val vm = viewModel()
+
+        vm.setAccountType(AccountType.ISK_KF)
+        advanceUntilIdle()
+        vm.setAccountType(AccountType.ISK_KF)
+        advanceUntilIdle()
+
+        assertEquals(1, switchPlanScans)
+    }
+
+    @Test
+    fun `byte till depa eller AF ber inte om nagon omrakning`() = runTest(dispatcher) {
+        // SET-4-gaten ger ingen plan alls i depå/AF — det finns inget att räkna om.
+        val vm = viewModel()
+
+        vm.setAccountType(AccountType.DEPA_AF)
+        advanceUntilIdle()
+
+        assertEquals(0, switchPlanScans)
     }
 }

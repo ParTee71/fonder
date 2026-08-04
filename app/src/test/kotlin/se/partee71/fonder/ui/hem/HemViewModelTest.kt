@@ -46,6 +46,7 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -134,7 +135,28 @@ class HemViewModelTest {
 
     private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
 
-    private fun viewModel() = HemViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, fakeSuggestionRecordRepo)
+    /** Räknar begärda omräkningar av bytesplanen (HEM-8, issue #88) och driver knappens släckta läge. */
+    private var switchPlanScans = 0
+    private val workRunning = MutableStateFlow(false)
+
+    private val fakeScheduler = object : FundPriceRefreshScheduler {
+        override fun scheduleOnLaunch() {}
+        override fun scheduleBackstop() {}
+        override fun triggerManualRefresh() {}
+        override fun triggerSwitchPlanScan() {
+            switchPlanScans++
+        }
+        override fun observeIsRunning(): Flow<Boolean> = workRunning
+    }
+
+    private fun viewModel() = HemViewModel(
+        fakeTransactionRepo,
+        fakeFundPriceRepo,
+        fakeFundMetadataRepo,
+        preferencesRepository,
+        fakeSuggestionRecordRepo,
+        fakeScheduler,
+    )
 
     @Before
     fun setUp() {
@@ -805,5 +827,75 @@ class HemViewModelTest {
             assertTrue(state.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Omräkning av bytesplanen på begäran (HEM-8, issue #88) ---
+
+    @Test
+    fun `canRecomputeSwitchPlan kraver bade profil och ISK eller KF`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.canRecomputeSwitchPlan) state = awaitItem()
+            assertTrue(state.canRecomputeSwitchPlan)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `canRecomputeSwitchPlan ar falskt i depa eller AF`() = runTest(dispatcher) {
+        // SET-4-gaten ger ingen plan där — knappen ska då inte lova en omräkning.
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskProfile == null) state = awaitItem()
+            assertFalse(state.canRecomputeSwitchPlan)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `canRecomputeSwitchPlan ar falskt utan sparad riskprofil`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertFalse(state.canRecomputeSwitchPlan)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `backgroundWorkRunning speglar schemalaggarens korstatus`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        workRunning.value = true
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.backgroundWorkRunning) state = awaitItem()
+            assertTrue(state.backgroundWorkRunning)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.recomputeSwitchPlan()
+
+        assertEquals(1, switchPlanScans)
     }
 }

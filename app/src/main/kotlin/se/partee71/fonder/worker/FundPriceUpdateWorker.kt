@@ -80,10 +80,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         const val KEY_SCAN_COMPARISONS = "scan_comparisons"
 
         /**
-         * Input-data-nyckel som slår på [scanSwitchPlan] (HEM-8, issue #70) — satt **bara** av
-         * [FundPriceRefreshScheduler.scheduleBackstop], av samma skäl som [KEY_SCAN_COMPARISONS]:
-         * en plan kräver en källfråga plus budgeterad köpbarhetsverifiering per underviktad
-         * nivå, för dyrt för launch-gaten eller den manuella knappen.
+         * Input-data-nyckel som slår på [scanSwitchPlan] (HEM-8, issue #70) — satt av
+         * [FundPriceRefreshScheduler.scheduleBackstop] och, sedan issue #88, av
+         * [FundPriceRefreshScheduler.triggerSwitchPlanScan] när planens indata just ändrats
+         * (riskprofil SET-3, kontotyp SET-4) eller användaren bett om en omräkning.
+         *
+         * Fortfarande **aldrig** av launch-gaten eller den manuella "Uppdatera nu"-knappen, av
+         * samma skäl som [KEY_SCAN_COMPARISONS]: en plan kräver en källfråga plus budgeterad
+         * köpbarhetsverifiering per underviktad nivå, och båda de triggarna löper ofta. De två
+         * vägar som finns är i stället glesa (var 12:e timme) respektive uttryckligen begärda.
          */
         const val KEY_SCAN_SWITCH_PLAN = "scan_switch_plan"
 

@@ -13,6 +13,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ fun HemScreen(
         state = state,
         onFundClick = onFundClick,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
         modifier = modifier,
     )
 }
@@ -64,6 +66,7 @@ fun HemContent(
     state: HemUiState,
     onFundClick: (String) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onRecomputeSwitchPlan: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -85,7 +88,10 @@ fun HemContent(
                         portfolioRisk = state.portfolioRisk,
                         levelDeviations = state.riskLevelDeviations,
                         switchPlan = state.switchPlan,
+                        canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
+                        recomputeRunning = state.backgroundWorkRunning,
                         onSwitchFollowedChange = onSwitchFollowedChange,
+                        onRecomputeSwitchPlan = onRecomputeSwitchPlan,
                     )
                 }
             }
@@ -325,7 +331,10 @@ private fun RiskCard(
     portfolioRisk: PortfolioRiskCalc.Result,
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
     switchPlan: List<SwitchSuggestionUi>,
+    canRecomputeSwitchPlan: Boolean,
+    recomputeRunning: Boolean,
     onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onRecomputeSwitchPlan: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -390,6 +399,27 @@ private fun RiskCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            // Omräkning på begäran (issue #88) — visas bara när en plan alls kan ges (ISK/KF +
+            // satt profil, SET-3/SET-4), annars vore knappen ett löfte SET-4-gaten vägrar
+            // infria. Släckt medan något jobb kör, samma signal som bakgrundsindikatorn (NAV-6).
+            if (canRecomputeSwitchPlan) {
+                TextButton(
+                    onClick = onRecomputeSwitchPlan,
+                    enabled = !recomputeRunning,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text(
+                        stringResource(
+                            if (recomputeRunning) R.string.hem_switch_plan_recompute_running else R.string.hem_switch_plan_recompute,
+                        ),
+                    )
+                }
+                Text(
+                    stringResource(R.string.hem_switch_plan_recompute_explain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
