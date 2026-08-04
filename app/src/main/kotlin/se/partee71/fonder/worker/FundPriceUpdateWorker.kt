@@ -338,7 +338,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             }
             val plan = SwitchPlanCalc.plan(withValue, metadataByIsin, candidates, targetAllocation)
 
-            plan.switches.forEachIndexed { index, switch ->
+            plan.forEachIndexed { index, switch ->
                 val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
                 if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
 

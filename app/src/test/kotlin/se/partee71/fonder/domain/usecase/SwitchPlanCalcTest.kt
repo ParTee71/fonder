@@ -27,8 +27,7 @@ class SwitchPlanCalcTest {
     fun `tom malfordelning ger tom plan`() {
         val plan = SwitchPlanCalc.plan(emptyList(), emptyMap(), emptyList(), emptyMap())
 
-        assertTrue(plan.switches.isEmpty())
-        assertEquals(0.0, plan.gapClosedPp, 1e-9)
+        assertTrue(plan.isEmpty())
     }
 
     @Test
@@ -38,7 +37,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, emptyList(), mapOf(4 to 1.0))
 
-        assertTrue(plan.switches.isEmpty())
+        assertTrue(plan.isEmpty())
     }
 
     @Test
@@ -49,14 +48,13 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
-        val switch = plan.switches.single()
+        val switch = plan.single()
         assertEquals("A", switch.sellFund.fundId)
         assertEquals(10_000.0, switch.sellValueKr, 1e-9)
         assertEquals("SEB", switch.buyIsin)
         assertEquals(5, switch.fromLevel)
         assertEquals(3, switch.toLevel)
         assertEquals(0.3 - 1.0, switch.feeDelta, 1e-9)
-        assertEquals(100.0, plan.gapClosedPp, 1e-9)
     }
 
     @Test
@@ -77,14 +75,13 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.3, 3 to 0.7))
 
-        assertEquals(2, plan.switches.size)
-        assertEquals("A" to 3, plan.switches[0].sellFund.fundId to plan.switches[0].toLevel)
-        assertEquals("B" to 2, plan.switches[1].sellFund.fundId to plan.switches[1].toLevel)
+        assertEquals(2, plan.size)
+        assertEquals("A" to 3, plan[0].sellFund.fundId to plan[0].toLevel)
+        assertEquals("B" to 2, plan[1].sellFund.fundId to plan[1].toLevel)
         // Byte 1 fyller nivå 3 helt (5 000 kr), byte 2 begränsas till nivå 2:s gap (3 000 kr av
         // B:s 5 000) i stället för att sälja hela positionen — se överskjutningstesterna nedan.
-        assertEquals(5_000.0, plan.switches[0].sellValueKr, 1e-9)
-        assertEquals(3_000.0, plan.switches[1].sellValueKr, 1e-9)
-        assertEquals(80.0, plan.gapClosedPp, 1e-9)
+        assertEquals(5_000.0, plan[0].sellValueKr, 1e-9)
+        assertEquals(3_000.0, plan[1].sellValueKr, 1e-9)
     }
 
     @Test
@@ -102,11 +99,10 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
 
-        val switch = plan.switches.single()
+        // Ett enda byte som stänger gapet helt — ingen andra rad som säljer tillbaka.
+        val switch = plan.single()
         assertEquals("Hog", switch.sellFund.fundId)
         assertEquals(1_000.0, switch.sellValueKr, 1e-9)
-        // Ett enda byte som stänger gapet helt — ingen andra rad som säljer tillbaka.
-        assertEquals(10.0, plan.gapClosedPp, 1e-9)
     }
 
     @Test
@@ -123,12 +119,12 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.2, 3 to 0.3, 5 to 0.5))
 
-        assertEquals(2, plan.switches.size)
-        assertTrue("båda bytena säljer ur samma position", plan.switches.all { it.sellFund.fundId == "Enda" })
-        assertEquals(3_000.0, plan.switches[0].sellValueKr, 1e-9)
-        assertEquals(3, plan.switches[0].toLevel)
-        assertEquals(2_000.0, plan.switches[1].sellValueKr, 1e-9)
-        assertEquals(2, plan.switches[1].toLevel)
+        assertEquals(2, plan.size)
+        assertTrue("båda bytena säljer ur samma position", plan.all { it.sellFund.fundId == "Enda" })
+        assertEquals(3_000.0, plan[0].sellValueKr, 1e-9)
+        assertEquals(3, plan[0].toLevel)
+        assertEquals(2_000.0, plan[1].sellValueKr, 1e-9)
+        assertEquals(2, plan[1].toLevel)
     }
 
     @Test
@@ -139,7 +135,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(1 to 1.0))
 
-        assertEquals(SwitchPlanCalc.MAX_SWITCHES_PER_PLAN, plan.switches.size)
+        assertEquals(SwitchPlanCalc.MAX_SWITCHES_PER_PLAN, plan.size)
     }
 
     @Test
@@ -153,7 +149,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
-        assertEquals("Dyr", plan.switches.first().sellFund.fundId)
+        assertEquals("Dyr", plan.first().sellFund.fundId)
     }
 
     @Test
@@ -175,7 +171,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
-        assertEquals("HOG_BILLIG", plan.switches.single().buyIsin)
+        assertEquals("HOG_BILLIG", plan.single().buyIsin)
     }
 
     @Test
@@ -189,7 +185,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
-        val switch = plan.switches.single()
+        val switch = plan.single()
         assertEquals("KandRisk", switch.sellFund.fundId)
         // Bara det kända innehavets värde räknas som portföljbas — inte 10 000.
         assertEquals(5_000.0, switch.sellValueKr, 1e-9)
@@ -210,7 +206,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
 
-        assertTrue("portföljen ligger redan på målet — inget byte ska föreslås", plan.switches.isEmpty())
+        assertTrue("portföljen ligger redan på målet — inget byte ska föreslås", plan.isEmpty())
     }
 
     @Test
@@ -223,7 +219,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
-        assertTrue(plan.switches.isEmpty())
+        assertTrue(plan.isEmpty())
     }
 
     @Test
@@ -233,7 +229,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, emptyList(), mapOf(3 to 1.0))
 
-        assertTrue(plan.switches.isEmpty())
+        assertTrue(plan.isEmpty())
     }
 
     @Test
@@ -246,7 +242,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(3 to 1.0))
 
-        assertTrue(plan.switches.isEmpty())
+        assertTrue(plan.isEmpty())
     }
 
     @Test
@@ -260,7 +256,7 @@ class SwitchPlanCalcTest {
 
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(4 to 1.0))
 
-        assertTrue(plan.switches.isEmpty())
+        assertTrue(plan.isEmpty())
     }
 
     // --- underweightedLevels: låter anroparen hämta kandidater bara för nivåer planen kan köpa på ---
@@ -308,10 +304,10 @@ class SwitchPlanCalcTest {
         val levels = SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, target)
         val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, target)
 
-        assertTrue(plan.switches.isNotEmpty())
+        assertTrue(plan.isNotEmpty())
         assertTrue(
             "plan köpte på en nivå underweightedLevels inte pekade ut",
-            plan.switches.map { it.toLevel }.all { it in levels },
+            plan.map { it.toLevel }.all { it in levels },
         )
     }
 }
