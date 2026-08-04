@@ -12,10 +12,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
+import se.partee71.fonder.domain.usecase.FundNameKey
 import javax.inject.Inject
 
 data class FundSearchUiState(
@@ -35,6 +37,14 @@ data class FundSearchUiState(
      * annars ser ett nätverksfel ut som ett tomt sökresultat (issue #78).
      */
     val loadFailed: Boolean = false,
+    /**
+     * Risknivå (1–7, TP-21) per fond i [results] (UI-10, issue #85). Nyckel: `Fund.fundId`.
+     * Katalogens träffar saknar ISIN (`HandelsbankenHtmlParser.parseFundCatalog`), så nivån slås
+     * upp på normaliserat fondnamn mot **cachad** metadata
+     * ([FundMetadataRepository.cachedRiskByFundName]) — en fond som inte hunnit hamna i cachen
+     * saknas i kartan och visas som okänd risk, aldrig gissad.
+     */
+    val riskLevels: Map<String, Int> = emptyMap(),
 )
 
 /**
@@ -51,6 +61,7 @@ data class FundSearchUiState(
 class FundSearchViewModel @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val transactionRepository: TransactionRepository,
+    private val fundMetadataRepository: FundMetadataRepository,
 ) : ViewModel() {
 
     private val allFunds = MutableStateFlow<List<Fund>>(emptyList())
@@ -71,6 +82,14 @@ class FundSearchViewModel @Inject constructor(
     /** Ett bolagsbyte i taget — ett snabbt byte ska inte kunna skriva över resultatet av ett senare. */
     private var companyLoadJob: Job? = null
 
+    /**
+     * Risknivå per normaliserat fondnamn ur metadatacachen (UI-10) — läses **en gång** per
+     * ViewModel-livstid, inte per sökning: kartan är en ren cache-läsning som inte ändras av att
+     * användaren skriver i sökfältet, och att läsa om den vid varje tangenttryck vore en
+     * databasfråga per tecken.
+     */
+    private val riskByNameKey = MutableStateFlow<Map<String, Int>>(emptyMap())
+
     val uiState: StateFlow<FundSearchUiState> =
         combine(visibleFunds, companies, selectedCompany, query, loading) { funds, companies, selected, query, loading ->
             val filtered = if (query.isBlank()) {
@@ -85,6 +104,13 @@ class FundSearchViewModel @Inject constructor(
                 selectedCompany = selected,
                 results = filtered,
             )
+        }.combine(riskByNameKey) { state, riskByName ->
+            state.copy(
+                riskLevels = state.results.mapNotNull { fund ->
+                    val risk = riskByName[FundNameKey.of(fund.name)] ?: return@mapNotNull null
+                    fund.fundId to risk
+                }.toMap(),
+            )
         }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
             state.copy(addedFundIds = added)
         }.combine(loadFailed) { state, failed -> state.copy(loadFailed = failed) }
@@ -95,6 +121,7 @@ class FundSearchViewModel @Inject constructor(
             )
 
     init {
+        viewModelScope.launch { riskByNameKey.value = fundMetadataRepository.cachedRiskByFundName() }
         viewModelScope.launch {
             // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
             // krascha (samma degraderingsprincip som onCompanySelected nedan).

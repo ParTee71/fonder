@@ -15,6 +15,7 @@ import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.FundScreenSortDirection
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
+import se.partee71.fonder.domain.usecase.FundNameKey
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.FundScreenFilter
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
@@ -81,6 +82,19 @@ interface FundMetadataRepository {
      * visa det som okänt, aldrig gissa.
      */
     suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata>
+
+    /**
+     * Risknivå per **normaliserat fondnamn** ([FundNameKey]) ur cachen, aldrig nätverket
+     * (UI-10, issue #85). Finns för fondsök, vars träffar kommer ur fondlista-katalogen och
+     * saknar ISIN (`HandelsbankenHtmlParser.parseFundCatalog`) — utan ett ISIN att slå upp är
+     * namnet den enda kopplingen till metadatan.
+     *
+     * Bara cachen, av samma skäl som [cachedMetadataFor]: katalogen är ~1500 fonder, och ett
+     * nätverksuppslag per rad vore en burst varje gång listan filtreras om. Fonder som inte
+     * hunnit hamna i cachen saknas därför i kartan och visas som okänd risk — cachen fylls på
+     * av innehavens (HEM-5/POR-9) och bytesplanens (HEM-8) egna uppslag över tid.
+     */
+    suspend fun cachedRiskByFundName(): Map<String, Int>
 
     /**
      * Kända risknivåer på källans skala (TP-21, SET-3/issue #68) — unionen av senast kända
@@ -316,6 +330,13 @@ class AvanzaFundMetadataRepository @Inject constructor(
         // just nätverkskostnaden metoden finns för att undvika.
         return dao.getByIsins(distinct).associate { it.isin to it.toDomain() }
     }
+
+    override suspend fun cachedRiskByFundName(): Map<String, Int> =
+        // Sista raden vinner vid namnkollision (andelsklasser med identiskt normaliserat namn).
+        // Ett godtyckligt men konsekvent val: alternativet vore att utelämna kollisioner helt,
+        // men två andelsklasser av samma fond har i praktiken samma risknivå — det är den
+        // siffran som visas, oavsett vilken rad den lästes ur.
+        dao.getKnownRisks().associate { FundNameKey.of(it.name) to it.risk }
 
     override suspend fun knownRiskLevels(): List<Int> {
         // Källans egen `type`-sträng för risk-dimensionen är "risk" (verifierat live

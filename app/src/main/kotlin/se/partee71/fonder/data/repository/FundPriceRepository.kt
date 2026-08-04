@@ -79,6 +79,21 @@ interface FundPriceRepository {
      */
     suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
 
+    /**
+     * Kurshistorik för ett [isin] **utan** att cacha den (ANA-11, issue #85) — underlaget till
+     * jämförelsediagrammet mot en föreslagen fond, som appen inte äger.
+     *
+     * Skiljer sig från [refreshSince] just i att inget skrivs till `fund_prices`: den cachen är
+     * sanningen om **bevakade** fonder, nycklad på `Fund.fundId`, och en kandidat har ingen
+     * sådan identitet. Att skriva in den under sitt ISIN hade fyllt kurscachen med rader som
+     * inget innehav pekar på — och sedan sett ut som en riktig fond för varje läsare av cachen.
+     * Anroparen får hålla resultatet i minnet så länge det behövs.
+     *
+     * Bästa-försök mot samma ISIN-källkedja som [refreshSince] (TP-14). Tom lista om ingen källa
+     * kan leverera — anroparen visar då "kunde inte jämföras" i stället för ett tomt diagram.
+     */
+    suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice>
+
     /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
 
@@ -400,6 +415,29 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     private fun IsinPricePoint.toEntity(fundId: String) =
         FundPriceEntity(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
+
+    /**
+     * Kurshistorik för en fond appen **inte** äger — ingen cache-skrivning, se gränssnittets
+     * KDoc. `fundId` sätts till ISIN:et i de returnerade [FundPrice]-objekten enbart för att
+     * modellen kräver ett värde; de lever bara i anroparens minne och når aldrig `fund_prices`.
+     *
+     * Ingen valutakonvertering (jämför [toValueCurrency]): jämförelsediagrammet indexerar båda
+     * serierna till 100 vid periodens start ([se.partee71.fonder.domain.usecase.ChartSeriesNormalizer]),
+     * och en indexerad kurva är okänslig för vilken valuta grundserien står i så länge den är
+     * konsekvent inom serien.
+     */
+    override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> {
+        for (source in isinSources) {
+            val points = runCatching { source.fetchHistory(isin, from, to) }
+                .onFailure { e -> Log.w(TAG, "ISIN-källa gav fel för jämförelsehistorik $isin, provar nästa i kedjan", e) }
+                .getOrNull()
+            if (!points.isNullOrEmpty()) {
+                return points.map { FundPrice(fundId = isin, epochDay = it.epochDay, nav = it.nav, currency = it.currency) }
+            }
+        }
+        Log.w(TAG, "Ingen ISIN-källa kunde ge jämförelsehistorik för $isin")
+        return emptyList()
+    }
 
     override suspend fun suggestIsin(fundName: String): String? {
         for (source in isinSources) {

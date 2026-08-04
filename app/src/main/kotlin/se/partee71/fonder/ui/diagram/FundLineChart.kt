@@ -1,11 +1,15 @@
 package se.partee71.fonder.ui.diagram
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,7 +21,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -26,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.marker.rememberDefaultCartesianMarker
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
@@ -47,6 +55,7 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianLayerRangeProvider
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
 import com.patrykandpatrick.vico.core.cartesian.marker.CartesianMarker
 import com.patrykandpatrick.vico.core.cartesian.marker.DefaultCartesianMarker
 import com.patrykandpatrick.vico.core.common.Insets
@@ -54,6 +63,7 @@ import com.patrykandpatrick.vico.core.common.data.ExtraStore
 import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.ChartPeriodFilter
+import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
 import java.time.LocalDate
@@ -62,9 +72,13 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToLong
 
+/** En namngiven kursserie att rita bredvid innehavets egen i [FundLineChart] (ANA-11, issue #85). */
+data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
+
 /**
  * Delad linjediagram-komponent (regel 4) som wrappar Vico — resten av appen ska aldrig
- * röra Vico-API:t direkt. Används för fondens kurshistorik i Fonddetalj (issue #7).
+ * röra Vico-API:t direkt. Används för fondens kurshistorik i Fonddetalj (issue #7) och, med
+ * [comparisonSeries], för jämförelsen mellan ett innehav och en föreslagen fond (ANA-11).
  *
  * En periodväljare (1 mån/3 mån/1 år/Allt, issue #51) styr vilken del av [points] som skickas
  * till Vico — bara den valda periodens punkter, inte hela historiken zoomad. Både x- och
@@ -75,33 +89,69 @@ import kotlin.math.roundToLong
  * (`Zoom.Content`) skrollat till slutet, så den senaste kursen alltid syns direkt.
  *
  * Köptillfällen som ingår i den visade perioden markeras med en linje och ett datum (issue
- * #55) — det kan vara flera. Se [PurchaseMarkerFilter].
+ * #55) — det kan vara flera. Se [PurchaseMarkerFilter]. Markörerna hör bara till [points]:
+ * i en jämförelse är köpen gjorda i innehavet, inte i kandidaten.
+ *
+ * Med minst en [comparisonSeries] **indexeras** alla serier till 100 vid periodens första
+ * gemensamma dag ([ChartSeriesNormalizer]) — rå NAV går inte att jämföra mellan två fonder på
+ * en gemensam y-axel. Serierna får då etiketter i en teckenförklaring, och beskrivningen säger
+ * att skalan är index, inte kronor.
  *
  * @param points (epochDay, NAV), i stigande datumordning. Tom lista ritar inget — visa ett
  *   eget tomt-tillstånd (`EmptyState`) i anropande skärm i stället.
  * @param purchaseEpochDays köpdagar (epochDay) för fonden, i valfri ordning. Markeras bara de
  *   som faller inom den period diagrammet just nu visar.
+ * @param primaryLabel etikett för [points] i teckenförklaringen — bara relevant tillsammans
+ *   med [comparisonSeries]; utan jämförelse ritas ingen teckenförklaring.
+ * @param comparisonSeries ytterligare serier att jämföra mot, beskurna till samma period som
+ *   [points] innan de indexeras.
  */
 @Composable
 fun FundLineChart(
     points: List<Pair<Long, Double>>,
     purchaseEpochDays: List<Long> = emptyList(),
+    primaryLabel: String? = null,
+    comparisonSeries: List<ChartSeries> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
     // tillbaka till 1 månad mitt i en jämförelse (issue #78).
     var period by rememberSaveable { mutableStateOf(ChartPeriodFilter.Period.EN_MANAD) }
     val windowedPoints = remember(points, period) { ChartPeriodFilter.apply(points, period) }
-    val markerEpochDays = remember(windowedPoints, purchaseEpochDays) {
-        PurchaseMarkerFilter.apply(windowedPoints, purchaseEpochDays)
+
+    // Jämförelseserierna beskärs till **innehavets** fönster, inte till sitt eget: perioden
+    // räknas bakåt från den senaste punkten i datan (se ChartPeriodFilter), och en kandidat
+    // vars historik slutar en annan dag hade annars fått ett förskjutet fönster — två kurvor
+    // över olika tidsspann ser ut som en jämförelse men är det inte.
+    val normalized = remember(windowedPoints, comparisonSeries) {
+        if (comparisonSeries.isEmpty()) {
+            ChartSeriesNormalizer.Result(listOf(windowedPoints), indexed = false, partial = false, baseEpochDay = null)
+        } else {
+            val from = windowedPoints.minOfOrNull { it.first }
+            val windowedComparisons = comparisonSeries.map { series ->
+                if (from == null) series.points else series.points.filter { it.first >= from }
+            }
+            ChartSeriesNormalizer.index(listOf(windowedPoints) + windowedComparisons)
+        }
     }
+    val primaryPoints = normalized.series.firstOrNull().orEmpty()
+    val markerEpochDays = remember(primaryPoints, purchaseEpochDays) {
+        PurchaseMarkerFilter.apply(primaryPoints, purchaseEpochDays)
+    }
+    val defaultPrimaryLabel = stringResource(R.string.fond_chart_series_holding)
+    val labels = listOf(primaryLabel ?: defaultPrimaryLabel) + comparisonSeries.map { it.label }
+    // Tomma serier tas bort **tillsammans med sin etikett**, så teckenförklaringens färger
+    // fortsätter peka på rätt kurva även om en kandidats historik saknas.
+    val visibleSeries = normalized.series.zip(labels).filter { (series, _) -> series.isNotEmpty() }
     val modelProducer = remember { CartesianChartModelProducer() }
 
-    LaunchedEffect(windowedPoints) {
-        if (windowedPoints.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(visibleSeries) {
+        if (visibleSeries.isEmpty()) return@LaunchedEffect
         modelProducer.runTransaction {
             lineSeries {
-                series(x = windowedPoints.map { it.first }, y = windowedPoints.map { it.second })
+                visibleSeries.forEach { (points, _) ->
+                    series(x = points.map { it.first }, y = points.map { it.second })
+                }
             }
         }
     }
@@ -109,28 +159,40 @@ fun FundLineChart(
     // Diagrammet är en ren canvas — utan semantik är kursutvecklingen osynlig för en
     // skärmläsare, i strid med att appen annars aldrig bär information i enbart färg/form
     // (issue #78). Beskrivningen sammanfattar det diagrammet faktiskt visar: vald period,
-    // antal punkter och kursspannet.
-    val chartDescription = if (windowedPoints.isEmpty()) {
-        stringResource(R.string.fond_chart_description_empty)
-    } else {
-        stringResource(
-            R.string.format_fond_chart_description,
+    // antal punkter och kursspannet — eller, i en jämförelse, vilka fonder som jämförs och
+    // att skalan är ett index.
+    val chartDescription = when {
+        visibleSeries.isEmpty() -> stringResource(R.string.fond_chart_description_empty)
+        normalized.indexed -> stringResource(
+            R.string.format_fond_chart_comparison_description,
             stringResource(periodLabelRes(period)),
-            windowedPoints.size,
-            MoneyFormat.kr(windowedPoints.minOf { it.second }),
-            MoneyFormat.kr(windowedPoints.maxOf { it.second }),
+            visibleSeries.joinToString(", ") { (_, label) -> label },
         )
+        // Beskrivs utifrån den serie som faktiskt ritas — inte utifrån [points], som kan vara
+        // tom i det udda fallet att bara en jämförelseserie har data (annars kraschade min/max).
+        else -> {
+            val described = visibleSeries.first().first
+            stringResource(
+                R.string.format_fond_chart_description,
+                stringResource(periodLabelRes(period)),
+                described.size,
+                MoneyFormat.kr(described.minOf { it.second }),
+                MoneyFormat.kr(described.maxOf { it.second }),
+            )
+        }
     }
 
+    val seriesColors = seriesColors()
     Column(modifier = modifier) {
         val purchaseMarker = rememberPurchaseMarker()
+        val lineProvider = rememberSeriesLineProvider(seriesColors)
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
         // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
         // (helt andra) datavolym.
         key(period) {
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(rangeProvider = PriceRangeProvider),
+                    rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
                     persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } },
@@ -149,6 +211,15 @@ fun FundLineChart(
                     .semantics { contentDescription = chartDescription },
             )
         }
+        if (visibleSeries.size > 1) {
+            ChartLegend(
+                labels = visibleSeries.map { (_, label) -> label },
+                colors = seriesColors,
+                indexed = normalized.indexed,
+                partial = normalized.partial,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(top = 8.dp),
@@ -156,6 +227,72 @@ fun FundLineChart(
             ChartPeriodFilter.Period.entries.forEach { option ->
                 PeriodChip(option, period, periodLabelRes(option)) { period = it }
             }
+        }
+    }
+}
+
+/**
+ * Kurvornas färger, i seriernas ordning — appens fasta palett (UI-1) i stället för Vicos
+ * standardfärger, så en jämförelse ser ut som resten av appen. Delad mellan diagrammet och
+ * teckenförklaringen; hade de valt färg var för sig kunde de glida isär och förklaringen peka
+ * på fel kurva.
+ */
+@Composable
+private fun seriesColors(): List<Color> =
+    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+
+/**
+ * Linjerna Vico ritar serierna med, i samma ordning som [seriesColors]. Båda skapas alltid,
+ * även när bara en serie visas: en `remember`-baserad fabrik som ibland anropas och ibland inte
+ * gör kompositionen instabil, och en oanvänd linje kostar ingenting.
+ */
+@Composable
+private fun rememberSeriesLineProvider(colors: List<Color>): LineCartesianLayer.LineProvider {
+    val primary = LineCartesianLayer.rememberLine(LineCartesianLayer.LineFill.single(fill(colors[0])))
+    val comparison = LineCartesianLayer.rememberLine(LineCartesianLayer.LineFill.single(fill(colors[1])))
+    return LineCartesianLayer.LineProvider.series(primary, comparison)
+}
+
+/**
+ * Teckenförklaring för en jämförelse (ANA-11) — färgprick **plus** fondnamn, aldrig färgen
+ * ensam (UI-3). Säger också rakt ut att skalan är ett index och, när kandidatens historik är
+ * kortare än perioden, att jämförelsen bara täcker den gemensamma delen (samma
+ * markera-hellre-än-gissa-princip som HEM-2/ANA-4).
+ */
+@Composable
+private fun ChartLegend(
+    labels: List<String>,
+    colors: List<Color>,
+    indexed: Boolean,
+    partial: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        labels.forEachIndexed { index, label ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
+                Box(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(colors[index % colors.size]),
+                )
+                Text(label, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (indexed) {
+            Text(
+                stringResource(R.string.fond_chart_indexed_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (partial) {
+            Text(
+                stringResource(R.string.fond_chart_partial_comparison),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

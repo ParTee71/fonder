@@ -45,6 +45,12 @@ data class PortfoljUiState(
     val analysis: Map<String, FundAnalysisCalc.Analysis> = emptyMap(),
     /** Exponeringskarta: andel per fondtyp/region/index-aktivt (POR-9, issue #66). */
     val exposure: PortfolioExposureCalc.Result = EMPTY_EXPOSURE,
+    /**
+     * Risknivå (1–7, TP-21) per innehav (UI-10, issue #85). Nyckel: `Fund.fundId`. En fond utan
+     * känd risknivå saknas i kartan och visas som okänd — aldrig gissad (ANA-4-principen).
+     * Läses ur samma [metadata]-flöde som exponeringskartan, alltså utan extra nätverksanrop.
+     */
+    val riskLevels: Map<String, Int> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
@@ -119,6 +125,10 @@ class PortfoljViewModel @Inject constructor(
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     analysis = buildAnalysis(enriched, transactions, today),
                     exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin),
+                    riskLevels = enriched.mapNotNull { holding ->
+                        val risk = holding.fund.isin?.let { metadataByIsin[it]?.risk } ?: return@mapNotNull null
+                        holding.fund.fundId to risk
+                    }.toMap(),
                 )
             }
         }.stateIn(

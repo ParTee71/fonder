@@ -361,4 +361,34 @@ class PortfoljScreenTest {
         composeRule.onNodeWithTag(PORTFOLJ_LIST_TEST_TAG).performScrollToIndex(11)
         composeRule.onNodeWithText("Innehav 10").assertIsDisplayed()
     }
+
+    // --- Risknivå på innehavsraden (UI-10, issue #85) ---
+
+    @Test
+    fun innehavsrad_visar_risknivan() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            riskLevels = mapOf(fond.fundId to 5),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risk 5/7").assertExists()
+    }
+
+    @Test
+    fun innehavsrad_utan_kand_risk_markeras_som_okand() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding))
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risk okänd").assertExists()
+    }
 }

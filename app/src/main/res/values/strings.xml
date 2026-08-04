@@ -116,6 +116,28 @@
     <string name="fond_chart_period_3man">3 mån</string>
     <string name="fond_chart_period_1ar">1 år</string>
     <string name="fond_chart_period_allt">Allt</string>
+    <string name="fond_chart_series_holding">Din fond</string>
+    <string name="fond_chart_indexed_explain">Båda kurvorna startar på 100 vid periodens början — jämförelsen visar utveckling, inte kurs i kronor.</string>
+    <string name="fond_chart_partial_comparison">Delvis jämförelse: fonderna har olika lång historik, så bara den gemensamma perioden visas.</string>
+    <string name="format_fond_chart_comparison_description">Jämförelsediagram, %1$s, %2$s, indexerade till 100 vid periodens början</string>
+
+    <!-- Bytesbeslut på fondkortet (ANA-10/ANA-11, issue #85) -->
+    <string name="switch_section_title">Ska du byta?</string>
+    <string name="switch_section_explain">Förslagen nedan kommer från din riskprofil (bytesplanen) och från avgiftsjämförelsen. Fäll ut ett förslag för att se motivering och kursjämförelse. Appen genomför aldrig ett byte åt dig.</string>
+    <string name="switch_none_plan_body">Riskprofilens bytesplan föreslår inget byte för den här fonden just nu — den ges bara i ISK/KF och när någon risknivå avviker tillräckligt från din målfördelning.</string>
+    <string name="switch_none_not_a_holding">Bytesförslag ges bara för fonder du äger.</string>
+    <string name="format_switch_plan_to">%1$d. Byt till %2$s</string>
+    <string name="format_switch_plan_from">%1$d. Byt hit från %2$s</string>
+    <string name="switch_comparison_loading">Hämtar kurshistorik för jämförelsen …</string>
+    <string name="switch_comparison_unavailable">Kunde inte hämta kurshistorik för den föreslagna fonden — ingen jämförelse visas.</string>
+
+    <!-- Risknivå (UI-10, issue #85) -->
+    <string name="format_risk_level">Risk %1$d/%2$d</string>
+    <string name="format_risk_level_change">Risk %1$d → %2$d (av %3$d)</string>
+    <string name="risk_unknown_label">Risk okänd</string>
+    <string name="format_risk_level_description">Risknivå %1$d av %2$d</string>
+    <string name="format_risk_level_change_description">Risknivå %1$d av %3$d, efter bytet %2$d av %3$d</string>
+    <string name="risk_unknown_description">Risknivå okänd</string>
 
     <!-- Analys — nyckeltal och säljsignaler (issue #16, ANA-1–ANA-4) -->
     <string name="analys_section_title">Analys</string>

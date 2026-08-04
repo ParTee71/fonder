@@ -72,6 +72,7 @@ class PortfoljViewModelTest {
             refreshSinceCalls.add(Triple(fundId, isin, since))
             return true
         }
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = null
@@ -96,6 +97,7 @@ class PortfoljViewModelTest {
             if (metadataForBlocks) awaitCancellation()
             return metadataByIsin.filterKeys { it in isins }
         }
+        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
         override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
 
@@ -408,6 +410,41 @@ class PortfoljViewModelTest {
             while (state.loading) state = awaitItem()
             assertEquals(1, state.exposure.excludedCount)
             assertEquals(0.0, state.exposure.includedValueKr, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Risknivå per innehav (UI-10, issue #85) ---
+
+    @Test
+    fun `riskLevels fylls ur samma metadatauppslag som exponeringskartan`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val medRisk = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        val utanIsin = Fund(fundId = "SHB0000627", name = "Fond B", isin = null)
+        funds.value = listOf(medRisk, utanIsin)
+        transactions.value = listOf(
+            Transaction(fundId = medRisk.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = utanIsin.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(
+            medRisk.fundId to FundPrice(fundId = medRisk.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+            utanIsin.fundId to FundPrice(fundId = utanIsin.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+        )
+        metadataByIsin = mapOf(
+            "SE0001466368" to FundMetadata(
+                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
+                category = null, fundType = null, companyName = null, risk = 5, indexFund = true,
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+            ),
+        )
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskLevels.isEmpty()) state = awaitItem()
+
+            assertEquals(5, state.riskLevels[medRisk.fundId])
+            assertNull("Fond utan ISIN har ingen känd risk och ska inte gissas", state.riskLevels[utanIsin.fundId])
             cancelAndIgnoreRemainingEvents()
         }
     }

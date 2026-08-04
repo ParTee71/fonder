@@ -456,7 +456,8 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    recordId = 1, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
@@ -487,7 +488,8 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    recordId = 1, planIndex = 1, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 1, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),
@@ -509,7 +511,8 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    recordId = 1, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = null,
                 ),
             ),
@@ -535,7 +538,8 @@ class HemScreenTest {
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
             switchPlan = listOf(
                 SwitchSuggestionUi(
-                    recordId = 42, planIndex = 0, sellFundName = "Dyr fond", buyFundName = "Billig fond",
+                    recordId = 42, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
                     fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
                 ),
             ),

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,18 +16,25 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -48,8 +56,34 @@ data class FondDetaljUiState(
     val holdingValue: Double? = null,
     /** Billigare-alternativ-jämförelse (ANA-9, issue #59). Null = fonden är inte ett kvarvarande innehav, inget kort visas. */
     val feeComparison: FeeComparisonUiState? = null,
+    /** Fondens egen risknivå på källans skala 1–7 (TP-21), null om okänd — visas ut som okänd, aldrig gissad (UI-10, issue #85). */
+    val riskLevel: Int? = null,
+    /**
+     * De byten i riskprofilens bytesplan (HEM-8) som rör just den här fonden — sälj härifrån
+     * eller köp hit (ANA-10, issue #85). Tom lista utan ISK/KF (SET-4), utan inspelad plan,
+     * eller när planen inte nämner fonden.
+     */
+    val switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
+    /**
+     * Kurshistorik för föreslagna fonder, nycklad på kandidatens ISIN (ANA-11) — hämtas först
+     * när ett förslag fälls ut ([FondDetaljViewModel.onSuggestionExpanded]) och hålls bara i
+     * minnet, aldrig i kurscachen (se [FundPriceRepository.historyForIsin]).
+     */
+    val comparisons: Map<String, ComparisonUiState> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
+}
+
+/** Kurshistoriken för en föreslagen fond, till jämförelsediagrammet (ANA-11, issue #85). */
+sealed interface ComparisonUiState {
+    /** Hämtningen pågår — ett nätverksanrop mot ISIN-källkedjan (TP-14). */
+    data object Loading : ComparisonUiState
+
+    /** Ingen källa kunde ge kandidatens historik — diagrammet utelämnas och sägs ut, aldrig ett tomt diagram. */
+    data object Unavailable : ComparisonUiState
+
+    /** Kandidatens kurshistorik, (epochDay, NAV) i stigande datumordning. */
+    data class Ready(val points: List<Pair<Long, Double>>) : ComparisonUiState
 }
 
 /**
@@ -80,12 +114,27 @@ private data class Snapshot(
     val purchaseEpochDays: List<Long>,
 )
 
+/** Bytesplanens indata innan den resolvas — se [FondDetaljViewModel.planInput]. */
+private data class PlanInput(
+    val accountType: AccountType?,
+    val batch: List<SuggestionRecord>,
+    val metadataByIsin: Map<String, FundMetadata>,
+)
+
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
 private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
 
 /**
- * Fonddetalj — kurshistorik sedan första köpet (i diagram och tabell), inte bara senaste
- * året (issue #7-uppföljning: se KRAVLISTA TP-14/TP-18). Har fonden ett känt ISIN
+ * Hur långt tillbaka en föreslagen fonds kurshistorik hämtas för jämförelsediagrammet (ANA-11).
+ * Täcker diagrammets längsta fasta period ("1 år") med marginal; "Allt" beskärs då till den
+ * gemensamma delen och markeras som en delvis jämförelse ([ChartSeriesNormalizer]) — hellre det
+ * än att hämta hela historiken för en fond användaren bara tittar på.
+ */
+private const val COMPARISON_HISTORY_YEARS = 3L
+
+/**
+ * Fonddetalj — kurshistorik sedan första köpet i diagram, inte bara senaste året
+ * (issue #7-uppföljning: se KRAVLISTA TP-14/TP-18). Har fonden ett känt ISIN
  * (`Fund.isin`) provas fondlista-källan först och en ISIN-baserad källkedja (Avanza m.fl.)
  * som reserv. Saknas ISIN föreslås ett via namnsökning — användaren bekräftar/rättar innan
  * det sparas (samma "föreslå men kräv bekräftelse"-princip som importflödet, IMP-2).
@@ -95,8 +144,11 @@ private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
  * portföljandelen) och övriga innehavs tremånadershistorik (för momentum-signalen S3), som
  * hämtas ur den lokala cachen (ingen extra nätverksuppdatering).
  *
- * Föreslår dessutom billigare, likvärdiga alternativ (ANA-9, issue #59) för ett kvarvarande
- * innehav — se [FeeComparisonUiState].
+ * Bär dessutom hela **bytesbeslutet** för fonden (ANA-10, issue #85): billigare, likvärdiga
+ * alternativ (ANA-9, issue #59, se [FeeComparisonUiState]), de av riskprofilens inspelade
+ * byten som rör just den här fonden ([SwitchPlanResolver], HEM-8) och fondens egen risknivå
+ * (UI-10). Kurshistoriken för en föreslagen fond hämtas först när förslaget fälls ut
+ * ([onSuggestionExpanded]) — inte vid öppning, eftersom varje kandidat kostar ett nätverksanrop.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -105,11 +157,35 @@ class FondDetaljViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val preferencesRepository: PreferencesRepository,
+    private val suggestionRecordRepository: SuggestionRecordRepository,
 ) : ViewModel() {
 
     private val fundId: String = checkNotNull(savedStateHandle["fundId"])
     private val suggestedIsin = MutableStateFlow<String?>(null)
     private val feeComparisonState = MutableStateFlow<FeeComparisonUiState?>(null)
+
+    /**
+     * Fondmetadata i ett eget flöde, inte hämtad inne i tillståndets `map` — samma skäl som i
+     * [se.partee71.fonder.ui.hem.HemViewModel]/[se.partee71.fonder.ui.portfolj.PortfoljViewModel]:
+     * [FundMetadataRepository.metadataFor] gör ett sekventiellt nätverksuppslag per okänd eller
+     * inaktuell ISIN, och låg det i flödet blockerades hela fondkortet på nätverket. Slår upp
+     * både fondens egen risknivå (UI-10) och bytesplanens ISIN (ANA-10) i **ett** anrop.
+     */
+    private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
+    private var metadataJob: Job? = null
+    private var metadataIsins: List<String>? = null
+
+    /** Kandidaternas kurshistorik, hämtad först vid utfällning — se [onSuggestionExpanded]. */
+    private val comparisons = MutableStateFlow<Map<String, ComparisonUiState>>(emptyMap())
+
+    private fun refreshMetadata(isins: List<String>) {
+        val distinct = isins.distinct().sorted()
+        if (distinct == metadataIsins) return
+        metadataIsins = distinct
+        metadataJob?.cancel()
+        metadataJob = viewModelScope.launch { metadata.value = fundMetadataRepository.metadataFor(distinct) }
+    }
 
     private val fundTransactions: Flow<List<Transaction>> =
         transactionRepository.observeTransactionsForFund(fundId)
@@ -160,13 +236,57 @@ class FondDetaljViewModel @Inject constructor(
             )
         }
 
-    val uiState: StateFlow<FondDetaljUiState> = combine(baseUiState, feeComparisonState) { state, feeComparison ->
-        state.copy(feeComparison = feeComparison)
+    /** Bytesplanens råmaterial: kontotyp (SET-4-gaten), senast inspelade batch och metadatan de slås upp mot. */
+    private val planInput: Flow<PlanInput> = combine(
+        preferencesRepository.accountType,
+        suggestionRecordRepository.observeLatestBatch(),
+        metadata,
+    ) { accountType, batch, metadataByIsin -> PlanInput(accountType, batch, metadataByIsin) }
+
+    val uiState: StateFlow<FondDetaljUiState> = combine(
+        baseUiState,
+        feeComparisonState,
+        planInput,
+        comparisons,
+    ) { state, feeComparison, plan, comparisonsByIsin ->
+        // Metadatan behövs för fondens egen risknivå **och** för att kunna slå upp planens
+        // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
+        // `metadata`-flödet ovan utan att blockera tillståndet.
+        refreshMetadata(listOfNotNull(state.isin) + plan.batch.flatMap { listOf(it.sellIsin, it.buyIsin) })
+        val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, LocalDate.now())
+        state.copy(
+            feeComparison = feeComparison,
+            riskLevel = state.isin?.let { plan.metadataByIsin[it]?.risk },
+            switchPlan = SwitchPlanResolver.forFund(resolvedPlan, state.isin),
+            comparisons = comparisonsByIsin,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = FondDetaljUiState(),
     )
+
+    /**
+     * Hämtar kurshistoriken för den föreslagna fonden [isin] till jämförelsediagrammet (ANA-11)
+     * — anropas när ett förslag fälls ut, inte när kortet öppnas: varje kandidat kostar ett
+     * nätverksanrop mot ISIN-källkedjan (TP-14), och de flesta förslag fälls aldrig ut. Ett
+     * redan hämtat (eller pågående) ISIN hämtas aldrig om under skärmens livstid.
+     */
+    fun onSuggestionExpanded(isin: String) {
+        if (comparisons.value.containsKey(isin)) return
+        comparisons.value = comparisons.value + (isin to ComparisonUiState.Loading)
+        viewModelScope.launch {
+            val today = LocalDate.now()
+            val points = fundPriceRepository.historyForIsin(isin, today.minusYears(COMPARISON_HISTORY_YEARS), today)
+            comparisons.value = comparisons.value + (
+                isin to if (points.isEmpty()) {
+                    ComparisonUiState.Unavailable
+                } else {
+                    ComparisonUiState.Ready(points.map { it.epochDay to it.nav }.sortedBy { it.first })
+                }
+                )
+        }
+    }
 
     /**
      * Bygger [FundAnalysisCalc.Analysis] för den visade fonden. Null om fonden inte är ett

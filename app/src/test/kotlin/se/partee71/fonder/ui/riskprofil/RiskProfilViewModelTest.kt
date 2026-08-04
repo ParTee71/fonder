@@ -54,6 +54,7 @@ class RiskProfilViewModelTest {
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
+        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
         override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
         override suspend fun knownRiskLevels(): List<Int> = knownLevels
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -14,13 +15,18 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
  * Instrumenterat test av Fonddetaljs tillståndsdrivna innehåll (issue #16) — bygger
  * [FondDetaljUiState] direkt i stället för att gå via ett riktigt [FondDetaljViewModel]/Hilt,
  * samma mönster som [se.partee71.fonder.ui.hem.HemScreenTest]/[se.partee71.fonder.ui.portfolj.PortfoljScreenTest].
- * Fokuserar på Analys-sektionen (ANA-1–ANA-4) — kurshistorik/diagram täcks inte här.
+ *
+ * Täcker analysen (ANA-1–ANA-7) och, sedan issue #85, kortets nya ordning: bytesavsnittet
+ * överst (ANA-10), risknivån i rubriken (UI-10), jämförelsediagrammet vid utfällning (ANA-11)
+ * och att den radvisa kurstabellen är borta (NAV-2). Analysens nyckeltal och ordlistan ligger
+ * hopfällda, så testerna fäller ut sektionen innan de letar efter en rad i den.
  */
 @RunWith(AndroidJUnit4::class)
 class FondDetaljScreenTest {
@@ -46,6 +52,11 @@ class FondDetaljScreenTest {
         annualizedVolatility = annualizedVolatility,
         sharpeRatio = sharpeRatio,
     )
+
+    /** Analysens nyckeltal ligger hopfällda (ANA-10) — fäll ut sektionen innan raderna söks. */
+    private fun expandAnalysis() {
+        composeRule.onNodeWithText("Analys").performScrollTo().performClick()
+    }
 
     @Test
     fun visar_ingen_analys_sektion_utan_beraknat_resultat() {
@@ -136,7 +147,8 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").assertExists()
+        expandAnalysis()
+        composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").performScrollTo().assertExists()
         composeRule.onNodeWithText("Otillräcklig data").assertExists()
     }
 
@@ -213,7 +225,8 @@ class FondDetaljScreenTest {
 
         // Förklaringen är dold tills raden fälls ut.
         composeRule.onNodeWithText("svaghetstecken på medellång sikt", substring = true).assertDoesNotExist()
-        composeRule.onNodeWithText("Kurs mot 200-dagars snitt").performClick()
+        expandAnalysis()
+        composeRule.onNodeWithText("Kurs mot 200-dagars snitt").performScrollTo().performClick()
         composeRule.onNodeWithText("svaghetstecken på medellång sikt", substring = true).assertExists()
     }
 
@@ -235,7 +248,9 @@ class FondDetaljScreenTest {
 
         composeRule.onNodeWithText("Så funkar analysen").assertExists()
         composeRule.onNodeWithText("ränta-på-ränta", substring = true).assertDoesNotExist()
-        // Ordlistan ligger längst ned — scrolla in raden innan den kan klickas/fällas ut.
+        // Ordlistan ligger längst ned och är hopfälld (ANA-10) — fäll ut den, scrolla sedan in
+        // raden innan den kan klickas.
+        composeRule.onNodeWithText("Så funkar analysen").performScrollTo().performClick()
         composeRule.onNodeWithText("CAGR (årlig snittavkastning)").performScrollTo().performClick()
         composeRule.onNodeWithText("jämna årstakt", substring = true).assertExists()
     }
@@ -281,6 +296,7 @@ class FondDetaljScreenTest {
 
         // Förklaringen är dold tills raden fälls ut, och förtydligar att talet inte är den egna avkastningen.
         composeRule.onNodeWithText("inte din egen avkastning", substring = true).assertDoesNotExist()
+        expandAnalysis()
         composeRule.onNodeWithText("Sedan köp").performScrollTo().performClick()
         composeRule.onNodeWithText("inte din egen avkastning", substring = true).assertExists()
     }
@@ -303,7 +319,8 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
+        expandAnalysis()
+        composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
         composeRule.onNodeWithText("18,0 %").assertExists()
         composeRule.onNodeWithText("0,80").assertExists()
     }
@@ -324,7 +341,8 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Volatilitet (årlig)").assertExists()
+        expandAnalysis()
+        composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
         // Båda riskmåtten saknar värde → markeras som otillräcklig data (ANA-4), inget gissat 0.
         assertTrue(composeRule.onAllNodesWithText("Otillräcklig data").fetchSemanticsNodes().size >= 2)
     }
@@ -429,7 +447,217 @@ class FondDetaljScreenTest {
 
         // Avgiften (förklaringen) är dold tills raden fälls ut.
         composeRule.onNodeWithText("0,21 %", substring = true).assertDoesNotExist()
-        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performClick()
+        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performScrollTo().performClick()
         composeRule.onNodeWithText("0,21 %", substring = true).assertExists()
+    }
+
+    // --- Bytesbeslutet överst, foldouts och risknivå (ANA-10/ANA-11/UI-10, issue #85) ---
+
+    private val planSuggestion = SwitchPlanResolver.Suggestion(
+        recordId = 1,
+        planIndex = 0,
+        sellIsin = "SE0004297927",
+        buyIsin = "SE0000581434",
+        sellFundName = "Fond A",
+        buyFundName = "Fond B",
+        fromLevel = 5,
+        toLevel = 4,
+        feeDeltaPercent = -0.8,
+        switchValueKr = 400.0,
+    )
+
+    private fun holdingState(
+        analysis: FundAnalysisCalc.Analysis? = null,
+        riskLevel: Int? = null,
+        switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
+        feeComparison: FeeComparisonUiState? = null,
+        comparisons: Map<String, ComparisonUiState> = emptyMap(),
+    ) = FondDetaljUiState(
+        loading = false,
+        fundName = "Fond A",
+        isin = "SE0004297927",
+        prices = prices,
+        analysis = analysis,
+        riskLevel = riskLevel,
+        switchPlan = switchPlan,
+        feeComparison = feeComparison,
+        comparisons = comparisons,
+    )
+
+    private fun greenAnalysis() = FundAnalysisCalc.Analysis(
+        keyFigures = keyFigures(),
+        distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+        trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+        momentum = null,
+        status = FundAnalysisCalc.SignalLevel.GRON,
+        profitTake = null,
+    )
+
+    @Test
+    fun visar_ingen_kurstabell_langre() {
+        // NAV-2: den radvisa kurstabellen (datum + kurs) är borttagen — diagrammet visar samma sak.
+        composeRule.setContent {
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis())) }
+        }
+
+        composeRule.onNodeWithText("1970-04-11").assertDoesNotExist()
+        composeRule.onNodeWithText("120,00 kr").assertDoesNotExist()
+    }
+
+    @Test
+    fun visar_bytesavsnittet_med_risknniva_i_rubriken() {
+        composeRule.setContent {
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = 5)) }
+        }
+
+        composeRule.onNodeWithText("Ska du byta?").assertExists()
+        composeRule.onNodeWithText("Risk 5/7").assertExists()
+    }
+
+    @Test
+    fun visar_okand_risk_i_stallet_for_ingen_markning() {
+        composeRule.setContent {
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = null)) }
+        }
+
+        composeRule.onNodeWithText("Risk okänd").assertExists()
+    }
+
+    @Test
+    fun visar_bytesplanens_forslag_med_riktning_och_riskdelta() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = 5, switchPlan = listOf(planSuggestion)))
+            }
+        }
+
+        composeRule.onNodeWithText("1. Byt till Fond B").assertExists()
+        composeRule.onNodeWithText("Risk 5 → 4 (av 7)").assertExists()
+    }
+
+    @Test
+    fun visar_kop_hit_riktningen_nar_fonden_ar_kopkandidaten() {
+        // Den öppnade fonden (SE0004297927) är köpkandidat: raden namnger säljfonden, och
+        // riskpilen följer **bytet** — från säljfondens nivå till den här fondens — inte den
+        // betraktande fondens perspektiv. Annars visades ett byte som höjer risken som en
+        // sänkning.
+        val incoming = planSuggestion.copy(
+            sellIsin = "SE0000581434",
+            buyIsin = "SE0004297927",
+            sellFundName = "Fond B",
+            buyFundName = "Fond A",
+            fromLevel = 4,
+            toLevel = 5,
+        )
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(incoming)))
+            }
+        }
+
+        composeRule.onNodeWithText("1. Byt hit från Fond B").assertExists()
+        composeRule.onNodeWithText("Risk 4 → 5 (av 7)").assertExists()
+    }
+
+    @Test
+    fun bytesforslagets_belopp_ar_dolt_tills_raden_falls_ut() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)))
+            }
+        }
+
+        composeRule.onNodeWithText("Belopp: 400,00 kr", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("1. Byt till Fond B").performScrollTo().performClick()
+        composeRule.onNodeWithText("Belopp: 400,00 kr", substring = true).assertExists()
+    }
+
+    @Test
+    fun utfallt_forslag_begar_kandidatens_kurshistorik() {
+        // ANA-11: historiken hämtas lazily, alltså först när raden fälls ut.
+        val expanded = mutableListOf<String>()
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
+                    onSuggestionExpanded = { expanded += it },
+                )
+            }
+        }
+
+        assertTrue(expanded.isEmpty())
+        composeRule.onNodeWithText("1. Byt till Fond B").performScrollTo().performClick()
+        assertEquals(listOf("SE0000581434"), expanded)
+    }
+
+    @Test
+    fun utfallt_forslag_visar_jamforelsediagram_med_bada_fonderna() {
+        val comparison = ComparisonUiState.Ready(points = listOf(90L to 100.0, 100L to 105.0))
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        switchPlan = listOf(planSuggestion),
+                        comparisons = mapOf("SE0000581434" to comparison),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("1. Byt till Fond B").performScrollTo().performClick()
+        composeRule.onNodeWithText("Din fond").assertExists()
+        composeRule.onNodeWithText("startar på 100", substring = true).assertExists()
+    }
+
+    @Test
+    fun utfallt_forslag_utan_hamtbar_historik_sager_det_i_stallet_for_tomt_diagram() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        switchPlan = listOf(planSuggestion),
+                        comparisons = mapOf("SE0000581434" to ComparisonUiState.Unavailable),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("1. Byt till Fond B").performScrollTo().performClick()
+        composeRule.onNodeWithText("Kunde inte hämta kurshistorik", substring = true).assertExists()
+    }
+
+    @Test
+    fun sager_varfor_inget_byte_foreslas_for_ett_innehav() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(analysis = greenAnalysis(), feeComparison = FeeComparisonUiState.NoCheaperAlternative),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Riskprofilens bytesplan föreslår inget byte", substring = true).assertExists()
+    }
+
+    @Test
+    fun sager_att_bytesforslag_bara_ges_for_agda_fonder() {
+        composeRule.setContent {
+            FonderTheme { FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices)) }
+        }
+
+        composeRule.onNodeWithText("bara för fonder du äger", substring = true).assertExists()
+    }
+
+    @Test
+    fun analysens_nyckeltal_ligger_hopfallda_tills_sektionen_falls_ut() {
+        composeRule.setContent {
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis())) }
+        }
+
+        composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").assertDoesNotExist()
+        expandAnalysis()
+        composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").performScrollTo().assertExists()
     }
 }

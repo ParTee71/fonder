@@ -63,6 +63,7 @@ class TransactionFormViewModelTest {
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?) = true
         override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) = true
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = null
