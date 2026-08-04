@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.fond
 
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -659,5 +660,37 @@ class FondDetaljScreenTest {
         composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").assertDoesNotExist()
         expandAnalysis()
         composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun bytesforslaget_kan_kvitteras_som_genomfort_utan_att_fallas_ut() {
+        // SET-5/issue #90: samma inspelade rad som Hems bytesplan skriver mot — kvitteringen
+        // ska gå att göra där beslutet fattas, utan att först fälla ut diagrammet.
+        var callback: Pair<Long, Boolean>? = null
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
+                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+
+        assertEquals(1L to true, callback)
+    }
+
+    @Test
+    fun kvitteringen_speglar_ett_redan_genomfort_byte() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion.copy(followed = true))),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Genomförd").performScrollTo().assertIsOn()
     }
 }

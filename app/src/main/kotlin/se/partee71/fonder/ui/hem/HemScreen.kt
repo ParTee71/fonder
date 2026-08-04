@@ -4,12 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +27,7 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
+import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
@@ -469,21 +466,9 @@ private fun SwitchSuggestionRow(switch: SwitchSuggestionUi, onFollowedChange: (L
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // `toggleable` på hela raden, inte bara på rutan — klickbar etikett, 48 dp träffyta
-        // och **en** nod med rollen kryssruta för skärmläsaren.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .toggleable(
-                    value = switch.followed,
-                    role = Role.Checkbox,
-                    onValueChange = { checked -> onFollowedChange(switch.recordId, checked) },
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = switch.followed, onCheckedChange = null)
-            Text(stringResource(R.string.facit_followed_label), style = MaterialTheme.typography.bodySmall)
-        }
+        FollowedToggleRow(
+            followed = switch.followed,
+            onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
+        )
     }
 }

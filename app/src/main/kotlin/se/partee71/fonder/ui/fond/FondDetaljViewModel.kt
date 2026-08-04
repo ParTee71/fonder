@@ -377,6 +377,20 @@ class FondDetaljViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Markerar ett av kortets bytesförslag som genomfört (SET-5/HEM-8, issue #90) — samma
+     * inspelade rad som Hems bytesplan skriver mot, så en kvittering på fondkortet och en på
+     * Hem är samma händelse. Skriver bara flaggan; appen utför aldrig ett byte.
+     *
+     * Utan den här vägen gick samma förslag att kvittera på Hem men inte där man faktiskt
+     * fattar beslutet, och facit (SET-5) mäter följda råd separat från alla givna råd — en
+     * oåtkomlig kvittering blir därför en systematisk underrapportering, inte bara en saknad
+     * knapp.
+     */
+    fun setSwitchFollowed(recordId: Long, followed: Boolean) {
+        viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
+    }
+
     /** Sparar ett användarbekräftat/rättat ISIN och hämtar direkt historik sedan första köpet med det. */
     fun onIsinConfirmed(isin: String) {
         val trimmed = isin.trim().uppercase()

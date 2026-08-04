@@ -35,6 +35,7 @@ import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
+import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
@@ -68,6 +69,7 @@ fun FondDetaljScreen(
         state = state,
         onIsinConfirmed = viewModel::onIsinConfirmed,
         onSuggestionExpanded = viewModel::onSuggestionExpanded,
+        onSwitchFollowedChange = viewModel::setSwitchFollowed,
         modifier = modifier,
     )
 }
@@ -78,6 +80,7 @@ fun FondDetaljContent(
     state: FondDetaljUiState,
     onIsinConfirmed: (String) -> Unit = {},
     onSuggestionExpanded: (String) -> Unit = {},
+    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -112,6 +115,7 @@ fun FondDetaljContent(
                             state = state,
                             chartPoints = chartPoints,
                             onSuggestionExpanded = onSuggestionExpanded,
+                            onSwitchFollowedChange = onSwitchFollowedChange,
                             modifier = Modifier.padding(vertical = 16.dp),
                         )
                         HorizontalDivider()
@@ -202,6 +206,7 @@ private fun SwitchDecisionSection(
     state: FondDetaljUiState,
     chartPoints: List<Pair<Long, Double>>,
     onSuggestionExpanded: (String) -> Unit,
+    onSwitchFollowedChange: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -222,6 +227,7 @@ private fun SwitchDecisionSection(
                     chartPoints = chartPoints,
                     comparison = state.comparisons[suggestion.counterpartIsin(state.isin)],
                     onSuggestionExpanded = onSuggestionExpanded,
+                    onSwitchFollowedChange = onSwitchFollowedChange,
                 )
             }
         }
@@ -303,6 +309,7 @@ private fun SwitchPlanRow(
     chartPoints: List<Pair<Long, Double>>,
     comparison: ComparisonUiState?,
     onSuggestionExpanded: (String) -> Unit,
+    onSwitchFollowedChange: (Long, Boolean) -> Unit,
 ) {
     val sellingThisFund = suggestion.sellIsin == fundIsin
     val counterpartName = if (sellingThisFund) suggestion.buyFundName else suggestion.sellFundName
@@ -313,35 +320,46 @@ private fun SwitchPlanRow(
         stringResource(R.string.hem_switch_plan_disclaimer),
     ).joinToString("\n")
 
-    ExpandableInfoRow(
-        explanation = explanation,
-        onExpand = { onSuggestionExpanded(counterpartIsin) },
-        extraContent = {
-            ComparisonChart(
-                holdingPoints = chartPoints,
-                candidateName = counterpartName,
-                comparison = comparison,
-            )
-        },
-    ) {
-        Column {
-            Text(
-                stringResource(
-                    if (sellingThisFund) R.string.format_switch_plan_to else R.string.format_switch_plan_from,
-                    suggestion.planIndex + 1,
-                    counterpartName,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
-            // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
-            // köpkandidaten hade visat "Risk 5 → 4" för ett byte som faktiskt höjer risken.
-            RiskBadge(
-                level = suggestion.fromLevel,
-                toLevel = suggestion.toLevel,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+    Column {
+        ExpandableInfoRow(
+            explanation = explanation,
+            onExpand = { onSuggestionExpanded(counterpartIsin) },
+            extraContent = {
+                ComparisonChart(
+                    holdingPoints = chartPoints,
+                    candidateName = counterpartName,
+                    comparison = comparison,
+                )
+            },
+        ) {
+            Column {
+                Text(
+                    stringResource(
+                        if (sellingThisFund) R.string.format_switch_plan_to else R.string.format_switch_plan_from,
+                        suggestion.planIndex + 1,
+                        counterpartName,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
+                // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
+                // köpkandidaten hade visat "Risk 5 → 4" för ett byte som faktiskt höjer risken.
+                RiskBadge(
+                    level = suggestion.fromLevel,
+                    toLevel = suggestion.toLevel,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
+        // Kvitteringen ligger **utanför** den utfällbara raden, inte i dess rubrik: rubriken är
+        // en `clickable` som slår ihop sina barns semantik, så en kryssruta där hade blivit en
+        // del av "fäll ut"-noden i stället för en egen växlare för skärmläsaren — och ett klick
+        // hade fällt ut raden i stället för att kvittera. Alltid synlig, av samma skäl som på
+        // Hem: kvitteringen ska gå att göra där beslutet fattas, utan att först fälla ut något.
+        FollowedToggleRow(
+            followed = suggestion.followed,
+            onFollowedChange = { checked -> onSwitchFollowedChange(suggestion.recordId, checked) },
+        )
     }
 }
 
