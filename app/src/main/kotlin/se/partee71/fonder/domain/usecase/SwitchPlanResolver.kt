@@ -2,6 +2,7 @@ package se.partee71.fonder.domain.usecase
 
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import java.time.LocalDate
 
@@ -72,10 +73,15 @@ object SwitchPlanResolver {
     ): List<Suggestion> {
         if (accountType != AccountType.ISK_KF) return emptyList()
 
-        val suggestedAt = latestBatch.firstOrNull()?.suggestedAtEpochDay ?: return emptyList()
+        // Bara planens egna rader (issue #91). DAO-frågan filtrerar redan på typen, men
+        // prefix-regeln nedan är det som gör en plan säker att *följa* — och den vilar på att
+        // varje rad hör till samma girigt framräknade plan. Ett avgiftsbyte som slank in hade
+        // presenterats som planens `planIndex 0`, alltså ett råd som aldrig räknats fram.
+        val planRecords = latestBatch.filter { it.kind == SuggestionKind.RISK_PLAN }
+        val suggestedAt = planRecords.firstOrNull()?.suggestedAtEpochDay ?: return emptyList()
         if (FundMetadataFreshness.isStale(suggestedAt, today, SwitchPlanCalc.PLAN_TTL_DAYS)) return emptyList()
 
-        val resolved = latestBatch.mapNotNull { record ->
+        val resolved = planRecords.mapNotNull { record ->
             val sellMeta = metadataByIsin[record.sellIsin] ?: return@mapNotNull null
             val buyMeta = metadataByIsin[record.buyIsin] ?: return@mapNotNull null
             val sellLevel = sellMeta.risk ?: return@mapNotNull null

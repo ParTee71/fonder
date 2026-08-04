@@ -33,6 +33,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.FollowedToggleRow
@@ -91,35 +92,75 @@ fun FacitContent(
 }
 
 /**
- * De två måtten och snittet per plats i planen. **Alla förslag** och **enbart genomförda**
- * står som skilda rader och slås aldrig ihop: ett oföljt förslag är ett hypotetiskt utfall,
- * ett följt ett verkligt, och en gemensam siffra hade mätt ingetdera (SET-5).
+ * De två måtten per sort, plus snittet per plats i planen. **Alla förslag** och **enbart
+ * genomförda** står som skilda rader och slås aldrig ihop: ett oföljt förslag är ett
+ * hypotetiskt utfall, ett följt ett verkligt, och en gemensam siffra hade mätt ingetdera
+ * (SET-5).
+ *
+ * Bytesplanens byten (HEM-8) och avgiftsbytena (ANA-9) redovisas i sin tur var för sig (issue
+ * #91) — de besvarar olika frågor, och ett gemensamt snitt hade dolt att avgiftsbytets vinst
+ * är känd på förhand medan riskplansbytets inte är det.
  */
 @Composable
 private fun SummaryCard(state: FacitUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(stringResource(R.string.facit_summary_title), style = MaterialTheme.typography.labelMedium)
-            SummaryRow(
-                label = stringResource(R.string.facit_summary_all_label),
-                summary = state.allSummary,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            SummaryRow(
-                label = stringResource(R.string.facit_summary_followed_label),
-                summary = state.followedSummary,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                stringResource(
-                    R.string.format_facit_evaluated_count,
-                    state.allSummary.evaluatedCount,
-                    state.allSummary.totalCount,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+
+            // Varje sektion visas bara när dess sort faktiskt har inspelade rader — en rubrik
+            // med tomma streck hade sett ut som ett mätfel i stället för som "inget att mäta
+            // än". Kortet i sig ritas bara när listan är icke-tom, så minst en sektion syns.
+            if (state.planAllSummary.totalCount > 0) {
+                Text(
+                    stringResource(R.string.facit_summary_plan_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.facit_summary_all_label),
+                    summary = state.planAllSummary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.facit_summary_followed_label),
+                    summary = state.planFollowedSummary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    stringResource(
+                        R.string.format_facit_evaluated_count,
+                        state.planAllSummary.evaluatedCount,
+                        state.planAllSummary.totalCount,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            if (state.feeAllSummary.totalCount > 0) {
+                Text(
+                    stringResource(R.string.facit_summary_fee_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.facit_summary_all_label),
+                    summary = state.feeAllSummary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.facit_summary_followed_label),
+                    summary = state.feeFollowedSummary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    stringResource(R.string.facit_summary_fee_explain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
 
             if (state.byPlanIndex.isNotEmpty()) {
                 Text(
@@ -194,7 +235,13 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        LocalDate.ofEpochDay(row.suggestedAtEpochDay).format(dateFormatter),
+                        stringResource(
+                            R.string.format_facit_row_kind_and_date,
+                            stringResource(
+                                if (row.kind == SuggestionKind.FEE) R.string.facit_kind_fee else R.string.facit_kind_plan,
+                            ),
+                            LocalDate.ofEpochDay(row.suggestedAtEpochDay).format(dateFormatter),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -221,11 +268,16 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
 
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    Text(
-                        stringResource(R.string.format_facit_plan_index_detail, row.planIndex + 1),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // Plats i planen bara för planens rader: ett avgiftsbyte ingår inte i någon
+                    // rangordning, så dess planIndex är alltid 0 och "1:a bytet i planen" hade
+                    // varit en påhittad ordning (issue #91).
+                    if (row.kind == SuggestionKind.RISK_PLAN) {
+                        Text(
+                            stringResource(R.string.format_facit_plan_index_detail, row.planIndex + 1),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     row.switchValueKr?.let { valueKr ->
                         Text(
                             stringResource(R.string.format_facit_amount, MoneyFormat.kr(valueKr)),

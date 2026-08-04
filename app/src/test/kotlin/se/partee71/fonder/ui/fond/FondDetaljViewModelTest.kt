@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -38,6 +39,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.FundTag
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -144,9 +146,17 @@ class FondDetaljViewModelTest {
 
     private val fakeSuggestionRecordRepo = object : SuggestionRecordRepository {
         val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records
-        override fun observeHistory(): Flow<List<SuggestionRecord>> = records
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> =
+            records.map { list -> list.filter { it.kind == SuggestionKind.RISK_PLAN } }
+        /** Nyast först, precis som DAO:ns `observeHistory` — ordningen är en del av kontraktet (issue #91). */
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { list ->
+            list.sortedWith(
+                compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                    .thenByDescending { it.batchEpochMillis }
+                    .thenBy { it.planIndex },
+            )
+        }
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
@@ -712,6 +722,95 @@ class FondDetaljViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ComparisonUiState.Unavailable, vm.uiState.value.comparisons["SE0000581434"])
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    // --- Kvittering av avgiftsbytet (ANA-9/SET-5, issue #91) ---
+
+    /** Seedar ett innehav med ISIN och en inspelad FEE-rad för kandidaten [buyIsin]. */
+    private suspend fun setUpRecordedFeeSwitch(
+        buyIsin: String = "SE0000581434",
+        followed: Boolean? = null,
+        suggestedAtEpochDay: Long = LocalDate.now().toEpochDay(),
+        id: Long = 21,
+    ) {
+        setUpHolding(isin = "SE0004297927")
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value + SuggestionRecord(
+            id = id, suggestedAtEpochDay = suggestedAtEpochDay, planIndex = 0,
+            sellIsin = "SE0004297927", buyIsin = buyIsin,
+            sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 90.0,
+            switchValueKr = 10_000.0, followed = followed, kind = SuggestionKind.FEE,
+        )
+    }
+
+    @Test
+    fun `inspelat avgiftsbyte exponeras med sitt rad-id och sin kvittering`() = runTest(dispatcher) {
+        setUpRecordedFeeSwitch(followed = true)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+            val recorded = state.recordedFeeSwitches.getValue("SE0000581434")
+            assertEquals(21L, recorded.recordId)
+            assertTrue(recorded.followed)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `alternativ utan inspelad rad saknas i kartan — ingen kryssruta som inte skriver nagonstans`() =
+        runTest(dispatcher) {
+            // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen.
+            // Ett alternativ som just dykt upp har alltså inget att kvittera mot ännu.
+            setUpRecordedFeeSwitch(buyIsin = "SE0009778954")
+
+            val vm = viewModel()
+            vm.uiState.test {
+                var state = awaitItem()
+                while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+                assertNull(state.recordedFeeSwitches["SE0000581434"])
+                cancelAndIgnoreRemainingEvents()
+            }
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun `planens rader hamnar aldrig bland avgiftsbytena`() = runTest(dispatcher) {
+        // De två sorterna mäts var för sig; skulle en riskplansrad räknas som ett avgiftsbyte
+        // hade kvitteringen på avgiftsraden skrivit mot fel rad i facit.
+        setUpSwitchPlan()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+            advanceUntilIdle()
+
+            assertTrue(state.recordedFeeSwitches.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `senaste inspelningen per kandidat vinner`() = runTest(dispatcher) {
+        // observeHistory är nyast först: kvitteringen ska gälla dagens råd, inte ett halvår
+        // gammalt som råkar nämna samma kandidat.
+        setUpRecordedFeeSwitch(id = 5, suggestedAtEpochDay = LocalDate.now().minusDays(180).toEpochDay())
+        setUpRecordedFeeSwitch(id = 6, suggestedAtEpochDay = LocalDate.now().toEpochDay())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+            assertEquals(6L, state.recordedFeeSwitches.getValue("SE0000581434").recordId)
             cancelAndIgnoreRemainingEvents()
         }
         advanceUntilIdle()

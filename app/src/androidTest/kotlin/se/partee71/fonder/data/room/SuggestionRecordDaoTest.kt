@@ -8,12 +8,14 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.domain.model.SuggestionKind
 
 /**
  * DAO-rundtur för [SuggestionRecordDao] — facit-inspelningen (HEM-8) och dess redovisning
@@ -44,6 +46,7 @@ class SuggestionRecordDaoTest {
         buyIsin: String = "SE_BUY",
         followed: Boolean? = null,
         batchEpochMillis: Long = 0,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
     ) = SuggestionRecordEntity(
         suggestedAtEpochDay = suggestedAtEpochDay,
         planIndex = planIndex,
@@ -54,6 +57,7 @@ class SuggestionRecordDaoTest {
         switchValueKr = 10_000.0,
         followed = followed,
         batchEpochMillis = batchEpochMillis,
+        kind = kind.name,
     )
 
     @Test
@@ -122,5 +126,52 @@ class SuggestionRecordDaoTest {
         assertEquals(1, senaste.size)
         assertEquals(20_001L, senaste.single().suggestedAtEpochDay)
         assertTrue(dao.observeHistory().first().size == 2)
+    }
+
+    // --- Sorten på raden (issue #91) ---
+
+    @Test
+    fun `kind gar rundturen och defaultar till bytesplansbyte`() = runTest {
+        dao.insert(entity(planIndex = 0))
+        dao.insert(entity(planIndex = 1, kind = SuggestionKind.FEE))
+
+        val rows = dao.getAll().sortedBy { it.planIndex }
+        assertEquals(SuggestionKind.RISK_PLAN, rows[0].toDomain().kind)
+        assertEquals(SuggestionKind.FEE, rows[1].toDomain().kind)
+    }
+
+    @Test
+    fun `observeLatestBatch utelamnar avgiftsbyten fran samma korning`() = runTest {
+        dao.insert(entity(suggestedAtEpochDay = 20_001, batchEpochMillis = 2_000, planIndex = 0))
+        dao.insert(entity(suggestedAtEpochDay = 20_001, batchEpochMillis = 2_000, buyIsin = "SE_BILLIG", kind = SuggestionKind.FEE))
+
+        val senaste = dao.observeLatestBatch().first()
+
+        assertEquals(listOf("SE_BUY"), senaste.map { it.buyIsin })
+    }
+
+    @Test
+    // Regression för issue #91: MAX()-underfrågorna måste filtrera på kind de också.
+    fun `observeLatestBatch ger planens senaste batch aven nar ett senare dygn bara har avgiftsbyten`() = runTest {
+        dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 0))
+        // Dygnet efter gav planen ingenting — bara avgiftsskanningen spelade in något. Väljs
+        // dygnet utan hänsyn till sorten blir planens batch tom och Hem visar ingen plan alls.
+        dao.insert(entity(suggestedAtEpochDay = 20_001, batchEpochMillis = 2_000, buyIsin = "SE_BILLIG", kind = SuggestionKind.FEE))
+
+        val senaste = dao.observeLatestBatch().first()
+
+        assertEquals(1, senaste.size)
+        assertEquals(20_000L, senaste.single().suggestedAtEpochDay)
+        assertEquals("SE_BUY", senaste.single().buyIsin)
+    }
+
+    @Test
+    fun `existsForDay skiljer pa sorterna for samma fondpar`() = runTest {
+        dao.insert(entity(suggestedAtEpochDay = 20_000))
+
+        assertTrue(dao.existsForDay("SE_SELL", "SE_BUY", 20_000, SuggestionKind.RISK_PLAN.name))
+        // Samma fondpar samma dygn, men den andra sorten — spärren får inte tyst blockera den.
+        assertFalse(dao.existsForDay("SE_SELL", "SE_BUY", 20_000, SuggestionKind.FEE.name))
+        assertFalse(dao.existsForDay("SE_SELL", "SE_BUY", 20_001, SuggestionKind.RISK_PLAN.name))
     }
 }

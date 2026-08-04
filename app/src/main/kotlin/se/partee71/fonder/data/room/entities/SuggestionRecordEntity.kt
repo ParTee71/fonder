@@ -2,6 +2,7 @@ package se.partee71.fonder.data.room.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 
 /**
@@ -21,6 +22,14 @@ data class SuggestionRecordEntity(
     val followed: Boolean?,
     /** Körningen raden hör till — se [SuggestionRecord.batchEpochMillis]. 0 = inspelad före issue #75. */
     val batchEpochMillis: Long = 0,
+    /**
+     * [SuggestionKind] som text (issue #91) — lagrad som `String` i stället för via en
+     * `TypeConverter` på hela databasen: kolumnen har ett default i SQL (`'RISK_PLAN'`, se
+     * migreringen 12→13), och en converter hade lagt till en global konvertering för en enda
+     * kolumn. Okänt värde läses som [SuggestionKind.RISK_PLAN] — en fil från en nyare version
+     * ska degradera, inte krascha.
+     */
+    val kind: String = SuggestionKind.RISK_PLAN.name,
 ) {
     fun toDomain() = SuggestionRecord(
         id = id,
@@ -33,6 +42,7 @@ data class SuggestionRecordEntity(
         switchValueKr = switchValueKr,
         followed = followed,
         batchEpochMillis = batchEpochMillis,
+        kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN),
     )
 
     companion object {
@@ -47,6 +57,7 @@ data class SuggestionRecordEntity(
             switchValueKr = record.switchValueKr,
             followed = record.followed,
             batchEpochMillis = record.batchEpochMillis,
+            kind = record.kind.name,
         )
     }
 }

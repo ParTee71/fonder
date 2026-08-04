@@ -14,6 +14,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.Transaction
@@ -58,6 +59,7 @@ class BackupSerializerTest {
                 sellIsin = "SE0000582033", buyIsin = "SE0005991445",
                 sellNavAtSuggestion = 190.0, buyNavAtSuggestion = 70.0,
                 switchValueKr = 1_000.0, followed = null, batchEpochMillis = 0,
+                kind = SuggestionKind.FEE,
             ),
         ),
         riskProfile = RiskProfile(
@@ -91,6 +93,26 @@ class BackupSerializerTest {
         assertEquals(listOf(true, false, null), restored.suggestionRecords.map { it.followed })
         assertEquals(listOf(4_200.0, null, 1_000.0), restored.suggestionRecords.map { it.switchValueKr })
         assertEquals(listOf(1_754_200_000_000, 1_754_200_000_000, 0), restored.suggestionRecords.map { it.batchEpochMillis })
+        // Sorten måste följa med (issue #91): utan den går ett återställt `followed` inte att
+        // tolka, eftersom de två sorterna mäts var för sig i facit.
+        assertEquals(
+            listOf(SuggestionKind.RISK_PLAN, SuggestionKind.RISK_PLAN, SuggestionKind.FEE),
+            restored.suggestionRecords.map { it.kind },
+        )
+    }
+
+    @Test
+    fun `en fil utan kind lases som bytesplansbyten`() {
+        // Filer skrivna före issue #91 saknar nyckeln helt. Defaulten är den enda rimliga
+        // tolkningen — varje rad som fanns då var ett bytesplansbyte — och en återställning ska
+        // aldrig avvisa filen eller gissa något annat.
+        val utanKind = BackupSerializer.encode(fullPayload())
+            .replace(Regex(",\\s*\"kind\": \"[A-Z_]+\""), "")
+
+        val restored = BackupSerializer.decode(utanKind).getOrThrow()
+
+        assertEquals(3, restored.suggestionRecords.size)
+        assertTrue(restored.suggestionRecords.all { it.kind == SuggestionKind.RISK_PLAN })
     }
 
     @Test
@@ -143,7 +165,8 @@ class BackupSerializerTest {
         assertEquals(
             setOf(
                 "id", "suggestedAtEpochDay", "planIndex", "sellIsin", "buyIsin",
-                "sellNavAtSuggestion", "buyNavAtSuggestion", "switchValueKr", "followed", "batchEpochMillis",
+                "sellNavAtSuggestion", "buyNavAtSuggestion", "switchValueKr", "followed",
+                "batchEpochMillis", "kind",
             ),
             root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys,
         )

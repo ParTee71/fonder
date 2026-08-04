@@ -32,6 +32,7 @@ import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.TimeHorizon
 
 /**
@@ -101,6 +102,9 @@ class BackupRoundTripTest {
                 id = 3, suggestedAtEpochDay = 19_400, planIndex = 0, sellIsin = "SE0000582033", buyIsin = "SE0005991445",
                 sellNavAtSuggestion = 190.0, buyNavAtSuggestion = 70.0, switchValueKr = 1_000.0, followed = null,
                 batchEpochMillis = 0,
+                // Ett avgiftsbyte (issue #91): sorten avgör vilken summering raden räknas i och
+                // om Hem visar den — tappas den i rundturen byter rådet betydelse.
+                kind = SuggestionKind.FEE.name,
             ),
         )
         preferences.setRiskProfile(
@@ -147,6 +151,10 @@ class BackupRoundTripTest {
         assertEquals(listOf(true, false, null), records.map { it.followed })
         assertEquals(listOf(4_200.0, null, 1_000.0), records.map { it.switchValueKr })
         assertEquals(listOf(1_754_200_000_000L, 1_754_200_000_000L, 0L), records.map { it.batchEpochMillis })
+        assertEquals(
+            listOf(SuggestionKind.RISK_PLAN, SuggestionKind.RISK_PLAN, SuggestionKind.FEE),
+            records.map { it.toDomain().kind },
+        )
         assertEquals(listOf(0, 1, 0), records.map { it.planIndex })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
         assertEquals(95.25, records[0].buyNavAtSuggestion, 1e-9)

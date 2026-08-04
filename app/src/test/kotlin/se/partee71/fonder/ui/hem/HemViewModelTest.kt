@@ -39,6 +39,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -126,7 +127,7 @@ class HemViewModelTest {
 
         var prunedBefore: LocalDate? = null
         override suspend fun prune(today: LocalDate) { prunedBefore = today }
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }

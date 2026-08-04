@@ -266,6 +266,9 @@
     <string name="facit_empty_title">Inget facit än</string>
     <string name="facit_empty_body">Här visas utfallet av bytesförslagen från Hem. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
     <string name="facit_summary_title">Meravkastning mot att ha behållit</string>
+    <string name="facit_summary_plan_title">Bytesplanen</string>
+    <string name="facit_summary_fee_title">Billigare alternativ</string>
+    <string name="facit_summary_fee_explain">Avgiftsbytena redovisas separat: där är vinsten den lägre avgiften, känd på förhand, medan bytesplanens utfall beror på hur fonderna går. Ett gemensamt snitt hade dolt skillnaden.</string>
     <string name="facit_summary_all_label">Alla förslag</string>
     <string name="facit_summary_followed_label">Enbart genomförda</string>
     <string name="format_facit_evaluated_count">%1$d av %2$d förslag utvärderade</string>
@@ -273,6 +276,9 @@
     <string name="format_facit_plan_index_label">Plats %1$d</string>
     <string name="facit_by_plan_index_explain">Planen är rangordnad, så det första bytet ska vara det starkaste. Presterar de lägre platserna sämre är det ett skäl att inte föreslå fler byten per plan.</string>
     <string name="format_facit_row_funds">%1$s → %2$s</string>
+    <string name="format_facit_row_kind_and_date">%1$s · %2$s</string>
+    <string name="facit_kind_plan">Bytesplan</string>
+    <string name="facit_kind_fee">Billigare alternativ</string>
     <string name="facit_row_excess_label">Meravkastning</string>
     <string name="format_facit_plan_index_detail">Plats %1$d i planen</string>
     <string name="format_facit_amount">Belopp: %1$s</string>

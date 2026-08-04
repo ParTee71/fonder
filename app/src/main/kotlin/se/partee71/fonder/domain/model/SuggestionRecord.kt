@@ -28,8 +28,11 @@ import kotlinx.serialization.Serializable
  *   landar normalt samma dygn och kan ha räknat fram olika planer — visades de ihop blev det
  *   en "plan" som aldrig räknats fram (issue #75). 0 = inspelad före den här versionen, då
  *   bara dygnet är känt.
- * @param followed null tills en framtida "markera som genomförd"-funktion (utanför det här
- *   issuets scope) sätter den.
+ * @param followed null tills användaren markerat förslaget som genomfört (SET-5, issue #80).
+ * @param kind vilken sorts råd raden bär (issue #91). Defaulten är inte kosmetisk: varje rad
+ *   inspelad före den här versionen **är** ett riskplansbyte, och migreringen sätter samma
+ *   värde. Typen måste följa med i backup-kontraktet — utan den går ett återställt [followed]
+ *   inte att tolka, eftersom de två sorterna mäts var för sig i facit.
  */
 @Serializable
 data class SuggestionRecord(
@@ -43,4 +46,22 @@ data class SuggestionRecord(
     val switchValueKr: Double? = null,
     val followed: Boolean? = null,
     val batchEpochMillis: Long = 0,
+    val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
 )
+
+/**
+ * Sorten av inspelat råd (issue #91) — de mäts var för sig i facit (SET-5) och läses av olika
+ * vyer. [RISK_PLAN] är bytesplanens byten mot riskprofilens målfördelning (HEM-8); [FEE] är
+ * avgiftsbytet till ett billigare, likvärdigt alternativ (ANA-9).
+ *
+ * Skillnaden är inte bara en etikett: de besvarar olika frågor. Ett avgiftsbyte görs för en
+ * **känd** besparing, ett riskplansbyte för ett förväntat utfall — att slå ihop dem till ett
+ * snitt hade dolt att den ena sortens råd är säkrare än den andra. Dessutom läser Hems
+ * bytesplan bara [RISK_PLAN]: en [FEE]-rad där hade presenterats som "1. Sälj X → Köp Y" i en
+ * plan den aldrig ingick i.
+ */
+@Serializable
+enum class SuggestionKind {
+    RISK_PLAN,
+    FEE,
+}
