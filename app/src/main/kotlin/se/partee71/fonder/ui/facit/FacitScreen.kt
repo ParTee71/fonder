@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,6 +35,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -252,24 +250,11 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    // `toggleable` på hela raden i stället för bara på rutan: etiketten blir
-                    // klickbar, träffytan når 48 dp och skärmläsaren får **en** nod med rollen
-                    // kryssruta i stället för en ruta plus en löstext bredvid.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .padding(top = 4.dp)
-                            .toggleable(
-                                value = row.followed,
-                                role = Role.Checkbox,
-                                onValueChange = { checked -> onFollowedChange(row.recordId, checked) },
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = row.followed, onCheckedChange = null)
-                        Text(stringResource(R.string.facit_followed_label), style = MaterialTheme.typography.bodySmall)
-                    }
+                    FollowedToggleRow(
+                        followed = row.followed,
+                        onFollowedChange = { checked -> onFollowedChange(row.recordId, checked) },
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
         }

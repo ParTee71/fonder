@@ -148,7 +148,9 @@ class FondDetaljViewModelTest {
         override fun observeHistory(): Flow<List<SuggestionRecord>> = records
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
-        override suspend fun setFollowed(id: Long, followed: Boolean) {}
+        override suspend fun setFollowed(id: Long, followed: Boolean) {
+            records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
+        }
         override suspend fun prune(today: LocalDate) {}
     }
 
@@ -713,5 +715,19 @@ class FondDetaljViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
         advanceUntilIdle()
+    }
+
+    @Test
+    fun `setSwitchFollowed skriver flaggan pa den inspelade raden`() = runTest(dispatcher) {
+        // Samma rad som Hems bytesplan skriver mot (SET-5) — en kvittering på fondkortet och
+        // en på Hem ska vara samma händelse, inte två olika mätningar.
+        setUpSwitchPlan()
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.setSwitchFollowed(recordId = 7, followed = true)
+        advanceUntilIdle()
+
+        assertEquals(true, fakeSuggestionRecordRepo.records.value.single().followed)
     }
 }
