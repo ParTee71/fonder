@@ -73,6 +73,7 @@ class ImportHoldingsViewModelTest {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
         }
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
         override suspend fun lookupIsin(fundId: String): String? = null

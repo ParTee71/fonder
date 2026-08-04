@@ -1,9 +1,9 @@
 # Fonder – Android
 
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
-och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
+och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.39.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.40.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -38,6 +38,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (HEM-6, #61)
 - [x] Exponeringskarta i Portfölj — andel per fondtyp, region, index/aktivt (POR-9, #66)
 - [x] Riskprofil — enkät, målrisknivå och jämförelse mot innehavens faktiska risk (SET-3/HEM-7, #68)
+- [x] Fondkortet som beslutsstöd — byte överst, foldouts, risknivå överallt och
+      jämförelsediagram mot föreslagen fond (ANA-10/ANA-11/UI-10, #85)
 - [x] Riskprofil som målfördelning över flera risknivåer, i stället för en enda nivå (SET-3/HEM-7/POR-9, #71)
 - [x] Bytesplan i ISK: rangordnade fondbyten mot målfördelningen, med facit-inspelning (SET-4/HEM-8, #70)
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
@@ -118,8 +120,9 @@ ui/
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
-├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
-│                 Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
+├── fond/         FondDetaljScreen + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
+│                 jämförelsediagram, ANA-10/ANA-11/#85 · kurshistorik i diagram sedan första köpet, #7 ·
+│                 hopfälld Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
 ├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
@@ -127,8 +130,9 @@ ui/
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
-│                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 …)
-├── diagram/      Delade diagram (FundLineChart)
+│                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
+│                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
+├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)
 ```

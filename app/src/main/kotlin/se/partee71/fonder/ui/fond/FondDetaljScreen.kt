@@ -1,13 +1,11 @@
 package se.partee71.fonder.ui.fond
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -23,34 +21,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
-import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
+import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
+import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
-import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
 /**
- * Fonddetalj — kurshistorik sedan första köpet i diagram och tabell (issue #7,
- * #7-uppföljning). Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt
- * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14. Innehåller även en
- * Analys-sektion med nyckeltal och säljsignal-status (issue #16, ANA-1–ANA-4) för fonder
- * som är kvarvarande innehav, plus ett pedagogiskt lager med utfällbara förklaringar,
- * neutral kontext och en ordlista (issue #22, ANA-5–ANA-6).
+ * Fonddetalj — appens beslutsstöd för en enskild fond (ANA-10, issue #85). Kortet leder med
+ * **bytesbeslutet**: verdiktrad (säljsignal-status ANA-3, risknivå UI-10 och neutral kontext
+ * ANA-6) följd av de bytesförslag som rör fonden — riskprofilens bytesplan (HEM-8) och de
+ * billigare, likvärdiga alternativen (ANA-9) — där varje förslag kan fällas ut till ett
+ * jämförelsediagram (ANA-11). Under det ligger fondens egen kurshistorik i diagram (issue #7,
+ * #7-uppföljning); den radvisa kurstabellen är borttagen (NAV-2).
+ *
+ * Allt förklarande material — analysens nyckeltal (ANA-1/ANA-7), signalförklaringarna (ANA-5)
+ * och ordlistan (ANA-6) — ligger i hopfällda sektioner: det är underlag man slår upp, inte det
+ * man öppnar kortet för. Saknar fonden ISIN visas fältet för att ange/bekräfta det (förifyllt
+ * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14.
  */
 @Composable
 fun FondDetaljScreen(
@@ -58,7 +64,12 @@ fun FondDetaljScreen(
     viewModel: FondDetaljViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    FondDetaljContent(state = state, onIsinConfirmed = viewModel::onIsinConfirmed, modifier = modifier)
+    FondDetaljContent(
+        state = state,
+        onIsinConfirmed = viewModel::onIsinConfirmed,
+        onSuggestionExpanded = viewModel::onSuggestionExpanded,
+        modifier = modifier,
+    )
 }
 
 /** Tillståndsdriven, testbar del av [FondDetaljScreen] — inget ViewModel/Hilt-beroende (issue #16). */
@@ -66,6 +77,7 @@ fun FondDetaljScreen(
 fun FondDetaljContent(
     state: FondDetaljUiState,
     onIsinConfirmed: (String) -> Unit = {},
+    onSuggestionExpanded: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -75,67 +87,342 @@ fun FondDetaljContent(
             modifier = modifier,
         )
 
-        else -> LazyColumn(modifier = modifier.fillMaxSize()) {
-            item {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(state.fundName ?: "", style = MaterialTheme.typography.titleLarge)
-                    val firstPurchaseEpochDay = state.firstPurchaseEpochDay
-                    val netInvested = state.netInvested
-                    if (firstPurchaseEpochDay != null && netInvested != null) {
-                        Text(
-                            stringResource(
-                                R.string.format_holding_first_purchase,
-                                LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
-                                MoneyFormat.kr(netInvested),
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp),
+        // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här är en ren
+        // omvändning + mappning — men utan remember kördes den vid varje recomposition, och
+        // eftersom listans identitet då ändrades triggades hela Vico-kedjan (periodfilter,
+        // LaunchedEffect, ny transaktion) på nytt vid varje kurstick. En backfillad fond har
+        // flera tusen punkter (issue #78).
+        else -> {
+            val chartPoints = remember(state.prices) {
+                state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
+            }
+            // Ett enda `item`, inte ett per sektion: utan kurstabellen finns inga lazy rader kvar
+            // att vinna något på, och en icke-komponerad sektion hade gjort resten av kortet
+            // onåbart för `performScrollTo` i instrumenttesterna. LazyColumn behålls för att vyn
+            // ska vara skrollbar (UI-5).
+            LazyColumn(modifier = modifier.fillMaxSize()) {
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        FundHeader(state = state, modifier = Modifier.padding(top = 16.dp))
+                        if (state.analysis != null) {
+                            AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = 12.dp))
+                            AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        SwitchDecisionSection(
+                            state = state,
+                            chartPoints = chartPoints,
+                            onSuggestionExpanded = onSuggestionExpanded,
+                            modifier = Modifier.padding(vertical = 16.dp),
                         )
-                    }
-                    if (state.analysis != null) {
-                        AnalysisSection(analysis = state.analysis!!, modifier = Modifier.padding(top = 16.dp))
-                    }
-                    state.feeComparison?.let { feeComparison ->
-                        FeeComparisonSection(state = feeComparison, modifier = Modifier.padding(top = 16.dp))
-                    }
-                    // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här
-                    // är en ren omvändning + mappning — men utan remember kördes den vid varje
-                    // recomposition, och eftersom listans identitet då ändrades triggades hela
-                    // Vico-kedjan (periodfilter, LaunchedEffect, ny transaktion) på nytt vid
-                    // varje kurstick. En backfillad fond har flera tusen punkter (issue #78).
-                    val chartPoints = remember(state.prices) {
-                        state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
-                    }
-                    FundLineChart(
-                        points = chartPoints,
-                        purchaseEpochDays = state.purchaseEpochDays,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
-                    if (state.isin == null) {
-                        IsinInput(
-                            suggestedIsin = state.suggestedIsin,
-                            onConfirm = onIsinConfirmed,
+                        HorizontalDivider()
+                        FundLineChart(
+                            points = chartPoints,
+                            purchaseEpochDays = state.purchaseEpochDays,
                             modifier = Modifier.padding(top = 16.dp),
                         )
+                        // Allt förklarande material ligger hopfällt (ANA-10): analysen och
+                        // ordlistan är referens man slår upp, inte det man öppnar kortet för.
+                        if (state.analysis != null) {
+                            ExpandableSection(
+                                title = stringResource(R.string.analys_section_title),
+                                modifier = Modifier.padding(top = 8.dp),
+                            ) {
+                                AnalysisSection(analysis = state.analysis!!)
+                            }
+                        }
+                        ExpandableSection(
+                            title = stringResource(R.string.analys_glossary_title),
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            AnalysisGlossary()
+                        }
+                        if (state.isin == null) {
+                            IsinInput(
+                                suggestedIsin = state.suggestedIsin,
+                                onConfirm = onIsinConfirmed,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        }
                     }
                 }
-                HorizontalDivider()
-            }
-            items(state.prices, key = { it.epochDay }) { price ->
-                PriceRow(price)
             }
         }
     }
 }
 
+/** Fondens rubrikrad: namn, säljsignal-status (ANA-3), risknivå (UI-10) och innehavets utgångsläge (POR-6). */
+@Composable
+private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // UI-6: fondnamnet är det som kapas, aldrig märkningarna till höger.
+            Text(
+                state.fundName ?: "",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
+            RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = 8.dp))
+        }
+        val firstPurchaseEpochDay = state.firstPurchaseEpochDay
+        val netInvested = state.netInvested
+        if (firstPurchaseEpochDay != null && netInvested != null) {
+            Text(
+                stringResource(
+                    R.string.format_holding_first_purchase,
+                    LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
+                    MoneyFormat.kr(netInvested),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Kortets bytesavsnitt (ANA-10, issue #85) — det man öppnar fondkortet för: *ska jag byta, och
+ * i så fall till vad?* Ligger därför överst, före analysen, och samlar båda källorna appen har
+ * till ett bytesförslag för den här fonden:
+ *
+ * - riskprofilens inspelade bytesplan ([SwitchPlanResolver], HEM-8) — det enda förslaget som
+ *   nämner fonden vid namn i **båda** riktningarna (sälj härifrån / köp hit), och
+ * - de billigare, likvärdiga alternativen (ANA-9), som byter avgift utan att byta exponering.
+ *
+ * Varje rad är hopfälld till namn, risknivå och det tal som avgör (belopp respektive
+ * årsbesparing); utfälld visar den motiveringen och jämförelsediagrammet (ANA-11). Fortfarande
+ * ingen åtgärdsknapp — appen rör aldrig innehavet, den visar bara underlaget (samma princip som
+ * HEM-8:s rena läsvy).
+ */
+@Composable
+private fun SwitchDecisionSection(
+    state: FondDetaljUiState,
+    chartPoints: List<Pair<Long, Double>>,
+    onSuggestionExpanded: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(stringResource(R.string.switch_section_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.switch_section_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+        )
+
+        if (state.switchPlan.isNotEmpty()) {
+            SwitchGroupLabel(stringResource(R.string.hem_switch_plan_title))
+            state.switchPlan.forEach { suggestion ->
+                SwitchPlanRow(
+                    suggestion = suggestion,
+                    fundIsin = state.isin,
+                    chartPoints = chartPoints,
+                    comparison = state.comparisons[suggestion.counterpartIsin(state.isin)],
+                    onSuggestionExpanded = onSuggestionExpanded,
+                )
+            }
+        }
+
+        // Avgiftsjämförelsen (ANA-9) behåller sin egen rubrik inne i avsnittet: den svarar på en
+        // annan fråga än bytesplanen — byt avgift utan att byta exponering, i stället för att
+        // flytta portföljen mot målfördelningen — och de två råden ska inte se ut som ett.
+        if (state.feeComparison != null) {
+            SwitchGroupLabel(stringResource(R.string.fee_comparison_title))
+            Text(
+                stringResource(R.string.fee_comparison_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        when (val feeComparison = state.feeComparison) {
+            null -> Unit
+            FeeComparisonUiState.Loading -> SwitchMessage(stringResource(R.string.fee_comparison_loading))
+            FeeComparisonUiState.Unavailable -> SwitchMessage(stringResource(R.string.fee_comparison_unavailable))
+            FeeComparisonUiState.NoCheaperAlternative -> SwitchMessage(stringResource(R.string.fee_comparison_none_cheaper))
+            is FeeComparisonUiState.Found -> feeComparison.alternatives.forEach { alternative ->
+                FeeAlternativeRow(
+                    alternative = alternative,
+                    chartPoints = chartPoints,
+                    comparison = state.comparisons[alternative.candidate.isin],
+                    onSuggestionExpanded = onSuggestionExpanded,
+                )
+            }
+        }
+
+        // Tomt-tillstånd med **orsak**: "du äger inte fonden", "planen föreslår inget" och
+        // "kunde inte jämföras" (avgiftssidans egna texter ovan) är olika svar, och en tom yta
+        // hade lästs som att appen inte gjort något (ANA-4-principen). Innan jämförelsen ens
+        // hunnit starta sägs ingenting — då är frågan obesvarad, inte besvarad med "nej".
+        when {
+            state.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
+            state.switchPlan.isEmpty() && state.feeComparison == null -> Unit
+            state.switchPlan.isEmpty() -> SwitchMessage(stringResource(R.string.switch_none_plan_body))
+            else -> Unit
+        }
+    }
+}
+
+/** Den *andra* fonden i ett byte sett från fonden [fundIsin] — den som ska jämföras mot. */
+private fun SwitchPlanResolver.Suggestion.counterpartIsin(fundIsin: String?): String =
+    if (sellIsin == fundIsin) buyIsin else sellIsin
+
+/** Liten grupprubrik inne i bytesavsnittet — skiljer bytesplanen (HEM-8) från avgiftsjämförelsen (ANA-9). */
+@Composable
+private fun SwitchGroupLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun SwitchMessage(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/**
+ * En rad ur riskprofilens bytesplan (HEM-8) sedd från den här fonden: "Byt till X" när fonden
+ * är säljkandidat, "Byt hit från Y" när den är köpkandidat. Rangordningen kommer ur
+ * [SwitchPlanResolver.Suggestion.planIndex], aldrig ur listpositionen — planen är girig och
+ * sekventiell, så numret är en del av rådet (issue #75).
+ */
+@Composable
+private fun SwitchPlanRow(
+    suggestion: SwitchPlanResolver.Suggestion,
+    fundIsin: String?,
+    chartPoints: List<Pair<Long, Double>>,
+    comparison: ComparisonUiState?,
+    onSuggestionExpanded: (String) -> Unit,
+) {
+    val sellingThisFund = suggestion.sellIsin == fundIsin
+    val counterpartName = if (sellingThisFund) suggestion.buyFundName else suggestion.sellFundName
+    val counterpartIsin = suggestion.counterpartIsin(fundIsin)
+    val explanation = listOfNotNull(
+        suggestion.switchValueKr?.let { stringResource(R.string.format_hem_switch_plan_amount, MoneyFormat.kr(it)) },
+        stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0)),
+        stringResource(R.string.hem_switch_plan_disclaimer),
+    ).joinToString("\n")
+
+    ExpandableInfoRow(
+        explanation = explanation,
+        onExpand = { onSuggestionExpanded(counterpartIsin) },
+        extraContent = {
+            ComparisonChart(
+                holdingPoints = chartPoints,
+                candidateName = counterpartName,
+                comparison = comparison,
+            )
+        },
+    ) {
+        Column {
+            Text(
+                stringResource(
+                    if (sellingThisFund) R.string.format_switch_plan_to else R.string.format_switch_plan_from,
+                    suggestion.planIndex + 1,
+                    counterpartName,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            RiskBadge(
+                level = if (sellingThisFund) suggestion.fromLevel else suggestion.toLevel,
+                toLevel = if (sellingThisFund) suggestion.toLevel else suggestion.fromLevel,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Ett billigare, likvärdigt alternativ (ANA-9) — namn, årsbesparing och kandidatens risknivå
+ * (UI-10) direkt på raden, avgiften och jämförelsediagrammet under när den fälls ut.
+ */
+@Composable
+private fun FeeAlternativeRow(
+    alternative: FeeComparisonCalc.Alternative,
+    chartPoints: List<Pair<Long, Double>>,
+    comparison: ComparisonUiState?,
+    onSuggestionExpanded: (String) -> Unit,
+) {
+    val explanation = stringResource(
+        R.string.format_fee_comparison_alternative_explain,
+        MoneyFormat.feePercent(alternative.candidateFeePercent),
+    )
+    ExpandableInfoRow(
+        explanation = explanation,
+        onExpand = { onSuggestionExpanded(alternative.candidate.isin) },
+        extraContent = {
+            ComparisonChart(
+                holdingPoints = chartPoints,
+                candidateName = alternative.candidate.name,
+                comparison = comparison,
+            )
+        },
+    ) {
+        Column {
+            PeriodRow(
+                label = alternative.candidate.name,
+                amount = alternative.annualSavingsKr,
+                fraction = null,
+            )
+            RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/**
+ * Jämförelsediagrammet för ett utfällt förslag (ANA-11) — innehavets och kandidatens kurvor i
+ * samma [FundLineChart], indexerade till 100 vid periodens start (regel 4: den delade
+ * komponenten utökades, ingen ny diagramvariant). Går kandidatens historik inte att hämta sägs
+ * det ut i stället för att ett tomt diagram ritas.
+ */
+@Composable
+private fun ComparisonChart(
+    holdingPoints: List<Pair<Long, Double>>,
+    candidateName: String,
+    comparison: ComparisonUiState?,
+) {
+    when (comparison) {
+        null -> Unit
+        ComparisonUiState.Loading -> Text(
+            stringResource(R.string.switch_comparison_loading),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        ComparisonUiState.Unavailable -> Text(
+            stringResource(R.string.switch_comparison_unavailable),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        is ComparisonUiState.Ready -> FundLineChart(
+            points = holdingPoints,
+            comparisonSeries = listOf(ChartSeries(label = candidateName, points = comparison.points)),
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+}
+
+/**
+ * Analysens nyckeltal och signalförklaringar (ANA-1/ANA-5/ANA-7). Statusbannern (ANA-3) och
+ * kontexttexten (ANA-6) ligger **inte** här längre utan uppe i rubriken (ANA-10, issue #85):
+ * de är verdikten kortet leder med, medan den här sektionen är underlaget man slår upp — och
+ * ligger därför hopfälld.
+ */
 @Composable
 private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(stringResource(R.string.analys_section_title), style = MaterialTheme.typography.titleMedium)
-        AnalysisStatusBanner(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
-        AnalysisGuidanceCard(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
-        SignalExplanations(analysis = analysis, modifier = Modifier.padding(top = 8.dp))
+        SignalExplanations(analysis = analysis)
         Column(modifier = Modifier.padding(top = 8.dp)) {
             analysis.keyFigures.periodReturns.forEach { periodReturn ->
                 // "Sedan köp" krockar lätt med "min vinst" — den visar fondens kursutveckling
@@ -196,56 +483,6 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                 )
             }
         }
-        AnalysisGlossary(modifier = Modifier.padding(top = 16.dp))
-    }
-}
-
-/**
- * Föreslår billigare, likvärdiga alternativ till innehavet (ANA-9, issue #59) — appens
- * första **rådgivande** kort. Anger uttryckligen vad jämförelsen omfattar (avgift vid
- * identisk exponering, verifierat köpbar hos Handelsbanken) och vad den inte gör, så
- * förslagen går att värdera i stället för att tas på tro.
- */
-@Composable
-private fun FeeComparisonSection(state: FeeComparisonUiState, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(stringResource(R.string.fee_comparison_title), style = MaterialTheme.typography.titleMedium)
-        Text(
-            stringResource(R.string.fee_comparison_explain),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-        )
-        when (state) {
-            FeeComparisonUiState.Loading -> FeeComparisonMessage(stringResource(R.string.fee_comparison_loading))
-            FeeComparisonUiState.Unavailable -> FeeComparisonMessage(stringResource(R.string.fee_comparison_unavailable))
-            FeeComparisonUiState.NoCheaperAlternative -> FeeComparisonMessage(stringResource(R.string.fee_comparison_none_cheaper))
-            is FeeComparisonUiState.Found -> Column {
-                state.alternatives.forEach { alternative ->
-                    FeeAlternativeRow(alternative)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeeComparisonMessage(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun FeeAlternativeRow(alternative: FeeComparisonCalc.Alternative) {
-    val explanation = stringResource(
-        R.string.format_fee_comparison_alternative_explain,
-        MoneyFormat.feePercent(alternative.candidateFeePercent),
-    )
-    ExpandableInfoRow(explanation = explanation) {
-        PeriodRow(
-            label = alternative.candidate.name,
-            amount = alternative.annualSavingsKr,
-            fraction = null,
-        )
     }
 }
 
@@ -291,11 +528,13 @@ private fun SignalRow(level: FundAnalysisCalc.SignalLevel, label: String, explan
     }
 }
 
-/** Kort "Så funkar analysen"-ordlista (ANA-6) — de begrepp appen faktiskt visar, var och en utfällbar. */
+/**
+ * Kort "Så funkar analysen"-ordlista (ANA-6) — de begrepp appen faktiskt visar, var och en
+ * utfällbar. Rubriken sätts av den hopfällda sektionen runt omkring (ANA-10), inte här.
+ */
 @Composable
 private fun AnalysisGlossary(modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(stringResource(R.string.analys_glossary_title), style = MaterialTheme.typography.titleSmall)
         val terms = listOf(
             R.string.analys_glossary_nav_term to R.string.analys_glossary_nav_def,
             R.string.analys_glossary_gav_term to R.string.analys_glossary_gav_def,
@@ -361,23 +600,5 @@ private fun IsinInput(
         ) {
             Text(stringResource(R.string.save))
         }
-    }
-}
-
-@Composable
-private fun PriceRow(price: FundPrice) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            LocalDate.ofEpochDay(price.epochDay).format(dateFormatter),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            MoneyFormat.kr(price.nav),
-            style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-        )
     }
 }

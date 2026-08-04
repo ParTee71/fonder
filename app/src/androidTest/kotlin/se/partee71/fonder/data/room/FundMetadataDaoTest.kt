@@ -132,4 +132,24 @@ class FundMetadataDaoTest {
         assertEquals(0.21, loaded?.cheapestAlternativeFee ?: -1.0, 1e-9)
         assertEquals(20100L, loaded?.comparisonResolvedAtEpochDay)
     }
+
+    // --- Risknivå per fondnamn (UI-10, issue #85) ---
+
+    @Test
+    fun `getKnownRisks ger namn och risknniva for rader med kand risk`() = runTest {
+        dao.upsertAll(listOf(entity("SE1", name = "Fond Ett"), entity("SE2", name = "Fond Tva")))
+
+        val risks = dao.getKnownRisks()
+
+        assertEquals(setOf("Fond Ett" to 4, "Fond Tva" to 4), risks.map { it.name to it.risk }.toSet())
+    }
+
+    @Test
+    fun `getKnownRisks utelamnar rader utan risknniva i stallet for att ge noll`() = runTest {
+        dao.upsertAll(listOf(entity("SE1", name = "Fond Ett"), entity("SE2", name = "Fond Tva").copy(risk = null)))
+
+        val risks = dao.getKnownRisks()
+
+        assertEquals(listOf("Fond Ett"), risks.map { it.name })
+    }
 }

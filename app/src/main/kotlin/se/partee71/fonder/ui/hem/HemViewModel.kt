@@ -23,16 +23,14 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.RiskProfile
-import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
-import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
-import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -40,35 +38,12 @@ import javax.inject.Inject
 data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysis)
 
 /**
- * Ett enskilt föreslaget byte i bytesplanen, redo för visning (HEM-8, issue #70) —
- * härlett ur redan inspelade [SuggestionRecord] (se [HemViewModel.buildSwitchPlan]), inte
- * omräknat live: samma nätverkskostnadsskäl som gör att facit-inspelningen själv ligger på
- * bakgrundsworkerns backstop, inte på varje Hem-öppning.
+ * Ett enskilt föreslaget byte i bytesplanen, redo för visning (HEM-8, issue #70). Modellen och
+ * uppslagslogiken bor sedan issue #85 i [SwitchPlanResolver], eftersom Fonddetaljs bytesavsnitt
+ * (ANA-10) visar samma byten för en enskild fond — två kopior hade kunnat glida isär och ge två
+ * olika råd om samma byte. Aliaset behålls så Hems egen kod läser som förut.
  */
-data class SwitchSuggestionUi(
-    /** Raden i facit-inspelningen ([SuggestionRecord.id]) — nyckeln "Genomförd" skriver mot (SET-5, issue #80). */
-    val recordId: Long,
-    /**
-     * Platsen i den rangordnade planen (0 = först). Bärs hela vägen till UI:t i stället för att
-     * härledas ur listpositionen: planen är girig och sekventiell, så ett byte måste visas med
-     * sin **egen** rangordning — annars kunde byte 1 presenteras som "1." när byte 0 fallit bort,
-     * och att följa det ensamt flyttar portföljen bort från målet (issue #75).
-     */
-    val planIndex: Int,
-    val sellFundName: String,
-    val buyFundName: String,
-    val fromLevel: Int,
-    val toLevel: Int,
-    val feeDeltaPercent: Double,
-    /**
-     * Beloppet förslaget avser — bytet storleksbestäms till gapet, inte till hela positionen
-     * (issue #75), så utan beloppet vore raden tvetydig. Null bara för rader inspelade före
-     * dess; raden visas då utan beloppstext i stället för med ett gissat belopp.
-     */
-    val switchValueKr: Double? = null,
-    /** Sant om användaren markerat bytet som genomfört (SET-5, issue #80) — null i inspelningen betyder "inte markerat", inte "inte genomfört". */
-    val followed: Boolean = false,
-)
+typealias SwitchSuggestionUi = SwitchPlanResolver.Suggestion
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
 data class AnalysisSummary(
@@ -186,7 +161,7 @@ class HemViewModel @Inject constructor(
                 refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
-                val switchPlan = buildSwitchPlan(currentSettings.accountType, latestBatch, metadataByIsin, today)
+                val switchPlan = SwitchPlanResolver.resolve(currentSettings.accountType, latestBatch, metadataByIsin, today)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -260,59 +235,6 @@ class HemViewModel @Inject constructor(
                 .filter { it.analysis.status == FundAnalysisCalc.SignalLevel.GUL || it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
                 .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD },
         )
-    }
-
-    /**
-     * Formaterar den senast inspelade bytesplanen ur facit ([SuggestionRecordRepository], HEM-8,
-     * issue #70) för visning — räknar **inte** om planen live, se [SwitchSuggestionUi]s KDoc.
-     * Tom lista utan ISK/KF (SET-4) eller innan bakgrundsworkerns backstop hunnit spela in
-     * något än — appen väntar hellre än att gissa.
-     *
-     * Planen är **girig och sekventiell**: byte n är framräknat under antagandet att byte 0…n−1
-     * genomförts. Kan en rad inte slås upp (metadata saknas) visas därför inte resten som om den
-     * vore fristående — listan kapas vid första luckan, och saknas `planIndex 0` visas ingen
-     * plan alls. Annars kunde byte 1 presenteras som "1." och att följa det ensamt flyttade
-     * portföljen **bort** från målet (issue #75).
-     */
-    private fun buildSwitchPlan(
-        accountType: AccountType?,
-        latestBatch: List<SuggestionRecord>,
-        metadataByIsin: Map<String, FundMetadata>,
-        today: LocalDate,
-    ): List<SwitchSuggestionUi> {
-        if (accountType != AccountType.ISK_KF) return emptyList()
-
-        // Färskhetsgräns, samma princip som HEM-6:s jämförelse: ett gammalt råd är fel på ett
-        // sätt gammal avgiftsdata inte är. Slutar backstopen köra ska planen försvinna, inte
-        // ligga kvar prissatt mot en portfölj som sedan dess rört sig (issue #75, punkt 5).
-        val suggestedAt = latestBatch.firstOrNull()?.suggestedAtEpochDay ?: return emptyList()
-        if (FundMetadataFreshness.isStale(suggestedAt, today, SwitchPlanCalc.PLAN_TTL_DAYS)) return emptyList()
-
-        val resolved = latestBatch.mapNotNull { record ->
-            val sellMeta = metadataByIsin[record.sellIsin] ?: return@mapNotNull null
-            val buyMeta = metadataByIsin[record.buyIsin] ?: return@mapNotNull null
-            val sellLevel = sellMeta.risk ?: return@mapNotNull null
-            val buyLevel = buyMeta.risk ?: return@mapNotNull null
-            val sellFee = sellMeta.totalFee ?: return@mapNotNull null
-            val buyFee = buyMeta.totalFee ?: return@mapNotNull null
-            SwitchSuggestionUi(
-                recordId = record.id,
-                planIndex = record.planIndex,
-                sellFundName = sellMeta.name,
-                buyFundName = buyMeta.name,
-                fromLevel = sellLevel,
-                toLevel = buyLevel,
-                feeDeltaPercent = buyFee - sellFee,
-                switchValueKr = record.switchValueKr,
-                followed = record.followed == true,
-            )
-        }
-
-        // Behåll bara den obrutna prefixen från och med planIndex 0.
-        return resolved.sortedBy { it.planIndex }
-            .withIndex()
-            .takeWhile { (position, suggestion) -> suggestion.planIndex == position }
-            .map { it.value }
     }
 
     /**

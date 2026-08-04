@@ -22,6 +22,7 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.network.AvanzaSource
 import se.partee71.fonder.data.room.daos.FundMetadataDao
+import se.partee71.fonder.data.room.daos.FundNameRisk
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
@@ -29,6 +30,7 @@ import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
+import se.partee71.fonder.domain.usecase.FundNameKey
 import java.io.IOException
 import java.time.LocalDate
 
@@ -64,6 +66,8 @@ private class FakeFundMetadataDao : FundMetadataDao {
     override suspend fun getAll(): List<FundMetadataEntity> = stored.values.toList()
     override suspend fun getByIsin(isin: String): FundMetadataEntity? = stored[isin]
     override suspend fun getByIsins(isins: List<String>): List<FundMetadataEntity> = isins.mapNotNull { stored[it] }
+    override suspend fun getKnownRisks(): List<FundNameRisk> =
+        stored.values.mapNotNull { row -> row.risk?.let { FundNameRisk(row.name, it) } }
     override suspend fun upsert(row: FundMetadataEntity) { stored[row.isin] = row }
     override suspend fun upsertAll(rows: List<FundMetadataEntity>) { rows.forEach { stored[it.isin] = it } }
     override suspend fun deleteAll() { stored.clear() }
@@ -83,6 +87,7 @@ private class FakeFundPriceRepository(
     override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean = false
     override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean = false
+    override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
     override suspend fun suggestIsin(fundName: String): String? = null
     override suspend fun findFundByIsin(isin: String): Fund? = null
 
@@ -207,6 +212,26 @@ class FundMetadataRepositoryTest {
     @Test
     fun `cachedMetadataFor med tom lista ger tom karta`() = runTest {
         assertTrue(repo(FailingAvanzaSource()).cachedMetadataFor(emptyList()).isEmpty())
+    }
+
+    // --- cachedRiskByFundName: risknivå för fondsök (UI-10, issue #85) ---
+
+    @Test
+    fun `cachedRiskByFundName nycklar pa normaliserat namn utan att rora kallan`() = runTest {
+        // Fondsök visar ~1500 katalogfonder utan ISIN — uppslaget måste gå via namnet och får
+        // aldrig kosta nätverk. Källan kastar vid varje anrop: går metoden dit fallerar testet.
+        dao.upsert(cachedEntity("SE1", "Handelsbanken Sverige Index (A1 SEK)"))
+
+        val result = repo(FailingAvanzaSource()).cachedRiskByFundName()
+
+        assertEquals(4, result[FundNameKey.of("handelsbanken sverige index a1 sek")])
+    }
+
+    @Test
+    fun `cachedRiskByFundName utelamnar fonder utan kand risknniva`() = runTest {
+        dao.upsert(cachedEntity("SE1", "Fond Ett").copy(risk = null))
+
+        assertTrue(repo(FailingAvanzaSource()).cachedRiskByFundName().isEmpty())
     }
 
     @Test
