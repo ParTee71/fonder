@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -17,6 +18,7 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Serializable
 enum class ThemeMode { LIGHT, DARK, AUTO }
 
 /**
@@ -85,8 +87,8 @@ class PreferencesRepository @Inject constructor(
     /**
      * Användarens riskprofil (SET-3, issue #68), null om ingen är satt. Till skillnad från
      * [lastPriceSyncEpochMillis]/[fundFilterVocabulary] är det här **genuin användardata** —
-     * inte härledd ur någon källa — och ska ingå i backup-kontraktet när Drive-backup (TP-7)
-     * byggs, se [se.partee71.fonder.data.repository.StubBackupRepository].
+     * inte härledd ur någon källa — och ingår därför i backup-kontraktet (NFR-1), se
+     * [se.partee71.fonder.data.repository.BackupPayload].
      */
     val riskProfile: Flow<RiskProfile?> = preferences.map { prefs ->
         prefs[riskProfileKey]?.let { runCatching { Json.decodeFromString(RiskProfile.serializer(), it) }.getOrNull() }
@@ -99,8 +101,8 @@ class PreferencesRepository @Inject constructor(
     /**
      * Kontotypen fondinnehaven ligger i (SET-4, issue #70), null om inget val gjorts —
      * bytesplanen (HEM-8) ges då aldrig, appen gissar aldrig kontotyp. Genuin användardata,
-     * samma kategori som [riskProfile] — ska ingå i backup-kontraktet (NFR-1), se
-     * [se.partee71.fonder.data.repository.StubBackupRepository].
+     * samma kategori som [riskProfile] — ingår i backup-kontraktet (NFR-1), se
+     * [se.partee71.fonder.data.repository.BackupPayload].
      */
     val accountType: Flow<AccountType?> = preferences.map { prefs ->
         prefs[accountTypeKey]?.let { runCatching { AccountType.valueOf(it) }.getOrNull() }

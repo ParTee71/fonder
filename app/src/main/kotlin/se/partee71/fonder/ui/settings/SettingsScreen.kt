@@ -1,6 +1,9 @@
 package se.partee71.fonder.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,19 +23,29 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.data.datastore.ThemeMode
+import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val lastSyncFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+/**
+ * Filväljarens filter vid återställning. Flera typer av samma skäl som importflödet: en
+ * `.json`-fil rapporteras olika beroende på var den ligger (Drive, Downloads, en delad mapp),
+ * och ett för snävt filter döljer användarens egen säkerhetskopia i väljaren.
+ */
+private val BACKUP_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 
 @Composable
 fun SettingsScreen(
@@ -44,6 +57,26 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // SAF: appen får skriva/läsa precis den fil användaren pekar ut, utan lagringsbehörighet.
+    // Själva I/O:n ligger här och inte i ViewModel:en — den känner bara till JSON-strängen,
+    // precis som BackupRepository (SET-6, issue #82).
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        viewModel.export { json ->
+            val stream = context.contentResolver.openOutputStream(uri)
+                ?: error("Kunde inte öppna $uri för skrivning")
+            stream.use { it.write(json.toByteArray()) }
+        }
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        viewModel.restore {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+        }
+    }
+
     SettingsContent(
         state = state,
         onThemeSelected = viewModel::setThemeMode,
@@ -53,6 +86,9 @@ fun SettingsScreen(
         onOpenFacit = onOpenFacit,
         onAccountTypeSelected = viewModel::setAccountType,
         onRefreshPricesNow = viewModel::refreshPricesNow,
+        onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
+        onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
+        onBackupMessageDismissed = viewModel::onBackupMessageDismissed,
         onClearDatabase = viewModel::clearDatabase,
         onClearedMessageDismissed = viewModel::onClearedMessageDismissed,
         modifier = modifier,
@@ -70,12 +106,16 @@ fun SettingsContent(
     onOpenFacit: () -> Unit = {},
     onAccountTypeSelected: (AccountType) -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
+    onExportBackup: () -> Unit = {},
+    onRestoreBackup: () -> Unit = {},
+    onBackupMessageDismissed: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
     onClearedMessageDismissed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // rememberSaveable: en bekräftelsedialog ska inte försvinna tyst vid rotation (issue #78).
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
+    var showRestoreConfirm by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -196,6 +236,43 @@ fun SettingsContent(
             }
         }
 
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_backup_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_backup_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en, av samma
+                // skäl som "databasen tömd" nedan: en engångshändelse lagrad som bestående
+                // tillstånd spelas upp igen vid varje rotation och återbesök (issue #78).
+                state.backupMessage?.let { message ->
+                    Text(
+                        backupMessageText(message),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    TextButton(
+                        onClick = onBackupMessageDismissed,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    ) { Text(stringResource(R.string.close)) }
+                }
+                Row {
+                    Button(
+                        onClick = onExportBackup,
+                        enabled = !state.backupInProgress,
+                    ) { Text(stringResource(R.string.settings_backup_export_button)) }
+                    TextButton(
+                        onClick = { showRestoreConfirm = true },
+                        enabled = !state.backupInProgress,
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) { Text(stringResource(R.string.settings_backup_restore_button)) }
+                }
+            }
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -251,6 +328,41 @@ fun SettingsContent(
                 TextButton(onClick = { showClearConfirm = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+
+    // Bekräftelsen kommer före filväljaren, inte efter: en återställning ersätter all data, och
+    // frågan ska ställas innan användaren är mitt i ett val (samma ordning som farozonen).
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
+            text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestoreConfirm = false
+                    onRestoreBackup()
+                }) { Text(stringResource(R.string.backup_restore_confirm_button)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirm = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+}
+
+@Composable
+private fun backupMessageText(message: BackupMessage): String = when (message) {
+    BackupMessage.Exported -> stringResource(R.string.backup_export_success)
+    BackupMessage.ExportFailed -> stringResource(R.string.backup_export_failed)
+    is BackupMessage.Restored -> stringResource(
+        R.string.format_backup_restore_success,
+        message.summary.funds,
+        message.summary.transactions,
+        message.summary.suggestionRecords,
+    )
+    is BackupMessage.RestoreFailed -> when (message.reason) {
+        BackupFormatException.Reason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_restore_failed_version)
+        BackupFormatException.Reason.UNREADABLE -> stringResource(R.string.backup_restore_failed_unreadable)
     }
 }
 

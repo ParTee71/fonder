@@ -40,8 +40,8 @@ data class RiskProfileAnswers(
  *
  * Genuin användardata, till skillnad från
  * [se.partee71.fonder.data.datastore.PreferencesRepository.lastPriceSyncEpochMillis]/
- * `fundFilterVocabulary` som är ren cache-metadata — ska ingå i backup-kontraktet (NFR-1) när
- * Drive-backup (TP-7) byggs, se [se.partee71.fonder.data.repository.StubBackupRepository].
+ * `fundFilterVocabulary` som är ren cache-metadata — ingår därför i backup-kontraktet (NFR-1),
+ * se [se.partee71.fonder.data.repository.BackupPayload].
  */
 @Serializable
 data class RiskProfile(

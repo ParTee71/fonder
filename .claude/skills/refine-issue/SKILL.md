@@ -71,7 +71,7 @@ catches hidden complexity. Use `Grep` / `Glob` / `Read`:
 - **Data model / persistence** → does it add or change a persisted field/entity? Then it
   needs a Room migration (bump `AppDatabase` version, write a `MigrationXYTest` in
   `app/src/androidTest/.../data/room/`) **and** backup-chain coverage
-  (`data-safety-backup` — note that Drive backup is still a stub, see Step 4).
+  (`data-safety-backup` — the local backup round-trip exists since SET-6, see Step 4).
 - **UI** → is there a shared component in `ui/components/` (`EmptyState`, `SelectField`,
   `DateField`, …) or `ui/diagram/` (`FundLineChart`) to reuse instead of a new variant
   (`shared-ui-components`)? Any accessibility impact (touch targets, `contentDescription`)?
@@ -81,7 +81,8 @@ catches hidden complexity. Use `Grep` / `Glob` / `Read`:
 - **Import** → does it touch `data/imports/` (`HoldingsImportParser`) or the fond↔fondbolag
   matching (`FundCompanyMatcher`, `FundNameMatcher`)?
 - Auth (`AuthRepository` — currently a stub, Google Sign-in is planned per TP-6) or backup
-  (`BackupRepository`/`StubBackupRepository` — currently a stub, Drive backup planned per TP-7)
+  (`BackupRepository`/`LocalBackupRepository` + `BackupPayload` — local file backup is built,
+  Drive transport planned per TP-7 step 2)
   touchpoints? DI (Hilt) touchpoints?
 - **Which requirements** in `KRAVLISTA.md` does it touch? Find the ID(s) — prefixes in use:
   `ÖV` (syfte), `TP` (teknisk plattform), `UI` (utseende/tema), `NAV`/`POR`/`TRX`/`IMP`
@@ -109,10 +110,11 @@ doesn't apply, say why in the issue rather than dropping it silently.
 
 1. **Data safety (rule 1)** — if the change adds/alters persisted data: a Room migration is
    written (with a migration test), and the field is accounted for in the backup contract
-   (`BackupRepository`). Real Drive backup is still a stub (`StubBackupRepository`,
-   NFR-1 marked *"backup planerad"*) — until it's implemented, say so explicitly in the
-   issue and note the field as pending backup-chain coverage rather than silently skipping
-   it. Once backup exists, this becomes a full round-trip test. (`data-safety-backup`)
+   (`BackupPayload`, the file format). Since SET-6 the round trip is real and tested
+   (`BackupRoundTripTest`), so a new persisted field must be added to `BackupPayload` **and**
+   to `BackupSerializerTest`'s field guard — that guard fails on purpose when a model gains a
+   field, so decide deliberately whether it belongs in the contract. Only the Drive transport
+   (TP-7 step 2) is still outstanding. (`data-safety-backup`)
 2. **Tests at all levels (rule 2)** — unit (`app/src/test`) for ViewModel/domain/mapper/
    parser logic (fakes over mocks, Turbine for flows); instrumented (`app/src/androidTest`)
    for Compose UI, Room DAO, and migrations. A bug fix adds a **regression test that fails

@@ -25,7 +25,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
 import se.partee71.fonder.data.repository.RoomSuggestionRecordRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
-import se.partee71.fonder.data.repository.StubBackupRepository
+import se.partee71.fonder.data.repository.LocalBackupRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -64,7 +64,7 @@ abstract class RepositoryModule {
     abstract fun bindPdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
 
     @Binds
-    abstract fun bindBackupRepository(impl: StubBackupRepository): BackupRepository
+    abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
 
     @Binds
     abstract fun bindAuthRepository(impl: StubAuthRepository): AuthRepository

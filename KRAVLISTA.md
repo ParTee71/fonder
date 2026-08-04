@@ -35,7 +35,7 @@
 | TP-4 | Lokal lagring i **Room** (`exportSchema = true`); inställningar i **DataStore (Preferences)**. |
 | TP-5 | Bakgrundsjobb via **WorkManager** (Hilt-integrerad worker): handelsdagsmedveten kursuppdatering för bevakade fonder — en billig launch-gate vid appstart plus en gles periodisk backstop (12h), båda gated av staleness (se TP-17, issue #27; ersätter den tidigare fasta 24h-periodiken). |
 | TP-6 | Inloggning via **Firebase Auth + Google Credential Manager**. *(planerad)* |
-| TP-7 | Molnbackup via **Google Drive (appDataFolder)**. *(planerad)* |
+| TP-7 | Backup av all användardata, i två steg. **Steg 1 (byggt, SET-6):** export/återställning mot en användarvald **lokal fil** via SAF (Storage Access Framework) — versionerat JSON-format (`BackupPayload`/`BackupSerializer`), ingen inloggning, inget nätverk, och därmed en rundtur som går att köra i CI. **Steg 2 (planerad):** samma sträng skriven till **Google Drive (`appDataFolder`)** — ett rent transportbyte bakom `BackupRepository`, formatet är redan låst och testat. Steg 2 kräver en **OAuth-klient i ett Google Cloud-projekt** (Drive API påslaget, SHA-1 för både debug- och release-nyckel, scope `drive.appdata`); Firebase behövs bara för TP-6:s inloggning, inte för Drive. |
 | TP-8 | Krävd behörighet: `INTERNET`. |
 | TP-9 | Fondidentitet: **`FundId`** (Handelsbankens fondlista-plattforms egen kod, t.ex. `SHB0000442`). Fonder matchade enbart via ISIN (TP-13/TP-14) saknar en sådan kod och får ISIN:et som `FundId` — de bär i stället ett uppslaget **`fondlistaFundId`** (Room-migrering 4→5, issue #39) som *bara* används som nyckel vid kurshämtning; identitet och transaktionernas främmande nyckel följer alltid `FundId`. ~~Källan exponerar inget ISIN.~~ *(borttaget — fondens egen sida `/shb/sv/funds/<fundid>` bär ISIN i faktabladslänkens `Identifier`-parameter, se TP-18; `FundPriceRepository.lookupIsin` läser det.)* |
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
@@ -99,11 +99,12 @@
 | IMP-7 | Filer som inte kan tolkas alls (t.ex. inte en avräkningsnota) räknas upp tydligt i stället för att tystas ner eller krascha importet — övriga filers transaktioner importeras ändå. |
 | IMP-8 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. Matchade transaktioner triggar nu även en kursuppdatering för fonden (samma "bara om inaktuell"-princip som IMP-4) — misslyckas den markeras raden ("Kurs kunde inte hämtas") i stället för att tystas ner (issue #19). |
 | IMP-9 | När import är klar visas en stängbar modal (titel + antal importerade poster + en tydlig **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy — stängning återgår till Inställningar. Gäller båda importflödena (issue #19). |
-| SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
+| SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner, inspelade bytesförslag och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Själva tömningen är irreversibel, men sedan SET-6 finns en väg tillbaka: farozonens text uppmanar uttryckligen att **exportera en säkerhetskopia först**, och en sådan fil återställer allt utom cachen. |
 | SET-2 | Inställningar visar ett **kursuppdateringskort** med "Senast uppdaterad: \<tidsstämpel\>" (eller "Aldrig uppdaterad") och en **"Uppdatera nu"-knapp** som forcerar en kursuppdatering oavsett staleness-gate (TP-17, issue #27) — bypassar launch-gate/backstopens "bara om inaktuellt"-princip, för den som inte vill vänta. |
 | SET-3 | Inställningar har en **Riskprofil** (egen undersida) — tre frågor (tidshorisont, reaktion vid en 30 %-nedgång, primärt mål) som **föreslår** en **målfördelning** över risknivåer på källans egen riskskala (`FundMetadata.risk`, TP-21), t.ex. 25 % nivå 3, 50 % nivå 4, 25 % nivå 5 — en enda nivå är specialfallet `{N: 100 %}` (issue #71, uppgraderat från #68:s enda skalära målnivå, som inte kunde skilja en 25/50/25-blandning från en enda fond på nivå 4). Enkäten mappar svaren till en av fem namngivna fördelningar (Bevarande / Försiktig / Balanserad / Tillväxt / Offensiv), grundade i uppmätt volatilitet, värsta nedgång, återhämtningstid och sammansättning per risknivå (6 års NAV-historik). **Tidshorisonten är en hård spärr**, inte en av flera poäng, som ingen risktolerans kan häva: under 3 år ger alltid Bevarande, motiverat av att uppmätt återhämtningstid efter värsta nedgången var 2,0–2,6 år på samtliga nivåer. Profilerna ökar risk genom **bredare aktieexponering (nivå 4), inte genom mer tematisk koncentration (nivå 5)** — nivå 5 domineras av enskilda teman och länder (ny teknik, Kina, fastigheter: 71 av 216 undersökta fonder branschtaggade mot 15 av 220 på nivå 4), och koncentrationsrisk är enligt teorin inte kompenserad på samma sätt som marknadsrisk. Skalans giltiga nivåer är unionen av senast kända filtervokabulär (`FundFilterVocabulary["risk"]`, som bara fylls av Fondsök/ANA-9:s frågeflöden) och redan cachade fonders egen `risk` (fylld av HEM-5/POR-9:s `metadataFor`-anrop, mer pålitligt populerad för en användare med innehav) — aldrig hårdkodad, samma princip som TP-21:s övriga filtervärden. Förslaget är just ett förslag: **användaren äger målfördelningen** och kan justera enskilda nivåers andelar direkt utan att svara på enkäten — det egna valet vinner alltid över förslaget. **Summan måste bli exakt 100 % för att kunna sparas** — går den inte ihop sparas ingenting, ingen tyst normalisering. Fördelningarna är **utgångspunkter, inte optima**, vilket UI-texten säger — ett verkligt optimum kräver ålder, övriga tillgångar och inkomststabilitet, uppgifter appen varken har eller frågar om. Både fördelningen och de underliggande svaren persisteras i `PreferencesRepository` (DataStore), separat från varandra, så en framtida ändring av poängsättningen (`RiskProfileCalc`) inte tyst skriver om en gammal slutsats. En profil sparad i #68:s tidigare skalära format (`targetRiskLevel`) migreras till `{N: 100 %}` vid inläsning och går aldrig förlorad — verifierat med ett explicit regressionstest, eftersom `PreferencesRepository.riskProfile` annars tyst skulle svälja en föråldrad JSON-form och profilen försvinna spårlöst. Detta är **genuin användardata** och ska ingå i backup-kontraktet (NFR-1), till skillnad från `lastPriceSyncEpochMillis`/`fundFilterVocabulary` som är ren cache-metadata; Drive-backup (TP-7) är fortfarande en stub, så fältet är täckt av rundturstest på DataStore-nivå i väntan på den. Poängsättningen är ett kodifierat omdöme, inte ett verifierbart faktum som ANA-9:s avgiftsjämförelse — den ligger därför samlad på ett ställe (`RiskProfileCalc`), i klartext och enhetstestad. Ingen köp- eller rebalanseringsrekommendation här — den ligger i SET-4/HEM-8 (issue #70). |
 | SET-4 | Inställningar har ett val av **kontotyp** — ISK/KF eller depå/AF. Valet styr om bytesförslag (HEM-8) ges alls: i ISK/KF finns ingen realisationsskatt och ett fondbyte kostar i praktiken ingenting, medan ett byte i depå/AF utlöser 30 % skatt på vinsten — en position som gått upp 50 % kräver då ~19 procentenheters meravkastning första året bara för att gå jämnt ut, långt över vad någon signal appen har kan leverera. Utan gjort val ges **inga** förslag; appen gissar aldrig kontotyp. Genuin användarinput, ingår i backup-kontraktet (NFR-1) — samma kategori som SET-3 (issue #70). |
 | SET-5 | Inställningar har ett **Facit** (egen undersida, samma mönster som SET-3) som redovisar utfallet av bytesplanens inspelade förslag (HEM-8, `suggestion_records`) mot att ha behållit innehavet. Per förslag visas sälj- och köpfond, förslagsdatum, plats i planen, belopp och **meravkastningen sedan förslagsdagen** — köpfondens NAV-utveckling minus säljfondens, i procent med kronbeloppet (`switchValueKr` × skillnaden) under, semantiskt färgat efter procenten (`SwitchOutcomeCalc`, `domain/usecase/`). Överst summeras **två skilda mått som aldrig slås ihop**: alla inspelade förslag (hur bra rådet var) och enbart de användaren markerat som genomförda (HEM-8) — ett oföljt förslag är ett hypotetiskt utfall, ett följt ett verkligt, och en gemensam siffra mäter ingetdera. Procenten är ett enkelt snitt över utvärderade förslag (varje råd väger lika) medan kronorna är en summa över dem som dessutom har ett känt belopp — två olika aggregat, inte samma tal i olika enheter, och antalet utvärderade av totalt redovisas därför explicit. Snittet visas dessutom **per plats i planen**, eftersom `planIndex` sparades just för att göra mätbart om lägre rankade byten presterar sämre innan `SwitchPlanCalc.MAX_SWITCHES_PER_PLAN` höjs. Rader inspelade före issue #75 saknar belopp och visas då med procent men utan kronor, aldrig med ett påhittat belopp; saknas NAV för endera sidan markeras raden som ej utvärderad, aldrig som noll (ANA-4-principen). **Skärmen läser bara cachen** — NAV ur den lokala kurscachen och fondnamn ur `FundMetadataRepository.cachedMetadataFor` (som till skillnad från `metadataFor` aldrig går till nätet). Köpsidans kurser, som per definition tillhör fonder appen aldrig ägt, fylls i budgeterat av den befintliga worker-backstopen (`FundPriceUpdateWorker.scanOutcomeNavs`, högst fyra ISIN per körning, nyast förslag först) — samma princip som HEM-6/HEM-8, aldrig en hämtning när skärmen öppnas. Texten anger uttryckligen vad måttet inte omfattar: skatt, courtage, att bytet i verkligheten kan ha skett en annan dag än förslagsdagen, och att bara faktiskt givna förslag mäts (perioder utan plan syns inte). Issue #80. |
+| SET-6 | Inställningar har ett kort för **säkerhetskopiering** — *Exportera till fil* och *Återställ från fil* — som skriver och läser hela backup-kontraktet (NFR-1) via systemets filväljare (SAF), utan inloggning eller nätverk (issue #82, TP-7 steg 1). Filen är **versionerad JSON** (`formatVersion`): en fil från en *nyare* app avvisas med ett eget felmeddelande i stället för att läsas in med bara de fält den här versionen känner igen — en delvis inläst säkerhetskopia är värre än ingen. Trasig eller otolkbar fil ger fel och lämnar databasen orörd; ingen halv återställning kan uppstå, eftersom Room-halvan körs i en enda transaktion. Innehållet är **bara genuin användardata**: fonder, transaktioner, riskprofil (SET-3, inklusive legacy-fältet `targetRiskLevel`), kontotyp (SET-4), samtliga inspelade bytesförslag (HEM-8/SET-5, inklusive `followed`, `switchValueKr` och `batchEpochMillis`) samt temavalet. `fund_prices`, `fx_rates` och `fund_metadata` ingår **inte** — härledd cache som hämtas om från källan, och som skulle mångdubbla filen utan att skydda något oåterskapbart; de töms heller inte av en återställning, så lokal kurshistorik behålls. Återställning **ersätter**, den slår inte ihop: det är en återställning, inte en import (merge dubblerar transaktioner utan väg tillbaka — importflödena IMP-1/IMP-6 täcker det fallet). Den ligger därför bakom en bekräftelsedialog och redovisar efteråt vad som faktiskt skrevs, så "klart" inte kan förväxlas med "tomt". Filen är **oskyddad klartext** med innehav och belopp, vilket kortets text säger rakt ut — användaren väljer själv var den hamnar. |
 
 ---
 
@@ -111,7 +112,7 @@
 
 | ID | Krav |
 |----|------|
-| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Androids inbyggda **Auto Backup** (Google-kontots molnlagring) är påslaget som interimistiskt skydd (`allowBackup="true"`) tills en egen, testbar Drive-backup (TP-7) finns — täcker en förlorad/nollställd enhet, men är inte en app-styrd rundtur. *(fullständig Drive-backup planerad)* |
+| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Rundturen är sedan SET-6 **app-styrd och testad**: `BackupPayload` definierar kontraktet, och `BackupRoundTripTest` kör backup → SET-1-tömning → restore mot riktig Room och riktig DataStore. Ett fält som läggs till i en kontraktsbärande modell utan att komma med i formatet fäller `BackupSerializerTest`s fältvakt, i stället för att tyst falla ur varje framtida säkerhetskopia. Androids **Auto Backup** (`allowBackup="true"`) ligger kvar som komplement — den täcker en förlorad enhet utan att användaren gjort något, men är inte en rundtur appen kan verifiera. *(molnbackup via Drive planerad, TP-7 steg 2)* |
 | NFR-2 | Ingen beteendeändring utan **tester** på berörd nivå (enhet/instrument/migrering). |
 | NFR-3 | Room-schemaändring kräver **migrering** utan dataförlust. |
 
@@ -161,10 +162,53 @@
 
 ## Följdkrav (planerade — se GitHub-issues)
 
-Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnitt när de
-implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
+Google-inloggning (TP-6) läggs till som eget krav när det implementeras — väntar på att ett
+Firebase-projekt sätts upp för fonder (`google-services.json`). Molnbackupen (TP-7 steg 2) väntar
+på en OAuth-klient med Drive API och `drive.appdata`-scope; den lokala rundturen finns sedan SET-6
+och formatet ändras inte av att transporten byts.
 
 ## Historik
+
+- **Säkerhetskopiering till fil (#82):** Ny rad **SET-6** — backup-kedjan som `BackupRepository`
+  lovat sedan projektstart men aldrig levererat: stubben returnerade `Result.success(Unit)` utan
+  att göra någonting, så NFR-1 var ett löfte utan täckning. Under tiden hann data som inte går
+  att återskapa samlas: handinmatade och PDF-importerade transaktioner, riskprofilen, kontotypen
+  och hela facit-inspelningen — vars `followed` är ett *val* och inte en mätning.
+
+  1. **Steg 1 av TP-7, inte hela TP-7.** Molndelen kräver en OAuth-klient (Drive API, SHA-1 för
+     båda nycklarna, scope `drive.appdata`) som måste sättas upp för hand. Den lokala filen
+     kräver ingenting av det, och bygger ändå hela det som Drive sedan bara transporterar.
+     Kontraktet är därför en **sträng**, inte en `Uri` eller en fil: `LocalBackupRepository`
+     lämnar den till SAF i dag, Drive skriver samma sträng i morgon, formatet ändras inte.
+     Noteringen om att Firebase blockerade backupen är samtidigt rättad — Firebase behövs bara
+     för TP-6:s inloggning.
+  2. **Formatet är byggt på domänmodellerna, inte Room-entiteterna.** Entiteterna följer schemat
+     och ändras av migreringar; filformatet ska inte glida med dem. Ett fält som byter kolumnnamn
+     ska kräva ett medvetet beslut i `BackupPayload`.
+  3. **Fail closed på versionen.** `formatVersion` läses *innan* innehållet avkodas, så en fil
+     från en nyare app avvisas med ett eget felmeddelande i stället för att läsas in med de fält
+     den här versionen råkar känna igen. Utan den kontrollen hade dessutom en godtycklig
+     JSON-fil avkodats till en payload med bara defaultvärden — alltså en "lyckad" återställning
+     som tömmer allt.
+  4. **En fältvakt mot tyst förlust.** `BackupSerializerTest` låser formatets nyckelmängd per
+     modell. Läggs ett fält till i `Fund`/`Transaction`/`SuggestionRecord`/`RiskProfile` utan att
+     tas med går testet sönder — i stället för att fältet försvinner ur varje framtida
+     säkerhetskopia utan att någon märker det. Det är den enda mekanism som gör regel 1 svår att
+     bryta av misstag.
+  5. **Återställning ersätter, den slår inte ihop.** Det här är en återställning, inte en import:
+     merge dubblerar transaktioner utan väg tillbaka, och IMP-1/IMP-6 täcker redan det fallet.
+     Room-halvan körs i en transaktion så en halv återställning inte kan uppstå; DataStore skrivs
+     efter databasen, eftersom omvänd ordning hade gett återställda inställningar till en portfölj
+     som inte kom fram.
+  6. **Cachen står utanför i båda riktningarna.** `fund_prices`, `fx_rates` och `fund_metadata`
+     ingår inte i filen och töms inte av en återställning — en återställd fond behåller den
+     kurshistorik som redan finns lokalt, och resten hämtas om av backstopen.
+  7. **SET-1 fick sin väg tillbaka.** Farozonens text sa "molnbackup finns ännu inte"; nu
+     uppmanar den att exportera först. Rundturstestet kör tömningen mitt i backup → restore, så
+     det bevisar något annat än att en orörd databas är orörd.
+
+  Ingen Room-migrering: schemat är oförändrat. `StubBackupRepository` och dess TODO-lista är
+  borta — kontraktet står nu i `BackupPayload`, där det går att testa.
 
 - **Facit för bytesplanen (#80):** Ny rad **SET-5** — en egen undersida från Inställningar som
   redovisar utfallet av HEM-8:s inspelade bytesförslag mot att ha behållit innehavet.

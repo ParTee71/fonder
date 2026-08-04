@@ -348,7 +348,19 @@
 
     <!-- Töm databas (farozon i Inställningar) -->
     <string name="settings_danger_section">Farozon</string>
-    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — molnbackup finns ännu inte.</string>
+    <string name="settings_backup_section">Säkerhetskopiering</string>
+    <string name="settings_backup_body">Exportera alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till en fil du väljer själv. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
+    <string name="settings_backup_export_button">Exportera till fil</string>
+    <string name="settings_backup_restore_button">Återställ från fil</string>
+    <string name="backup_export_success">Säkerhetskopian har sparats.</string>
+    <string name="backup_export_failed">Kunde inte spara säkerhetskopian. Ingenting har ändrats.</string>
+    <string name="format_backup_restore_success">Återställt: %1$d fonder, %2$d transaktioner och %3$d inspelade förslag.</string>
+    <string name="backup_restore_failed_unreadable">Filen kunde inte läsas som en säkerhetskopia. Ingenting har ändrats.</string>
+    <string name="backup_restore_failed_version">Filen kommer från en nyare version av appen och kan inte läsas. Ingenting har ändrats.</string>
+    <string name="backup_restore_confirm_title">Återställ från säkerhetskopia?</string>
+    <string name="backup_restore_confirm_button">Återställ</string>
+    <string name="backup_restore_confirm_body">Alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag ersätts med innehållet i filen. Det som finns i appen nu går förlorat.</string>
+    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — exportera en säkerhetskopia först om du vill kunna komma tillbaka.</string>
     <string name="settings_clear_database_button">Töm databasen</string>
     <string name="settings_clear_database_success">Databasen har tömts.</string>
     <string name="clear_database_confirm_title">Töm databasen?</string>
