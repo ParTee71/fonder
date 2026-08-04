@@ -2,6 +2,7 @@ package se.partee71.fonder.ui.hem
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -589,5 +590,53 @@ class HemScreenTest {
         // testtillståndet), den fjärde är riskradens "otillräcklig data".
         composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(4)
         composeRule.onNodeWithText("1 fond(er) saknar känd risknivå", substring = true).assertExists()
+    }
+
+    // --- Knappen "Räkna om bytesplanen" (HEM-8, issue #88) ---
+
+    private fun riskState(
+        canRecomputeSwitchPlan: Boolean = true,
+        backgroundWorkRunning: Boolean = false,
+    ) = HemUiState(
+        loading = false,
+        hasHoldings = true,
+        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+        portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
+        canRecomputeSwitchPlan = canRecomputeSwitchPlan,
+        backgroundWorkRunning = backgroundWorkRunning,
+    )
+
+    @Test
+    fun riskkortet_visar_omraknningsknappen_nar_en_plan_kan_ges() {
+        composeRule.setContent { FonderTheme { HemContent(state = riskState()) } }
+
+        composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun omraknningsknappen_uteblir_nar_ingen_plan_kan_ges() {
+        // Depå/AF eller ingen profil — knappen ska inte lova något SET-4-gaten vägrar infria.
+        composeRule.setContent { FonderTheme { HemContent(state = riskState(canRecomputeSwitchPlan = false)) } }
+
+        composeRule.onNodeWithText("Räkna om bytesplanen").assertDoesNotExist()
+    }
+
+    @Test
+    fun omraknningsknappen_ar_slackt_medan_en_korning_pagar() {
+        composeRule.setContent { FonderTheme { HemContent(state = riskState(backgroundWorkRunning = true)) } }
+
+        composeRule.onNodeWithText("Räknar om …").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun klick_pa_omraknningsknappen_anropar_callbacken() {
+        var clicks = 0
+        composeRule.setContent {
+            FonderTheme { HemContent(state = riskState(), onRecomputeSwitchPlan = { clicks++ }) }
+        }
+
+        composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().performClick()
+
+        assertEquals(1, clicks)
     }
 }

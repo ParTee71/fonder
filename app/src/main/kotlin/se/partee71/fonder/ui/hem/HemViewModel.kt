@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -79,6 +80,14 @@ data class HemUiState(
     val riskLevelDeviations: List<PortfolioRiskCalc.LevelDeviation> = emptyList(),
     /** Rangordnad bytesplan mot målfördelningen (HEM-8, issue #70) — tom utom i ISK/KF med en avvikelse som passerat [se.partee71.fonder.domain.usecase.SwitchPlanCalc.MIN_GAP_PP]. */
     val switchPlan: List<SwitchSuggestionUi> = emptyList(),
+    /**
+     * Sant när en omräkning av bytesplanen (HEM-8, issue #88) över huvud taget kan ge något:
+     * riskprofil satt (SET-3) **och** kontotyp ISK/KF (SET-4). Styr om knappen visas — utan
+     * gaten hade den lovat något SET-4 ändå vägrar infria.
+     */
+    val canRecomputeSwitchPlan: Boolean = false,
+    /** Sant medan en bakgrundskörning pågår — knappen är då släckt, samma signal som bakgrundsindikatorn (NAV-6). */
+    val backgroundWorkRunning: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -102,6 +111,7 @@ class HemViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -182,8 +192,14 @@ class HemViewModel @Inject constructor(
                         )
                     }.orEmpty(),
                     switchPlan = switchPlan,
+                    canRecomputeSwitchPlan = riskProfile != null && currentSettings.accountType == AccountType.ISK_KF,
                 )
             }
+        }.combine(fundPriceRefreshScheduler.observeIsRunning()) { state, running ->
+            // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
+            // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
+            // den ska inte kunna räkna om portföljen bara för att ett jobb startade.
+            state.copy(backgroundWorkRunning = running)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -244,6 +260,16 @@ class HemViewModel @Inject constructor(
      */
     fun setSwitchFollowed(recordId: Long, followed: Boolean) {
         viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
+    }
+
+    /**
+     * Ber om en omräkning av bytesplanen (HEM-8, issue #88) — knappen på riskkortet. Kör inte
+     * själv: skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per
+     * underviktad nivå och hör därför hemma i WorkManager, med nätverksvillkor och
+     * koalescering, precis som backstopens egen körning.
+     */
+    fun recomputeSwitchPlan() {
+        fundPriceRefreshScheduler.triggerSwitchPlanScan()
     }
 
     private data class Settings(val riskProfile: RiskProfile?, val accountType: AccountType?)

@@ -19,6 +19,7 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -74,6 +75,7 @@ data class RiskProfilUiState(
 class RiskProfilViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private data class FormState(
@@ -149,8 +151,17 @@ class RiskProfilViewModel @Inject constructor(
             null
         }
         viewModelScope.launch {
+            val previousAllocation = preferences.riskProfile.first()?.effectiveAllocation
             preferences.setRiskProfile(RiskProfile(targetAllocation = allocation, answers = answers))
             form.update { it.copy(saved = true) }
+
+            // Bytesplanen (HEM-8) mäts mot **målfördelningen** — ändras den är den inspelade
+            // planen inaktuell i samma sekund, och utan den här triggern fick man vänta upp till
+            // 12 timmar på backstopen (issue #88). Jämförelsen görs mot den sparade fördelningen,
+            // inte mot "sparade knappen trycktes": en oförändrad profil ska inte kosta en
+            // skanning (källfråga + budgeterad köpbarhetsverifiering per underviktad nivå).
+            // Enkätsvaren påverkar inte planen — bara fördelningen gör det.
+            if (allocation != previousAllocation) fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
 }

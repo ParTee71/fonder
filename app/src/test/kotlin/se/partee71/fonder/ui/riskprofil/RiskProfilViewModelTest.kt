@@ -8,6 +8,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -36,6 +38,7 @@ import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiskProfilViewModelTest {
@@ -47,6 +50,19 @@ class RiskProfilViewModelTest {
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var preferencesRepository: PreferencesRepository
     private var knownLevels: List<Int> = listOf(1, 2, 3, 4, 5, 6)
+
+    /** Räknar begärda omräkningar av bytesplanen (HEM-8, issue #88). */
+    private var switchPlanScans = 0
+
+    private val fakeScheduler = object : FundPriceRefreshScheduler {
+        override fun scheduleOnLaunch() {}
+        override fun scheduleBackstop() {}
+        override fun triggerManualRefresh() {}
+        override fun triggerSwitchPlanScan() {
+            switchPlanScans++
+        }
+        override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
+    }
 
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
@@ -72,7 +88,7 @@ class RiskProfilViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = RiskProfilViewModel(preferencesRepository, fakeFundMetadataRepo)
+    private fun viewModel() = RiskProfilViewModel(preferencesRepository, fakeFundMetadataRepo, fakeScheduler)
 
     @Test
     fun `initialt tillstand har ingen egen andring och en tom enkat`() = runTest(dispatcher) {
@@ -254,5 +270,48 @@ class RiskProfilViewModelTest {
             assertFalse(state.canSave)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Omräkning av bytesplanen vid sparad profil (HEM-8, issue #88) ---
+
+    @Test
+    fun `sparad andrad malfordelning ber om en omrakning av bytesplanen`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.availableLevels.isEmpty()) state = awaitItem()
+            vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
+            awaitItem()
+            vm.onReactionSelected(DownturnReaction.GOR_INGET)
+            awaitItem()
+            vm.onGoalSelected(PrimaryGoal.BALANSERAD)
+            state = awaitItem()
+            assertTrue(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.save()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, switchPlanScans)
+    }
+
+    @Test
+    fun `oforandrad malfordelning kostar ingen ny skanning`() = runTest(dispatcher) {
+        // En skanning kostar en källfråga plus budgeterad köpbarhetsverifiering per underviktad
+        // nivå — att trycka Spara igen utan att ha ändrat fördelningen ska inte betala det priset.
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
+            assertTrue(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.save()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0, switchPlanScans)
     }
 }
