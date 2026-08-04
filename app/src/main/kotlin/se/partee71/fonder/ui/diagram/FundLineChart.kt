@@ -66,6 +66,7 @@ import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
+import se.partee71.fonder.ui.theme.ChartSeriesColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -232,14 +233,14 @@ fun FundLineChart(
 }
 
 /**
- * Kurvornas färger, i seriernas ordning — appens fasta palett (UI-1) i stället för Vicos
- * standardfärger, så en jämförelse ser ut som resten av appen. Delad mellan diagrammet och
- * teckenförklaringen; hade de valt färg var för sig kunde de glida isär och förklaringen peka
- * på fel kurva.
+ * Kurvornas färger, i seriernas ordning — appens fasta palett (UI-1, se [ChartSeriesColors])
+ * i stället för Vicos standardfärger, så en jämförelse ser ut som resten av appen. Delad mellan
+ * diagrammet och teckenförklaringen; hade de valt färg var för sig kunde de glida isär och
+ * förklaringen peka på fel kurva.
  */
 @Composable
 private fun seriesColors(): List<Color> =
-    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+    listOf(ChartSeriesColors.holding, ChartSeriesColors.candidate)
 
 /**
  * Linjerna Vico ritar serierna med, i samma ordning som [seriesColors]. Båda skapas alltid,

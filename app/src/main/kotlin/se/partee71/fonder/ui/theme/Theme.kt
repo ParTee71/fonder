@@ -68,3 +68,27 @@ object StatusColors {
         @Composable @ReadOnlyComposable
         get() = ReturnColors.loss
 }
+
+/**
+ * Kurvfärger i jämförelsediagrammet (ANA-11, issue #85) — innehavet mot en föreslagen fond.
+ *
+ * De två kurvorna låg tidigare på `primary` och `tertiary`, som i ljust tema är två grannar i
+ * samma petrolskala (Petrol700 mot Petrol500) och i praktiken inte gick att skilja åt. Här
+ * skiljs de i stället på **ljushet**, inte bara i kulör: innehavet är bläckfärgat (samma ton
+ * som brödtexten, alltså nästan svart i ljust tema och nästan vitt i mörkt) och kandidaten är
+ * palettens lysande petrol. Skillnaden håller därmed i båda temana.
+ *
+ * Mässingsaccenten är medvetet inte tagen i anspråk: den bär redan köpmarkörerna i samma
+ * diagram (issue #55) och gula risknivåer i övrigt ([StatusColors.gul]).
+ */
+object ChartSeriesColors {
+    /** Innehavets egen kurva — "bläck" på ytan, vänder med temat så den alltid syns. */
+    val holding: Color
+        @Composable @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.onSurface
+
+    /** Den föreslagna fondens kurva — palettens ljusaste petrol som fortfarande bär mot bakgrunden. */
+    val candidate: Color
+        @Composable @ReadOnlyComposable
+        get() = if (LocalDarkTheme.current) Petrol300 else Petrol400
+}
