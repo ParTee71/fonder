@@ -675,17 +675,25 @@ class FondDetaljViewModelTest {
         )
 
         val vm = viewModel()
-        advanceUntilIdle()
-        assertTrue("Ingen hämtning innan något fällts ut", historyForIsinCalls.isEmpty())
+        // Tillståndet måste kollektas: uiState delas med WhileSubscribed, så utan en aktiv
+        // prenumerant körs uppströmsflödet aldrig och `value` stannar på initialtillståndet.
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue("Ingen hämtning innan något fällts ut", historyForIsinCalls.isEmpty())
 
-        vm.onSuggestionExpanded("SE0000581434")
-        advanceUntilIdle()
-        vm.onSuggestionExpanded("SE0000581434")
-        advanceUntilIdle()
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
 
-        assertEquals(listOf("SE0000581434"), historyForIsinCalls)
-        val comparison = vm.uiState.value.comparisons["SE0000581434"]
-        assertEquals(listOf(100L to 100.0, 200L to 110.0), (comparison as ComparisonUiState.Ready).points)
+            assertEquals(listOf("SE0000581434"), historyForIsinCalls)
+            val comparison = vm.uiState.value.comparisons["SE0000581434"]
+            assertEquals(listOf(100L to 100.0, 200L to 110.0), (comparison as ComparisonUiState.Ready).points)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
     }
 
     @Test
@@ -694,10 +702,16 @@ class FondDetaljViewModelTest {
         historyByIsin = emptyMap()
 
         val vm = viewModel()
-        advanceUntilIdle()
-        vm.onSuggestionExpanded("SE0000581434")
-        advanceUntilIdle()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
 
-        assertEquals(ComparisonUiState.Unavailable, vm.uiState.value.comparisons["SE0000581434"])
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
+
+            assertEquals(ComparisonUiState.Unavailable, vm.uiState.value.comparisons["SE0000581434"])
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
     }
 }
