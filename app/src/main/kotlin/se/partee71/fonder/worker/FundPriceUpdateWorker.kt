@@ -18,7 +18,6 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
@@ -110,6 +109,17 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * kort kursuppdatering, inte en hel kandidatsökning med köpbarhetsverifiering.
          */
         private const val MAX_OUTCOME_NAVS_PER_RUN = 4
+
+        /**
+         * Högst så här många avgiftsbyten spelas in i facit per körning (ANA-9/SET-5, issue
+         * #93), störst innehavsvärde först. Varje inspelning kostar ett NAV-uppslag för
+         * kandidaten, precis som [MAX_OUTCOME_NAVS_PER_RUN] — men ett innehav kan visa upp till
+         * tre alternativ, så budgeten räknas i **rader**, inte i innehav. Redan inspelade rader
+         * (dedup per dygn och sort) drar ingen budget: då hinner de innehav som ligger längre
+         * ner i värdeordningen med i samma körning i stället för att stängas ute av dem som
+         * redan är klara.
+         */
+        private const val MAX_FEE_RECORDINGS_PER_RUN = 6
 
         /**
          * Hur långt bak [resolveBuyNav] hämtar historik för en köpkandidat. Bara den senaste
@@ -256,10 +266,22 @@ class FundPriceUpdateWorker @AssistedInject constructor(
 
         /**
          * Fyller inkrementellt på den persisterade billigare-alternativ-jämförelsen (ANA-9/HEM-6,
-         * issue #61) — högst [MAX_COMPARISONS_PER_RUN] innehav per körning, störst nuvarande
-         * värde (mest potential) först. Innehav utan ISIN kan aldrig jämföras (samma princip som
-         * [PortfolioFeeCalc.compute]s `unknownFeeCount`) och utelämnas. Ren logik utan
-         * `CoroutineWorker`-beroende, samma mönster som [refreshAll].
+         * issue #61) **och** spelar in de visade alternativen i facit (SET-5, issue #91/#93).
+         * Innehav utan ISIN kan aldrig jämföras (samma princip som [PortfolioFeeCalc.compute]s
+         * `unknownFeeCount`) och utelämnas. Ren logik utan `CoroutineWorker`-beroende, samma
+         * mönster som [refreshAll].
+         *
+         * De två passen har **skilda urval**, och det är hela poängen (issue #93):
+         *
+         * - *Omskanningen* är dyr (källfråga + budgeterad köpbarhetsverifiering) och gäller
+         *   därför bara innehav vars jämförelse hunnit bli inaktuell — högst
+         *   [MAX_COMPARISONS_PER_RUN] per körning, störst värde först.
+         * - *Inspelningen* gäller **alla** innehav med ett sparat jämförelseresultat, oavsett
+         *   vem som räknade fram det. Fondkortet kör samma jämförelse vid varje skärmöppning och
+         *   stämplar då `comparisonResolvedAtEpochDay`, så hängde inspelningen på omskanningens
+         *   urval blev just de fonder användaren tittar på permanent överhoppade — kvitteringen
+         *   dök aldrig upp för dem. Ett råd spelas in för att det **gavs**, inte för att det
+         *   råkade räknas om här.
          *
          * [se.partee71.fonder.data.repository.FundMetadataRepository.suggestCheaperAlternatives]
          * gör själva jämförelsen (och skriver resultatet) och degraderar redan tyst vid nätverksfel
@@ -284,38 +306,52 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             val withValue = PortfolioCalc.withCurrentValue(holdings, prices)
             val metadataByIsin = fundMetadataRepository.metadataFor(holdings.mapNotNull { it.fund.isin })
 
-            val targets = withValue
+            val comparable = withValue
                 .filter { it.fund.isin != null && it.currentValue != null }
+                .sortedByDescending { it.currentValue }
+
+            val rescanTargets = comparable
                 .filter { holding ->
                     val resolvedAt = metadataByIsin[holding.fund.isin]?.comparisonResolvedAtEpochDay
                     resolvedAt == null || FundMetadataFreshness.isStale(resolvedAt, today, FundMetadataFreshness.COMPARISON_TTL_DAYS)
                 }
-                .sortedByDescending { it.currentValue }
                 .take(MAX_COMPARISONS_PER_RUN)
 
-            targets.forEach { holding ->
+            // Omskanningens färska svar går före den sparade listan: metadataByIsin lästes innan
+            // den här körningen skrev något, och ska inte spela in gårdagens kandidater.
+            val rescanned = rescanTargets.associate { holding ->
                 val sellIsin = holding.fund.isin!!
                 val alternatives = fundMetadataRepository.suggestCheaperAlternatives(sellIsin, holding.currentValue!!)
-                recordFeeSwitch(
-                    holding = holding,
-                    sellIsin = sellIsin,
-                    // Det billigaste alternativet — samma kandidat HEM-6 räknar besparingen på.
-                    // Att spela in alla visade hade gett flera rader per innehav och dygn utan
-                    // att besvara en ny fråga i facit.
-                    best = alternatives?.firstOrNull(),
-                    prices = prices,
-                    fundPriceRepository = fundPriceRepository,
-                    suggestionRecordRepository = suggestionRecordRepository,
-                    today = today,
-                    batchEpochMillis = batchEpochMillis,
-                )
+                sellIsin to alternatives?.map { it.candidate.isin }
             }
+
+            recordFeeSwitches(
+                comparable = comparable,
+                shownIsinsFor = { sellIsin ->
+                    // null i `rescanned` = jämförelsen kunde inte göras just nu (fonden saknar
+                    // känd avgift eller källan svarade inte). Då spelas inget in för den — men
+                    // den sparade listan får inte heller läsas, för den hör till ett resultat
+                    // körningen just försökte ersätta.
+                    if (sellIsin in rescanned) rescanned[sellIsin].orEmpty()
+                    else metadataByIsin[sellIsin]?.shownAlternativeIsins.orEmpty()
+                },
+                prices = prices,
+                fundPriceRepository = fundPriceRepository,
+                suggestionRecordRepository = suggestionRecordRepository,
+                today = today,
+                batchEpochMillis = batchEpochMillis,
+            )
         }
 
         /**
-         * Spelar in ett avgiftsbyte (ANA-9) i facit (SET-5, issue #91) — samma tabell och samma
+         * Spelar in avgiftsbytena (ANA-9) i facit (SET-5, issue #91) — samma tabell och samma
          * utgångsläge som bytesplanens rader, men med [SuggestionKind.FEE] så de två sorterna
-         * kan mätas var för sig och Hems bytesplan aldrig ser den här raden.
+         * kan mätas var för sig och Hems bytesplan aldrig ser dem.
+         *
+         * **Varje visat alternativ** får en egen rad (issue #93), inte bara det billigaste: de
+         * tre alternativen är varandras alternativ, och vilket som helst kan vara det användaren
+         * faktiskt byter till. Spelades bara det översta in gick de andra två aldrig att
+         * kvittera, och facit kunde inte mäta ett byte som faktiskt gjordes.
          *
          * Skillnaden mot ett riskplansbyte är beloppet: ett avgiftsbyte avser **hela**
          * positionen (man byter andelsklass/fond, inte en del av den), medan planens byte
@@ -325,37 +361,48 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * ([SwitchOutcomeCalc]), så en halv rad vore en rad som aldrig kan utvärderas — och den
          * skulle ändå räknas i "antal givna råd".
          */
-        private suspend fun recordFeeSwitch(
-            holding: Holding,
-            sellIsin: String,
-            best: FeeComparisonCalc.Alternative?,
+        private suspend fun recordFeeSwitches(
+            comparable: List<Holding>,
+            shownIsinsFor: (String) -> List<String>,
             prices: Map<String, FundPrice>,
             fundPriceRepository: FundPriceRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate,
             batchEpochMillis: Long,
         ) {
-            val buyIsin = best?.candidate?.isin ?: return
-            if (suggestionRecordRepository.hasRecordedToday(sellIsin, buyIsin, today.toEpochDay(), SuggestionKind.FEE)) return
+            var budget = MAX_FEE_RECORDINGS_PER_RUN
+            for (holding in comparable) {
+                if (budget == 0) return
+                val sellIsin = holding.fund.isin ?: continue
+                val sellNav = prices[holding.fund.fundId]?.nav ?: continue
 
-            val sellNav = prices[holding.fund.fundId]?.nav ?: return
-            val buyNav = resolveBuyNav(buyIsin, fundPriceRepository, today) ?: return
+                for (buyIsin in shownIsinsFor(sellIsin)) {
+                    if (budget == 0) return
+                    // Dedupen först: en redan inspelad rad ska varken kosta ett nätverksanrop
+                    // eller ta en plats i budgeten från ett innehav som ännu inte hunnit med.
+                    if (suggestionRecordRepository.hasRecordedToday(sellIsin, buyIsin, today.toEpochDay(), SuggestionKind.FEE)) continue
+                    val buyNav = resolveBuyNav(buyIsin, fundPriceRepository, today) ?: continue
 
-            suggestionRecordRepository.record(
-                SuggestionRecord(
-                    suggestedAtEpochDay = today.toEpochDay(),
-                    // Ingen girig, sekventiell plan finns för ett avgiftsbyte — platsen är
-                    // meningslös här och räknas därför inte i facits `byPlanIndex` (SET-5).
-                    planIndex = 0,
-                    sellIsin = sellIsin,
-                    buyIsin = buyIsin,
-                    sellNavAtSuggestion = sellNav,
-                    buyNavAtSuggestion = buyNav,
-                    switchValueKr = holding.currentValue,
-                    batchEpochMillis = batchEpochMillis,
-                    kind = SuggestionKind.FEE,
-                ),
-            )
+                    suggestionRecordRepository.record(
+                        SuggestionRecord(
+                            suggestedAtEpochDay = today.toEpochDay(),
+                            // Ingen girig, sekventiell plan finns för ett avgiftsbyte — platsen
+                            // är meningslös här och räknas därför inte i facits `byPlanIndex`
+                            // (SET-5). Alternativens inbördes ordning bärs av listan i
+                            // `fund_metadata`, inte av den här kolumnen.
+                            planIndex = 0,
+                            sellIsin = sellIsin,
+                            buyIsin = buyIsin,
+                            sellNavAtSuggestion = sellNav,
+                            buyNavAtSuggestion = buyNav,
+                            switchValueKr = holding.currentValue,
+                            batchEpochMillis = batchEpochMillis,
+                            kind = SuggestionKind.FEE,
+                        ),
+                    )
+                    budget--
+                }
+            }
         }
 
         /**

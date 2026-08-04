@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.43.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.44.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -44,7 +44,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       riskprofil/kontotyp (HEM-8/SET-3/SET-4, #88)
 - [x] "Genomförd"-kvittering även på fondkortets bytesförslag, via delad komponent (ANA-10, #90)
 - [x] Avgiftsbytena spelas in i facit och kan kvitteras, redovisade skilt från bytesplanens
-      byten (ANA-9/ANA-10/SET-5, #91)
+      byten (ANA-9/ANA-10/SET-5, #91) — varje visat alternativ, oberoende av jämförelsens
+      TTL (#93)
 - [x] Riskprofil som målfördelning över flera risknivåer, i stället för en enda nivå (SET-3/HEM-7/POR-9, #71)
 - [x] Bytesplan i ISK: rangordnade fondbyten mot målfördelningen, med facit-inspelning (SET-4/HEM-8, #70)
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)

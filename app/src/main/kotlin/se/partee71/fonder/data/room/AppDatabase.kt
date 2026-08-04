@@ -26,7 +26,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundMetadataEntity::class,
         SuggestionRecordEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -308,6 +308,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 13 → 14: `fund_metadata.shownAlternativeIsinsJson` — samtliga alternativ
+         * ANA-9 visade, inte bara det billigaste (issue #93), så facit kan spela in varje
+         * *givet* råd. `'[]'` för befintliga rader: de vet bara vilket alternativ som var
+         * billigast, och att gissa resten vore att hitta på råd som aldrig gavs. Nästa
+         * jämförelse fyller listan.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `shownAlternativeIsinsJson` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -321,6 +334,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
+            MIGRATION_13_14,
         )
     }
 }
