@@ -406,7 +406,7 @@ class FundPriceUpdateWorkerTest {
     }
 
     @Test
-    fun `scanComparisons spelar in det billigaste alternativet med NAV-utgangslage`() = runTest {
+    fun `scanComparisons spelar in varje visat alternativ med NAV-utgangslage`() = runTest {
         setUpHoldingWithCheaperAlternative()
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -414,28 +414,87 @@ class FundPriceUpdateWorkerTest {
             fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, LocalDate.of(2026, 1, 1),
         )
 
-        val record = suggestionRepo.recorded.single()
-        assertEquals(SuggestionKind.FEE, record.kind)
-        assertEquals("SE_HELD", record.sellIsin)
-        // Bara det billigaste — övriga visade alternativ besvarar ingen ny fråga i facit.
-        assertEquals("SE_BILLIG", record.buyIsin)
-        assertEquals(100.0, record.sellNavAtSuggestion, 1e-9)
-        assertEquals(50.0, record.buyNavAtSuggestion, 1e-9)
+        // Alla visade alternativ, inte bara det billigaste (issue #93): de är varandras
+        // alternativ, och vilket som helst kan vara det användaren faktiskt byter till.
+        assertEquals(listOf("SE_BILLIG", "SE_NASTBILLIG"), suggestionRepo.recorded.map { it.buyIsin })
+        assertTrue(suggestionRepo.recorded.all { it.kind == SuggestionKind.FEE })
+        assertTrue(suggestionRepo.recorded.all { it.sellIsin == "SE_HELD" })
+
+        val best = suggestionRepo.recorded.first()
+        assertEquals(100.0, best.sellNavAtSuggestion, 1e-9)
+        assertEquals(50.0, best.buyNavAtSuggestion, 1e-9)
         // Ett avgiftsbyte avser hela positionen, till skillnad från planens gap-storlek.
-        assertEquals(10_000.0, record.switchValueKr!!, 1e-9)
-        assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), record.suggestedAtEpochDay)
+        assertEquals(10_000.0, best.switchValueKr!!, 1e-9)
+        assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), best.suggestedAtEpochDay)
+        assertEquals(25.0, suggestionRepo.recorded[1].buyNavAtSuggestion, 1e-9)
     }
 
     @Test
-    fun `scanComparisons spelar inte in nagot nar kandidatens kurs saknas`() = runTest {
-        // Utfallet mäts mot just de två kurserna — en rad utan köpkursen kan aldrig utvärderas,
-        // men skulle ändå räknas som ett givet råd och späda ut facit.
-        setUpHoldingWithCheaperAlternative(altNav = null)
+    fun `scanComparisons spelar in aven for ett innehav vars jamforelse redan ar farsk`() = runTest {
+        // Regression för issue #93: fondkortet kör samma jämförelse vid varje skärmöppning och
+        // stämplar comparisonResolvedAtEpochDay, så hängde inspelningen på omskanningens urval
+        // blev just de fonder användaren tittar på permanent överhoppade — kryssrutan dök
+        // aldrig upp för dem. Ett råd spelas in för att det gavs, inte för att det räknades om.
+        val today = LocalDate.of(2026, 1, 1)
+        setUpHoldingWithCheaperAlternative()
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
+            comparisonResolvedAtEpochDay = today.toEpochDay(),
+            shownAlternativeIsins = listOf("SE_BILLIG", "SE_NASTBILLIG"),
+        )
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
+
+        // Ingen dyr omskanning — resultatet är färskt.
+        assertTrue(suggestCheaperAlternativesCalls.isEmpty())
+        // …men raderna spelas in ur den sparade listan.
+        assertEquals(listOf("SE_BILLIG", "SE_NASTBILLIG"), suggestionRepo.recorded.map { it.buyIsin })
+    }
+
+    @Test
+    fun `scanComparisons spelar in omskanningens farska kandidater, inte den sparade listan`() = runTest {
+        // Den sparade listan lästes innan körningen skrev något. Hade den använts för ett
+        // innehav som just skannats om hade gårdagens kandidater spelats in som dagens råd.
+        setUpHoldingWithCheaperAlternative()
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
+            shownAlternativeIsins = listOf("SE_GAMMAL"),
+        )
+        fundByIsin["SE_GAMMAL"] = Fund(fundId = "SE_GAMMAL", name = "Gammal", isin = "SE_GAMMAL")
+        isinChainPrices["SE_GAMMAL"] = FundPrice(fundId = "SE_GAMMAL", epochDay = LocalDate.now().toEpochDay(), nav = 10.0)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo)
+
+        assertEquals(listOf("SE_BILLIG", "SE_NASTBILLIG"), suggestionRepo.recorded.map { it.buyIsin })
+    }
+
+    @Test
+    fun `scanComparisons spelar inte in nagot nar jamforelsen inte kunde goras`() = runTest {
+        // null = fonden saknar känd avgift eller källan svarade inte. Den sparade listan hör
+        // till ett resultat körningen just försökte ersätta och får inte läsas som dagens råd.
+        setUpHoldingWithCheaperAlternative()
+        cheaperAlternativesByIsin["SE_HELD"] = null
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
+            shownAlternativeIsins = listOf("SE_BILLIG"),
+        )
         val suggestionRepo = FakeSuggestionRecordRepository()
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    @Test
+    fun `alternativ utan hamtbar kurs hoppas over, ovriga spelas in`() = runTest {
+        // Utfallet mäts mot just de två kurserna — en rad utan köpkursen kan aldrig utvärderas,
+        // men skulle ändå räknas som ett givet råd och späda ut facit. Att en kandidat faller
+        // bort får däremot inte ta med sig de andra.
+        setUpHoldingWithCheaperAlternative(altNav = null)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo)
+
+        assertEquals(listOf("SE_NASTBILLIG"), suggestionRepo.recorded.map { it.buyIsin })
     }
 
     @Test
@@ -458,7 +517,75 @@ class FundPriceUpdateWorkerTest {
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
 
-        assertEquals(1, suggestionRepo.recorded.size)
+        assertEquals(2, suggestionRepo.recorded.size)
+    }
+
+    @Test
+    fun `redan inspelade rader tar ingen plats i inspelningsbudgeten`() = runTest {
+        // Sex innehav med ett alternativ vardera fyller budgeten exakt. Är de tre största redan
+        // inspelade ska de tre minsta komma med i samma körning — annars hade ett innehav som
+        // ligger långt ner i värdeordningen aldrig hunnit med, trots att budgeten var oanvänd.
+        val today = LocalDate.of(2026, 1, 1)
+        val fundList = (1..9).map { Fund(fundId = "F$it", name = "F$it", isin = "SE_F$it") }
+        funds.value = fundList
+        // Fallande värde: F1 störst.
+        transactions.value = fundList.mapIndexed { index, fund -> buy(fund.fundId, (100 - index).toDouble(), 100.0) }
+        fundList.forEach { cachedPrices[it.fundId] = FundPrice(fundId = it.fundId, epochDay = today.toEpochDay(), nav = 100.0) }
+        fundList.forEach { fund ->
+            val isin = fund.isin!!
+            val alt = "ALT_${fund.fundId}"
+            // Färsk jämförelse: ingen omskanning, bara inspelning ur den sparade listan.
+            metadataByIsin[isin] = heldMetadata(isin, risk = 5, totalFee = 1.0).copy(
+                comparisonResolvedAtEpochDay = today.toEpochDay(),
+                shownAlternativeIsins = listOf(alt),
+            )
+            fundByIsin[alt] = Fund(fundId = alt, name = alt, isin = alt)
+            isinChainPrices[alt] = FundPrice(fundId = alt, epochDay = today.toEpochDay(), nav = 50.0)
+        }
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        // De tre största är redan inspelade i dag.
+        listOf("SE_F1", "SE_F2", "SE_F3").forEach { isin ->
+            suggestionRepo.record(
+                SuggestionRecord(
+                    suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
+                    sellIsin = isin, buyIsin = "ALT_${isin.removePrefix("SE_")}",
+                    sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, kind = SuggestionKind.FEE,
+                ),
+            )
+        }
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
+
+        // Budgeten är 6 rader: F4…F9 spelas in, F1–F3 hoppas över utan att kosta något.
+        assertEquals(
+            (4..9).map { "SE_F$it" },
+            suggestionRepo.recorded.drop(3).map { it.sellIsin },
+        )
+    }
+
+    @Test
+    fun `inspelningen ar budgeterad per korning`() = runTest {
+        val today = LocalDate.of(2026, 1, 1)
+        val fundList = (1..9).map { Fund(fundId = "F$it", name = "F$it", isin = "SE_F$it") }
+        funds.value = fundList
+        transactions.value = fundList.mapIndexed { index, fund -> buy(fund.fundId, (100 - index).toDouble(), 100.0) }
+        fundList.forEach { cachedPrices[it.fundId] = FundPrice(fundId = it.fundId, epochDay = today.toEpochDay(), nav = 100.0) }
+        fundList.forEach { fund ->
+            val isin = fund.isin!!
+            val alt = "ALT_${fund.fundId}"
+            metadataByIsin[isin] = heldMetadata(isin, risk = 5, totalFee = 1.0).copy(
+                comparisonResolvedAtEpochDay = today.toEpochDay(),
+                shownAlternativeIsins = listOf(alt),
+            )
+            fundByIsin[alt] = Fund(fundId = alt, name = alt, isin = alt)
+            isinChainPrices[alt] = FundPrice(fundId = alt, epochDay = today.toEpochDay(), nav = 50.0)
+        }
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
+
+        // Störst innehavsvärde först — resten kommer med nästa körning.
+        assertEquals((1..6).map { "SE_F$it" }, suggestionRepo.recorded.map { it.sellIsin })
     }
 
     @Test
@@ -483,9 +610,10 @@ class FundPriceUpdateWorkerTest {
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
 
         assertEquals(
-            listOf(SuggestionKind.RISK_PLAN, SuggestionKind.FEE),
+            listOf(SuggestionKind.RISK_PLAN, SuggestionKind.FEE, SuggestionKind.FEE),
             suggestionRepo.recorded.map { it.kind },
         )
+        assertEquals(listOf("SE_BILLIG", "SE_NASTBILLIG"), suggestionRepo.recorded.drop(1).map { it.buyIsin })
     }
 
     // --- scanSwitchPlan: bytesplanens facit-inspelning (HEM-8, issue #70) ---

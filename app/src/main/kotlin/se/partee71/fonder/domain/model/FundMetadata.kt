@@ -29,6 +29,11 @@ package se.partee71.fonder.domain.model
  * @param cheapestAlternativeFee [cheapestAlternativeIsin]s `totalFee` vid jämförelsetillfället,
  *   för att räkna kr-besparingen ur innehavets *aktuella* värde vid visning — aldrig ett sparat
  *   kronbelopp, som blir fel så fort NAV rör sig.
+ * @param shownAlternativeIsins ISIN för **samtliga** alternativ jämförelsen visade, rangordnade
+ *   som i ANA-9-kortet (störst årsbesparing först) — [cheapestAlternativeIsin] är alltid det
+ *   första. Sparas för att facit ska kunna spela in varje *givet* råd (SET-5, issue #91): de tre
+ *   alternativen är varandras alternativ, och vilket som helst av dem kan vara det användaren
+ *   följer. Tom lista = jämfört utan träff, eller en rad sparad före issue #93.
  * @param comparisonResolvedAtEpochDay Null = aldrig jämfört. Satt datum (oavsett om
  *   [cheapestAlternativeIsin] är null eller ej) = jämfört den dagen. Sätts av
  *   [se.partee71.fonder.data.repository.FundMetadataRepository.suggestCheaperAlternatives].
@@ -54,6 +59,7 @@ data class FundMetadata(
     val availableAtHandelsbanken: Boolean? = null,
     val cheapestAlternativeIsin: String? = null,
     val cheapestAlternativeFee: Double? = null,
+    val shownAlternativeIsins: List<String> = emptyList(),
     val comparisonResolvedAtEpochDay: Long? = null,
     val developmentOneYear: Double? = null,
 )

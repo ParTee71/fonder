@@ -441,6 +441,9 @@ class FundMetadataRepositoryTest {
         assertEquals("SE_CAND", stored?.cheapestAlternativeIsin)
         assertEquals(0.21, stored?.cheapestAlternativeFee ?: -1.0, 1e-9)
         assertEquals(LocalDate.now().toEpochDay(), stored?.comparisonResolvedAtEpochDay)
+        // Hela den visade listan sparas (issue #93), inte bara det billigaste — facit ska kunna
+        // spela in varje *givet* råd, och alternativen är varandras alternativ.
+        assertEquals(listOf("SE_CAND"), stored?.toDomain()?.shownAlternativeIsins)
     }
 
     @Test
@@ -459,6 +462,7 @@ class FundMetadataRepositoryTest {
         // den distinktionen är precis vad som skiljer "genomsökt utan träff" från "aldrig sökt".
         assertNull(stored?.cheapestAlternativeIsin)
         assertEquals(LocalDate.now().toEpochDay(), stored?.comparisonResolvedAtEpochDay)
+        assertEquals(emptyList<String>(), stored?.toDomain()?.shownAlternativeIsins)
     }
 
     @Test
@@ -615,6 +619,7 @@ class FundMetadataRepositoryTest {
             availabilityResolvedAtEpochDay = today.minusDays(3).toEpochDay(),
             cheapestAlternativeIsin = "SE2",
             cheapestAlternativeFee = 0.21,
+            shownAlternativeIsinsJson = """["SE2","SE3"]""",
             comparisonResolvedAtEpochDay = today.minusDays(3).toEpochDay(),
         )
         val source = FakeAvanzaSource(fullListJson(1, listOf(fundView("SE1", "Fond Ett", totalFee = 0.5, indexFund = false, tags = emptyList()))))
@@ -628,6 +633,7 @@ class FundMetadataRepositoryTest {
         assertEquals("SE2", metadata?.cheapestAlternativeIsin)
         assertEquals(0.21, metadata?.cheapestAlternativeFee ?: -1.0, 1e-9)
         assertEquals(today.minusDays(3).toEpochDay(), metadata?.comparisonResolvedAtEpochDay)
+        assertEquals(listOf("SE2", "SE3"), metadata?.shownAlternativeIsins)
         assertEquals(true, metadata?.availableAtHandelsbanken)
     }
 

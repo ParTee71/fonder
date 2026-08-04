@@ -8,6 +8,7 @@ import se.partee71.fonder.data.network.AvanzaFundListParser
 import se.partee71.fonder.data.network.AvanzaFundListRequestBuilder
 import se.partee71.fonder.data.network.AvanzaSource
 import se.partee71.fonder.data.room.daos.FundMetadataDao
+import se.partee71.fonder.data.room.entities.FundAlternativeIsinsCodec
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
@@ -197,6 +198,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
             availabilityResolvedAtEpochDay = existing?.availabilityResolvedAtEpochDay,
             cheapestAlternativeIsin = existing?.cheapestAlternativeIsin,
             cheapestAlternativeFee = existing?.cheapestAlternativeFee,
+            shownAlternativeIsinsJson = existing?.shownAlternativeIsinsJson ?: "[]",
             comparisonResolvedAtEpochDay = existing?.comparisonResolvedAtEpochDay,
         )
     }
@@ -257,27 +259,34 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 verified += alternative
             }
         }
-        persistComparisonResult(isin, verified.firstOrNull())
+        persistComparisonResult(isin, verified)
         return verified
     }
 
     /**
      * Sparar resultatet av en jämförelse för portföljens samlade besparingspotential
-     * (HEM-6, issue #61) — [best] är redan rankad på störst besparing (samma sak som lägst
+     * (HEM-6, issue #61) — [shown] är redan rankad på störst besparing (samma sak som lägst
      * avgift, eftersom `annualSavingsKr` är monotont avtagande i kandidatens avgift för ett
-     * givet innehav och värde), så `verified.firstOrNull()` i anroparen är det billigaste
-     * verifierade alternativet. Kronbesparingen sparas medvetet inte — bara avgiften, så den
-     * kan räknas om ur innehavets aktuella värde vid visning i stället för att bli fel så
-     * fort NAV rör sig. [best] null (ingen kandidat kvalificerade eller verifierades) sparas
-     * som "jämfört, inget billigare hittades" — skilt från att aldrig ha jämförts alls, se
+     * givet innehav och värde), så det första elementet är det billigaste verifierade
+     * alternativet. Kronbesparingen sparas medvetet inte — bara avgiften, så den kan räknas om
+     * ur innehavets aktuella värde vid visning i stället för att bli fel så fort NAV rör sig.
+     * Tom [shown] (ingen kandidat kvalificerade eller verifierades) sparas som "jämfört, inget
+     * billigare hittades" — skilt från att aldrig ha jämförts alls, se
      * [FundMetadata.comparisonResolvedAtEpochDay].
+     *
+     * **Hela** listan sparas, inte bara det billigaste (issue #93): alternativen är varandras
+     * alternativ och vilket som helst av dem kan vara det användaren faktiskt byter till, så
+     * facit måste kunna spela in vart och ett som ett givet råd (SET-5). HEM-6 läser fortsatt
+     * bara `cheapestAlternative*`.
      */
-    private suspend fun persistComparisonResult(isin: String, best: FeeComparisonCalc.Alternative?) {
+    private suspend fun persistComparisonResult(isin: String, shown: List<FeeComparisonCalc.Alternative>) {
         val cached = dao.getByIsin(isin) ?: return
+        val best = shown.firstOrNull()
         dao.upsert(
             cached.copy(
                 cheapestAlternativeIsin = best?.candidate?.isin,
                 cheapestAlternativeFee = best?.candidateFeePercent,
+                shownAlternativeIsinsJson = FundAlternativeIsinsCodec.encode(shown.map { it.candidate.isin }),
                 comparisonResolvedAtEpochDay = LocalDate.now().toEpochDay(),
             ),
         )
