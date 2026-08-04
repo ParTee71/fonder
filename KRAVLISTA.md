@@ -370,6 +370,13 @@ implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`
   31. **`sellNavOf` härledde NAV via en division (kodhygien).** `currentValue / netShares`
       reproducerade exakt den kurs skanningen redan hade i handen, till priset av en
       nollvakt och ett flyttalsfel. Kursen läses nu direkt.
+  32. **`SwitchPlanCalc.Plan.gapClosedPp` mätte inte det namnet sa (kodhygien).** Fältet
+      summerade den *flyttade andelen av portföljen*, inte hur mycket av gapet som stängts —
+      i granskningens överskjutningsfall rapporterade det `100.0` för en plan som lämnade
+      avvikelsen oförändrad. Ingen produktionsläsare fanns; bara fyra enhetstester
+      asserterade det, var och en bredvid `sellValueKr`-assertioner som redan bar samma
+      information. Fältet är borttaget i stället för omdefinierat, och därmed också
+      `Plan`-omslaget som inte längre hade något att bära: `plan()` returnerar bytena direkt.
 
   Migrering 11→12 (`batchEpochMillis`) med rundturstest; fältet är med i backup-kontraktet av
   samma skäl som resten av `suggestion_records`. I övrigt ingen ny persisterad data — men

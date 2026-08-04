@@ -33,7 +33,7 @@ import kotlin.math.ceil
  * den beskriver samma procenttal. Ett innehav som saknar avgiftsuppgift räknas med i sin nivås
  * vikt men kan inte väljas som säljkandidat (avgiften avgör vilken position som säljs).
  *
- * Ingen plan ges (tom [Plan]) om ingen nivå avviker minst [MIN_GAP_PP], eller om ingen
+ * Ingen plan ges (tom lista) om ingen nivå avviker minst [MIN_GAP_PP], eller om ingen
  * kvalificerad köp-/säljkandidat finns för den mest avvikande nivån.
  */
 object SwitchPlanCalc {
@@ -57,11 +57,6 @@ object SwitchPlanCalc {
         val toLevel: Int,
         val feeDelta: Double,
     )
-
-    /** [switches] rangordnade så att bara det första ensamt är en giltig handling. [gapClosedPp] är hur stor andel av portföljen (i procentenheter) planens byten omfattar. */
-    data class Plan(val switches: List<Switch>, val gapClosedPp: Double)
-
-    private val EMPTY_PLAN = Plan(emptyList(), 0.0)
 
     /**
      * Under den här avvikelsen (procentenheter av portföljens totala värde) ges inget förslag
@@ -150,13 +145,14 @@ object SwitchPlanCalc {
             ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
         }
 
+    /** Bytena rangordnade så att bara det första ensamt är en giltig handling — se klassens KDoc. */
     fun plan(
         holdings: List<Holding>,
         metadataByIsin: Map<String, FundMetadata>,
         candidates: List<Candidate>,
         targetAllocation: Map<Int, Double>,
-    ): Plan {
-        if (targetAllocation.isEmpty()) return EMPTY_PLAN
+    ): List<Switch> {
+        if (targetAllocation.isEmpty()) return emptyList()
 
         // Klassificerbart = känd risknivå och känt värde. Avgiften krävs bara för att *sälja*.
         // Tidigare föll ett innehav utan känd `totalFee` ur hela beräkningen, alltså även ur
@@ -168,7 +164,7 @@ object SwitchPlanCalc {
         val positions = positionsOf(holdings, metadataByIsin)
 
         val totalValueKr = positions.sumOf { it.valueKr }
-        if (totalValueKr <= 0.0) return EMPTY_PLAN
+        if (totalValueKr <= 0.0) return emptyList()
 
         val sellSlots = positions.filter { it.feePercent != null }.toMutableList()
         val levelValues = positions.groupBy { it.level }.mapValues { (_, p) -> p.sumOf { it.valueKr } }.toMutableMap()
@@ -215,9 +211,7 @@ object SwitchPlanCalc {
             levelValues[underEntry.key] = (levelValues[underEntry.key] ?: 0.0) + switchValueKr
         }
 
-        if (switches.isEmpty()) return EMPTY_PLAN
-        val gapClosedPp = switches.sumOf { it.sellValueKr / totalValueKr * 100.0 }
-        return Plan(switches, gapClosedPp)
+        return switches
     }
 
     /**
