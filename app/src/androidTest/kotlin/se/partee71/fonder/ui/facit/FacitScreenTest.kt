@@ -220,14 +220,22 @@ class FacitScreenTest {
 
     @Test
     fun avgiftsbyten_summeras_i_en_egen_sektion() {
-        // Ett riskplansbyte och ett avgiftsbyte med olika utfall: syns båda talen står de i var
-        // sin sektion. Slogs de ihop hade bara ett snitt visats (issue #91).
+        // Två rader av varje sort, så varje sorts **total** skiljer sig från de enskilda
+        // radernas belopp: 140,00 kr respektive 10,00 kr står då bara på summeringsraden och
+        // träffen blir entydig. Med en rad per sort är totalen identisk med raden och samma
+        // text står på tre ställen (summering, plats-i-planen och kortet) — samma skäl som
+        // `summeringen_visar_alla_och_enbart_genomforda...` redan väljer skilda belopp av.
+        // Slogs sorterna ihop hade bara ett gemensamt tal visats (issue #91).
         composeRule.setContent {
             FonderTheme {
                 FacitContent(
                     state = state(
-                        rad(id = 1, switchValueKr = 1_000.0),
-                        rad(id = 2, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
+                        // Planens rader: +7,0 % på 1 000 kr vardera → 140,00 kr totalt.
+                        rad(id = 1, planIndex = 0, switchValueKr = 1_000.0),
+                        rad(id = 2, planIndex = 1, switchValueKr = 1_000.0),
+                        // Avgiftsraderna: +1,0 % på 500 kr vardera → 10,00 kr totalt.
+                        rad(id = 3, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
+                        rad(id = 4, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
                     ),
                 )
             }
@@ -235,9 +243,8 @@ class FacitScreenTest {
 
         composeRule.onNodeWithText("Bytesplanen").assertExists()
         composeRule.onNodeWithText("Billigare alternativ").assertExists()
-        // Planens rad: +7,0 % på 1 000 kr. Avgiftsraden: +1,0 % på 500 kr.
-        composeRule.onNodeWithText("70,00 kr").assertExists()
-        composeRule.onNodeWithText("5,00 kr").assertExists()
+        composeRule.onNodeWithText("140,00 kr").assertExists()
+        composeRule.onNodeWithText("10,00 kr").assertExists()
     }
 
     @Test
