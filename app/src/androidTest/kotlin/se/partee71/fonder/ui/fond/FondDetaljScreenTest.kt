@@ -537,7 +537,18 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_kop_hit_riktningen_nar_fonden_ar_kopkandidaten() {
-        val incoming = planSuggestion.copy(sellIsin = "SE0000581434", buyIsin = "SE0004297927")
+        // Den öppnade fonden (SE0004297927) är köpkandidat: raden namnger säljfonden, och
+        // riskpilen följer **bytet** — från säljfondens nivå till den här fondens — inte den
+        // betraktande fondens perspektiv. Annars visades ett byte som höjer risken som en
+        // sänkning.
+        val incoming = planSuggestion.copy(
+            sellIsin = "SE0000581434",
+            buyIsin = "SE0004297927",
+            sellFundName = "Fond B",
+            buyFundName = "Fond A",
+            fromLevel = 4,
+            toLevel = 5,
+        )
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(incoming)))
@@ -545,6 +556,7 @@ class FondDetaljScreenTest {
         }
 
         composeRule.onNodeWithText("1. Byt hit från Fond B").assertExists()
+        composeRule.onNodeWithText("Risk 4 → 5 (av 7)").assertExists()
     }
 
     @Test

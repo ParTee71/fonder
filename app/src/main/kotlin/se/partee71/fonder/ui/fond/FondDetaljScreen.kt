@@ -333,9 +333,12 @@ private fun SwitchPlanRow(
                 ),
                 style = MaterialTheme.typography.bodyMedium,
             )
+            // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
+            // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
+            // köpkandidaten hade visat "Risk 5 → 4" för ett byte som faktiskt höjer risken.
             RiskBadge(
-                level = if (sellingThisFund) suggestion.fromLevel else suggestion.toLevel,
-                toLevel = if (sellingThisFund) suggestion.toLevel else suggestion.fromLevel,
+                level = suggestion.fromLevel,
+                toLevel = suggestion.toLevel,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
