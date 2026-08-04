@@ -76,11 +76,12 @@ Hilt DI, errors mapped in the repository layer.
   testable (inject dispatchers).
 - **Persisted data changed?** Write the Room migration (`AppDatabase` version bump + a
   `MigrationXYTest`), and account for the new field in the backup contract
-  (`BackupRepository`/`StubBackupRepository` in `data/repository/BackupRepository.kt`).
-  Drive backup itself is still a stub pending its own feature build-out (NFR-1,
-  *"backup planerad"*) — don't invent a JSON backup format for it; just make sure the stub's
-  contract and any in-repo notes reflect the new field so the real implementation won't miss
-  it later (`data-safety-backup`).
+  (`BackupPayload` in `data/repository/BackupPayload.kt` — the file format, built on the
+  domain models). Since SET-6 the backup round trip is real and tested: add the field to
+  `BackupPayload`, update `BackupSerializerTest`'s field guard (it fails deliberately when a
+  contract-bearing model gains a field), and make sure `BackupRoundTripTest` covers it. Only
+  the Drive transport (TP-7 step 2) is outstanding — don't build that as a side effect
+  (`data-safety-backup`).
 - Keep diffs focused. Match surrounding style. UI strings in Swedish via `strings.xml`.
 - Don't log full HTTP responses or secrets from the fund-data sources; add
   `contentDescription`/adequate touch targets for new interactive UI.
@@ -148,4 +149,4 @@ ahead of time is fine; just sequence the PR-open-through-merge step.
 - Deleting/`@Ignore`-ing a failing test to "go green".
 - Trying to run `./gradlew` in a remote/phone session instead of trusting CI.
 - Inventing a real Drive backup implementation as a side effect of an unrelated feature —
-  that's its own issue; just keep the stub's contract accurate.
+  that's its own issue; the local format is already built and must not be reshaped for it.

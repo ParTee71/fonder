@@ -28,7 +28,7 @@ import java.io.IOException
 /**
  * Riskprofilens DataStore-rundtur (SET-3, issue #68) — genuin användardata, till skillnad
  * från övriga [PreferencesRepository]-fält som är ren cache-metadata (se
- * [se.partee71.fonder.data.repository.StubBackupRepository]). Ingen instrumenterad
+ * [se.partee71.fonder.data.repository.BackupPayload]). Ingen instrumenterad
  * DataStore krävs: [PreferenceDataStoreFactory.create] fungerar direkt i ett JVM-enhetstest.
  */
 class PreferencesRepositoryTest {

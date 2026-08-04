@@ -1,15 +1,19 @@
 package se.partee71.fonder.ui.settings
 
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.data.repository.BackupFormatException
+import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -165,5 +169,115 @@ class SettingsScreenTest {
         }
 
         composeRule.onNodeWithText("Databasen har tömts.").assertDoesNotExist()
+    }
+
+    // --- Säkerhetskopiering (SET-6, issue #82) ---
+
+    @Test
+    fun backup_kortet_visar_bada_knapparna() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState()) }
+        }
+
+        composeRule.onNodeWithText("Exportera till fil").assertExists()
+        composeRule.onNodeWithText("Återställ från fil").assertExists()
+    }
+
+    @Test
+    fun export_knappen_anropar_callback() {
+        var called = false
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onExportBackup = { called = true }) }
+        }
+
+        composeRule.onNodeWithText("Exportera till fil").performScrollTo().performClick()
+
+        assertTrue(called)
+    }
+
+    @Test
+    fun aterstallning_kraver_bekraftelse_innan_filvaljaren_oppnas() {
+        // Återställningen ersätter all data — filväljaren får inte öppnas på ett enda tryck.
+        var called = false
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onRestoreBackup = { called = true }) }
+        }
+
+        composeRule.onNodeWithText("Återställ från fil").performScrollTo().performClick()
+
+        assertFalse("callbacken får inte köras förrän dialogen bekräftats", called)
+        composeRule.onNodeWithText("Återställ från säkerhetskopia?").assertExists()
+
+        composeRule.onNodeWithText("Återställ").performClick()
+        assertTrue(called)
+    }
+
+    @Test
+    fun avbruten_bekraftelse_aterstaller_ingenting() {
+        var called = false
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onRestoreBackup = { called = true }) }
+        }
+
+        composeRule.onNodeWithText("Återställ från fil").performScrollTo().performClick()
+        composeRule.onNodeWithText("Avbryt").performClick()
+
+        assertFalse(called)
+        composeRule.onNodeWithText("Återställ från säkerhetskopia?").assertDoesNotExist()
+    }
+
+    @Test
+    fun knapparna_ar_slackta_medan_en_backup_pagar() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(backupInProgress = true)) }
+        }
+
+        composeRule.onNodeWithText("Exportera till fil").assertIsNotEnabled()
+        composeRule.onNodeWithText("Återställ från fil").assertIsNotEnabled()
+    }
+
+    @Test
+    fun aterstallningens_summering_visas_och_gar_att_kvittera() {
+        var dismissed = false
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(backupMessage = BackupMessage.Restored(RestoreSummary(2, 5, 3))),
+                    onBackupMessageDismissed = { dismissed = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Återställt: 2 fonder, 5 transaktioner och 3 inspelade förslag.").assertExists()
+        composeRule.onNodeWithText("Stäng").performScrollTo().performClick()
+
+        assertTrue(dismissed)
+    }
+
+    @Test
+    fun ett_versionsfel_far_sin_egen_text_och_inte_trasig_fil_texten() {
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(
+                        backupMessage = BackupMessage.RestoreFailed(BackupFormatException.Reason.UNSUPPORTED_VERSION),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("nyare version av appen", substring = true).assertExists()
+        composeRule.onNodeWithText("kunde inte läsas som en säkerhetskopia", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun farozonen_hanvisar_till_export_i_stallet_for_att_saga_att_ingen_backup_finns() {
+        // SET-1 sa tidigare "molnbackup finns ännu inte" — sedan SET-6 finns en väg tillbaka,
+        // och texten ska peka på den innan användaren tömmer allt.
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState()) }
+        }
+
+        composeRule.onNodeWithText("exportera en säkerhetskopia först", substring = true).assertExists()
     }
 }

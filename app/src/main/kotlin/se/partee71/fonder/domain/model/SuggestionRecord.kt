@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Ett enskilt bytesförslag (HEM-8, issue #70), sparat med sin utgångspunkt så utfallet kan
  * mätas senare mot att ha behållit innehavet — "facit". Skrivs av den periodiska
@@ -8,8 +10,8 @@ package se.partee71.fonder.domain.model
  *
  * Genuin användardata: förslagstidpunkten och NAV-utgångsläget kan inte återskapas ur
  * NAV-historiken i efterhand, till skillnad från t.ex. [FundMetadata.cheapestAlternativeIsin]
- * — ska ingå i backup-kontraktet (NFR-1) när Drive-backup (TP-7) byggs, se
- * [se.partee71.fonder.data.repository.StubBackupRepository].
+ * — ingår därför i backup-kontraktet (NFR-1), se
+ * [se.partee71.fonder.data.repository.BackupPayload].
  *
  * Redovisning/visning av facit är ett eget, senare issue — bara inspelningen ligger här.
  *
@@ -29,6 +31,7 @@ package se.partee71.fonder.domain.model
  * @param followed null tills en framtida "markera som genomförd"-funktion (utanför det här
  *   issuets scope) sätter den.
  */
+@Serializable
 data class SuggestionRecord(
     val id: Long = 0,
     val suggestedAtEpochDay: Long,
