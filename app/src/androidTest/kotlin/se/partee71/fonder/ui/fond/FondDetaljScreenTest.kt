@@ -473,6 +473,7 @@ class FondDetaljScreenTest {
         switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
         feeComparison: FeeComparisonUiState? = null,
         comparisons: Map<String, ComparisonUiState> = emptyMap(),
+        recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
     ) = FondDetaljUiState(
         loading = false,
         fundName = "Fond A",
@@ -483,6 +484,7 @@ class FondDetaljScreenTest {
         switchPlan = switchPlan,
         feeComparison = feeComparison,
         comparisons = comparisons,
+        recordedFeeSwitches = recordedFeeSwitches,
     )
 
     private fun greenAnalysis() = FundAnalysisCalc.Analysis(
@@ -687,6 +689,67 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion.copy(followed = true))),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Genomförd").performScrollTo().assertIsOn()
+    }
+
+    // --- Kvittering av avgiftsbytet (ANA-9/SET-5, issue #91) ---
+
+    @Test
+    fun avgiftsalternativ_utan_inspelad_rad_har_ingen_kryssruta() {
+        // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen —
+        // ett alternativ som just dykt upp har inget att kvittera mot. En kryssruta som tyst
+        // inte skriver någonstans vore värre än ingen alls.
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
+    }
+
+    @Test
+    fun avgiftsalternativ_med_inspelad_rad_kan_kvitteras() {
+        var callback: Pair<Long, Boolean>? = null
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
+                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = false)),
+                    ),
+                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+
+        // Skriver mot avgiftsradens eget id, inte mot bytesplanens.
+        assertEquals(42L to true, callback)
+    }
+
+    @Test
+    fun kvitteringen_speglar_ett_redan_genomfort_avgiftsbyte() {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
+                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = true)),
+                    ),
                 )
             }
         }

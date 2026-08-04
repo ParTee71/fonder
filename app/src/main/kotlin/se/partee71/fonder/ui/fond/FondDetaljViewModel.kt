@@ -27,6 +27,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -70,9 +71,19 @@ data class FondDetaljUiState(
      * minnet, aldrig i kurscachen (se [FundPriceRepository.historyForIsin]).
      */
     val comparisons: Map<String, ComparisonUiState> = emptyMap(),
+    /**
+     * De inspelade avgiftsbytena (ANA-9, issue #91) för den här fonden, nycklade på
+     * kandidatens ISIN. Ett alternativ som saknas här har ingen inspelad rad — då visas ingen
+     * kvittering alls, aldrig en kryssruta som inte skriver någonstans. Asymmetrin är väntad:
+     * listan räknas fram live vid skärmöppning, raden skrivs av bakgrundsskanningen.
+     */
+    val recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
 }
+
+/** Ett inspelat avgiftsbyte (issue #91) — nyckeln facit skrivs mot när kvitteringen används. */
+data class RecordedFeeSwitch(val recordId: Long, val followed: Boolean)
 
 /** Kurshistoriken för en föreslagen fond, till jämförelsediagrammet (ANA-11, issue #85). */
 sealed interface ComparisonUiState {
@@ -114,11 +125,13 @@ private data class Snapshot(
     val purchaseEpochDays: List<Long>,
 )
 
-/** Bytesplanens indata innan den resolvas — se [FondDetaljViewModel.planInput]. */
+/** Bytesplanens och avgiftsbytenas indata innan de resolvas — se [FondDetaljViewModel.planInput]. */
 private data class PlanInput(
     val accountType: AccountType?,
     val batch: List<SuggestionRecord>,
     val metadataByIsin: Map<String, FundMetadata>,
+    /** Hela inspelade historiken — avgiftsbytena kan vara äldre än den senaste körningen (issue #91). */
+    val history: List<SuggestionRecord>,
 )
 
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
@@ -241,7 +254,11 @@ class FondDetaljViewModel @Inject constructor(
         preferencesRepository.accountType,
         suggestionRecordRepository.observeLatestBatch(),
         metadata,
-    ) { accountType, batch, metadataByIsin -> PlanInput(accountType, batch, metadataByIsin) }
+        // Historiken, inte batchen: ett avgiftsbyte spelas in av jämförelseskanningen (HEM-6),
+        // som går sin egen takt — den senaste körningens rader säger inget om huruvida just den
+        // här fondens alternativ har en inspelad rad.
+        suggestionRecordRepository.observeHistory(),
+    ) { accountType, batch, metadataByIsin, history -> PlanInput(accountType, batch, metadataByIsin, history) }
 
     val uiState: StateFlow<FondDetaljUiState> = combine(
         baseUiState,
@@ -259,12 +276,26 @@ class FondDetaljViewModel @Inject constructor(
             riskLevel = state.isin?.let { plan.metadataByIsin[it]?.risk },
             switchPlan = SwitchPlanResolver.forFund(resolvedPlan, state.isin),
             comparisons = comparisonsByIsin,
+            recordedFeeSwitches = recordedFeeSwitches(plan.history, state.isin),
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = FondDetaljUiState(),
     )
+
+    /**
+     * De inspelade avgiftsbytena för fonden [isin], nycklade på kandidatens ISIN (issue #91).
+     * `observeHistory` är sorterad nyast först, så `distinctBy` behåller den **senaste** raden
+     * per kandidat — kvitteringen ska gälla det senaste rådet, inte ett halvår gammalt.
+     */
+    private fun recordedFeeSwitches(history: List<SuggestionRecord>, isin: String?): Map<String, RecordedFeeSwitch> {
+        if (isin == null) return emptyMap()
+        return history
+            .filter { it.kind == SuggestionKind.FEE && it.sellIsin == isin }
+            .distinctBy { it.buyIsin }
+            .associate { it.buyIsin to RecordedFeeSwitch(recordId = it.id, followed = it.followed == true) }
+    }
 
     /**
      * Hämtar kurshistoriken för den föreslagna fonden [isin] till jämförelsediagrammet (ANA-11)

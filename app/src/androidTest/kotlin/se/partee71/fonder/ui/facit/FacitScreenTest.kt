@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.theme.FonderTheme
@@ -50,8 +51,10 @@ class FacitScreenTest {
         followed: Boolean = false,
         sellNavNow: Double? = 105.0,
         buyNavNow: Double? = 224.0,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
     ) = FacitRad(
         recordId = id,
+        kind = kind,
         planIndex = planIndex,
         suggestedAtEpochDay = 20_000,
         sellFundName = sellFundName,
@@ -65,14 +68,18 @@ class FacitScreenTest {
         ),
     )
 
+    /** Speglar [FacitViewModel]s uppdelning per sort (issue #91) så skärmen testas mot ett äkta tillstånd. */
     private fun state(vararg rows: FacitRad): FacitUiState {
-        val outcomes = rows.map { it.outcome }
+        val planRows = rows.filter { it.kind == SuggestionKind.RISK_PLAN }
+        val feeRows = rows.filter { it.kind == SuggestionKind.FEE }
         return FacitUiState(
             loading = false,
             rows = rows.toList(),
-            allSummary = SwitchOutcomeCalc.summarize(outcomes),
-            followedSummary = SwitchOutcomeCalc.summarize(rows.filter { it.followed }.map { it.outcome }),
-            byPlanIndex = SwitchOutcomeCalc.byPlanIndex(outcomes),
+            planAllSummary = SwitchOutcomeCalc.summarize(planRows.map { it.outcome }),
+            planFollowedSummary = SwitchOutcomeCalc.summarize(planRows.filter { it.followed }.map { it.outcome }),
+            feeAllSummary = SwitchOutcomeCalc.summarize(feeRows.map { it.outcome }),
+            feeFollowedSummary = SwitchOutcomeCalc.summarize(feeRows.filter { it.followed }.map { it.outcome }),
+            byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome }),
         )
     }
 
@@ -198,6 +205,64 @@ class FacitScreenTest {
         // ett kronbelopp.
         composeRule.onAllNodesWithText("+7,0 %").onFirst().assertExists()
         composeRule.onNodeWithText("Belopp: ", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun avgiftssektionen_uteblir_utan_inspelade_avgiftsbyten() {
+        // En rubrik med tomma streck hade lästs som ett mätfel i stället för "inget att mäta än"
+        // (issue #91).
+        composeRule.setContent {
+            FonderTheme { FacitContent(state = state(rad(id = 1))) }
+        }
+
+        composeRule.onNodeWithText("Billigare alternativ").assertDoesNotExist()
+    }
+
+    @Test
+    fun avgiftsbyten_summeras_i_en_egen_sektion() {
+        // Två rader av varje sort, så varje sorts **total** skiljer sig från de enskilda
+        // radernas belopp: 140,00 kr respektive 10,00 kr står då bara på summeringsraden och
+        // träffen blir entydig. Med en rad per sort är totalen identisk med raden och samma
+        // text står på tre ställen (summering, plats-i-planen och kortet) — samma skäl som
+        // `summeringen_visar_alla_och_enbart_genomforda...` redan väljer skilda belopp av.
+        // Slogs sorterna ihop hade bara ett gemensamt tal visats (issue #91).
+        composeRule.setContent {
+            FonderTheme {
+                FacitContent(
+                    state = state(
+                        // Planens rader: +7,0 % på 1 000 kr vardera → 140,00 kr totalt.
+                        rad(id = 1, planIndex = 0, switchValueKr = 1_000.0),
+                        rad(id = 2, planIndex = 1, switchValueKr = 1_000.0),
+                        // Avgiftsraderna: +1,0 % på 500 kr vardera → 10,00 kr totalt.
+                        rad(id = 3, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
+                        rad(id = 4, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Bytesplanen").assertExists()
+        composeRule.onNodeWithText("Billigare alternativ").assertExists()
+        composeRule.onNodeWithText("140,00 kr").assertExists()
+        composeRule.onNodeWithText("10,00 kr").assertExists()
+    }
+
+    @Test
+    fun avgiftsrad_markt_med_sin_sort_och_utan_plats_i_planen() {
+        // Platsen är alltid 0 för ett avgiftsbyte — visades den hade en rangordning som inte
+        // finns påståtts (issue #91).
+        composeRule.setContent {
+            FonderTheme { FacitContent(state = state(rad(id = 1, kind = SuggestionKind.FEE))) }
+        }
+
+        composeRule.onNodeWithText("Billigare alternativ · ", substring = true).assertExists()
+        // Spegelvänt mot avgiftssektionen: utan inspelade planbyten ritas ingen tom plansektion.
+        composeRule.onNodeWithText("Bytesplanen").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Såld fond → Köpt fond").performClick()
+
+        composeRule.onNodeWithText("Plats 1 i planen").assertDoesNotExist()
+        composeRule.onNodeWithText("Belopp: ", substring = true).assertExists()
     }
 
     @Test

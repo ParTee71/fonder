@@ -14,8 +14,11 @@ import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
@@ -146,7 +149,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         ) {
             if (!refreshSucceeded) return
             if (scanComparisons) {
-                scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository)
+                scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository, suggestionRecordRepository)
             }
             if (scanSwitchPlan) {
                 scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
@@ -266,7 +269,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             fundMetadataRepository: FundMetadataRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate = LocalDate.now(),
+            /** Körnings-id som grupperar den här skanningens rader — se [SuggestionRecord.batchEpochMillis]. */
+            batchEpochMillis: Long = System.currentTimeMillis(),
         ) {
             val funds = transactionRepository.observeFunds().first().filter { it.isin != null }
             if (funds.isEmpty()) return
@@ -288,8 +294,68 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 .take(MAX_COMPARISONS_PER_RUN)
 
             targets.forEach { holding ->
-                fundMetadataRepository.suggestCheaperAlternatives(holding.fund.isin!!, holding.currentValue!!)
+                val sellIsin = holding.fund.isin!!
+                val alternatives = fundMetadataRepository.suggestCheaperAlternatives(sellIsin, holding.currentValue!!)
+                recordFeeSwitch(
+                    holding = holding,
+                    sellIsin = sellIsin,
+                    // Det billigaste alternativet — samma kandidat HEM-6 räknar besparingen på.
+                    // Att spela in alla visade hade gett flera rader per innehav och dygn utan
+                    // att besvara en ny fråga i facit.
+                    best = alternatives?.firstOrNull(),
+                    prices = prices,
+                    fundPriceRepository = fundPriceRepository,
+                    suggestionRecordRepository = suggestionRecordRepository,
+                    today = today,
+                    batchEpochMillis = batchEpochMillis,
+                )
             }
+        }
+
+        /**
+         * Spelar in ett avgiftsbyte (ANA-9) i facit (SET-5, issue #91) — samma tabell och samma
+         * utgångsläge som bytesplanens rader, men med [SuggestionKind.FEE] så de två sorterna
+         * kan mätas var för sig och Hems bytesplan aldrig ser den här raden.
+         *
+         * Skillnaden mot ett riskplansbyte är beloppet: ett avgiftsbyte avser **hela**
+         * positionen (man byter andelsklass/fond, inte en del av den), medan planens byte
+         * storleksbestäms till gapet (issue #75).
+         *
+         * Saknas endera NAV spelas raden **inte** in. Utfallet mäts mot just de kurserna
+         * ([SwitchOutcomeCalc]), så en halv rad vore en rad som aldrig kan utvärderas — och den
+         * skulle ändå räknas i "antal givna råd".
+         */
+        private suspend fun recordFeeSwitch(
+            holding: Holding,
+            sellIsin: String,
+            best: FeeComparisonCalc.Alternative?,
+            prices: Map<String, FundPrice>,
+            fundPriceRepository: FundPriceRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+            today: LocalDate,
+            batchEpochMillis: Long,
+        ) {
+            val buyIsin = best?.candidate?.isin ?: return
+            if (suggestionRecordRepository.hasRecordedToday(sellIsin, buyIsin, today.toEpochDay(), SuggestionKind.FEE)) return
+
+            val sellNav = prices[holding.fund.fundId]?.nav ?: return
+            val buyNav = resolveBuyNav(buyIsin, fundPriceRepository, today) ?: return
+
+            suggestionRecordRepository.record(
+                SuggestionRecord(
+                    suggestedAtEpochDay = today.toEpochDay(),
+                    // Ingen girig, sekventiell plan finns för ett avgiftsbyte — platsen är
+                    // meningslös här och räknas därför inte i facits `byPlanIndex` (SET-5).
+                    planIndex = 0,
+                    sellIsin = sellIsin,
+                    buyIsin = buyIsin,
+                    sellNavAtSuggestion = sellNav,
+                    buyNavAtSuggestion = buyNav,
+                    switchValueKr = holding.currentValue,
+                    batchEpochMillis = batchEpochMillis,
+                    kind = SuggestionKind.FEE,
+                ),
+            )
         }
 
         /**
@@ -345,7 +411,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
 
             plan.forEachIndexed { index, switch ->
                 val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
-                if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay())) return@forEachIndexed
+                if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay(), SuggestionKind.RISK_PLAN)) return@forEachIndexed
 
                 // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
                 // `currentValue / netShares` gav exakt samma tal via en division som krävde en

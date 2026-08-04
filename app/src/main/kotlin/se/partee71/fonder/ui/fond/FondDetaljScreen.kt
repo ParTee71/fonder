@@ -254,7 +254,9 @@ private fun SwitchDecisionSection(
                     alternative = alternative,
                     chartPoints = chartPoints,
                     comparison = state.comparisons[alternative.candidate.isin],
+                    recorded = state.recordedFeeSwitches[alternative.candidate.isin],
                     onSuggestionExpanded = onSuggestionExpanded,
+                    onSwitchFollowedChange = onSwitchFollowedChange,
                 )
             }
         }
@@ -366,36 +368,53 @@ private fun SwitchPlanRow(
 /**
  * Ett billigare, likvärdigt alternativ (ANA-9) — namn, årsbesparing och kandidatens risknivå
  * (UI-10) direkt på raden, avgiften och jämförelsediagrammet under när den fälls ut.
+ *
+ * Kryssrutan visas bara när alternativet har en inspelad rad ([recorded], issue #91). Listan här
+ * räknas om mot dagsfärska kurser varje gång kortet öppnas, medan inspelningen sker en gång per
+ * dygn i bakgrundsjobbet — ett alternativ som just dykt upp har alltså ännu inget att kvittera
+ * *mot*, och en kryssruta som tyst inte skriver någonstans vore värre än ingen.
  */
 @Composable
 private fun FeeAlternativeRow(
     alternative: FeeComparisonCalc.Alternative,
     chartPoints: List<Pair<Long, Double>>,
     comparison: ComparisonUiState?,
+    recorded: RecordedFeeSwitch?,
     onSuggestionExpanded: (String) -> Unit,
+    onSwitchFollowedChange: (Long, Boolean) -> Unit,
 ) {
     val explanation = stringResource(
         R.string.format_fee_comparison_alternative_explain,
         MoneyFormat.feePercent(alternative.candidateFeePercent),
     )
-    ExpandableInfoRow(
-        explanation = explanation,
-        onExpand = { onSuggestionExpanded(alternative.candidate.isin) },
-        extraContent = {
-            ComparisonChart(
-                holdingPoints = chartPoints,
-                candidateName = alternative.candidate.name,
-                comparison = comparison,
+    Column {
+        ExpandableInfoRow(
+            explanation = explanation,
+            onExpand = { onSuggestionExpanded(alternative.candidate.isin) },
+            extraContent = {
+                ComparisonChart(
+                    holdingPoints = chartPoints,
+                    candidateName = alternative.candidate.name,
+                    comparison = comparison,
+                )
+            },
+        ) {
+            Column {
+                PeriodRow(
+                    label = alternative.candidate.name,
+                    amount = alternative.annualSavingsKr,
+                    fraction = null,
+                )
+                RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        // Utanför den utfällbara raden av samma skäl som i SwitchPlanRow: rubriken är en
+        // `clickable` som slår ihop sina barns semantik.
+        if (recorded != null) {
+            FollowedToggleRow(
+                followed = recorded.followed,
+                onFollowedChange = { checked -> onSwitchFollowedChange(recorded.recordId, checked) },
             )
-        },
-    ) {
-        Column {
-            PeriodRow(
-                label = alternative.candidate.name,
-                amount = alternative.annualSavingsKr,
-                fraction = null,
-            )
-            RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

@@ -28,6 +28,7 @@ import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
@@ -56,7 +57,7 @@ class FacitViewModelTest {
                     .thenBy { it.planIndex },
             )
         }
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long): Boolean = false
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) {}
         override suspend fun prune(today: LocalDate) {}
         override suspend fun setFollowed(id: Long, followed: Boolean) {
@@ -125,6 +126,7 @@ class FacitViewModelTest {
         switchValueKr: Double? = 10_000.0,
         followed: Boolean? = null,
         suggestedAtEpochDay: Long = 20_000,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
     ) = SuggestionRecord(
         id = id,
         suggestedAtEpochDay = suggestedAtEpochDay,
@@ -135,6 +137,7 @@ class FacitViewModelTest {
         buyNavAtSuggestion = buyNav,
         switchValueKr = switchValueKr,
         followed = followed,
+        kind = kind,
     )
 
     /** Säljfonden är bevakad (kurs under fondens egen fundId), köpfonden inte (kurs under ISIN:et). */
@@ -206,10 +209,10 @@ class FacitViewModelTest {
         viewModel().uiState.test {
             awaitItem()
             val state = awaitItem()
-            assertEquals(2, state.allSummary.totalCount)
-            assertEquals(1400.0, state.allSummary.totalExcessKr!!, 1e-9)
-            assertEquals(1, state.followedSummary.totalCount)
-            assertEquals(700.0, state.followedSummary.totalExcessKr!!, 1e-9)
+            assertEquals(2, state.planAllSummary.totalCount)
+            assertEquals(1400.0, state.planAllSummary.totalExcessKr!!, 1e-9)
+            assertEquals(1, state.planFollowedSummary.totalCount)
+            assertEquals(700.0, state.planFollowedSummary.totalExcessKr!!, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -223,9 +226,9 @@ class FacitViewModelTest {
             awaitItem()
             val state = awaitItem()
             assertFalse(state.rows.single().outcome.isEvaluated)
-            assertNull(state.allSummary.averageExcessReturn)
-            assertEquals(0, state.allSummary.evaluatedCount)
-            assertEquals(1, state.allSummary.totalCount)
+            assertNull(state.planAllSummary.averageExcessReturn)
+            assertEquals(0, state.planAllSummary.evaluatedCount)
+            assertEquals(1, state.planAllSummary.totalCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -239,6 +242,64 @@ class FacitViewModelTest {
             awaitItem()
             val state = awaitItem()
             assertEquals(listOf(0, 1), state.byPlanIndex.map { it.planIndex })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `avgiftsbyten summeras for sig och blandas aldrig in i planens matt`() = runTest(dispatcher) {
+        // Samma NAV-utgångsläge och samma kurser för båda raderna, så ett hopslaget mått hade
+        // gett exakt dubbla planens total — skillnaden kommer bara ur *sorten* (issue #91).
+        setUpPrices()
+        records.value = listOf(
+            record(id = 1, followed = true),
+            record(id = 2, kind = SuggestionKind.FEE, followed = null),
+        )
+
+        viewModel().uiState.test {
+            awaitItem()
+            val state = awaitItem()
+            assertEquals(2, state.rows.size)
+            assertEquals(1, state.planAllSummary.totalCount)
+            assertEquals(700.0, state.planAllSummary.totalExcessKr!!, 1e-9)
+            assertEquals(1, state.planFollowedSummary.totalCount)
+            assertEquals(1, state.feeAllSummary.totalCount)
+            assertEquals(700.0, state.feeAllSummary.totalExcessKr!!, 1e-9)
+            // Avgiftsraden är inte kvitterad — den följda avgiftssummeringen ska vara tom, inte
+            // ärva planens kvittering.
+            assertEquals(0, state.feeFollowedSummary.totalCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `snittet per plats i planen raknar aldrig avgiftsraderna`() = runTest(dispatcher) {
+        // Ett avgiftsbyte har alltid planIndex 0. Räknades det in hade "Plats 1" mätts på rader
+        // som aldrig ingick i någon rangordning — och just det talet avgör om
+        // MAX_SWITCHES_PER_PLAN kan höjas (SET-5).
+        setUpPrices()
+        records.value = listOf(
+            record(id = 1, planIndex = 0),
+            record(id = 2, planIndex = 0, kind = SuggestionKind.FEE),
+        )
+
+        viewModel().uiState.test {
+            awaitItem()
+            val state = awaitItem()
+            assertEquals(listOf(0), state.byPlanIndex.map { it.planIndex })
+            assertEquals(1, state.byPlanIndex.single().summary.totalCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `raden bar med sig sin sort till vyn`() = runTest(dispatcher) {
+        setUpPrices()
+        records.value = listOf(record(id = 1, kind = SuggestionKind.FEE))
+
+        viewModel().uiState.test {
+            awaitItem()
+            assertEquals(SuggestionKind.FEE, awaitItem().rows.single().kind)
             cancelAndIgnoreRemainingEvents()
         }
     }

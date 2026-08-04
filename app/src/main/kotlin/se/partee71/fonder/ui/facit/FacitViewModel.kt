@@ -17,6 +17,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import javax.inject.Inject
@@ -30,6 +31,8 @@ import javax.inject.Inject
  */
 data class FacitRad(
     val recordId: Long,
+    /** Vilken sorts råd raden bär (issue #91) — styr både märkningen i listan och vilken summering den räknas in i. */
+    val kind: SuggestionKind,
     val planIndex: Int,
     val suggestedAtEpochDay: Long,
     val sellFundName: String,
@@ -42,11 +45,14 @@ data class FacitRad(
 data class FacitUiState(
     val loading: Boolean = true,
     val rows: List<FacitRad> = emptyList(),
-    /** Utfallet över **alla** inspelade förslag — hur bra rådet var. */
-    val allSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
-    /** Utfallet över enbart de användaren markerat som genomförda — vad rådet faktiskt gav. */
-    val followedSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
-    /** Snitt per plats i planen (SET-5) — underlaget för om `MAX_SWITCHES_PER_PLAN` kan höjas. */
+    /** Utfallet över **alla** inspelade förslag ur bytesplanen (HEM-8) — hur bra rådet var. */
+    val planAllSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
+    /** Utfallet över enbart de bytesplansförslag användaren markerat som genomförda — vad rådet faktiskt gav. */
+    val planFollowedSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
+    /** Samma två mått för avgiftsbytena (ANA-9, issue #91) — redovisade **separat**, se klassens KDoc. */
+    val feeAllSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
+    val feeFollowedSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
+    /** Snitt per plats i planen (SET-5) — underlaget för om `MAX_SWITCHES_PER_PLAN` kan höjas. Bara bytesplanens rader. */
     val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> = emptyList(),
 ) {
     val isEmpty: Boolean get() = !loading && rows.isEmpty()
@@ -95,6 +101,7 @@ class FacitViewModel @Inject constructor(
                 val rows = history.map { record ->
                     FacitRad(
                         recordId = record.id,
+                        kind = record.kind,
                         planIndex = record.planIndex,
                         suggestedAtEpochDay = record.suggestedAtEpochDay,
                         sellFundName = metadataByIsin[record.sellIsin]?.name ?: record.sellIsin,
@@ -109,13 +116,22 @@ class FacitViewModel @Inject constructor(
                     )
                 }
 
-                val outcomes = rows.map { it.outcome }
+                // De två sorterna summeras var för sig (issue #91) och slås aldrig ihop till ett
+                // snitt: ett avgiftsbyte görs för en **känd** besparing, ett riskplansbyte för ett
+                // förväntat utfall. Ett gemensamt tal hade dolt att den ena sortens råd är
+                // säkrare än den andra. `byPlanIndex` räknar bara planens rader — den finns för
+                // att avgöra om MAX_SWITCHES_PER_PLAN kan höjas, och en avgiftsrad har ingen
+                // meningsfull plats i planen.
+                val planRows = rows.filter { it.kind == SuggestionKind.RISK_PLAN }
+                val feeRows = rows.filter { it.kind == SuggestionKind.FEE }
                 FacitUiState(
                     loading = false,
                     rows = rows,
-                    allSummary = SwitchOutcomeCalc.summarize(outcomes),
-                    followedSummary = SwitchOutcomeCalc.summarize(rows.filter { it.followed }.map { it.outcome }),
-                    byPlanIndex = SwitchOutcomeCalc.byPlanIndex(outcomes),
+                    planAllSummary = SwitchOutcomeCalc.summarize(planRows.map { it.outcome }),
+                    planFollowedSummary = SwitchOutcomeCalc.summarize(planRows.filter { it.followed }.map { it.outcome }),
+                    feeAllSummary = SwitchOutcomeCalc.summarize(feeRows.map { it.outcome }),
+                    feeFollowedSummary = SwitchOutcomeCalc.summarize(feeRows.filter { it.followed }.map { it.outcome }),
+                    byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome }),
                 )
             }
         }.stateIn(

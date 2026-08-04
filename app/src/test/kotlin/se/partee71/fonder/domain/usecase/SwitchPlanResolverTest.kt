@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import java.time.LocalDate
 
@@ -24,17 +25,23 @@ class SwitchPlanResolverTest {
         startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
     )
 
-    private fun record(planIndex: Int, sell: String, buy: String, epochDay: Long = today.toEpochDay()) =
-        SuggestionRecord(
-            id = planIndex + 1L,
-            suggestedAtEpochDay = epochDay,
-            planIndex = planIndex,
-            sellIsin = sell,
-            buyIsin = buy,
-            sellNavAtSuggestion = 100.0,
-            buyNavAtSuggestion = 90.0,
-            switchValueKr = 4000.0,
-        )
+    private fun record(
+        planIndex: Int,
+        sell: String,
+        buy: String,
+        epochDay: Long = today.toEpochDay(),
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+    ) = SuggestionRecord(
+        id = planIndex + 1L,
+        suggestedAtEpochDay = epochDay,
+        planIndex = planIndex,
+        sellIsin = sell,
+        buyIsin = buy,
+        sellNavAtSuggestion = 100.0,
+        buyNavAtSuggestion = 90.0,
+        switchValueKr = 4000.0,
+        kind = kind,
+    )
 
     private val metadataByIsin = mapOf(
         "A" to metadata("A", "Fond A", risk = 6, fee = 1.4),
@@ -90,6 +97,27 @@ class SwitchPlanResolverTest {
         val incomplete = metadataByIsin + ("B" to metadata("B", "Fond B", risk = null, fee = 0.4))
 
         assertTrue(SwitchPlanResolver.resolve(AccountType.ISK_KF, listOf(record(0, "A", "B")), incomplete, today).isEmpty())
+    }
+
+    @Test
+    fun `avgiftsbyten ingar aldrig i planen — inte ens som enda raden`() {
+        // Det dygn planen inte gav något (ingen nivå avviker tillräckligt) men
+        // avgiftsskanningen spelade in en rad är det vanligaste fallet, inte ett hörnfall
+        // (issue #91). Utan filtret hade raden visats som "1. Sälj A → Köp C" i en plan den
+        // aldrig ingick i — och att följa den flyttar inte portföljen mot målfördelningen.
+        val batch = listOf(record(0, "A", "C", kind = SuggestionKind.FEE))
+
+        assertTrue(SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today).isEmpty())
+    }
+
+    @Test
+    fun `en avgiftsrad forskjuter aldrig planens rangordning`() {
+        val batch = listOf(record(0, "A", "C", kind = SuggestionKind.FEE), record(0, "A", "B"))
+
+        val plan = SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today)
+
+        assertEquals(listOf("B"), plan.map { it.buyIsin })
+        assertEquals(listOf(0), plan.map { it.planIndex })
     }
 
     @Test

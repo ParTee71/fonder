@@ -26,7 +26,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundMetadataEntity::class,
         SuggestionRecordEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -297,6 +297,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 12 → 13: `suggestion_records.kind` skiljer bytesplanens byten (HEM-8) från
+         * avgiftsbytena (ANA-9, issue #91). Befintliga rader **är** riskplansbyten, så defaulten
+         * i SQL är det värdet — ingen datamigrering behövs, bara kolumnen.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'RISK_PLAN'")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -309,6 +320,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_9_10,
             MIGRATION_10_11,
             MIGRATION_11_12,
+            MIGRATION_12_13,
         )
     }
 }

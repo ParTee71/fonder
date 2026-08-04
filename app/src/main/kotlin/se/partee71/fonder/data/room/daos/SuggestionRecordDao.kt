@@ -17,14 +17,22 @@ interface SuggestionRecordDao {
      *
      * Senaste dygnet räcker inte som nyckel — backstopen kör var 12:e timme, så två körningar
      * landar normalt samma dygn. Därav `batchEpochMillis` (issue #75, fynd B).
+     *
+     * `kind = 'RISK_PLAN'` sitter i **alla tre** nivåerna, inte bara den yttersta (issue #91):
+     * annars väljer `MAX()`-underfrågorna dygn och körning utifrån rader frågan sedan filtrerar
+     * bort. Vanligaste dygnet är just det där planen inte gav något (ingen nivå avviker ≥
+     * `MIN_GAP_PP`) men avgiftsskanningen spelade in en rad — utan filtret hade Hem då visat
+     * ett avgiftsbyte som "1. Sälj X → Köp Y" i en plan det aldrig ingick i.
      */
     @Query(
         """
         SELECT * FROM suggestion_records
-        WHERE suggestedAtEpochDay = (SELECT MAX(suggestedAtEpochDay) FROM suggestion_records)
+        WHERE kind = 'RISK_PLAN'
+          AND suggestedAtEpochDay = (SELECT MAX(suggestedAtEpochDay) FROM suggestion_records WHERE kind = 'RISK_PLAN')
           AND batchEpochMillis = (
               SELECT MAX(batchEpochMillis) FROM suggestion_records
-              WHERE suggestedAtEpochDay = (SELECT MAX(suggestedAtEpochDay) FROM suggestion_records)
+              WHERE kind = 'RISK_PLAN'
+                AND suggestedAtEpochDay = (SELECT MAX(suggestedAtEpochDay) FROM suggestion_records WHERE kind = 'RISK_PLAN')
           )
         ORDER BY planIndex ASC, id ASC
         """,
@@ -53,9 +61,23 @@ interface SuggestionRecordDao {
     @Query("UPDATE suggestion_records SET followed = :followed WHERE id = :id")
     suspend fun setFollowed(id: Long, followed: Boolean)
 
-    /** Sant om exakt det här bytet (samma sälj-/köp-ISIN) redan spelats in [epochDay] — dedupspärr mot upprepad inspelning samma dag. */
-    @Query("SELECT EXISTS(SELECT 1 FROM suggestion_records WHERE sellIsin = :sellIsin AND buyIsin = :buyIsin AND suggestedAtEpochDay = :epochDay)")
-    suspend fun existsForDay(sellIsin: String, buyIsin: String, epochDay: Long): Boolean
+    /**
+     * Sant om exakt det här bytet (samma sälj-/köp-ISIN **och** samma [kind]) redan spelats in
+     * [epochDay] — dedupspärr mot upprepad inspelning samma dag.
+     *
+     * Typen är en del av nyckeln sedan issue #91: samma fondpar kan legitimt föreslås både som
+     * riskplansbyte och som avgiftsbyte, och utan typen hade den ena tyst blockerat den andra —
+     * facit hade då saknat halva historien utan att någonstans säga det.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM suggestion_records
+            WHERE sellIsin = :sellIsin AND buyIsin = :buyIsin AND suggestedAtEpochDay = :epochDay AND kind = :kind
+        )
+        """,
+    )
+    suspend fun existsForDay(sellIsin: String, buyIsin: String, epochDay: Long, kind: String): Boolean
 
     @Insert
     suspend fun insert(record: SuggestionRecordEntity): Long
