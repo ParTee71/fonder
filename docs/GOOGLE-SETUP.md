@@ -11,13 +11,45 @@ eftersom nyckelns SHA-1 ska registreras där.
 | Vad | Var | Krävs för |
 |---|---|---|
 | Release-keystore (`fonder.jks`) + GitHub Secrets | lokalt + GitHub | signerad release-APK |
-| Firebase-projekt + Android-app + `google-services.json` | Firebase Console | Google-inloggning |
+| Android-app + `google-services.json` | Firebase Console | Google-inloggning |
 | OAuth-medgivandeskärm + Drive API + `drive.appdata` | Google Cloud Console | Drive-backup |
 
 Redan klart i repot: `app/build.gradle.kts` läser signeringsuppgifter från
 `local.properties`/miljövariabler, `.github/workflows/release.yml` avkodar keystoren ur
 GitHub Secrets, och `gradle/libs.versions.toml` deklarerar alla beroenden. Det som
 saknas är kontona och nycklarna nedan.
+
+## Fonder ligger i Dagbokens projekt
+
+Fonder läggs till som en **andra Android-app i det befintliga projektet
+`dagboken-711d2`**, inte i ett eget. Det gör steg 4 till en ren verifiering i stället för en
+uppsättning — medgivandeskärmen, Drive API och `drive.appdata`-scopet finns redan där och
+gäller projektet, inte appen.
+Ett Firebase-projekt är samtidigt ett Google Cloud-projekt; en app till i det är en
+OAuth-klient till, inget mer.
+
+Två saker följer med på köpet, och båda måste hanteras:
+
+**1. Medgivandeskärmen är gemensam.** Google visar OAuth-medgivandeskärmens *appnamn* när
+man loggar in — inte Android-appens namn. Loggar man in i Fonder står det alltså
+"Dagboken" i kontoväljaren så länge det är projektets appnamn. Det går att byta till något
+neutralt (steg 4), men då ändras texten för båda apparna. Kosmetiskt, men det är ingen bugg
+när det dyker upp.
+
+**2. Drive-mappen är gemensam.** `appDataFolder` är per *projekt*, inte per Android-app —
+Fonders och Dagbokens säkerhetskopior hamnar i **samma dolda mapp**. Det gör ingen skada
+så länge båda apparna alltid namnrymdar sina filer och alltid filtrerar på sitt eget
+prefix. Dagboken gör redan det (`name contains 'dagboken-backup-'`, även i sin
+gallringsrutin, så den kan inte råka radera Fonders filer). Fonder måste göra samma sak
+åt sitt håll — se steg 5, där det är ett krav och inte en rekommendation.
+
+Vill du hellre ha full isolering skapar du i stället ett eget projekt `fonder` i Firebase
+Console (Google Analytics behövs inte) och sätter upp steg 4 från grunden i det: skapa
+medgivandeskärmen (användartyp **Extern**, appnamn `Fonder`, publiceringsstatus
+**Testing**, din adress som testanvändare), aktivera **Google Drive API** och lägg till
+scopet `drive.appdata`. Du måste också aktivera Google som inloggningsmetod under
+**Authentication → Sign-in method**, som i det gemensamma projektet redan är påslagen.
+Allt annat i guiden är detsamma.
 
 ---
 
@@ -112,24 +144,50 @@ keytool -list -v -keystore app/fonder.jks -alias fonder
 
 ---
 
-## Steg 3 — Firebase-projekt
+## Steg 3 — Lägg till Fonder-appen i Firebase
 
-1. [Firebase Console](https://console.firebase.google.com/) → **Lägg till projekt** →
-   namn `fonder`. Google Analytics behövs inte.
-2. **Lägg till app → Android**
-   - Paketnamn: `se.partee71.fonder` (måste stämma exakt med `applicationId`)
-   - Smeknamn: `Fonder`
-   - SHA-1: klistra in **debug**-fingeravtrycket från steg 2
-3. Ladda ner `google-services.json` → lägg i **`app/google-services.json`**.
-4. **Projektinställningar → Dina appar → Lägg till fingeravtryck** → klistra in
-   **release**-SHA-1. Ladda ner `google-services.json` **igen** — den första saknar
-   releasenyckelns klient.
-5. **Authentication → Kom igång → Sign-in method → Google → Aktivera.**
-   Ange en supportmejladress. Spara.
+Gör hela steget i en följd. Ladda **inte** ner `google-services.json` förrän efter
+punkt 6 — filen speglar läget vid nedladdningen, och laddar du ner den innan
+releasenyckeln är registrerad saknar den den klienten utan att något klagar.
 
-Ett eget projekt (i stället för att lägga Fonder som andra app i `dagboken-711d2`) håller
-användare, kvoter och medgivandeskärm skilda mellan apparna. Det kostar bara att
-medgivandeskärmen i steg 4 måste sättas upp en gång till.
+1. [Firebase Console](https://console.firebase.google.com/) → välj projektet
+   **`dagboken-711d2`** (visas som *Dagboken*). Skapa inget nytt projekt.
+2. Kugghjulet uppe till vänster → **Projektinställningar** (*Project settings*).
+3. Fliken **Allmänt** (*General*) → skrolla till **Dina appar** (*Your apps*) → knappen
+   **Lägg till app** (*Add app*) → Android-ikonen.
+4. Fyll i:
+   | Fält | Värde |
+   |---|---|
+   | Android-paketnamn | `se.partee71.fonder` |
+   | Smeknamn (valfritt) | `Fonder` |
+   | SHA-1 för felsökningssigneringscertifikat | `B6:9E:C9:B9:E9:C8:89:DD:AD:E9:9F:34:12:E8:53:69:20:B3:33:FB` |
+
+   Paketnamnet måste stämma **exakt** med `applicationId` i `app/build.gradle.kts` — det
+   går inte att ändra efteråt, appen får tas bort och läggas till på nytt. Att Dagboken
+   redan ligger i projektet spelar ingen roll; paketnamnen skiljer sig.
+5. **Registrera app**. Guiden erbjuder nu nedladdning och visar Gradle-steg — **hoppa över
+   båda** (`Nästa` → `Nästa` → `Fortsätt till konsolen`). Gradle-delen är redan förberedd i
+   repot, och filen hämtas i punkt 7.
+6. Tillbaka på **Projektinställningar → Allmänt → Dina appar**: leta upp kortet för
+   `se.partee71.fonder` (inte Dagbokens) → **Lägg till fingeravtryck** (*Add fingerprint*)
+   → klistra in **release**-SHA-1 från steg 2 → **Spara**.
+
+   Kortet ska nu lista två fingeravtryck. Har du inte skapat releasenyckeln ännu går det
+   att lägga till senare — men då måste `google-services.json` laddas ner på nytt, och
+   inloggning fungerar inte i release-APK:n förrän dess.
+7. På samma kort: **google-services.json** → ladda ner → lägg filen som
+   **`app/google-services.json`** i repot och checka in den (se nedan).
+8. Kontrollera att Google-inloggning är påslagen för projektet: vänstermenyn →
+   **Build → Authentication → Sign-in method**. **Google** ska stå som *Aktiverad*.
+   Det är den redan om Dagboken loggar in, och inställningen är projektgemensam —
+   rör den inte. Är den mot förmodan av: aktivera, ange supportmejladress, spara, och
+   ladda ner `google-services.json` igen (webbklienten skapas först då).
+
+### Steg 4 blir en verifiering
+
+Medgivandeskärmen, Drive API och `drive.appdata`-scopet gäller projektet och är redan
+uppsatta för Dagboken, så steg 4 är bara att kontrollera att så är fallet — det tar en
+minut och sparar en 403 som annars är svår att förstå.
 
 ### Filen ska checkas in
 
@@ -140,41 +198,80 @@ Innehållet är projektnummer och OAuth-klient-ID:n, som ändå ligger läsbara 
 publicerade APK:n; Google dokumenterar uttryckligen att den får checkas in. Det som
 faktiskt skyddar kontot är SHA-1-kopplingen och Firebase-reglerna, inte filens hemlighet.
 
-Kontrollera att den nedladdade filen innehåller båda klienttyperna:
+Eftersom projektet nu har två appar kan den nedladdade filen innehålla klientposter för
+**både** `se.partee71.dagboken` och `se.partee71.fonder`. Det är ofarligt — pluginet
+väljer posten vars `package_name` matchar `applicationId` och ignorerar resten. Dagbokens
+egen `google-services.json` ska inte röras; den är fortfarande giltig.
+
+Kontrollera vad du faktiskt fick:
 
 ```bash
 python3 - <<'PY'
 import json
 d = json.load(open("app/google-services.json"))
+print("projekt:", d["project_info"]["project_id"])
 for c in d["client"]:
-    print(c["client_info"]["android_client_info"]["package_name"])
+    pkg = c["client_info"]["android_client_info"]["package_name"]
+    print(pkg)
     for o in c["oauth_client"]:
-        print("  client_type", o["client_type"], o.get("android_info", {}).get("certificate_hash"))
+        print("   client_type", o["client_type"],
+              o.get("android_info", {}).get("certificate_hash", ""))
 PY
 ```
 
-- `client_type: 1` — Android-klient, en per registrerat SHA-1 (ska bli **två**: debug + release)
-- `client_type: 3` — webbklient, den som blir `default_web_client_id` och som
-  Credential Manager begär ID-token för
+Kraven på posten för `se.partee71.fonder`:
 
-Saknas `client_type: 3` har Firebase inte skapat någon webbklient — den dyker upp när
-Google-inloggning aktiverats i steg 3.5. Ladda ner filen på nytt efteråt.
+- **två** `client_type: 1` — en Android-klient per registrerat SHA-1 (debug + release).
+  `certificate_hash` är samma fingeravtryck som i steg 2, fast gemener utan kolon.
+- **en** `client_type: 3` — projektets webbklient, den som blir
+  `R.string.default_web_client_id` och som Credential Manager begär ID-token för. Den
+  delas med Dagboken; samma sträng i båda filerna är väntat och rätt.
+
+| Vad du ser | Vad det betyder |
+|---|---|
+| bara **en** `client_type: 1` | release-SHA-1 saknas — punkt 6, ladda sedan ner filen igen |
+| ingen `client_type: 3` | Google-inloggning inte aktiverad i projektet — punkt 8 |
+| `project_id` ≠ `dagboken-711d2` | du står i fel projekt |
+| ingen post alls för `se.partee71.fonder` | appen registrerades med fel paketnamn |
 
 ---
 
 ## Steg 4 — Google Cloud: medgivandeskärm och Drive API
 
-Firebase-projektet **är** ett Google Cloud-projekt. Öppna
-[Google Cloud Console](https://console.cloud.google.com/) och välj projektet `fonder`.
+Firebase-projektet **är** ett Google Cloud-projekt, så allt här är redan uppsatt för
+Dagboken och gäller Fonder automatiskt. Verifiera ändå — ett saknat scope visar sig annars
+först som en 403 långt in i backup-flödet, utan att något säger varför.
 
-1. **APIs & Services → OAuth consent screen**
-   - Användartyp **Extern**
-   - Appnamn `Fonder`, supportmejl och utvecklarmejl = din adress
-   - Publiceringsstatus: låt den stå kvar på **Testing**
-   - **Test users → Lägg till** din egen Google-adress
-2. **APIs & Services → Bibliotek → Google Drive API → Aktivera**
-3. **OAuth consent screen → Data access (Scopes) → Lägg till**
-   `https://www.googleapis.com/auth/drive.appdata`
+Öppna [Google Cloud Console](https://console.cloud.google.com/) och välj projektet
+**`dagboken-711d2`** i projektväljaren högst upp. Kontrollera projekt-ID:t, inte namnet:
+flera projekt kan heta "Dagboken".
+
+> Google har döpt om det här området. **APIs & Services → OAuth consent screen** heter i
+> den nuvarande konsolen **Google Auth Platform**, med flikarna *Overview*, *Branding*,
+> *Audience*, *Clients*, *Data access* och *Verification center*. Båda namnen används
+> nedan.
+
+**1. Medgivandeskärmen (Branding + Audience).** Ska redan finnas.
+
+- *Audience* → **Publishing status: Testing**, och din egen Google-adress under
+  **Test users**. Står den på *In production* utan att appen är verifierad av Google
+  slutar `drive.appdata` fungera — sätt tillbaka den till Testing.
+- *Branding* → **App name**. Det är den här strängen som visas i kontoväljaren när man
+  loggar in i **båda** apparna. Vill du slippa "Dagboken" i Fonders inloggningsruta byter
+  du den till något gemensamt, t.ex. `partee71`. Ändringen slår igenom på Dagboken också,
+  och kan ta några minuter.
+
+**2. Drive API.** *APIs & Services → Enabled APIs & services* → **Google Drive API** ska
+stå i listan. Saknas den: *Library* → sök `Google Drive API` → **Enable**.
+
+**3. Scopet `drive.appdata`.** *Google Auth Platform → Data access* (tidigare *OAuth
+consent screen → Scopes*) → i listan över tillagda scopes ska
+`https://www.googleapis.com/auth/drive.appdata` finnas. Saknas det: **Add or remove
+scopes** → filtrera på `drive.appdata` → kryssa i → **Update** → **Save**.
+
+**4. Klienterna.** *Google Auth Platform → Clients* ska nu innehålla två nya Android-
+klienter för `se.partee71.fonder` (en per SHA-1), utöver Dagbokens och projektets enda
+webbklient. De skapades av steg 3 — du ska inte lägga till dem för hand här.
 
 `drive.appdata` ger appen bara dess egen dolda mapp i användarens Drive — inte
 användarens filer, och inte läsrättigheter till något appen inte själv skrivit. Så länge
@@ -183,8 +280,8 @@ Google-verifiering. Publicerar du appen bredare senare måste medgivandeskärmen
 av Google först.
 
 Scopet begärs vid körning via `Identity.getAuthorizationClient(...)` — separat från
-inloggningen, första gången backupen används. Inloggning i steg 3 räcker alltså inte;
-utan det här steget svarar Drive med 403.
+inloggningen, första gången backupen används. Inloggningen i steg 3 räcker alltså inte;
+utan scopet svarar Drive med 403.
 
 ---
 
@@ -214,6 +311,16 @@ det görs i respektive issue, eftersom `google-services`-pluginet fäller bygget
 - `DriveBackupRepository` implementerar samma `BackupRepository`-interface som
   `LocalBackupRepository` — kontraktet är en **sträng**, så formatet (`BackupPayload`/
   `BackupSerializer`) och rundturstestet är oförändrade. Bara transporten byts.
+- **`appDataFolder` delas med Dagboken** (samma Cloud-projekt). Det är ett datasäkerhetskrav
+  (regel 1), inte en stilfråga:
+  - filnamnen prefixas `fonder-backup-`
+  - **varje** `files().list()` filtrerar på det prefixet —
+    `name contains 'fonder-backup-' and trashed = false`, aldrig en obefiltrerad listning
+  - gallringen ("behåll de N senaste") körs mot den filtrerade listan. Dagboken gör redan
+    så åt sitt håll; en obefiltrerad `drop(n).forEach { delete }` här skulle radera
+    Dagbokens säkerhetskopior utan väg tillbaka.
+  - `trashed = false` behövs för att papperskorgade filer ligger kvar i mappen och annars
+    matchar namnfrågan — en raderad backup skulle räknas som "senaste".
 - `proguard-rules.pro` behöver keeps för Google API-klienten, som annars krymps bort i
   release:
 
@@ -240,4 +347,7 @@ det görs i respektive issue, eftersom `google-services`-pluginet fäller bygget
 | `GetCredentialException: no credentials available` | ingen SHA-1-koppling, eller inget Google-konto på enheten | kontrollera `client_type: 1` för rätt fingeravtryck |
 | Drive svarar 403 | Drive API inte aktiverat, eller scopet inte tillagt | steg 4.2 och 4.3 |
 | Drive-auktoriseringen frågar om och om igen | appen står som Testing → token kort livslängd | förväntat; scopet begärs på nytt vid behov |
+| Kontoväljaren säger "Dagboken" när man loggar in i Fonder | gemensam medgivandeskärm, appnamnet är projektets | förväntat; byt *Branding → App name* i steg 4.1 om det stör |
+| Dagbokens backupfiler dyker upp i Fonders lista | gemensam `appDataFolder`, ofiltrerad listning | prefixfiltrera frågan — se steg 5 |
+| SHA-1:t avvisas: "already in use by another project" | fingeravtrycket är registrerat i ett annat Cloud-projekt | ta bort det där först; ett SHA-1 kan bara ligga i ett projekt |
 | APK:n går inte att installera över en tidigare | annan signeringsnyckel | samma `fonder.jks` som förra släppet, alltid |
