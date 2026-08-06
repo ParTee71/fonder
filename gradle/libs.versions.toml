@@ -18,6 +18,16 @@ coil                    = "2.7.0"
 workManager             = "2.10.0"
 hiltWork                = "1.2.0"
 appcompat               = "1.7.0"
+# Google-inloggning (TP-6) och Drive-backup (TP-7 steg 2) — deklarerade, kopplas in i
+# respektive issue när Firebase-projektet finns (se docs/GOOGLE-SETUP.md). Samma
+# versioner som Dagboken, som kör identisk AGP 8.13.2 / Kotlin 2.1.0.
+firebaseBom             = "33.7.0"
+credentialManager       = "1.3.0"
+googleIdentity          = "1.1.1"
+googleServices          = "4.4.2"
+googleAuthPlayServices  = "21.3.0"
+googleApiClientAndroid  = "2.7.0"
+googleApiServicesDrive  = "v3-rev20241206-2.0.0"
 # UI-beroenden för kommande features (aktiveras i respektive issue)
 # OBS: nyare Vico (2.1+) är byggt mot Kotlin 2.1.21+/2.2.x/2.3.x — inkompatibelt med
 # projektets Kotlin 2.1.0 (Kotlin-metadatats binärversion måste matcha exakt eller lägre).
@@ -79,6 +89,18 @@ pdfbox-android                        = { group = "com.tom-roush",           nam
 vico-compose-m3                      = { group = "com.patrykandpatrick.vico", name = "compose-m3",                    version.ref = "vico" }
 compose-shimmer                      = { group = "com.valentinilk.shimmer",  name = "compose-shimmer",                version.ref = "shimmer" }
 androidx-compose-material3-adaptive  = { group = "androidx.compose.material3.adaptive", name = "adaptive",            version.ref = "material3Adaptive" }
+# Firebase Auth + Credential Manager (Google-inloggning, TP-6) — Credential Manager ersätter
+# den utfasade GoogleSignIn-API:n; `googleid` bär GetSignInWithGoogleOption/GoogleIdTokenCredential
+firebase-bom                         = { group = "com.google.firebase",      name = "firebase-bom",                   version.ref = "firebaseBom" }
+firebase-auth                        = { group = "com.google.firebase",      name = "firebase-auth" }
+credentials                          = { group = "androidx.credentials",     name = "credentials",                    version.ref = "credentialManager" }
+credentials-play-services            = { group = "androidx.credentials",     name = "credentials-play-services-auth", version.ref = "credentialManager" }
+googleid                             = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleIdentity" }
+# Google Drive (molnbackup, TP-7 steg 2) — play-services-auth krävs fortfarande för
+# Identity.getAuthorizationClient, som begär drive.appdata-scopet skilt från inloggningen
+google-auth-play-services            = { group = "com.google.android.gms",   name = "play-services-auth",             version.ref = "googleAuthPlayServices" }
+google-api-client-android            = { group = "com.google.api-client",    name = "google-api-client-android",      version.ref = "googleApiClientAndroid" }
+google-api-services-drive            = { group = "com.google.apis",          name = "google-api-services-drive",      version.ref = "googleApiServicesDrive" }
 # Test
 junit                                = { group = "junit",                    name = "junit",                          version.ref = "junit" }
 androidx-junit-ext                   = { group = "androidx.test.ext",        name = "junit",                          version.ref = "junitExt" }
@@ -96,3 +118,6 @@ kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",       versi
 ksp                  = { id = "com.google.devtools.ksp",                   version.ref = "ksp" }
 hilt                 = { id = "com.google.dagger.hilt.android",            version.ref = "hilt" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# Appliceras först i auth-issuet: pluginet fäller bygget så länge app/google-services.json
+# saknas, och filen kommer först när Firebase-projektet är uppsatt (docs/GOOGLE-SETUP.md)
+google-services      = { id = "com.google.gms.google-services",            version.ref = "googleServices" }

@@ -2,7 +2,13 @@
 *.jks
 *.keystore
 local.properties
-google-services.json
+
+# OBS: app/google-services.json är medvetet INTE ignorerad. google-services-pluginet
+# läser den vid varje bygge (den genererar bl.a. default_web_client_id), så utan filen
+# i repot går CI-bygget inte att köra alls. Innehållet är projektnummer och
+# OAuth-klient-ID:n som ändå ligger läsbara i den publicerade APK:n — skyddet ligger i
+# SHA-1-kopplingen till signeringsnyckeln, inte i att filen är hemlig.
+# Se docs/GOOGLE-SETUP.md.
 
 # Undantag: fast debug-keystore, medvetet incheckad så alla CI-byggda debug-APK:er
 # signeras med samma nyckel och kan installeras som uppgradering av varandra
