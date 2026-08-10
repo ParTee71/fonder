@@ -50,7 +50,9 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Bytesplan i ISK: rangordnade fondbyten mot målfördelningen, med facit-inspelning (SET-4/HEM-8, #70)
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
 - [ ] Google Drive-backup — steg 2 av TP-7, väntar på en OAuth-klient med `drive.appdata`
+      ([uppsättning](docs/GOOGLE-SETUP.md))
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
+      ([uppsättning](docs/GOOGLE-SETUP.md))
 
 ---
 
@@ -76,6 +78,37 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 ```
 
 Öppna i Android Studio och kör på en enhet/emulator (API 30+).
+
+### Google Services
+
+Google-inloggning (TP-6) och Drive-backup (TP-7 steg 2) kräver en `google-services.json`
+från Firebase Console i `app/`. Filen är **incheckad** — `google-services`-pluginet läser
+den vid varje bygge, så utan den i repot går CI inte att köra. Beroendena finns
+deklarerade i `gradle/libs.versions.toml` men kopplas in först i respektive issue.
+
+Uppsättningen — Firebase-projekt, SHA-1-fingeravtryck, OAuth-medgivandeskärm och Drive
+API — är dokumenterad steg för steg i **[docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md)**.
+
+---
+
+## Releasebygge och signering
+
+Releasebygget signeras med `app/fonder.jks` (git-ignorerad). Lösenord läses ur
+`local.properties` eller miljövariabler — saknas de byggs `release` osignerat i stället
+för att fela.
+
+**local.properties (lokalt, git-ignorerad):**
+```properties
+signing.storePassword=<lösenord>
+signing.keyAlias=fonder
+signing.keyPassword=<lösenord>
+```
+
+**GitHub Secrets (CI):** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`,
+`SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. `.github/workflows/release.yml` avkodar
+keystoren, bygger och publicerar en signerad APK — hela släppet går därmed att köra från
+telefonen. Se [docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md) för hur nyckeln skapas och
+läggs upp.
 
 ---
 
