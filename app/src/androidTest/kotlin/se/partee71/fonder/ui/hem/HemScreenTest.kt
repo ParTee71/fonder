@@ -149,7 +149,11 @@ class HemScreenTest {
         composeRule.onNodeWithText("Flaggad Fond").assertExists()
         composeRule.onNodeWithText("Under 200-dagars snitt").assertExists()
 
-        composeRule.onNodeWithText("Flaggad Fond").performClick()
+        // Skrolla fram raden innan klicket: `assertExists()` passerar för innehåll som är
+        // komponerat men avklippt (UI-5, issue #63), och ett klick på en rad utanför
+        // skärmen landar aldrig. Kortet ligger fjärde på Hem sedan avkastningsdiagrammet
+        // (HEM-9) lades in som tredje.
+        composeRule.onNodeWithText("Flaggad Fond").performScrollTo().performClick()
         assertEquals("SHB0000442", clickedFundId)
     }
 
@@ -232,7 +236,8 @@ class HemScreenTest {
         composeRule.onNodeWithText("Billig Fond").assertExists()
         composeRule.onNodeWithText("200,00 kr", substring = true).assertExists()
 
-        composeRule.onNodeWithText("Billig Fond").performClick()
+        // Samma skäl som i analyskortets test ovan — avgiftskortet ligger femte sedan HEM-9.
+        composeRule.onNodeWithText("Billig Fond").performScrollTo().performClick()
         assertEquals("BIL", clickedFundId)
     }
 
