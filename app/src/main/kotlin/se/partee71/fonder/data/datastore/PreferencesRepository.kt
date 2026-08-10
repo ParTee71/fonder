@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -46,7 +47,9 @@ class PreferencesRepository @Inject constructor(
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
+    /** Issue #96:s ensamma ISIN — läses fortfarande, skrivs aldrig mer. Se [benchmark]. */
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
+    private val benchmarkKey = stringPreferencesKey("benchmark_components")
 
     val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -114,22 +117,39 @@ class PreferencesRepository @Inject constructor(
     }
 
     /**
-     * ISIN för den referensfond portföljens avkastning jämförs mot (HEM-10), null tills
-     * bakgrundsjobbet hunnit välja en. Valet görs av
+     * Referensblandningen portföljens avkastning jämförs mot (HEM-10) — tom lista tills
+     * bakgrundsjobbet hunnit välja. Valet görs av
      * [se.partee71.fonder.domain.usecase.IndexBenchmarkSelector] ur källans katalog och sparas
-     * här av just det skälet: hade det härletts på nytt vid varje läsning kunde referensfonden
+     * här av just det skälet: hade det härletts på nytt vid varje läsning kunde referensen
      * bytas så fort katalogen ändrades, och jämförelsekurvan hade ritats om utan att något
      * hänt i portföljen.
      *
      * **Härledd cache-metadata, inte ett användarval** — samma kategori som
      * [lastPriceSyncEpochMillis]/[fundFilterVocabulary] och därför medvetet utanför
-     * backup-kontraktet (NFR-1): går den förlorad väljs samma fond ut igen ur samma katalog.
-     * Den dagen användaren själv får välja referensfond blir det ett annat, genuint fält som
-     * ska in i kontraktet.
+     * backup-kontraktet (NFR-1): går den förlorad väljs samma fonder ut igen ur samma katalog.
+     * Den dagen användaren själv får välja referens (issue #102) blir det ett annat, genuint
+     * fält som ska in i kontraktet.
      */
-    val benchmarkIsin: Flow<String?> = preferences.map { prefs -> prefs[benchmarkIsinKey] }
+    val benchmark: Flow<List<BenchmarkComponentRef>> = preferences.map { prefs ->
+        val stored = prefs[benchmarkKey]
+            ?.let { runCatching { Json.decodeFromString(ListSerializer(BenchmarkComponentRef.serializer()), it) }.getOrNull() }
+        // Bakåtkompatibilitet: issue #96 sparade ett ensamt ISIN. Det läses som en
+        // enkomponentsblandning i stället för att kastas — annars hade uppgraderingen tappat
+        // referensfonden och tvingat fram en ny källfråga och en full backfill i onödan.
+        stored ?: prefs[benchmarkIsinKey]?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: emptyList()
+    }
 
-    suspend fun setBenchmarkIsin(isin: String) {
-        dataStore.edit { it[benchmarkIsinKey] = isin }
+    suspend fun setBenchmark(components: List<BenchmarkComponentRef>) {
+        dataStore.edit { prefs ->
+            prefs[benchmarkKey] = Json.encodeToString(ListSerializer(BenchmarkComponentRef.serializer()), components)
+            prefs.remove(benchmarkIsinKey)
+        }
     }
 }
+
+/**
+ * En sparad del av Hems referensblandning (HEM-10): fondens ISIN och dess vikt. Vikterna
+ * summerar till 1,0 — se [se.partee71.fonder.domain.usecase.IndexBenchmarkSelector.Benchmark].
+ */
+@Serializable
+data class BenchmarkComponentRef(val isin: String, val weight: Double)

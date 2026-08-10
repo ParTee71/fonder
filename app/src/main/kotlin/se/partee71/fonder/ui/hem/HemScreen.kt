@@ -159,6 +159,12 @@ private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerfo
 }
 
 /**
+ * Under den här andelen oklassificerat värde sägs ingenting: en blandning som vilar på 95 % av
+ * portföljen är i praktiken exakt, och en notis om varje blandfond hade blivit brus.
+ */
+private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
+
+/**
  * Portföljens totala avkastning i procent över tid (HEM-9, issue #96) med indexjämförelsen som
  * skuggportfölj (HEM-10) — samma delade [FundLineChart] som Fonddetalj (regel 4), i procentläge
  * ([ChartValueAxis.PROCENT]) så y-axeln alltid visar nollinjen och serierna inte indexeras.
@@ -209,6 +215,20 @@ private fun ReturnChartCard(state: HemUiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
+            // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
+            // (HEM-10) — inte döljas bakom en exakt procentsats i teckenförklaringen.
+            if (benchmark != null && benchmark.unclassifiedFraction >= UNCLASSIFIED_NOTICE_THRESHOLD) {
+                Text(
+                    stringResource(
+                        R.string.format_hem_return_chart_benchmark_unclassified,
+                        MoneyFormat.percent(benchmark.unclassifiedFraction),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             if (state.returnSeries.partial) {
                 Text(
                     stringResource(R.string.hem_return_chart_partial),

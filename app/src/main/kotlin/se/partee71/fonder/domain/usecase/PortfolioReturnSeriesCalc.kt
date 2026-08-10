@@ -42,8 +42,14 @@ object PortfolioReturnSeriesCalc {
         }
     }
 
-    /** Fond-id för den syntetiska skuggportföljen i [benchmark] — aldrig en riktig fonds identitet. */
+    /** Fond-id-prefix för den syntetiska skuggportföljen i [benchmark] — aldrig en riktig fonds identitet. */
     private const val BENCHMARK_FUND_ID = "__benchmark__"
+
+    /**
+     * En del av referensen: hur stor andel av varje insättning som läggs här, och fondens
+     * kurshistorik. Vikterna förutsätts summera till 1,0 (se [IndexBenchmarkSelector.Benchmark]).
+     */
+    data class BenchmarkComponent(val weight: Double, val history: List<FundPrice>)
 
     /**
      * Avkastningsserien för hela portföljen.
@@ -115,13 +121,17 @@ object PortfolioReturnSeriesCalc {
 
     /**
      * Skuggportföljen (HEM-10): **samma** insättningar och uttag, samma dagar och samma
-     * kronbelopp, lagda i referensfonden i stället. Andelarna räknas om till referensfondens
-     * NAV den dagen (`belopp / NAV`) och serien räknas sedan med exakt samma maskineri som
-     * [compute] — det är hela poängen: två kurvor med samma mått och samma kassaflöden, där
-     * skillnaden dem emellan är alternativkostnaden för de egna fondvalen, inte en artefakt av
-     * när pengarna sattes in.
+     * kronbelopp, lagda i referensen i stället. Varje insättning delas efter [components]
+     * vikter, och varje del köper andelar till respektive fonds NAV den dagen (`belopp / NAV`).
+     * Serien räknas sedan med exakt samma maskineri som [compute] — det är hela poängen: två
+     * kurvor med samma mått och samma kassaflöden, där skillnaden dem emellan är
+     * alternativkostnaden för de egna fondvalen, inte en artefakt av när pengarna sattes in.
      *
-     * Null om referensfondens historik inte når tillbaka till **varje** transaktionsdag: en
+     * Blandningen speglar portföljens aktieandel (issue #101), så skillnaden inte bara mäter
+     * att portföljen råkar ha en annan tillgångsfördelning än referensen — se
+     * [IndexBenchmarkSelector].
+     *
+     * Null om någon komponents historik inte når tillbaka till **varje** transaktionsdag: en
      * skuggportfölj som saknar sitt första köp är inte samma kassaflöden, och en jämförelse som
      * tyst hoppar över en insättning är sämre än ingen jämförelse alls (samma
      * hellre-markerat-än-gissat-princip som HEM-2).
@@ -130,24 +140,38 @@ object PortfolioReturnSeriesCalc {
      * på köpsidan ([RealizedGainCalculator]), och att låtsas att ett fondbyte i en indexfond
      * hade kostat exakt lika mycket vore en gissning.
      */
-    fun benchmark(transactions: List<Transaction>, benchmarkHistory: List<FundPrice>): Result? {
-        if (transactions.isEmpty() || benchmarkHistory.isEmpty()) return null
+    fun benchmark(transactions: List<Transaction>, components: List<BenchmarkComponent>): Result? {
+        if (transactions.isEmpty() || components.isEmpty()) return null
+        if (components.any { it.history.isEmpty() }) return null
 
-        val sorted = benchmarkHistory.sortedBy { it.epochDay }
-        val synthetic = transactions.sortedBy { it.epochDay }.map { transaction ->
-            val nav = sorted.lastOrNull { it.epochDay <= transaction.epochDay }?.nav ?: return null
-            if (nav <= 0.0) return null
-            transaction.copy(
-                fundId = BENCHMARK_FUND_ID,
-                shares = transaction.amount / nav,
-                pricePerShare = nav,
-                fee = 0.0,
-            )
+        val sortedTransactions = transactions.sortedBy { it.epochDay }
+        val funds = mutableListOf<Fund>()
+        val historyByFundId = mutableMapOf<String, List<FundPrice>>()
+        val synthetic = mutableListOf<Transaction>()
+
+        // Varje komponent blir en egen syntetisk fond, så den viktade skuggportföljen räknas av
+        // exakt samma maskineri som den riktiga: FIFO, framåtfyllda kurser och allt. En
+        // enkomponentsblandning ger därför per konstruktion samma kurva som före issue #101.
+        components.forEachIndexed { index, component ->
+            val fundId = "$BENCHMARK_FUND_ID$index"
+            val sorted = component.history.sortedBy { it.epochDay }
+            funds += Fund(fundId = fundId, name = fundId)
+            historyByFundId[fundId] = sorted.map { it.copy(fundId = fundId) }
+
+            for (transaction in sortedTransactions) {
+                val nav = sorted.lastOrNull { it.epochDay <= transaction.epochDay }?.nav ?: return null
+                if (nav <= 0.0) return null
+                val amount = transaction.amount * component.weight
+                synthetic += transaction.copy(
+                    fundId = fundId,
+                    shares = amount / nav,
+                    pricePerShare = nav,
+                    fee = 0.0,
+                )
+            }
         }
 
-        val fund = Fund(fundId = BENCHMARK_FUND_ID, name = BENCHMARK_FUND_ID)
-        val history = sorted.map { it.copy(fundId = BENCHMARK_FUND_ID) }
-        return compute(listOf(fund), synthetic, mapOf(BENCHMARK_FUND_ID to history))
+        return compute(funds, synthetic, historyByFundId)
     }
 
     /**

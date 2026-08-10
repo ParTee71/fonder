@@ -33,7 +33,8 @@
     <string name="hem_return_chart_title">Avkastning över tid</string>
     <string name="hem_return_chart_series_portfolio">Din portfölj</string>
     <string name="hem_return_chart_explain">Utvecklingen under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Välj Allt för hela innehavstiden; då slutar din kurva på samma procent som visas överst. Insättningar markeras — nya pengar till dagens kurs flyttar procenten utan att något stigit eller fallit.</string>
-    <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, i den fonden i stället. Skatt och courtage ingår inte.</string>
+    <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, där i stället. Blandningen speglar din nuvarande fördelning mellan aktier och räntor. Skatt och courtage ingår inte.</string>
+    <string name="format_hem_return_chart_benchmark_unclassified">%1$s av portföljen är blandfonder eller fonder utan känd typ och ingår inte i viktningen — jämförelsen är då en grov uppskattning.</string>
     <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
     <string name="hem_return_chart_partial">Delvis osäker: någon fond saknar kurs för delar av perioden och är utelämnad de dagarna.</string>
     <string name="hem_return_chart_insufficient">För lite kurshistorik för att rita en kurva än. Den fylls på allt eftersom kurserna uppdateras.</string>

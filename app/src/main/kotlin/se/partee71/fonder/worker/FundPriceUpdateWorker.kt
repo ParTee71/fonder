@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -21,6 +22,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 
@@ -188,10 +190,11 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * (`findFundByIsin` ger per kontrakt `Fund.fundId == isin`, TP-13/TP-14).
          *
          * Valet görs **en gång** och sparas sedan
-         * ([se.partee71.fonder.data.datastore.PreferencesRepository.benchmarkIsin]). Att välja om
+         * ([se.partee71.fonder.data.datastore.PreferencesRepository.benchmark]). Att välja om
          * vid varje körning hade låtit en katalogändring byta referensfond bakom ryggen på
          * användaren och rita om hela jämförelsekurvan utan att något hänt i portföljen — och
-         * kostat en källfråga i onödan varje gång.
+         * kostat en källfråga i onödan varje gång. Sedan issue #101 är referensen dessutom en
+         * viktad blandning, se [resolveBenchmark].
          *
          * Utan transaktioner finns ingen portfölj att jämföra och ingen historikhorisont att
          * hämta mot: då görs ingenting alls, inte ens valet.
@@ -205,15 +208,53 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             val transactions = transactionRepository.observeTransactions().first()
             if (transactions.isEmpty()) return
 
-            val isin = preferencesRepository.benchmarkIsin.first()
-                ?: IndexBenchmarkSelector.select(fundMetadataRepository.query(IndexBenchmarkSelector.QUERY))
-                    ?.also { preferencesRepository.setBenchmarkIsin(it.isin) }
-                    ?.isin
-                ?: return
+            val components = preferencesRepository.benchmark.first().ifEmpty {
+                resolveBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository)
+                    ?.also { preferencesRepository.setBenchmark(it) }
+                    .orEmpty()
+            }
+            if (components.isEmpty()) return
 
             // Sedan portföljens första köp: skuggportföljen måste kunna spegla *varje*
             // insättning, annars ger PortfolioReturnSeriesCalc.benchmark ingen kurva alls.
-            fundPriceRepository.refreshSince(isin, isin, LocalDate.ofEpochDay(transactions.minOf { it.epochDay }))
+            val since = LocalDate.ofEpochDay(transactions.minOf { it.epochDay })
+            components.forEach { component ->
+                fundPriceRepository.refreshSince(component.isin, component.isin, since)
+            }
+        }
+
+        /**
+         * Väljer referensblandningen (HEM-10, issue #101) — aktieandelen ur portföljens egen
+         * fondtypsfördelning (POR-9), och sedan en billig indexfond per behövd del.
+         *
+         * Två källfrågor i stället för en, men bara den **första** gången: valet sparas, och
+         * nästa körning hoppar direkt till att hålla kurserna färska. Räntefrågan hoppas över
+         * helt för en ren aktieportfölj, som är normalfallet.
+         */
+        private suspend fun resolveBenchmark(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+        ): List<BenchmarkComponentRef>? {
+            val funds = transactionRepository.observeFunds().first()
+            val holdings = PortfolioCalc.computeHoldings(funds, transactionRepository.observeTransactions().first())
+            if (holdings.isEmpty()) return null
+
+            val prices = fundPriceRepository.observeLatestPrices(holdings.map { it.fund.fundId }).first()
+            val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
+            val metadataByIsin = fundMetadataRepository.metadataFor(enriched.mapNotNull { it.fund.isin })
+            val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
+            val split = IndexBenchmarkSelector.exposureSplit(exposure.byType)
+
+            val equityCandidates = fundMetadataRepository.query(IndexBenchmarkSelector.EQUITY_QUERY)
+            val bondCandidates = if (1.0 - split.equityShare >= IndexBenchmarkSelector.MIN_COMPONENT_WEIGHT) {
+                fundMetadataRepository.query(IndexBenchmarkSelector.BOND_QUERY)
+            } else {
+                emptyList()
+            }
+
+            val benchmark = IndexBenchmarkSelector.select(equityCandidates, bondCandidates, split.equityShare) ?: return null
+            return benchmark.components.map { BenchmarkComponentRef(isin = it.metadata.isin, weight = it.weight) }
         }
 
         /**
