@@ -142,27 +142,22 @@ fun FundLineChart(
     // vars historik slutar en annan dag hade annars fått ett förskjutet fönster — två kurvor
     // över olika tidsspann ser ut som en jämförelse men är det inte.
     val normalized = remember(windowedPoints, comparisonSeries, valueAxis) {
-        if (comparisonSeries.isEmpty()) {
-            ChartSeriesNormalizer.Result(listOf(windowedPoints), indexed = false, partial = false, baseEpochDay = null)
-        } else {
-            val from = windowedPoints.minOfOrNull { it.first }
-            val windowedComparisons = comparisonSeries.map { series ->
-                if (from == null) series.points else series.points.filter { it.first >= from }
-            }
-            val all = listOf(windowedPoints) + windowedComparisons
-            when (valueAxis) {
-                ChartValueAxis.KRONOR -> ChartSeriesNormalizer.index(all)
-                // Indexering till 100 löser att två *kurser* inte går att jämföra på en gemensam
-                // y-axel. Två avkastningskurvor är redan samma enhet, och att indexera dem hade
-                // gjort dem relativa mot periodens första dag — precis den skillnad jämförelsen
-                // finns för (HEM-10) hade då räknats bort utan att något syntes.
-                ChartValueAxis.PROCENT -> ChartSeriesNormalizer.Result(
-                    series = all.map { serie -> serie.sortedBy { it.first } },
-                    indexed = false,
-                    partial = false,
-                    baseEpochDay = null,
-                )
-            }
+        val from = windowedPoints.minOfOrNull { it.first }
+        val windowedComparisons = comparisonSeries.map { series ->
+            if (from == null) series.points else series.points.filter { it.first >= from }
+        }
+        val all = listOf(windowedPoints) + windowedComparisons
+        when {
+            // Avkastningskurvor nollställs mot periodens första gemensamma dag, så alla kurvor
+            // startar på 0 % där. Utan det ritas två *ackumulerade* avkastningar sedan
+            // respektive start som parallella band på olika höjd, och den fråga en enmånadsvy
+            // ställer — vilken växte mest den här månaden? — går inte att läsa ur bilden.
+            valueAxis == ChartValueAxis.PROCENT -> ChartSeriesNormalizer.rebaseReturns(all)
+            // Rå NAV går inte att jämföra mellan två fonder på en gemensam y-axel; en ensam
+            // kurva ska däremot visa fondens verkliga kurs i kronor (se ChartSeriesNormalizer).
+            comparisonSeries.isEmpty() ->
+                ChartSeriesNormalizer.Result(listOf(windowedPoints), indexed = false, partial = false, baseEpochDay = null)
+            else -> ChartSeriesNormalizer.index(all)
         }
     }
     val primaryPoints = normalized.series.firstOrNull().orEmpty()
