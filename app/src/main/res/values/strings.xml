@@ -34,7 +34,7 @@
     <string name="hem_return_chart_series_portfolio">Din portfölj</string>
     <string name="hem_return_chart_explain">Samma mått som procenten överst: värdet mot vad du betalat för de andelar du fortfarande äger. Insättningar markeras i diagrammet — nya pengar till dagens kurs flyttar procenten utan att något stigit eller fallit.</string>
     <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, i den fonden i stället. Skatt och courtage ingår inte.</string>
-    <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfondens kurshistorik hämtas i bakgrunden och dyker upp här när den är på plats.</string>
+    <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
     <string name="hem_return_chart_partial">Delvis osäker: någon fond saknar kurs för delar av perioden och är utelämnad de dagarna.</string>
     <string name="hem_return_chart_insufficient">För lite kurshistorik för att rita en kurva än. Den fylls på allt eftersom kurserna uppdateras.</string>
 

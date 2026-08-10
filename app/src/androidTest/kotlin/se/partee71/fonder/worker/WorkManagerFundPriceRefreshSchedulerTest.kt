@@ -116,4 +116,34 @@ class WorkManagerFundPriceRefreshSchedulerTest {
         assertTrue(scanInfos.first().state != WorkInfo.State.CANCELLED)
         assertEquals(1, refreshInfos.size)
     }
+
+    @Test
+    fun triggerBenchmarkScan_koar_under_eget_namn() {
+        scheduler.triggerBenchmarkScan()
+
+        val infos = workManager.getWorkInfosForUniqueWork(WorkManagerFundPriceRefreshScheduler.BENCHMARK_WORK_NAME).get()
+        assertEquals(1, infos.size)
+        assertEquals(WorkInfo.State.ENQUEUED, infos.first().state)
+    }
+
+    @Test
+    fun triggerBenchmarkScan_dubbelanropas_inte_tack_vare_KEEP() {
+        // Hem ber om referensfonden när ingen är vald; två snabba anrop får inte ge två
+        // källfrågor och två backfills.
+        scheduler.triggerBenchmarkScan()
+        scheduler.triggerBenchmarkScan()
+
+        val infos = workManager.getWorkInfosForUniqueWork(WorkManagerFundPriceRefreshScheduler.BENCHMARK_WORK_NAME).get()
+        assertEquals(1, infos.size)
+    }
+
+    @Test
+    fun manuell_uppdatering_avbryter_inte_en_koad_referensfondsskanning() {
+        scheduler.triggerBenchmarkScan()
+        scheduler.triggerManualRefresh()
+
+        val scanInfos = workManager.getWorkInfosForUniqueWork(WorkManagerFundPriceRefreshScheduler.BENCHMARK_WORK_NAME).get()
+        assertEquals(1, scanInfos.size)
+        assertTrue(scanInfos.first().state != WorkInfo.State.CANCELLED)
+    }
 }

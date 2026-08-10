@@ -174,6 +174,9 @@ class HemViewModel @Inject constructor(
     private var metadataJob: Job? = null
     private var metadataIsins: List<String>? = null
 
+    /** Se [requestBenchmarkIfMissing] — flödet emitterar om vid varje kursändring, begäran ska ändå bara gå en gång. */
+    private var benchmarkScanRequested = false
+
     private fun refreshMetadata(isins: List<String>) {
         val distinct = isins.distinct().sorted()
         if (distinct == metadataIsins) return
@@ -212,6 +215,7 @@ class HemViewModel @Inject constructor(
                     )
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
+                requestBenchmarkIfMissing(currentSettings.benchmarkIsin, hasHoldings = enriched.isNotEmpty())
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
                 val switchPlan = SwitchPlanResolver.resolve(currentSettings.accountType, latestBatch, metadataByIsin, today)
@@ -302,6 +306,24 @@ class HemViewModel @Inject constructor(
                 .filter { it.analysis.status == FundAnalysisCalc.SignalLevel.GUL || it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
                 .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD },
         )
+    }
+
+    /**
+     * Ber bakgrundsjobbet välja referensfond (HEM-10) när ingen är vald än. Bara backstopen
+     * satte tidigare den skanningen, så en ny installation eller uppgradering visade ingen
+     * indexkurva alls förrän en körning råkat passera — upp till ett halvt dygn av "Ingen
+     * indexjämförelse än" utan att något var fel.
+     *
+     * Högst en begäran per ViewModel-livstid, och bara med innehav: skanningen kostar en
+     * källfråga plus en backfill av referensfondens historik, och flödet emitterar om vid varje
+     * kursändring. Misslyckas den (källan nere, ingen global indexfond i katalogen) står
+     * `benchmarkIsin` kvar som null och nästa appstart frågar igen — inget tyst förevigat
+     * misslyckande, men heller ingen omförsökssnurra som pollar källan.
+     */
+    private fun requestBenchmarkIfMissing(benchmarkIsin: String?, hasHoldings: Boolean) {
+        if (benchmarkIsin != null || !hasHoldings || benchmarkScanRequested) return
+        benchmarkScanRequested = true
+        fundPriceRefreshScheduler.triggerBenchmarkScan()
     }
 
     /**

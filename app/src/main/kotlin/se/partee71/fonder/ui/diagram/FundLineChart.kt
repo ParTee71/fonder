@@ -71,7 +71,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToLong
 
 /** En namngiven kursserie att rita bredvid innehavets egen i [FundLineChart] (ANA-11, issue #85). */
@@ -80,13 +79,14 @@ data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
 /**
  * Vad y-värdena i [FundLineChart] betyder — avgör axelformatering, intervall och beskrivning.
  *
- * [KRONOR] är fondkurser (NAV): alltid positiva, sällan i närheten av noll, och intervallet pads
- * därför runt datans egna min/max (se [PriceRangeProvider], issue #49).
+ * [KRONOR] är fondkurser (NAV) och [PROCENT] avkastning som andel (0.12 = +12 %), t.ex.
+ * portföljens avkastningskurva på Hem (HEM-9). Skillnaden ligger i **etiketterna**, inte i
+ * intervallet: båda pads runt datans egna min/max (se [PriceRangeProvider], issue #49), så
+ * rörelsen fyller diagramhöjden i stället för att tryckas ihop mot en fast referenslinje. Att en
+ * avkastningskurva ligger plus eller minus syns på axelns tecken (`+12,3 %` / `−5,0 %`) — den
+ * behöver alltså inte tvinga in nollinjen i bilden, och gör det inte heller.
  *
- * [PROCENT] är avkastning som andel (0.12 = +12 %), t.ex. portföljens avkastningskurva på Hem
- * (HEM-9). Där gäller det omvända: **nollinjen måste alltid synas**, annars går det inte att se
- * om kurvan ligger plus eller minus — en förlustkurva som fyller diagrammets höjd ser annars ut
- * precis som en vinstkurva. Serier i procentläge indexeras heller aldrig (se [FundLineChart]).
+ * Serier i procentläge indexeras aldrig (se [FundLineChart]).
  */
 enum class ChartValueAxis { KRONOR, PROCENT }
 
@@ -236,13 +236,7 @@ fun FundLineChart(
         key(period) {
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(
-                        lineProvider = lineProvider,
-                        rangeProvider = when (valueAxis) {
-                            ChartValueAxis.KRONOR -> PriceRangeProvider
-                            ChartValueAxis.PROCENT -> ReturnRangeProvider
-                        },
-                    ),
+                    rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
                     startAxis = when (valueAxis) {
                         ChartValueAxis.KRONOR -> VerticalAxis.rememberStart()
                         ChartValueAxis.PROCENT -> VerticalAxis.rememberStart(valueFormatter = PercentValueFormatter)
@@ -435,33 +429,6 @@ internal object PriceRangeProvider : CartesianLayerRangeProvider {
     private fun padding(minY: Double, maxY: Double): Double {
         val range = maxY - minY
         return if (range > 0.0) range * PADDING_FRACTION else max(abs(maxY), 1.0) * PADDING_FRACTION
-    }
-}
-
-/**
- * Y-intervallet för en **avkastningskurva** (HEM-9) — motsatsen till [PriceRangeProvider]s
- * problem: här måste nollinjen alltid vara med. Utan den skalas kurvan till sitt eget min/max,
- * och en portfölj som legat mellan −8 % och −3 % fyller diagramhöjden på exakt samma sätt som en
- * som legat mellan +3 % och +8 % — diagrammet slutar då svara på den första fråga man ställer
- * till det. Marginalen läggs runt det intervall som faktiskt visas (inklusive noll), så kurvan
- * ändå inte klistras mot kanten.
- */
-internal object ReturnRangeProvider : CartesianLayerRangeProvider {
-    override fun getMinY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
-        min(minY, 0.0) - padding(minY, maxY)
-
-    override fun getMaxY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
-        max(maxY, 0.0) + padding(minY, maxY)
-
-    /** Andel av det visade spannet som läggs till som marginal ovanför/under. */
-    private const val PADDING_FRACTION = 0.1
-
-    /** Marginal för en helt platt kurva (t.ex. en enda punkt) — en procentenhet, så linjen inte hamnar exakt på kanten. */
-    private const val FLAT_PADDING = 0.01
-
-    private fun padding(minY: Double, maxY: Double): Double {
-        val span = max(maxY, 0.0) - min(minY, 0.0)
-        return if (span > 0.0) span * PADDING_FRACTION else FLAT_PADDING
     }
 }
 

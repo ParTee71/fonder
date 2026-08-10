@@ -61,6 +61,7 @@ class RiskProfilViewModelTest {
         override fun triggerSwitchPlanScan() {
             switchPlanScans++
         }
+        override fun triggerBenchmarkScan() {}
         override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
     }
 
