@@ -1197,6 +1197,39 @@ class HemViewModelTest {
         }
     }
 
+    @Test
+    fun `eget val av referens vinner over appens automatiska`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+        priceHistoryByFundId = priceHistoryByFundId +
+            (BENCHMARK_ISIN to listOf(
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+            )) +
+            (BOND_ISIN to listOf(
+                FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 130.0),
+            ))
+        metadataByIsin = mapOf(
+            BENCHMARK_ISIN to indexFundMetadata(),
+            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Mitt val"),
+        )
+        // Appens val: den automatiska blandningen. Användarens val: en helt annan fond.
+        preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
+        preferencesRepository.setChosenBenchmarkIsin(BOND_ISIN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+
+            val benchmark = state.benchmarkSeries!!
+            assertEquals("Mitt val", benchmark.fundName)
+            assertEquals(0.30, benchmark.points.last().second, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = FundMetadata(
         isin = isin,
         name = name,

@@ -208,11 +208,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             val transactions = transactionRepository.observeTransactions().first()
             if (transactions.isEmpty()) return
 
-            val components = preferencesRepository.benchmark.first().ifEmpty {
-                resolveBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository)
-                    ?.also { preferencesRepository.setBenchmark(it) }
-                    .orEmpty()
-            }
+            // Eget val (issue #102) gäller före allt annat och kostar ingen källfråga: fonden
+            // är redan utpekad, bara kurshistoriken behöver hämtas.
+            val chosen = preferencesRepository.chosenBenchmarkIsin.first()
+            val components = chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) }
+                ?: preferencesRepository.benchmark.first().ifEmpty {
+                    resolveBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository)
+                        ?.also { preferencesRepository.setBenchmark(it) }
+                        .orEmpty()
+                }
             if (components.isEmpty()) return
 
             // Sedan portföljens första köp: skuggportföljen måste kunna spegla *varje*

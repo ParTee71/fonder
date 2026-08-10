@@ -38,6 +38,13 @@ data class BackupPayload(
     val riskProfile: RiskProfile? = null,
     val accountType: AccountType? = null,
     val themeMode: ThemeMode = ThemeMode.AUTO,
+    /**
+     * Referensfonden användaren själv valt för Hems indexjämförelse (HEM-10, issue #102), null
+     * om appen väljer. Ett **val**, inte något härlett — därför med, till skillnad från den
+     * automatiskt valda blandningen (`PreferencesRepository.benchmark`), som är cache i samma
+     * kategori som `fundFilterVocabulary`.
+     */
+    val chosenBenchmarkIsin: String? = null,
 ) {
     companion object {
         /**

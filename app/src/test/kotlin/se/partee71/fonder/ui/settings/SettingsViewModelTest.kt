@@ -10,6 +10,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -18,6 +20,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -26,12 +29,22 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupRepository
+import se.partee71.fonder.data.repository.FundMetadataRepository
+import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.FundCatalog
+import se.partee71.fonder.domain.model.FundFilterVocabulary
+import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -57,6 +70,9 @@ class SettingsViewModelTest {
         }
     }
 
+    /** Räknar begärda referensfondsskanningar (HEM-10, issue #102). */
+    private var benchmarkScans = 0
+
     private val fakeScheduler = object : FundPriceRefreshScheduler {
         override fun scheduleOnLaunch() {}
         override fun scheduleBackstop() {}
@@ -66,7 +82,9 @@ class SettingsViewModelTest {
         override fun triggerSwitchPlanScan() {
             switchPlanScans++
         }
-        override fun triggerBenchmarkScan() {}
+        override fun triggerBenchmarkScan() {
+            benchmarkScans++
+        }
         override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
     }
 
@@ -99,7 +117,40 @@ class SettingsViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo)
+
+    /** Slår upp ISIN för en katalogfond utan ett — null = fonden går inte att jämföra mot (issue #102). */
+    private var isinByFundId: Map<String, String> = emptyMap()
+
+    private val fakeFundPriceRepo = object : FundPriceRepository {
+        override suspend fun latestPrice(fundId: String): FundPrice? = null
+        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
+        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
+        override suspend fun refresh(fundId: String, since: LocalDate?) = true
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
+        override suspend fun suggestIsin(fundName: String): String? = null
+        override suspend fun findFundByIsin(isin: String): Fund? = null
+        override suspend fun lookupIsin(fundId: String): String? = isinByFundId[fundId]
+        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
+        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
+    }
+
+    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
+
+    private val fakeFundMetadataRepo = object : FundMetadataRepository {
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
+        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
+        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
+        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
+        override suspend fun knownRiskLevels(): List<Int> = emptyList()
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
+    }
+
+    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -151,7 +202,7 @@ class SettingsViewModelTest {
     @Test
     fun `lastPriceSyncEpochMillis speglar preferences efter en uppdatering (SET-2)`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
 
         vm.uiState.test {
             awaitItem()
@@ -360,4 +411,103 @@ class SettingsViewModelTest {
 
         assertEquals(0, switchPlanScans)
     }
+
+    // --- Val av jämförelsefond (HEM-10, issue #102) ---
+
+    @Test
+    fun `valt referens-ISIN sparas och startar en skanning`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613"))
+        advanceUntilIdle()
+
+        assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
+        // Utan skanningen hade den valda fondens historik dröjt till nästa backstop (issue #88).
+        assertEquals(1, benchmarkScans)
+    }
+
+    @Test
+    fun `en katalogfond utan ISIN slas upp innan den sparas`() = runTest(dispatcher) {
+        // Katalogens träffar saknar ISIN — hela jämförelsekedjan är ISIN-nycklad.
+        val preferences = PreferencesRepository(dataStore)
+        isinByFundId = mapOf("SHB1" to "SE0011527613")
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null))
+        advanceUntilIdle()
+
+        assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
+    }
+
+    @Test
+    fun `en fond vars ISIN inte gar att sla upp sparas inte alls`() = runTest(dispatcher) {
+        // Ett sparat fond-id som inget annat lager kan använda hade gett ett val som såg gjort
+        // ut men aldrig gav en kurva.
+        val preferences = PreferencesRepository(dataStore)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.uiState.test {
+            awaitItem()
+            vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Fond utan ISIN", isin = null))
+            advanceUntilIdle()
+            var state = awaitItem()
+            while (!state.benchmarkPickFailed) state = awaitItem()
+
+            assertTrue(state.benchmarkPickFailed)
+            assertNull(preferences.chosenBenchmarkIsin.first())
+            assertEquals(0, benchmarkScans)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `rensat val faller tillbaka pa appens referens`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        preferences.setChosenBenchmarkIsin("SE0011527613")
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.clearBenchmark()
+        advanceUntilIdle()
+
+        assertNull(preferences.chosenBenchmarkIsin.first())
+    }
+
+    @Test
+    fun `det egna valet visas med fondens namn ur cachen`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
+        preferences.setChosenBenchmarkIsin("SE0011527613")
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.chosenBenchmarkName == null) state = awaitItem()
+
+            assertEquals("Global Index", state.chosenBenchmarkName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett val vars namn inte finns i cachen visas som ISIN, aldrig tomt`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        preferences.setChosenBenchmarkIsin("SE0011527613")
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.chosenBenchmarkName == null) state = awaitItem()
+
+            assertEquals("SE0011527613", state.chosenBenchmarkName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun benchmarkMetadata() = FundMetadata(
+        isin = "SE0011527613", name = "Global Index", orderbookId = "1", totalFee = 0.2, managementFee = 0.2,
+        category = null, fundType = "Aktiefond", companyName = null, risk = 5, indexFund = true,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+    )
 }

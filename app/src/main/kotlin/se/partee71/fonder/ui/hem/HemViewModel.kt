@@ -168,7 +168,12 @@ class HemViewModel @Inject constructor(
         combine(
             preferencesRepository.riskProfile,
             preferencesRepository.accountType,
-            preferencesRepository.benchmark,
+            combine(preferencesRepository.benchmark, preferencesRepository.chosenBenchmarkIsin) { derived, chosen ->
+                // Eget val vinner alltid över appens (HEM-10, issue #102) — och ersätter hela
+                // blandningen, inte en del av den: väljer man en fond är det den man vill mätas
+                // mot, inte den plus appens gissning om resten.
+                chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: derived
+            },
         ) { riskProfile, accountType, benchmark ->
             Settings(riskProfile, accountType, benchmark)
         }

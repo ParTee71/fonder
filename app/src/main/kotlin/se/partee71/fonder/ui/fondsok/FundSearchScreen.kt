@@ -31,6 +31,7 @@ import se.partee71.fonder.ui.components.SelectField
 @Composable
 fun FundSearchScreen(
     modifier: Modifier = Modifier,
+    onPickFund: ((Fund) -> Unit)? = null,
     viewModel: FundSearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -39,6 +40,7 @@ fun FundSearchScreen(
         onQueryChange = viewModel::onQueryChange,
         onCompanySelected = viewModel::onCompanySelected,
         onAddFund = viewModel::addFund,
+        onPickFund = onPickFund,
         modifier = modifier,
     )
 }
@@ -54,6 +56,13 @@ fun FundSearchContent(
     onQueryChange: (String) -> Unit = {},
     onCompanySelected: (FundCompany?) -> Unit = {},
     onAddFund: (Fund) -> Unit = {},
+    /**
+     * Satt = skärmen är en **väljare** (HEM-10, issue #102): raden erbjuder "Välj" i stället för
+     * "Lägg till", och en redan bevakad fond visar ingen bock — den bocken betyder "finns i din
+     * bevakning", vilket är irrelevant när man pekar ut en jämförelsefond. Null = normalläget,
+     * lägg till i bevakningen.
+     */
+    onPickFund: ((Fund) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val allaFondbolag = stringResource(R.string.fondsok_company_all)
@@ -98,9 +107,10 @@ fun FundSearchContent(
                 items(state.results, key = { it.fundId }) { fund ->
                     FundResultRow(
                         fund = fund,
-                        added = fund.fundId in state.addedFundIds,
+                        added = onPickFund == null && fund.fundId in state.addedFundIds,
                         riskLevel = state.riskLevels[fund.fundId],
-                        onAdd = { onAddFund(fund) },
+                        actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
+                        onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) },
                     )
                 }
             }
@@ -114,7 +124,13 @@ fun FundSearchContent(
  * en rad helt utan märkning hade sett ut som en fond där risken inte gällde.
  */
 @Composable
-private fun FundResultRow(fund: Fund, added: Boolean, riskLevel: Int?, onAdd: () -> Unit) {
+private fun FundResultRow(
+    fund: Fund,
+    added: Boolean,
+    riskLevel: Int?,
+    actionLabelRes: Int,
+    onAction: () -> Unit,
+) {
     ListItem(
         headlineContent = { Text(fund.name) },
         supportingContent = { RiskBadge(level = riskLevel) },
@@ -122,8 +138,8 @@ private fun FundResultRow(fund: Fund, added: Boolean, riskLevel: Int?, onAdd: ()
             if (added) {
                 Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.fondsok_added))
             } else {
-                TextButton(onClick = onAdd) {
-                    Text(stringResource(R.string.add))
+                TextButton(onClick = onAction) {
+                    Text(stringResource(actionLabelRes))
                 }
             }
         },

@@ -50,6 +50,7 @@ class PreferencesRepository @Inject constructor(
     /** Issue #96:s ensamma ISIN — läses fortfarande, skrivs aldrig mer. Se [benchmark]. */
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
     private val benchmarkKey = stringPreferencesKey("benchmark_components")
+    private val chosenBenchmarkKey = stringPreferencesKey("chosen_benchmark_isin")
 
     val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -137,6 +138,30 @@ class PreferencesRepository @Inject constructor(
         // enkomponentsblandning i stället för att kastas — annars hade uppgraderingen tappat
         // referensfonden och tvingat fram en ny källfråga och en full backfill i onödan.
         stored ?: prefs[benchmarkIsinKey]?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: emptyList()
+    }
+
+    /**
+     * ISIN för den referens **användaren själv valt** (HEM-10, issue #102), null om inget val
+     * gjorts — då används appens automatiska blandning ([benchmark]).
+     *
+     * Skilt fält från [benchmark] med flit: annars gick det inte att skilja "användaren valde X"
+     * från "appen råkade välja X", och nästa bakgrundsskanning hade kunnat skriva över ett
+     * medvetet val. Samma distinktion som SET-3 gör mellan enkätens förslag och den sparade
+     * fördelningen.
+     *
+     * Till skillnad från [benchmark] är det här **genuin användardata** — ett val, inte något
+     * härlett — och ingår därför i backup-kontraktet (NFR-1), se
+     * [se.partee71.fonder.data.repository.BackupPayload].
+     */
+    val chosenBenchmarkIsin: Flow<String?> = preferences.map { prefs -> prefs[chosenBenchmarkKey] }
+
+    suspend fun setChosenBenchmarkIsin(isin: String) {
+        dataStore.edit { it[chosenBenchmarkKey] = isin }
+    }
+
+    /** Rensar det egna valet, så appens automatiska referens gäller igen. */
+    suspend fun clearChosenBenchmarkIsin() {
+        dataStore.edit { it.remove(chosenBenchmarkKey) }
     }
 
     suspend fun setBenchmark(components: List<BenchmarkComponentRef>) {
