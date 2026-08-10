@@ -170,7 +170,11 @@
 Google-inloggning (TP-6) läggs till som eget krav när det implementeras — väntar på att ett
 Firebase-projekt sätts upp för fonder (`google-services.json`). Molnbackupen (TP-7 steg 2) väntar
 på en OAuth-klient med Drive API och `drive.appdata`-scope; den lokala rundturen finns sedan SET-6
-och formatet ändras inte av att transporten byts.
+och formatet ändras inte av att transporten byts. Konsolstegen för båda — Firebase-projekt,
+SHA-1 för debug- och releasenyckeln, medgivandeskärm och Drive API — är dokumenterade i
+[docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md), tillsammans med releasesigneringen; beroendena är
+deklarerade i versionskatalogen men avsiktligt inte inkopplade, eftersom `google-services`-pluginet
+fäller bygget så länge `app/google-services.json` saknas.
 
 ## Historik
 
