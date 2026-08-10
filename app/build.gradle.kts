@@ -29,7 +29,7 @@ android {
         minSdk = 30
         targetSdk = 35
         versionCode = 59
-        versionName = versionNameOverride ?: "0.47.0"
+        versionName = versionNameOverride ?: "0.48.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -89,6 +92,14 @@ data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
  * Serier i procentläge indexeras aldrig (se [FundLineChart]).
  */
 enum class ChartValueAxis { KRONOR, PROCENT }
+
+/**
+ * Periodväljarens rad. Den skrollar (sex perioder får inte plats på en telefon), så en chip
+ * utanför vyn är inte komponerad och `performScrollTo` kan inte hitta den — instrumenttester
+ * måste gå via `performScrollToIndex` på den här taggen i stället (UI-5, samma sak som
+ * `PORTFOLJ_LIST_TEST_TAG` löser för innehavslistan, issue #66).
+ */
+const val CHART_PERIOD_ROW_TEST_TAG = "chart_period_row"
 
 /**
  * Delad linjediagram-komponent (regel 4) som wrappar Vico — resten av appen ska aldrig
@@ -262,11 +273,13 @@ fun FundLineChart(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        Row(
+        // Skrollbar rad, inte en vanlig Row: sex perioder får inte plats på en telefonskärm,
+        // och en fast rad hade tyst klippt bort "Allt" i stället för att göra den nåbar (UI-5).
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp).testTag(CHART_PERIOD_ROW_TEST_TAG),
         ) {
-            ChartPeriodFilter.Period.entries.forEach { option ->
+            items(ChartPeriodFilter.Period.entries) { option ->
                 PeriodChip(option, period, periodLabelRes(option)) { period = it }
             }
         }
@@ -344,6 +357,8 @@ private fun periodLabelRes(period: ChartPeriodFilter.Period): Int = when (period
     ChartPeriodFilter.Period.EN_MANAD -> R.string.fond_chart_period_1man
     ChartPeriodFilter.Period.TRE_MANADER -> R.string.fond_chart_period_3man
     ChartPeriodFilter.Period.ETT_AR -> R.string.fond_chart_period_1ar
+    ChartPeriodFilter.Period.TRE_AR -> R.string.fond_chart_period_3ar
+    ChartPeriodFilter.Period.FEM_AR -> R.string.fond_chart_period_5ar
     ChartPeriodFilter.Period.ALLT -> R.string.fond_chart_period_allt
 }
 

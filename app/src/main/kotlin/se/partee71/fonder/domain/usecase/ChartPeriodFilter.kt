@@ -9,10 +9,23 @@ package se.partee71.fonder.domain.usecase
  */
 object ChartPeriodFilter {
 
+    /**
+     * Perioderna är avsiktligt de horisonter fondfaktablad och utvärderingar använder, så
+     * siffrorna går att jämföra med vad man ser någon annanstans.
+     *
+     * [TRE_AR]/[FEM_AR] tillkom med Hems avkastningskurva (HEM-9): steget från [ETT_AR] till
+     * [ALLT] hoppade över precis det spann där en jämförelse mot index börjar betyda något —
+     * en månad är brus, och [ALLT] är förankrad i första köpet och betyder därför olika saker
+     * för olika portföljer och längre för varje år som går. Appens egen riskprofil (SET-3)
+     * vilar dessutom på uppmätta återhämtningstider på 2,0–2,6 år, som ett ettårsfönster inte
+     * kan visa.
+     */
     enum class Period(val days: Long?) {
         EN_MANAD(30L),
         TRE_MANADER(90L),
         ETT_AR(365L),
+        TRE_AR(1_095L),
+        FEM_AR(1_825L),
         ALLT(null),
     }
 
