@@ -16,6 +16,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -1006,7 +1007,7 @@ class FundPriceUpdateWorkerTest {
 
         FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
 
-        assertEquals("SE_BILLIG", preferencesRepository.benchmarkIsin.first())
+        assertEquals(listOf("SE_BILLIG"), preferencesRepository.benchmark.first().map { it.isin })
         // Kurserna cachas under ISIN:et som fondnyckel, samma väg som scanOutcomeNavs — och
         // sedan första köpet, annars kan skuggportföljen inte spegla insättningen.
         assertEquals(
@@ -1020,13 +1021,13 @@ class FundPriceUpdateWorkerTest {
         // En omvalsrunda per körning hade kostat en källfråga i onödan — och, värre, kunnat byta
         // referensfond bakom ryggen på användaren så jämförelsekurvan ritades om utan orsak.
         setUpPortfolioForBenchmark()
-        preferencesRepository.setBenchmarkIsin("SE_REDAN_VALD")
+        preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef("SE_REDAN_VALD", weight = 1.0)))
         queryResult = listOf(indexCandidate("SE_BILLIG", 0.10))
 
         FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
 
         assertTrue("ingen källfråga ska behövas", queriesRun.isEmpty())
-        assertEquals("SE_REDAN_VALD", preferencesRepository.benchmarkIsin.first())
+        assertEquals(listOf("SE_REDAN_VALD"), preferencesRepository.benchmark.first().map { it.isin })
         assertEquals(listOf("SE_REDAN_VALD"), refreshSinceCalls.map { it.second })
     }
 
@@ -1040,7 +1041,7 @@ class FundPriceUpdateWorkerTest {
 
         assertTrue(queriesRun.isEmpty())
         assertTrue(refreshSinceCalls.isEmpty())
-        assertNull(preferencesRepository.benchmarkIsin.first())
+        assertTrue(preferencesRepository.benchmark.first().isEmpty())
     }
 
     @Test
@@ -1050,7 +1051,7 @@ class FundPriceUpdateWorkerTest {
 
         FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
 
-        assertNull(preferencesRepository.benchmarkIsin.first())
+        assertTrue(preferencesRepository.benchmark.first().isEmpty())
         assertTrue(refreshSinceCalls.isEmpty())
     }
 
@@ -1086,7 +1087,64 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
         )
-        assertEquals("SE_BILLIG", preferencesRepository.benchmarkIsin.first())
+        assertEquals(listOf("SE_BILLIG"), preferencesRepository.benchmark.first().map { it.isin })
         assertEquals(listOf("SE_BILLIG"), refreshSinceCalls.map { it.second })
+    }
+
+    private fun bondCandidate(isin: String, totalFee: Double) = FundMetadata(
+        isin = isin, name = "Ränta $isin", orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
+        category = null, fundType = IndexBenchmarkSelector.TAG_TYPE_BOND, companyName = null, risk = 2,
+        indexFund = true, startDateEpochDay = null, minimumBuy = null,
+        tags = listOf(FundTag(title = IndexBenchmarkSelector.TAG_TYPE_BOND, category = FundTag.CATEGORY_TYPE)),
+    )
+
+    /** Metadata för ett *innehav* — bara fondtypstaggen behövs, det är den exponeringen läser. */
+    private fun holdingMetadata(isin: String, type: String) = FundMetadata(
+        isin = isin, name = "Innehav $isin", orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
+        category = null, fundType = type, companyName = null, risk = 4, indexFund = false,
+        startDateEpochDay = null, minimumBuy = null,
+        tags = listOf(FundTag(title = type, category = FundTag.CATEGORY_TYPE)),
+    )
+
+    @Test
+    fun `scanBenchmark speglar portfoljens aktieandel i en viktad blandning`() = runTest {
+        // Hälften aktier, hälften räntor → en 50/50-referens, inte 100 % aktier. Utan
+        // viktningen hade jämförelsen mätt tillgångsfördelning i stället för fondval.
+        funds.value = listOf(
+            Fund(fundId = "AKT", name = "Aktiefond", isin = "SE_H_AKT"),
+            Fund(fundId = "RNT", name = "Räntefond", isin = "SE_H_RNT"),
+        )
+        transactions.value = listOf(
+            buy("AKT", shares = 10.0, pricePerShare = 100.0),
+            buy("RNT", shares = 10.0, pricePerShare = 100.0),
+        )
+        cachedPrices["AKT"] = FundPrice("AKT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)
+        cachedPrices["RNT"] = FundPrice("RNT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)
+        metadataByIsin = mapOf(
+            "SE_H_AKT" to holdingMetadata("SE_H_AKT", IndexBenchmarkSelector.TAG_TYPE_EQUITY),
+            "SE_H_RNT" to holdingMetadata("SE_H_RNT", IndexBenchmarkSelector.TAG_TYPE_BOND),
+        )
+        queryResult = listOf(indexCandidate("SE_AKTIE", 0.10), bondCandidate("SE_RANTA", 0.08))
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        val components = preferencesRepository.benchmark.first()
+        assertEquals(listOf("SE_AKTIE", "SE_RANTA"), components.map { it.isin })
+        assertEquals(0.5, components[0].weight, 1e-9)
+        assertEquals(0.5, components[1].weight, 1e-9)
+        // Båda komponenterna backfillas i samma skanning — annars ger skuggportföljen ingen kurva.
+        assertEquals(listOf("SE_AKTIE", "SE_RANTA"), refreshSinceCalls.map { it.second })
+    }
+
+    @Test
+    fun `en ren aktieportfolj fragar aldrig kallan om rantekandidater`() = runTest {
+        // Normalfallet ska kosta en källfråga, inte två.
+        setUpPortfolioForBenchmark()
+        queryResult = listOf(indexCandidate("SE_BILLIG", 0.10))
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        assertEquals(1, queriesRun.size)
+        assertEquals(IndexBenchmarkSelector.EQUITY_QUERY, queriesRun.single())
     }
 }

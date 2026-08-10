@@ -744,6 +744,51 @@ class HemScreenTest {
     }
 
     @Test
+    fun viktad_referens_visar_sina_andelar_i_teckenforklaringen() {
+        // Blandningen ska gå att läsa av: "70,0 % Global Index / 30,0 % Räntefond X" säger både
+        // vad man jämförs med och i vilka proportioner (UI-3).
+        val benchmark = BenchmarkSeries(
+            fundName = "70,0 % Global Index / 30,0 % Räntefond X",
+            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+        )
+
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
+
+        composeRule.onAllNodesWithText("70,0 % Global Index", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun stor_oklassificerad_andel_markeras_i_stallet_for_att_doljas() {
+        // Vikterna vilar bara på klassificerat värde. Är resten stor är blandningen en grov
+        // approximation, och det ska synas i stället för att gömmas bakom en exakt procentsats.
+        val benchmark = BenchmarkSeries(
+            fundName = "Global Index",
+            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+            unclassifiedFraction = 0.30,
+        )
+
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
+
+        composeRule.onNodeWithText("ingår inte i viktningen", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun liten_oklassificerad_andel_ger_ingen_notis() {
+        val benchmark = BenchmarkSeries(
+            fundName = "Global Index",
+            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+            unclassifiedFraction = 0.02,
+        )
+
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
+
+        composeRule.onNodeWithText("ingår inte i viktningen", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun utan_referensfond_visas_kurvan_ensam_med_en_forklaring() {
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = null)) } }
 

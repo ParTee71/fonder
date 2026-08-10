@@ -29,6 +29,10 @@ class PortfolioReturnSeriesCalcTest {
     private fun priser(fundId: String, vararg dagOchNav: Pair<Long, Double>) =
         dagOchNav.map { (day, nav) -> FundPrice(fundId = fundId, epochDay = day, nav = nav) }
 
+    /** En enkomponentsreferens — motsvarar hela insättningen i en enda fond. */
+    private fun enFond(history: List<FundPrice>) =
+        listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = history))
+
     @Test
     fun `avkastningen per dag ar vardet mot anskaffningsvardet`() {
         val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
@@ -181,7 +185,7 @@ class PortfolioReturnSeriesCalcTest {
         val referens = priser("IDX", 10L to 50.0, 11L to 55.0) // samma +10 %, annan kursnivå
 
         val portfolj = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
-        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, referens)
+        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))
 
         assertNotNull(benchmark)
         assertEquals(portfolj.points.map { it.first }, benchmark!!.points.map { it.first })
@@ -197,7 +201,7 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
         val referens = priser("IDX", 10L to 250.0, 11L to 300.0)
 
-        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, referens)!!
+        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))!!
 
         assertEquals(0.0, benchmark.points.first { it.first == 10L }.second, 1e-9)
         assertEquals(0.20, benchmark.points.first { it.first == 11L }.second, 1e-9)
@@ -213,7 +217,7 @@ class PortfolioReturnSeriesCalcTest {
         )
         val referens = priser("IDX", 10L to 250.0, 11L to 250.0)
 
-        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, referens)!!
+        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))!!
 
         assertEquals(0.0, benchmark.points.first { it.first == 11L }.second, 1e-9)
     }
@@ -224,7 +228,7 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(kop("A", day = 11, shares = 10.0, price = 100.0))
         val referens = priser("IDX", 10L to 100.0, 12L to 110.0)
 
-        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, referens)!!
+        val benchmark = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))!!
 
         assertEquals(0.10, benchmark.points.first { it.first == 12L }.second, 1e-9)
     }
@@ -235,7 +239,7 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
         val referens = priser("IDX", 15L to 100.0, 16L to 110.0)
 
-        assertNull(PortfolioReturnSeriesCalc.benchmark(transaktioner, referens))
+        assertNull(PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens)))
     }
 
     @Test
@@ -243,6 +247,94 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
 
         assertNull(PortfolioReturnSeriesCalc.benchmark(transaktioner, emptyList()))
-        assertNull(PortfolioReturnSeriesCalc.benchmark(emptyList(), priser("IDX", 10L to 100.0)))
+        assertNull(PortfolioReturnSeriesCalc.benchmark(emptyList(), enFond(priser("IDX", 10L to 100.0))))
+    }
+
+    @Test
+    fun `en enkomponentsblandning ger exakt samma kurva som en ensam referensfond`() {
+        // Regressionsvakt för issue #101: viktningen infördes utan att ändra normalfallet.
+        val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+        val referens = priser("IDX", 10L to 250.0, 11L to 300.0)
+
+        val en = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))!!
+        val viktad = PortfolioReturnSeriesCalc.benchmark(
+            transaktioner,
+            listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = referens)),
+        )!!
+
+        assertEquals(en.points, viktad.points)
+    }
+
+    @Test
+    fun `viktad blandning ger det viktade snittet av komponenternas utveckling`() {
+        // 1 000 kr: 700 i aktier (+20 %) och 300 i räntor (+0 %) → 840 + 300 = 1 140, dvs +14 %.
+        val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+        val aktier = priser("AKT", 10L to 100.0, 11L to 120.0)
+        val rantor = priser("RNT", 10L to 50.0, 11L to 50.0)
+
+        val result = PortfolioReturnSeriesCalc.benchmark(
+            transaktioner,
+            listOf(
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.7, history = aktier),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.3, history = rantor),
+            ),
+        )!!
+
+        assertEquals(0.0, result.points.first { it.first == 10L }.second, 1e-9)
+        assertEquals(0.14, result.points.first { it.first == 11L }.second, 1e-9)
+    }
+
+    @Test
+    fun `blandningen speglar varje insattning, inte bara den forsta`() {
+        // Andra insättningen delas efter samma vikter till den dagens kurser.
+        val transaktioner = listOf(
+            kop("A", day = 10, shares = 10.0, price = 100.0),
+            kop("A", day = 11, shares = 10.0, price = 100.0),
+        )
+        val aktier = priser("AKT", 10L to 100.0, 11L to 200.0)
+        val rantor = priser("RNT", 10L to 100.0, 11L to 100.0)
+
+        val result = PortfolioReturnSeriesCalc.benchmark(
+            transaktioner,
+            listOf(
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = aktier),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = rantor),
+            ),
+        )!!
+
+        // Dag 11: aktiedelen av köp 1 (500 kr → 5 andelar à 100) är värd 1 000, räntedelen 500.
+        // Köp 2 lägger till 500 + 500 till dagens kurser. Värde 2 500 mot investerat 2 000 = +25 %.
+        assertEquals(0.25, result.points.first { it.first == 11L }.second, 1e-9)
+    }
+
+    @Test
+    fun `en komponent utan historik ger ingen kurva alls`() {
+        // Halva blandningen saknas — en jämförelse på fel vikter är sämre än ingen.
+        val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+
+        val result = PortfolioReturnSeriesCalc.benchmark(
+            transaktioner,
+            listOf(
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("AKT", 10L to 100.0)),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = emptyList()),
+            ),
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `en komponent vars historik inte nar tillbaka till forsta kopet ger ingen kurva`() {
+        val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+
+        val result = PortfolioReturnSeriesCalc.benchmark(
+            transaktioner,
+            listOf(
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("AKT", 10L to 100.0, 11L to 110.0)),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("RNT", 11L to 100.0)),
+            ),
+        )
+
+        assertNull(result)
     }
 }

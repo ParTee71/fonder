@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.hem
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +28,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -1003,7 +1006,7 @@ class HemViewModelTest {
             )
             )
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
-        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+        preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
 
         val vm = viewModel()
         vm.uiState.test {
@@ -1042,7 +1045,7 @@ class HemViewModelTest {
             BENCHMARK_ISIN to listOf(FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0))
             )
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
-        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+        preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
 
         val vm = viewModel()
         vm.uiState.test {
@@ -1105,7 +1108,7 @@ class HemViewModelTest {
     @Test
     fun `ingen skanning begars nar en referensfond redan ar vald`() = runTest(dispatcher) {
         setUpHoldingForReturnSeries()
-        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+        preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
 
         val vm = viewModel()
         vm.uiState.test {
@@ -1130,10 +1133,74 @@ class HemViewModelTest {
         }
     }
 
-    private fun indexFundMetadata() = FundMetadata(
-        isin = BENCHMARK_ISIN,
-        name = "Global Index",
-        orderbookId = "1",
+    @Test
+    fun `en viktad referens namnges med sina andelar`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+        priceHistoryByFundId = priceHistoryByFundId +
+            (BENCHMARK_ISIN to listOf(
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+            )) +
+            (BOND_ISIN to listOf(
+                FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 100.0),
+            ))
+        metadataByIsin = mapOf(
+            BENCHMARK_ISIN to indexFundMetadata(),
+            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Räntefond X"),
+        )
+        preferencesRepository.setBenchmark(
+            listOf(
+                BenchmarkComponentRef(BENCHMARK_ISIN, weight = 0.7),
+                BenchmarkComponentRef(BOND_ISIN, weight = 0.3),
+            ),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+
+            val benchmark = state.benchmarkSeries!!
+            assertTrue(benchmark.fundName.contains("Global Index"))
+            assertTrue(benchmark.fundName.contains("Räntefond X"))
+            // 70 % av insättningen i en fond som steg 10 %, 30 % i en som stod still.
+            assertEquals(0.07, benchmark.points.last().second, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en referens sparad i det gamla formatet lases som en enkomponentsblandning`() = runTest(dispatcher) {
+        // Issue #96 sparade ett ensamt ISIN. En uppgradering får inte tappa referensen och
+        // tvinga fram en ny källfråga plus full backfill i onödan.
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+        priceHistoryByFundId = priceHistoryByFundId + (
+            BENCHMARK_ISIN to listOf(
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+            )
+            )
+        metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
+        dataStore.edit { it[stringPreferencesKey("benchmark_isin")] = BENCHMARK_ISIN }
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+
+            assertEquals("Global Index", state.benchmarkSeries!!.fundName)
+            assertEquals(0, benchmarkScans)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = FundMetadata(
+        isin = isin,
+        name = name,
+        orderbookId = isin,
         totalFee = 0.2,
         managementFee = 0.2,
         category = null,
@@ -1148,5 +1215,6 @@ class HemViewModelTest {
 
     private companion object {
         const val BENCHMARK_ISIN = "SE0009999999"
+        const val BOND_ISIN = "SE0008888888"
     }
 }

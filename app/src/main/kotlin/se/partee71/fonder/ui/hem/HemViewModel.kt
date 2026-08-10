@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -27,6 +28,8 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
@@ -50,11 +53,18 @@ data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysi
 typealias SwitchSuggestionUi = SwitchPlanResolver.Suggestion
 
 /**
- * Indexjämförelsens kurva, redo för visning (HEM-10) — skuggportföljen i referensfonden
- * [fundName]. Fondens namn är inte kosmetiskt: jämförelsen namnger alltid sin egen referens i
- * teckenförklaringen (UI-3), den påstår aldrig att den är "index" i abstrakt mening.
+ * Indexjämförelsens kurva, redo för visning (HEM-10) — skuggportföljen i referensen [fundName],
+ * som sedan issue #101 kan vara en viktad blandning av en aktie- och en räntedel. Namnet är inte
+ * kosmetiskt: jämförelsen namnger alltid sin egen referens i teckenförklaringen (UI-3), den
+ * påstår aldrig att den är "index" i abstrakt mening.
  */
-data class BenchmarkSeries(val fundName: String, val points: List<Pair<Long, Double>>)
+data class BenchmarkSeries(
+    /** Etikett för teckenförklaringen — en fond namnges rakt av, en blandning som "70 % X / 30 % Y". */
+    val fundName: String,
+    val points: List<Pair<Long, Double>>,
+    /** Andel av portföljen som varken kunde klassificeras som aktier eller räntor (blandfonder, okänd typ) — vikterna vilar inte på den delen. */
+    val unclassifiedFraction: Double = 0.0,
+)
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
 data class AnalysisSummary(
@@ -80,7 +90,7 @@ data class HemUiState(
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
     /** Portföljens totala avkastning i procent per känd NAV-dag (HEM-9, issue #96). Tom = historiken räcker inte till en enda punkt. */
     val returnSeries: PortfolioReturnSeriesCalc.Result = PortfolioReturnSeriesCalc.Result.EMPTY,
-    /** Indexjämförelsen som skuggportfölj (HEM-10), null tills referensfondens historik finns cachad. */
+    /** Indexjämförelsen som skuggportfölj (HEM-10), null tills referensens historik finns cachad. */
     val benchmarkSeries: BenchmarkSeries? = null,
     /** Köpdagar (epoch-day) för samtliga innehav — markeras i avkastningsdiagrammet, eftersom en insättning flyttar kurvan utan att någon avkastning skett (HEM-9). */
     val purchaseEpochDays: List<Long> = emptyList(),
@@ -158,9 +168,9 @@ class HemViewModel @Inject constructor(
         combine(
             preferencesRepository.riskProfile,
             preferencesRepository.accountType,
-            preferencesRepository.benchmarkIsin,
-        ) { riskProfile, accountType, benchmarkIsin ->
-            Settings(riskProfile, accountType, benchmarkIsin)
+            preferencesRepository.benchmark,
+        ) { riskProfile, accountType, benchmark ->
+            Settings(riskProfile, accountType, benchmark)
         }
 
     /**
@@ -215,7 +225,7 @@ class HemViewModel @Inject constructor(
                     )
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
-                requestBenchmarkIfMissing(currentSettings.benchmarkIsin, hasHoldings = enriched.isNotEmpty())
+                requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
                 val switchPlan = SwitchPlanResolver.resolve(currentSettings.accountType, latestBatch, metadataByIsin, today)
@@ -229,7 +239,12 @@ class HemViewModel @Inject constructor(
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
                     analysisSummary = buildAnalysisSummary(enriched, firstPurchaseByFund, historyByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
-                    benchmarkSeries = currentSettings.benchmarkIsin?.let { buildBenchmark(it, transactions, today) },
+                    benchmarkSeries = buildBenchmark(
+                        refs = currentSettings.benchmark,
+                        transactions = transactions,
+                        unclassifiedFraction = IndexBenchmarkSelector.exposureSplit(exposure.byType).unclassifiedFraction,
+                        today = today,
+                    ),
                     purchaseEpochDays = transactions
                         .filter { it.type == TransactionType.KOP }
                         .map { it.epochDay }
@@ -317,11 +332,11 @@ class HemViewModel @Inject constructor(
      * Högst en begäran per ViewModel-livstid, och bara med innehav: skanningen kostar en
      * källfråga plus en backfill av referensfondens historik, och flödet emitterar om vid varje
      * kursändring. Misslyckas den (källan nere, ingen global indexfond i katalogen) står
-     * `benchmarkIsin` kvar som null och nästa appstart frågar igen — inget tyst förevigat
+     * referensblandningen tom och nästa appstart frågar igen — inget tyst förevigat
      * misslyckande, men heller ingen omförsökssnurra som pollar källan.
      */
-    private fun requestBenchmarkIfMissing(benchmarkIsin: String?, hasHoldings: Boolean) {
-        if (benchmarkIsin != null || !hasHoldings || benchmarkScanRequested) return
+    private fun requestBenchmarkIfMissing(benchmark: List<BenchmarkComponentRef>, hasHoldings: Boolean) {
+        if (benchmark.isNotEmpty() || !hasHoldings || benchmarkScanRequested) return
         benchmarkScanRequested = true
         fundPriceRefreshScheduler.triggerBenchmarkScan()
     }
@@ -338,14 +353,33 @@ class HemViewModel @Inject constructor(
      * fond appen inte kan namnge. Kortet säger då varför, i stället för att rita en halv
      * jämförelse.
      */
-    private suspend fun buildBenchmark(isin: String, transactions: List<Transaction>, today: LocalDate): BenchmarkSeries? {
-        if (transactions.isEmpty()) return null
+    private suspend fun buildBenchmark(
+        refs: List<BenchmarkComponentRef>,
+        transactions: List<Transaction>,
+        unclassifiedFraction: Double,
+        today: LocalDate,
+    ): BenchmarkSeries? {
+        if (refs.isEmpty() || transactions.isEmpty()) return null
         val since = LocalDate.ofEpochDay(transactions.minOf { it.epochDay })
-        val history = fundPriceRepository.priceHistory(isin, since.toEpochDay(), today.toEpochDay())
-        val series = PortfolioReturnSeriesCalc.benchmark(transactions, history) ?: return null
+        val components = refs.map { ref ->
+            PortfolioReturnSeriesCalc.BenchmarkComponent(
+                weight = ref.weight,
+                history = fundPriceRepository.priceHistory(ref.isin, since.toEpochDay(), today.toEpochDay()),
+            )
+        }
+        val series = PortfolioReturnSeriesCalc.benchmark(transactions, components) ?: return null
         if (series.isEmpty) return null
-        val name = fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.name ?: return null
-        return BenchmarkSeries(fundName = name, points = series.points)
+
+        val names = fundMetadataRepository.cachedMetadataFor(refs.map { it.isin })
+        // Kan appen inte namnge varje del kan den inte heller redovisa blandningen ärligt, och
+        // en teckenförklaring med ett ISIN i vore obegriplig — hellre ingen jämförelse.
+        val labels = refs.map { ref -> names[ref.isin]?.name ?: return null }
+        val label = if (refs.size == 1) {
+            labels.single()
+        } else {
+            refs.zip(labels).joinToString(" / ") { (ref, name) -> "${MoneyFormat.percent(ref.weight)} $name" }
+        }
+        return BenchmarkSeries(fundName = label, points = series.points, unclassifiedFraction = unclassifiedFraction)
     }
 
     /**
@@ -370,7 +404,7 @@ class HemViewModel @Inject constructor(
     private data class Settings(
         val riskProfile: RiskProfile?,
         val accountType: AccountType?,
-        /** Referensfondens ISIN (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
-        val benchmarkIsin: String?,
+        /** Referensblandningen (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
+        val benchmark: List<BenchmarkComponentRef>,
     )
 }
