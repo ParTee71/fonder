@@ -5,10 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -26,12 +28,14 @@ import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 
@@ -270,8 +274,17 @@ class FundPriceUpdateWorkerTest {
     /** Nivåerna källan faktiskt frågades om — budgeten i KEY_SCAN_SWITCH_PLAN mäts på dem. */
     private val switchCandidateLevelsQueried = mutableListOf<Int>()
 
+    /** Kandidater källan svarar med på en fondfråga — riggas av referensfondstesterna (HEM-10). */
+    private var queryResult: List<FundMetadata> = emptyList()
+
+    /** Frågorna som faktiskt gick till källan — budgeten i KEY_SCAN_BENCHMARK mäts på dem. */
+    private val queriesRun = mutableListOf<FundScreenQuery>()
+
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
+        override suspend fun query(query: FundScreenQuery): List<FundMetadata> {
+            queriesRun.add(query)
+            return queryResult
+        }
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
@@ -966,5 +979,114 @@ class FundPriceUpdateWorkerTest {
 
         assertTrue(refreshSinceCalls.isEmpty())
         assertTrue(refreshCalls.isEmpty())
+    }
+
+    // --- Referensfonden för Hems indexjämförelse (HEM-10, issue #96) ---
+
+    private fun indexCandidate(isin: String, totalFee: Double) = FundMetadata(
+        isin = isin, name = "Index $isin", orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
+        category = null, fundType = IndexBenchmarkSelector.TAG_TYPE_EQUITY, companyName = null, risk = 5,
+        indexFund = true, startDateEpochDay = null, minimumBuy = null,
+        tags = listOf(
+            FundTag(title = IndexBenchmarkSelector.TAG_TYPE_EQUITY, category = FundTag.CATEGORY_TYPE),
+            FundTag(title = IndexBenchmarkSelector.TAG_REGION_GLOBAL, category = FundTag.CATEGORY_COMMON_REGION),
+        ),
+    )
+
+    /** En portfölj med ett köp 2020-01-01 — historikhorisonten skuggportföljen måste nå tillbaka till. */
+    private fun setUpPortfolioForBenchmark() {
+        funds.value = listOf(Fund(fundId = "SHB1", name = "Fond A"))
+        transactions.value = listOf(buy("SHB1", shares = 10.0, pricePerShare = 100.0))
+    }
+
+    @Test
+    fun `scanBenchmark valjer referensfond och cachar dess historik sedan forsta kopet`() = runTest {
+        setUpPortfolioForBenchmark()
+        queryResult = listOf(indexCandidate("SE_DYR", 0.40), indexCandidate("SE_BILLIG", 0.10))
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        assertEquals("SE_BILLIG", preferencesRepository.benchmarkIsin.first())
+        // Kurserna cachas under ISIN:et som fondnyckel, samma väg som scanOutcomeNavs — och
+        // sedan första köpet, annars kan skuggportföljen inte spegla insättningen.
+        assertEquals(
+            listOf(Triple("SE_BILLIG", "SE_BILLIG", LocalDate.of(2020, 1, 1))),
+            refreshSinceCalls,
+        )
+    }
+
+    @Test
+    fun `scanBenchmark valjer inte om nar en referensfond redan ar vald`() = runTest {
+        // En omvalsrunda per körning hade kostat en källfråga i onödan — och, värre, kunnat byta
+        // referensfond bakom ryggen på användaren så jämförelsekurvan ritades om utan orsak.
+        setUpPortfolioForBenchmark()
+        preferencesRepository.setBenchmarkIsin("SE_REDAN_VALD")
+        queryResult = listOf(indexCandidate("SE_BILLIG", 0.10))
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        assertTrue("ingen källfråga ska behövas", queriesRun.isEmpty())
+        assertEquals("SE_REDAN_VALD", preferencesRepository.benchmarkIsin.first())
+        assertEquals(listOf("SE_REDAN_VALD"), refreshSinceCalls.map { it.second })
+    }
+
+    @Test
+    fun `scanBenchmark gor ingenting utan transaktioner`() = runTest {
+        // Ingen portfölj att jämföra och ingen historikhorisont att hämta mot — då ska inte ens
+        // valet göras, eftersom det kostar en källfråga.
+        queryResult = listOf(indexCandidate("SE_BILLIG", 0.10))
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        assertTrue(queriesRun.isEmpty())
+        assertTrue(refreshSinceCalls.isEmpty())
+        assertNull(preferencesRepository.benchmarkIsin.first())
+    }
+
+    @Test
+    fun `scanBenchmark valjer ingen referensfond nar katalogen saknar en global indexfond`() = runTest {
+        setUpPortfolioForBenchmark()
+        queryResult = listOf(neverScanned("SE_AKTIV")) // varken indexfond eller globalt taggad
+
+        FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
+
+        assertNull(preferencesRepository.benchmarkIsin.first())
+        assertTrue(refreshSinceCalls.isEmpty())
+    }
+
+    @Test
+    fun `runScans kor referensfondsskanningen bara med sin nyckel`() = runTest {
+        // Launch-gaten och den manuella knappen sätter aldrig nyckeln: valet kostar en källfråga
+        // och hämtningen är en full backfill sedan första köpet.
+        setUpPortfolioForBenchmark()
+        queryResult = listOf(indexCandidate("SE_BILLIG", 0.10))
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = false,
+            scanBenchmark = false,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = FakeSuggestionRecordRepository(),
+        )
+        assertTrue(queriesRun.isEmpty())
+        assertTrue(refreshSinceCalls.isEmpty())
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = false,
+            scanBenchmark = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = FakeSuggestionRecordRepository(),
+        )
+        assertEquals("SE_BILLIG", preferencesRepository.benchmarkIsin.first())
+        assertEquals(listOf("SE_BILLIG"), refreshSinceCalls.map { it.second })
     }
 }

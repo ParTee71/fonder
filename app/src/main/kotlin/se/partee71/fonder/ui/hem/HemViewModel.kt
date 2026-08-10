@@ -21,14 +21,17 @@ import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -45,6 +48,13 @@ data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysi
  * olika råd om samma byte. Aliaset behålls så Hems egen kod läser som förut.
  */
 typealias SwitchSuggestionUi = SwitchPlanResolver.Suggestion
+
+/**
+ * Indexjämförelsens kurva, redo för visning (HEM-10) — skuggportföljen i referensfonden
+ * [fundName]. Fondens namn är inte kosmetiskt: jämförelsen namnger alltid sin egen referens i
+ * teckenförklaringen (UI-3), den påstår aldrig att den är "index" i abstrakt mening.
+ */
+data class BenchmarkSeries(val fundName: String, val points: List<Pair<Long, Double>>)
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
 data class AnalysisSummary(
@@ -68,6 +78,12 @@ data class HemUiState(
         month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
     ),
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
+    /** Portföljens totala avkastning i procent per känd NAV-dag (HEM-9, issue #96). Tom = historiken räcker inte till en enda punkt. */
+    val returnSeries: PortfolioReturnSeriesCalc.Result = PortfolioReturnSeriesCalc.Result.EMPTY,
+    /** Indexjämförelsen som skuggportfölj (HEM-10), null tills referensfondens historik finns cachad. */
+    val benchmarkSeries: BenchmarkSeries? = null,
+    /** Köpdagar (epoch-day) för samtliga innehav — markeras i avkastningsdiagrammet, eftersom en insättning flyttar kurvan utan att någon avkastning skett (HEM-9). */
+    val purchaseEpochDays: List<Long> = emptyList(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,
     /** Portföljens totala fondavgift per år (HEM-5, issue #60). */
@@ -114,9 +130,21 @@ class HemViewModel @Inject constructor(
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
-    private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
+    /**
+     * [PortfolioInput.funds] bärs med, inte bara de sammanräknade innehaven: avkastningskurvan
+     * (HEM-9) räknar om innehaven för varje historisk dag, och en fond som sedan dess sålts av
+     * helt saknas i [PortfolioInput.holdings] trots att den fanns i portföljen då. Utan hela
+     * fondlistan hade kurvan ritat om historien som om den fonden aldrig ägts.
+     */
+    private data class PortfolioInput(
+        val funds: List<Fund>,
+        val holdings: List<Holding>,
+        val transactions: List<Transaction>,
+    )
+
+    private val baseHoldings: Flow<PortfolioInput> =
         combine(transactionRepository.observeFunds(), transactionRepository.observeTransactions()) { funds, transactions ->
-            PortfolioCalc.computeHoldings(funds, transactions) to transactions
+            PortfolioInput(funds, PortfolioCalc.computeHoldings(funds, transactions), transactions)
         }
 
     /**
@@ -127,8 +155,12 @@ class HemViewModel @Inject constructor(
      * en ny transaktion råkade trigga flödet — upp till 12 timmar senare (issue #75).
      */
     private val settings: Flow<Settings> =
-        combine(preferencesRepository.riskProfile, preferencesRepository.accountType) { riskProfile, accountType ->
-            Settings(riskProfile, accountType)
+        combine(
+            preferencesRepository.riskProfile,
+            preferencesRepository.accountType,
+            preferencesRepository.benchmarkIsin,
+        ) { riskProfile, accountType, benchmarkIsin ->
+            Settings(riskProfile, accountType, benchmarkIsin)
         }
 
     /**
@@ -151,7 +183,7 @@ class HemViewModel @Inject constructor(
     }
 
     val uiState: StateFlow<HemUiState> =
-        baseHoldings.flatMapLatest { (holdings, transactions) ->
+        baseHoldings.flatMapLatest { (funds, holdings, transactions) ->
             val fundIds = holdings.map { it.fund.fundId }
             combine(
                 fundPriceRepository.observeLatestPrices(fundIds),
@@ -161,10 +193,21 @@ class HemViewModel @Inject constructor(
             ) { prices, metadataByIsin, currentSettings, latestBatch ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
-                val historyByFundId = enriched.associate { holding ->
-                    holding.fund.fundId to fundPriceRepository.priceHistory(
-                        fundId = holding.fund.fundId,
-                        fromEpochDay = today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS).toEpochDay(),
+                val firstPurchaseByFund = transactions
+                    .groupBy { it.fundId }
+                    .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
+                // **En** hämtning per fond, inte en per läsare: fönstret är det vidaste någon av
+                // dem behöver (sedan första köpet för analysen och avkastningskurvan, minst
+                // HISTORY_LOOKBACK_DAYS bakåt för dag/vecka/månad även för en nyss köpt fond).
+                // Var och en klipper sedan till sitt eget fönster i minnet — analysen räknar
+                // volatilitet på hela listan den får (ANA-7) och måste därför få exakt sitt.
+                val historyByFundId = funds.associate { fund ->
+                    val since = firstPurchaseByFund[fund.fundId]
+                        ?.let { minOf(it, today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS)) }
+                        ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
+                    fund.fundId to fundPriceRepository.priceHistory(
+                        fundId = fund.fundId,
+                        fromEpochDay = since.toEpochDay(),
                         toEpochDay = today.toEpochDay(),
                     )
                 }
@@ -180,7 +223,14 @@ class HemViewModel @Inject constructor(
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
-                    analysisSummary = buildAnalysisSummary(enriched, transactions, today),
+                    analysisSummary = buildAnalysisSummary(enriched, firstPurchaseByFund, historyByFundId, today),
+                    returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
+                    benchmarkSeries = currentSettings.benchmarkIsin?.let { buildBenchmark(it, transactions, today) },
+                    purchaseEpochDays = transactions
+                        .filter { it.type == TransactionType.KOP }
+                        .map { it.epochDay }
+                        .distinct()
+                        .sorted(),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
                     riskProfile = riskProfile,
@@ -207,26 +257,27 @@ class HemViewModel @Inject constructor(
         )
 
     /**
-     * Analyserar varje innehav och summerar statusarna (HEM-4). Övrig kurshistorik för
-     * varje innehav hämtas sedan första köpet ur den lokala cachen (Room), samma räckvidd
-     * som [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond —
-     * ingen ny nätverksuppdatering.
+     * Analyserar varje innehav och summerar statusarna (HEM-4). Kurshistoriken kommer från den
+     * gemensamma hämtningen i flödet ovan (lokal cache, Room — ingen nätverksuppdatering) och
+     * **klipps här till sedan första köpet**, samma räckvidd som
+     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Klippet är
+     * inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela listan den får
+     * (ANA-7), så en vidare historik hade tyst gett andra siffror än fondkortet visar.
      */
-    private suspend fun buildAnalysisSummary(
+    private fun buildAnalysisSummary(
         enriched: List<Holding>,
-        transactions: List<Transaction>,
+        firstPurchaseByFund: Map<String, LocalDate>,
+        fullHistoryByFundId: Map<String, List<FundPrice>>,
         today: LocalDate,
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
-        val firstPurchaseByFund = transactions
-            .groupBy { it.fundId }
-            .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
         val portfolioTotalValue = PortfolioCalc.totalValue(enriched)
 
         val historyByFundId = enriched.associate { holding ->
             val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
-            holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since.toEpochDay(), today.toEpochDay())
+            holding.fund.fundId to fullHistoryByFundId[holding.fund.fundId].orEmpty()
+                .filter { it.epochDay >= since.toEpochDay() }
         }
 
         val analyses = enriched.mapNotNull { holding ->
@@ -254,6 +305,28 @@ class HemViewModel @Inject constructor(
     }
 
     /**
+     * Indexjämförelsen (HEM-10) — skuggportföljen i referensfonden, byggd **enbart ur cachen**.
+     * Referensfonden är vald av bakgrundsjobbet
+     * ([se.partee71.fonder.worker.FundPriceUpdateWorker.scanBenchmark]) och dess kurshistorik
+     * hämtad där; Hem gör aldrig ett nätverksanrop när det öppnas, av samma skäl som
+     * HEM-6/HEM-8 ligger i workern. `cachedMetadataFor` går per kontrakt aldrig till nätet.
+     *
+     * Null i varje läge där jämförelsen inte kan bli ärlig — ingen historik alls, historik som
+     * inte når tillbaka till första köpet (se [PortfolioReturnSeriesCalc.benchmark]), eller en
+     * fond appen inte kan namnge. Kortet säger då varför, i stället för att rita en halv
+     * jämförelse.
+     */
+    private suspend fun buildBenchmark(isin: String, transactions: List<Transaction>, today: LocalDate): BenchmarkSeries? {
+        if (transactions.isEmpty()) return null
+        val since = LocalDate.ofEpochDay(transactions.minOf { it.epochDay })
+        val history = fundPriceRepository.priceHistory(isin, since.toEpochDay(), today.toEpochDay())
+        val series = PortfolioReturnSeriesCalc.benchmark(transactions, history) ?: return null
+        if (series.isEmpty) return null
+        val name = fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.name ?: return null
+        return BenchmarkSeries(fundName = name, points = series.points)
+    }
+
+    /**
      * Markerar ett förslag i den visade planen som genomfört (HEM-8/SET-5, issue #80). Skriver
      * bara flaggan — inget byte utförs, appen rör aldrig användarens innehav. Facit (SET-5)
      * läser den för att mäta följda råd separat från alla givna råd.
@@ -272,5 +345,10 @@ class HemViewModel @Inject constructor(
         fundPriceRefreshScheduler.triggerSwitchPlanScan()
     }
 
-    private data class Settings(val riskProfile: RiskProfile?, val accountType: AccountType?)
+    private data class Settings(
+        val riskProfile: RiskProfile?,
+        val accountType: AccountType?,
+        /** Referensfondens ISIN (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
+        val benchmarkIsin: String?,
+    )
 }

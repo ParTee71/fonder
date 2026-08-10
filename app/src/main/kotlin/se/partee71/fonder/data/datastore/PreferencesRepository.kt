@@ -46,6 +46,7 @@ class PreferencesRepository @Inject constructor(
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
+    private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
 
     val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -110,5 +111,25 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setAccountType(type: AccountType) {
         dataStore.edit { it[accountTypeKey] = type.name }
+    }
+
+    /**
+     * ISIN för den referensfond portföljens avkastning jämförs mot (HEM-10), null tills
+     * bakgrundsjobbet hunnit välja en. Valet görs av
+     * [se.partee71.fonder.domain.usecase.IndexBenchmarkSelector] ur källans katalog och sparas
+     * här av just det skälet: hade det härletts på nytt vid varje läsning kunde referensfonden
+     * bytas så fort katalogen ändrades, och jämförelsekurvan hade ritats om utan att något
+     * hänt i portföljen.
+     *
+     * **Härledd cache-metadata, inte ett användarval** — samma kategori som
+     * [lastPriceSyncEpochMillis]/[fundFilterVocabulary] och därför medvetet utanför
+     * backup-kontraktet (NFR-1): går den förlorad väljs samma fond ut igen ur samma katalog.
+     * Den dagen användaren själv får välja referensfond blir det ett annat, genuint fält som
+     * ska in i kontraktet.
+     */
+    val benchmarkIsin: Flow<String?> = preferences.map { prefs -> prefs[benchmarkIsinKey] }
+
+    suspend fun setBenchmarkIsin(isin: String) {
+        dataStore.edit { it[benchmarkIsinKey] = isin }
     }
 }

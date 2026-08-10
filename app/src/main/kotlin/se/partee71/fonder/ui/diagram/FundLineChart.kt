@@ -71,10 +71,24 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToLong
 
 /** En namngiven kursserie att rita bredvid innehavets egen i [FundLineChart] (ANA-11, issue #85). */
 data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
+
+/**
+ * Vad y-värdena i [FundLineChart] betyder — avgör axelformatering, intervall och beskrivning.
+ *
+ * [KRONOR] är fondkurser (NAV): alltid positiva, sällan i närheten av noll, och intervallet pads
+ * därför runt datans egna min/max (se [PriceRangeProvider], issue #49).
+ *
+ * [PROCENT] är avkastning som andel (0.12 = +12 %), t.ex. portföljens avkastningskurva på Hem
+ * (HEM-9). Där gäller det omvända: **nollinjen måste alltid synas**, annars går det inte att se
+ * om kurvan ligger plus eller minus — en förlustkurva som fyller diagrammets höjd ser annars ut
+ * precis som en vinstkurva. Serier i procentläge indexeras heller aldrig (se [FundLineChart]).
+ */
+enum class ChartValueAxis { KRONOR, PROCENT }
 
 /**
  * Delad linjediagram-komponent (regel 4) som wrappar Vico — resten av appen ska aldrig
@@ -106,6 +120,8 @@ data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
  *   med [comparisonSeries]; utan jämförelse ritas ingen teckenförklaring.
  * @param comparisonSeries ytterligare serier att jämföra mot, beskurna till samma period som
  *   [points] innan de indexeras.
+ * @param valueAxis vad y-värdena betyder — kronor (NAV) eller procent (avkastning). Se
+ *   [ChartValueAxis]; i procentläge indexeras serierna aldrig.
  */
 @Composable
 fun FundLineChart(
@@ -113,6 +129,7 @@ fun FundLineChart(
     purchaseEpochDays: List<Long> = emptyList(),
     primaryLabel: String? = null,
     comparisonSeries: List<ChartSeries> = emptyList(),
+    valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
     modifier: Modifier = Modifier,
 ) {
     // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
@@ -124,7 +141,7 @@ fun FundLineChart(
     // räknas bakåt från den senaste punkten i datan (se ChartPeriodFilter), och en kandidat
     // vars historik slutar en annan dag hade annars fått ett förskjutet fönster — två kurvor
     // över olika tidsspann ser ut som en jämförelse men är det inte.
-    val normalized = remember(windowedPoints, comparisonSeries) {
+    val normalized = remember(windowedPoints, comparisonSeries, valueAxis) {
         if (comparisonSeries.isEmpty()) {
             ChartSeriesNormalizer.Result(listOf(windowedPoints), indexed = false, partial = false, baseEpochDay = null)
         } else {
@@ -132,7 +149,20 @@ fun FundLineChart(
             val windowedComparisons = comparisonSeries.map { series ->
                 if (from == null) series.points else series.points.filter { it.first >= from }
             }
-            ChartSeriesNormalizer.index(listOf(windowedPoints) + windowedComparisons)
+            val all = listOf(windowedPoints) + windowedComparisons
+            when (valueAxis) {
+                ChartValueAxis.KRONOR -> ChartSeriesNormalizer.index(all)
+                // Indexering till 100 löser att två *kurser* inte går att jämföra på en gemensam
+                // y-axel. Två avkastningskurvor är redan samma enhet, och att indexera dem hade
+                // gjort dem relativa mot periodens första dag — precis den skillnad jämförelsen
+                // finns för (HEM-10) hade då räknats bort utan att något syntes.
+                ChartValueAxis.PROCENT -> ChartSeriesNormalizer.Result(
+                    series = all.map { serie -> serie.sortedBy { it.first } },
+                    indexed = false,
+                    partial = false,
+                    baseEpochDay = null,
+                )
+            }
         }
     }
     val primaryPoints = normalized.series.firstOrNull().orEmpty()
@@ -164,6 +194,19 @@ fun FundLineChart(
     // att skalan är ett index.
     val chartDescription = when {
         visibleSeries.isEmpty() -> stringResource(R.string.fond_chart_description_empty)
+        // Procentläget beskrivs i procent och namnger sina kurvor — informationen får inte bara
+        // ligga i linjernas färg (UI-3), och "kr" i beskrivningen hade dessutom varit fel enhet.
+        valueAxis == ChartValueAxis.PROCENT -> {
+            val described = visibleSeries.first().first
+            stringResource(
+                R.string.format_fond_chart_description_percent,
+                stringResource(periodLabelRes(period)),
+                described.size,
+                MoneyFormat.percentSigned(described.minOf { it.second }),
+                MoneyFormat.percentSigned(described.maxOf { it.second }),
+                visibleSeries.joinToString(", ") { (_, label) -> label },
+            )
+        }
         normalized.indexed -> stringResource(
             R.string.format_fond_chart_comparison_description,
             stringResource(periodLabelRes(period)),
@@ -193,8 +236,17 @@ fun FundLineChart(
         key(period) {
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
-                    startAxis = VerticalAxis.rememberStart(),
+                    rememberLineCartesianLayer(
+                        lineProvider = lineProvider,
+                        rangeProvider = when (valueAxis) {
+                            ChartValueAxis.KRONOR -> PriceRangeProvider
+                            ChartValueAxis.PROCENT -> ReturnRangeProvider
+                        },
+                    ),
+                    startAxis = when (valueAxis) {
+                        ChartValueAxis.KRONOR -> VerticalAxis.rememberStart()
+                        ChartValueAxis.PROCENT -> VerticalAxis.rememberStart(valueFormatter = PercentValueFormatter)
+                    },
                     bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
                     persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } },
                 ),
@@ -384,6 +436,42 @@ internal object PriceRangeProvider : CartesianLayerRangeProvider {
         val range = maxY - minY
         return if (range > 0.0) range * PADDING_FRACTION else max(abs(maxY), 1.0) * PADDING_FRACTION
     }
+}
+
+/**
+ * Y-intervallet för en **avkastningskurva** (HEM-9) — motsatsen till [PriceRangeProvider]s
+ * problem: här måste nollinjen alltid vara med. Utan den skalas kurvan till sitt eget min/max,
+ * och en portfölj som legat mellan −8 % och −3 % fyller diagramhöjden på exakt samma sätt som en
+ * som legat mellan +3 % och +8 % — diagrammet slutar då svara på den första fråga man ställer
+ * till det. Marginalen läggs runt det intervall som faktiskt visas (inklusive noll), så kurvan
+ * ändå inte klistras mot kanten.
+ */
+internal object ReturnRangeProvider : CartesianLayerRangeProvider {
+    override fun getMinY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
+        min(minY, 0.0) - padding(minY, maxY)
+
+    override fun getMaxY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
+        max(maxY, 0.0) + padding(minY, maxY)
+
+    /** Andel av det visade spannet som läggs till som marginal ovanför/under. */
+    private const val PADDING_FRACTION = 0.1
+
+    /** Marginal för en helt platt kurva (t.ex. en enda punkt) — en procentenhet, så linjen inte hamnar exakt på kanten. */
+    private const val FLAT_PADDING = 0.01
+
+    private fun padding(minY: Double, maxY: Double): Double {
+        val span = max(maxY, 0.0) - min(minY, 0.0)
+        return if (span > 0.0) span * PADDING_FRACTION else FLAT_PADDING
+    }
+}
+
+/** Y-axelns etiketter i procentläge: 0.123 → "+12,3 %" (samma formatering som resten av appens avkastningstal, UI-3). */
+private object PercentValueFormatter : CartesianValueFormatter {
+    override fun format(
+        context: CartesianMeasuringContext,
+        value: Double,
+        verticalAxisPosition: Axis.Position.Vertical?,
+    ): CharSequence = MoneyFormat.percentSigned(value)
 }
 
 /**

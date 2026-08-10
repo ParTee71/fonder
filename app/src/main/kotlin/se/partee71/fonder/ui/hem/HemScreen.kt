@@ -32,6 +32,9 @@ import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
+import se.partee71.fonder.ui.diagram.ChartSeries
+import se.partee71.fonder.ui.diagram.ChartValueAxis
+import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 
@@ -76,6 +79,7 @@ fun HemContent(
         else -> LazyColumn(modifier = modifier.fillMaxSize()) {
             item { TotalCard(state = state) }
             item { PerformanceCard(performance = state.performance) }
+            item { ReturnChartCard(state = state) }
             item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
             item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
             state.riskProfile?.let { riskProfile ->
@@ -150,6 +154,69 @@ private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerfo
                 partial = monthPartial,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
+        }
+    }
+}
+
+/**
+ * Portföljens totala avkastning i procent över tid (HEM-9, issue #96) med indexjämförelsen som
+ * skuggportfölj (HEM-10) — samma delade [FundLineChart] som Fonddetalj (regel 4), i procentläge
+ * ([ChartValueAxis.PROCENT]) så y-axeln alltid visar nollinjen och serierna inte indexeras.
+ *
+ * Köpdagarna markeras med flit: måttet är kassaflödesokänsligt, så en insättning flyttar kurvan
+ * utan att någon avkastning skett — utan markörerna hade den rörelsen sett ut som ett resultat.
+ *
+ * Tre olika "det går inte"-lägen hålls isär i stället för att bakas ihop till ett tomt diagram:
+ * ingen kurva alls (för lite historik), en kurva utan jämförelse (referensfonden inte hämtad än)
+ * och en kurva räknad utan något innehav en viss dag (HEM-2:s delvis osäker).
+ */
+@Composable
+private fun ReturnChartCard(state: HemUiState) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.hem_return_chart_title), style = MaterialTheme.typography.labelMedium)
+            if (state.returnSeries.isEmpty) {
+                Text(
+                    stringResource(R.string.hem_return_chart_insufficient),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                return@Column
+            }
+            val benchmark = state.benchmarkSeries
+            FundLineChart(
+                points = state.returnSeries.points,
+                purchaseEpochDays = state.purchaseEpochDays,
+                primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
+                comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
+                valueAxis = ChartValueAxis.PROCENT,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.hem_return_chart_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                if (benchmark != null) {
+                    stringResource(R.string.format_hem_return_chart_benchmark_explain, benchmark.fundName)
+                } else {
+                    stringResource(R.string.hem_return_chart_benchmark_missing)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (state.returnSeries.partial) {
+                Text(
+                    stringResource(R.string.hem_return_chart_partial),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
     }
 }
