@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -18,6 +20,7 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -638,5 +641,92 @@ class HemScreenTest {
         composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().performClick()
 
         assertEquals(1, clicks)
+    }
+
+    // --- Avkastningsdiagrammet med indexjämförelse (HEM-9/HEM-10, issue #96) ---
+
+    private fun returnState(
+        points: List<Pair<Long, Double>> = listOf(20_000L to 0.0, 20_015L to 0.08, 20_030L to 0.20),
+        partial: Boolean = false,
+        benchmark: BenchmarkSeries? = null,
+    ) = HemUiState(
+        loading = false,
+        hasHoldings = true,
+        totalValue = 1200.0,
+        totalGainLoss = 200.0,
+        totalGainLossFraction = 0.2,
+        returnSeries = PortfolioReturnSeriesCalc.Result(points = points, partial = partial),
+        benchmarkSeries = benchmark,
+        purchaseEpochDays = listOf(20_000L),
+    )
+
+    @Test
+    fun avkastningsdiagrammet_ar_tredje_kortet_och_natt_via_skroll() {
+        // UI-5: kortet ligger under totalen och periodraden, alltså utanför skärmen på en
+        // telefon — det ska gå att skrolla till, inte bara finnas i semantikträdet (issue #63).
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
+        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun avkastningsdiagrammet_har_samma_perioder_som_ovriga_diagram() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
+        listOf("1 mån", "3 mån", "1 år", "Allt").forEach { period ->
+            composeRule.onNodeWithText(period).performScrollTo().assertIsDisplayed()
+        }
+        // Ett periodbyte får inte fälla kortet — diagrammet ritas om, rubriken står kvar.
+        composeRule.onNodeWithText("1 år").performScrollTo().performClick()
+        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun otillracklig_historik_visar_forklaring_i_stallet_for_tomt_diagram() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(points = emptyList())) } }
+
+        composeRule.onNodeWithText("För lite kurshistorik", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("1 mån").assertDoesNotExist()
+    }
+
+    @Test
+    fun delvis_osaker_avkastningskurva_markeras() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(partial = true)) } }
+
+        composeRule.onNodeWithText("Delvis osäker", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun indexjamforelsen_namnger_referensfonden() {
+        // UI-3: jämförelsen får aldrig bäras av enbart kurvans färg — fondens namn ska stå både
+        // i teckenförklaringen och i texten under diagrammet.
+        val benchmark = BenchmarkSeries(
+            fundName = "Länsförsäkringar Global Index",
+            points = listOf(20_000L to 0.0, 20_030L to 0.10),
+        )
+
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
+
+        composeRule.onAllNodesWithText("Länsförsäkringar Global Index", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun utan_referensfond_visas_kurvan_ensam_med_en_forklaring() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = null)) } }
+
+        composeRule.onNodeWithText("Ingen indexjämförelse än", substring = true).performScrollTo().assertIsDisplayed()
+        // Kurvan ska fortfarande finnas — en utebliven jämförelse döljer inte diagrammet.
+        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun avkastningsdiagrammet_beskrivs_i_procent_for_skarmlasare() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
+        composeRule.onNodeWithContentDescription("Avkastningsdiagram", substring = true)
+            .assertExists()
     }
 }

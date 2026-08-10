@@ -44,4 +44,43 @@ class FundLineChartTest {
 
         assertTrue(minY < maxY)
     }
+
+    @Test
+    fun `avkastningsaxeln inkluderar alltid nollinjen aven nar kurvan bara ar positiv`() {
+        // Hela poängen med HEM-9:s procentläge: utan nollinjen ser +3..+8 % ut precis som
+        // −8..−3 %, och diagrammet slutar svara på den första fråga man ställer till det.
+        val minY = ReturnRangeProvider.getMinY(0.03, 0.08, extraStore)
+        val maxY = ReturnRangeProvider.getMaxY(0.03, 0.08, extraStore)
+
+        assertTrue("nollinjen ska rymmas i intervallet", minY <= 0.0)
+        assertEquals(-0.008, minY, 1e-9)
+        assertEquals(0.088, maxY, 1e-9)
+    }
+
+    @Test
+    fun `avkastningsaxeln inkluderar nollinjen aven nar kurvan bara ar negativ`() {
+        val minY = ReturnRangeProvider.getMinY(-0.20, -0.05, extraStore)
+        val maxY = ReturnRangeProvider.getMaxY(-0.20, -0.05, extraStore)
+
+        assertTrue("nollinjen ska rymmas i intervallet", maxY >= 0.0)
+        assertEquals(-0.22, minY, 1e-9)
+        assertEquals(0.02, maxY, 1e-9)
+    }
+
+    @Test
+    fun `platt avkastningskurva far anda ett synligt intervall`() {
+        val minY = ReturnRangeProvider.getMinY(0.0, 0.0, extraStore)
+        val maxY = ReturnRangeProvider.getMaxY(0.0, 0.0, extraStore)
+
+        assertTrue(minY < maxY)
+        assertEquals(-0.01, minY, 1e-9)
+        assertEquals(0.01, maxY, 1e-9)
+    }
+
+    @Test
+    fun `kursaxeln tvingas fortfarande inte till noll`() {
+        // Regressionsvakt mot att procentläget (issue #96) skulle "rätta" kronintervallet till
+        // att alltid inkludera noll — det var exakt buggen #49 fixade.
+        assertTrue(PriceRangeProvider.getMinY(180.0, 220.0, extraStore) > 0.0)
+    }
 }

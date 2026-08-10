@@ -76,11 +76,16 @@ class HemViewModelTest {
     private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
     private var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
 
+    /** Varje `priceHistory`-anrop, i ordning — driver testet att hämtningen sker en gång per fond och emission. */
+    private val priceHistoryCalls = mutableListOf<String>()
+
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
-            priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> {
+            priceHistoryCalls += fundId
+            return priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
+        }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?) = true
         override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
@@ -898,5 +903,192 @@ class HemViewModelTest {
         vm.recomputeSwitchPlan()
 
         assertEquals(1, switchPlanScans)
+    }
+
+    // --- Avkastningskurvan och indexjämförelsen (HEM-9/HEM-10, issue #96) ---
+
+    /** Ett innehav köpt för 30 dagar sedan med en kurshistorik som räcker till en kurva. */
+    private fun setUpHoldingForReturnSeries(fond: Fund = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0000000001")) {
+        val today = LocalDate.now()
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        priceHistoryByFundId = mapOf(
+            fond.fundId to listOf(
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(15).toEpochDay(), nav = 110.0),
+                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+            ),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+    }
+
+    @Test
+    fun `avkastningskurvan slutar pa samma tal som totalkortet visar`() = runTest(dispatcher) {
+        setUpHoldingForReturnSeries()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            assertEquals(3, state.returnSeries.points.size)
+            assertEquals(0.0, state.returnSeries.points.first().second, 1e-9)
+            assertEquals(state.totalGainLossFraction!!, state.returnSeries.points.last().second, 1e-12)
+            assertFalse(state.returnSeries.partial)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kopdagarna bars med sa insattningar kan markeras i diagrammet`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.purchaseEpochDays.isEmpty()) state = awaitItem()
+
+            assertEquals(listOf(today.minusDays(30).toEpochDay()), state.purchaseEpochDays)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kurvan markeras delvis osaker nar ett innehav saknar kurshistorik`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fondA = Fund(fundId = "SHB0000442", name = "Fond A")
+        val fondB = Fund(fundId = "SHB0000443", name = "Fond B")
+        funds.value = listOf(fondA, fondB)
+        transactions.value = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        // Fond B saknar historik helt — den ska utelämnas ur kurvan, inte räknas som en förlust.
+        priceHistoryByFundId = mapOf(
+            fondA.fundId to listOf(
+                FundPrice(fundId = fondA.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                FundPrice(fundId = fondA.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+            ),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            assertTrue(state.returnSeries.partial)
+            assertEquals(0.20, state.returnSeries.points.last().second, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `indexjamforelsen byggs ur cachen nar referensfonden ar vald`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+        // Referensfonden: samma dagar, men +10 % i stället för innehavets +20 %.
+        priceHistoryByFundId = priceHistoryByFundId + (
+            BENCHMARK_ISIN to listOf(
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+            )
+            )
+        metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
+        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+
+            val benchmark = state.benchmarkSeries!!
+            assertEquals("Global Index", benchmark.fundName)
+            assertEquals(0.0, benchmark.points.first().second, 1e-9)
+            assertEquals(0.10, benchmark.points.last().second, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen indexjamforelse innan bakgrundsjobbet valt en referensfond`() = runTest(dispatcher) {
+        setUpHoldingForReturnSeries()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            assertNull(state.benchmarkSeries)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen indexjamforelse nar referensfondens historik inte nar tillbaka till forsta kopet`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        setUpHoldingForReturnSeries()
+        // Historiken börjar efter köpet — skuggportföljen kan då inte spegla insättningen, och
+        // en halv jämförelse är sämre än ingen (HEM-10).
+        priceHistoryByFundId = priceHistoryByFundId + (
+            BENCHMARK_ISIN to listOf(FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0))
+            )
+        metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
+        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            assertNull(state.benchmarkSeries)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kurshistoriken hamtas en gang per fond och emission`() = runTest(dispatcher) {
+        // Innan issue #96 hämtade Hem samma fonds historik två gånger per emission (en gång för
+        // dag-/vecka-/månadsraden, en gång för analysen). Kurvan behöver den en tredje gång —
+        // hämtningarna slogs därför ihop till en, med det vidaste fönstret.
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0000000001")
+        setUpHoldingForReturnSeries(fond)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            priceHistoryCalls.clear()
+            latestPrices.value = mapOf(
+                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0),
+            )
+            awaitItem()
+
+            assertEquals(1, priceHistoryCalls.count { it == fond.fundId })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun indexFundMetadata() = FundMetadata(
+        isin = BENCHMARK_ISIN,
+        name = "Global Index",
+        orderbookId = "1",
+        totalFee = 0.2,
+        managementFee = 0.2,
+        category = null,
+        fundType = "Aktiefond",
+        companyName = null,
+        risk = 5,
+        indexFund = true,
+        startDateEpochDay = null,
+        minimumBuy = null,
+        tags = emptyList(),
+    )
+
+    private companion object {
+        const val BENCHMARK_ISIN = "SE0009999999"
     }
 }

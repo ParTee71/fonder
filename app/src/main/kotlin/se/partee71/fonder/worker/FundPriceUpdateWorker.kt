@@ -19,6 +19,7 @@ import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
+import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
@@ -57,6 +58,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             refreshSucceeded = success,
             scanComparisons = inputData.getBoolean(KEY_SCAN_COMPARISONS, false),
             scanSwitchPlan = inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false),
+            scanBenchmark = inputData.getBoolean(KEY_SCAN_BENCHMARK, false),
             transactionRepository = transactionRepository,
             fundPriceRepository = fundPriceRepository,
             fundMetadataRepository = fundMetadataRepository,
@@ -93,6 +95,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * vägar som finns är i stället glesa (var 12:e timme) respektive uttryckligen begärda.
          */
         const val KEY_SCAN_SWITCH_PLAN = "scan_switch_plan"
+
+        /**
+         * Input-data-nyckel som slår på [scanBenchmark] (HEM-10, issue #96) — satt bara av
+         * [FundPriceRefreshScheduler.scheduleBackstop], av samma skäl som de två ovan: valet av
+         * referensfond kostar en källfråga, och hämtningen av dess historik är en full backfill
+         * sedan portföljens första köp. Hem ska aldrig betala det när skärmen öppnas.
+         */
+        const val KEY_SCAN_BENCHMARK = "scan_benchmark"
 
         /**
          * Högst så här många innehav jämförs per körning — inkrementell ifyllnad i stället för
@@ -151,6 +161,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             refreshSucceeded: Boolean,
             scanComparisons: Boolean,
             scanSwitchPlan: Boolean,
+            scanBenchmark: Boolean = false,
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             fundMetadataRepository: FundMetadataRepository,
@@ -165,6 +176,44 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
             }
+            if (scanBenchmark) {
+                scanBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository)
+            }
+        }
+
+        /**
+         * Väljer och håller referensfonden för Hems indexjämförelse färsk (HEM-10, issue #96) —
+         * en fond appen aldrig ägt, som därför inte nås av [refreshAll]. Samma väg som
+         * [scanOutcomeNavs] använder: kurserna cachas under ISIN:et som fondnyckel
+         * (`findFundByIsin` ger per kontrakt `Fund.fundId == isin`, TP-13/TP-14).
+         *
+         * Valet görs **en gång** och sparas sedan
+         * ([se.partee71.fonder.data.datastore.PreferencesRepository.benchmarkIsin]). Att välja om
+         * vid varje körning hade låtit en katalogändring byta referensfond bakom ryggen på
+         * användaren och rita om hela jämförelsekurvan utan att något hänt i portföljen — och
+         * kostat en källfråga i onödan varje gång.
+         *
+         * Utan transaktioner finns ingen portfölj att jämföra och ingen historikhorisont att
+         * hämta mot: då görs ingenting alls, inte ens valet.
+         */
+        internal suspend fun scanBenchmark(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+            preferencesRepository: PreferencesRepository,
+        ) {
+            val transactions = transactionRepository.observeTransactions().first()
+            if (transactions.isEmpty()) return
+
+            val isin = preferencesRepository.benchmarkIsin.first()
+                ?: IndexBenchmarkSelector.select(fundMetadataRepository.query(IndexBenchmarkSelector.QUERY))
+                    ?.also { preferencesRepository.setBenchmarkIsin(it.isin) }
+                    ?.isin
+                ?: return
+
+            // Sedan portföljens första köp: skuggportföljen måste kunna spegla *varje*
+            // insättning, annars ger PortfolioReturnSeriesCalc.benchmark ingen kurva alls.
+            fundPriceRepository.refreshSince(isin, isin, LocalDate.ofEpochDay(transactions.minOf { it.epochDay }))
         }
 
         /**
