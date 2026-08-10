@@ -1120,10 +1120,8 @@ class FundPriceUpdateWorkerTest {
         )
         cachedPrices["AKT"] = FundPrice("AKT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)
         cachedPrices["RNT"] = FundPrice("RNT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)
-        metadataByIsin = mapOf(
-            "SE_H_AKT" to holdingMetadata("SE_H_AKT", IndexBenchmarkSelector.TAG_TYPE_EQUITY),
-            "SE_H_RNT" to holdingMetadata("SE_H_RNT", IndexBenchmarkSelector.TAG_TYPE_BOND),
-        )
+        metadataByIsin["SE_H_AKT"] = holdingMetadata("SE_H_AKT", IndexBenchmarkSelector.TAG_TYPE_EQUITY)
+        metadataByIsin["SE_H_RNT"] = holdingMetadata("SE_H_RNT", IndexBenchmarkSelector.TAG_TYPE_BOND)
         queryResult = listOf(indexCandidate("SE_AKTIE", 0.10), bondCandidate("SE_RANTA", 0.08))
 
         FundPriceUpdateWorker.scanBenchmark(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository)
