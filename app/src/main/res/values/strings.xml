@@ -124,6 +124,8 @@
     <string name="fond_chart_period_1man">1 mån</string>
     <string name="fond_chart_period_3man">3 mån</string>
     <string name="fond_chart_period_1ar">1 år</string>
+    <string name="fond_chart_period_3ar">3 år</string>
+    <string name="fond_chart_period_5ar">5 år</string>
     <string name="fond_chart_period_allt">Allt</string>
     <string name="fond_chart_series_holding">Din fond</string>
     <string name="fond_chart_indexed_explain">Båda kurvorna startar på 100 vid periodens början — jämförelsen visar utveckling, inte kurs i kronor.</string>

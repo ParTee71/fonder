@@ -7,9 +7,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -22,6 +24,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
@@ -687,11 +690,24 @@ class HemScreenTest {
     fun avkastningsdiagrammet_har_samma_perioder_som_ovriga_diagram() {
         composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
 
-        listOf("1 mån", "3 mån", "1 år", "Allt").forEach { period ->
-            composeRule.onNodeWithText(period).performScrollTo().assertIsDisplayed()
+        // Chipraden skrollar, så de sista perioderna är inte komponerade förrän listan skrollats
+        // dit — `performScrollTo` hade letat i semantikträdet och inte hittat dem (UI-5, samma
+        // metod som Portföljs innehavslista, issue #66).
+        composeRule.onNodeWithText("1 mån").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("3 mån").assertIsDisplayed()
+
+        composeRule.onNodeWithTag(CHART_PERIOD_ROW_TEST_TAG).performScrollToIndex(5)
+        listOf("3 år", "5 år", "Allt").forEach { period ->
+            composeRule.onNodeWithText(period).assertIsDisplayed()
         }
-        // Ett periodbyte får inte fälla kortet — diagrammet ritas om, rubriken står kvar.
+    }
+
+    @Test
+    fun periodbyte_faller_inte_kortet() {
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
         composeRule.onNodeWithText("1 år").performScrollTo().performClick()
+
         composeRule.onNodeWithText("Avkastning över tid").performScrollTo().assertIsDisplayed()
     }
 
