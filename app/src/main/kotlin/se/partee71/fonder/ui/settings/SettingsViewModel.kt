@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,9 +17,12 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupRepository
+import se.partee71.fonder.data.repository.FundMetadataRepository
+import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
@@ -45,7 +49,22 @@ data class SettingsUiState(
     /** Sant medan en export eller återställning pågår — knapparna släcks, se [SettingsViewModel.export] (SET-6, issue #82). */
     val backupInProgress: Boolean = false,
     val backupMessage: BackupMessage? = null,
+    /**
+     * Namnet på den referens användaren själv valt för Hems indexjämförelse (HEM-10, issue
+     * #102), null när appens automatiska blandning gäller. Namnet läses ur metadatacachen —
+     * går det inte att slå upp visas ISIN:et, så raden aldrig ser tom ut för ett gjort val.
+     */
+    val chosenBenchmarkName: String? = null,
+    /**
+     * Sant när den senast valda fonden inte gick att använda: katalogens träffar saknar ISIN,
+     * och utan ISIN kan kursen varken hämtas eller cachas. Raden säger det i stället för att
+     * tyst behålla den gamla referensen.
+     */
+    val benchmarkPickFailed: Boolean = false,
 )
+
+/** Referensvalets del av tillståndet — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
+private data class BenchmarkState(val chosenName: String? = null, val pickFailed: Boolean = false)
 
 /** Backup-delen av tillståndet, hållen för sig så [SettingsViewModel.uiState] kan `combine`:a in den. */
 private data class BackupState(
@@ -59,11 +78,27 @@ class SettingsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
     private val backupRepository: BackupRepository,
+    private val fundPriceRepository: FundPriceRepository,
+    private val fundMetadataRepository: FundMetadataRepository,
 ) : ViewModel() {
 
     private val databaseCleared = MutableStateFlow(false)
     private val backupState = MutableStateFlow(BackupState())
     private var backupJob: Job? = null
+    private val benchmarkPickFailed = MutableStateFlow(false)
+
+    /**
+     * Egen gren, inte en sjätte flöde i combinen nedan: `combine` tar högst fem, och
+     * referensvalet har ingenting med tema, backup eller kontotyp att göra — det ska inte kunna
+     * räkna om resten av inställningarna bara för att ett namn slogs upp.
+     */
+    private val benchmarkState: Flow<BenchmarkState> =
+        combine(preferences.chosenBenchmarkIsin, benchmarkPickFailed) { isin, failed ->
+            BenchmarkState(
+                chosenName = isin?.let { fundMetadataRepository.cachedMetadataFor(listOf(it))[it]?.name ?: it },
+                pickFailed = failed,
+            )
+        }
 
     val uiState: StateFlow<SettingsUiState> =
         combine(
@@ -80,6 +115,11 @@ class SettingsViewModel @Inject constructor(
                 accountType = accountType,
                 backupInProgress = backup.inProgress,
                 backupMessage = backup.message,
+            )
+        }.combine(benchmarkState) { state, benchmark ->
+            state.copy(
+                chosenBenchmarkName = benchmark.chosenName,
+                benchmarkPickFailed = benchmark.pickFailed,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -100,6 +140,41 @@ class SettingsViewModel @Inject constructor(
      * Bara vid faktiskt byte: att välja samma kontotyp igen ska inte kosta en skanning. Byte
      * *till* depå/AF triggar ingenting alls — där ges ingen plan att räkna om.
      */
+    /**
+     * Sparar [fund] som referens för Hems indexjämförelse (HEM-10, issue #102). Katalogens
+     * träffar saknar ISIN, så det slås upp när det behövs — hela jämförelsekedjan är
+     * ISIN-nycklad, från kurscachen till skuggportföljen.
+     *
+     * Går ISIN:et inte att slå upp **sparas ingenting** och raden säger varför: ett sparat
+     * fond-id som inget annat lager kan använda hade gett ett val som såg gjort ut men aldrig
+     * gav en kurva.
+     *
+     * Ett sparat val startar en skanning direkt, samma princip som en ändrad riskprofil gör för
+     * bytesplanen (issue #88) — annars hade den valda fondens historik dröjt till nästa
+     * backstop, alltså upp till ett halvt dygn.
+     */
+    fun chooseBenchmark(fund: Fund) {
+        viewModelScope.launch {
+            val isin = fund.isin ?: fundPriceRepository.lookupIsin(fund.fundId)
+            if (isin == null) {
+                benchmarkPickFailed.value = true
+                return@launch
+            }
+            benchmarkPickFailed.value = false
+            preferences.setChosenBenchmarkIsin(isin)
+            fundPriceRefreshScheduler.triggerBenchmarkScan()
+        }
+    }
+
+    /** Rensar det egna valet — appens automatiska referens (issue #101) gäller då igen. */
+    fun clearBenchmark() {
+        viewModelScope.launch {
+            benchmarkPickFailed.value = false
+            preferences.clearChosenBenchmarkIsin()
+            fundPriceRefreshScheduler.triggerBenchmarkScan()
+        }
+    }
+
     fun setAccountType(type: AccountType) {
         viewModelScope.launch {
             val previous = preferences.accountType.first()

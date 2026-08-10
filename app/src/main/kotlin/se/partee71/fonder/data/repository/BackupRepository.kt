@@ -63,6 +63,7 @@ class LocalBackupRepository @Inject constructor(
                 riskProfile = preferences.riskProfile.first(),
                 accountType = preferences.accountType.first(),
                 themeMode = preferences.themeMode.first(),
+                chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first(),
             ),
         )
     }
@@ -95,6 +96,11 @@ class LocalBackupRepository @Inject constructor(
             payload.riskProfile?.let { preferences.setRiskProfile(it) }
             payload.accountType?.let { preferences.setAccountType(it) }
             preferences.setThemeMode(payload.themeMode)
+            // Rensas när filen saknar val: en återställning **ersätter**, den slår inte ihop
+            // (SET-6), så ett gammalt val får inte överleva en fil där användaren inte hade något.
+            payload.chosenBenchmarkIsin
+                ?.let { preferences.setChosenBenchmarkIsin(it) }
+                ?: preferences.clearChosenBenchmarkIsin()
 
             RestoreSummary(
                 funds = payload.funds.size,

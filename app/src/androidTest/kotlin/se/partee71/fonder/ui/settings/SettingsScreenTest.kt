@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.settings
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -279,5 +280,55 @@ class SettingsScreenTest {
         }
 
         composeRule.onNodeWithText("exportera en säkerhetskopia först", substring = true).assertExists()
+    }
+
+    // --- Val av jämförelsefond (HEM-10, issue #102) ---
+
+    @Test
+    fun jamforelsekortet_visar_att_appen_valjer_nar_inget_eget_val_finns() {
+        composeRule.setContent { FonderTheme { SettingsContent(state = SettingsUiState()) } }
+
+        composeRule.onNodeWithText("Väljs automatiskt", substring = true).performScrollTo().assertIsDisplayed()
+        // Ingen "använd appens val"-knapp när appens val redan gäller.
+        composeRule.onNodeWithText("Använd appens val").assertDoesNotExist()
+    }
+
+    @Test
+    fun jamforelsekortet_visar_det_egna_valet_och_gar_att_rensa() {
+        var cleared = 0
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(chosenBenchmarkName = "Global Index"),
+                    onClearBenchmark = { cleared++ },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Ditt val: Global Index").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Använd appens val").performScrollTo().performClick()
+
+        assertEquals(1, cleared)
+    }
+
+    @Test
+    fun en_fond_utan_isin_ger_ett_felmeddelande_i_stallet_for_tyst_misslyckande() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(benchmarkPickFailed = true)) }
+        }
+
+        composeRule.onNodeWithText("saknar ISIN", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun valjknappen_anropar_callbacken() {
+        var opened = 0
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onOpenBenchmarkPicker = { opened++ }) }
+        }
+
+        composeRule.onNodeWithText("Välj fond").performScrollTo().performClick()
+
+        assertEquals(1, opened)
     }
 }

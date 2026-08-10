@@ -33,6 +33,7 @@ class BackupSerializerTest {
      */
     private fun fullPayload() = BackupPayload(
         exportedAtEpochMillis = 1_754_300_000_000,
+        chosenBenchmarkIsin = "SE0011527613",
         funds = listOf(
             Fund(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033", fondlistaFundId = "SHB0000442"),
             Fund(fundId = "LU0055631609", name = "Fond utan koder", currency = "USD", isin = null, fondlistaFundId = null),
@@ -151,6 +152,7 @@ class BackupSerializerTest {
             setOf(
                 "formatVersion", "exportedAtEpochMillis", "funds", "transactions",
                 "suggestionRecords", "riskProfile", "accountType", "themeMode",
+                "chosenBenchmarkIsin",
             ),
             root.keys,
         )

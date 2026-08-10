@@ -239,6 +239,7 @@
     <string name="fondsok_load_failed_body">Kontrollera uppkopplingen och försök igen. Redan bevakade fonder påverkas inte.</string>
     <string name="fondsok_empty_title">Inga fonder hittades</string>
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
+    <string name="fondsok_pick">Välj</string>
     <string name="fondsok_added">Tillagd</string>
     <string name="fondsok_fab">Lägg till fond</string>
     <string name="fondsok_company_label">Fondbolag</string>
@@ -273,6 +274,15 @@
     <string name="account_type_depa_af">Depå/AF</string>
     <!-- Facit för bytesplanen (SET-5, issue #80) -->
     <string name="facit_title">Facit</string>
+    <!-- Val av jämförelsereferens (HEM-10, issue #102) -->
+    <string name="settings_benchmark_section">Jämförelsefond</string>
+    <string name="settings_benchmark_automatic">Väljs automatiskt efter din fördelning mellan aktier och räntor.</string>
+    <string name="format_settings_benchmark_chosen">Ditt val: %1$s</string>
+    <string name="settings_benchmark_body">Fonden som Hems avkastningskurva jämförs mot. Ditt val gäller före appens. Saknar den kurshistorik lika långt tillbaka som ditt första köp visas ingen jämförelse.</string>
+    <string name="settings_benchmark_button">Välj fond</string>
+    <string name="settings_benchmark_clear">Använd appens val</string>
+    <string name="settings_benchmark_pick_failed">Fonden saknar ISIN och går inte att jämföra mot — välj en annan.</string>
+
     <string name="settings_facit_section">Facit</string>
     <string name="settings_facit_body">Se hur bytesförslagen på Hem gick jämfört med att ha behållit innehavet.</string>
     <string name="settings_facit_button">Öppna facit</string>

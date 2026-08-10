@@ -116,6 +116,9 @@ class BackupRoundTripTest {
         )
         preferences.setAccountType(AccountType.ISK_KF)
         preferences.setThemeMode(ThemeMode.DARK)
+        // Eget val av jämförelsefond (HEM-10, issue #102) — ett val, inte härledd cache, och
+        // därför en del av kontraktet.
+        preferences.setChosenBenchmarkIsin("SE0011527613")
     }
 
     @Test
@@ -165,6 +168,21 @@ class BackupRoundTripTest {
         assertEquals(TimeHorizon.SJU_TILL_15_AR, profile?.answers?.horizon)
         assertEquals(AccountType.ISK_KF, preferences.accountType.first())
         assertEquals(ThemeMode.DARK, preferences.themeMode.first())
+        assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
+    }
+
+    @Test
+    fun en_fil_utan_eget_referensval_rensar_ett_befintligt() = runTest {
+        // Återställning **ersätter**, den slår inte ihop (SET-6): ett val som inte fanns när
+        // filen skrevs får inte överleva den.
+        seed()
+        preferences.clearChosenBenchmarkIsin()
+        val utanVal = backup.export().getOrThrow()
+        preferences.setChosenBenchmarkIsin("SE0099999999")
+
+        backup.restore(utanVal).getOrThrow()
+
+        assertNull(preferences.chosenBenchmarkIsin.first())
     }
 
     @Test

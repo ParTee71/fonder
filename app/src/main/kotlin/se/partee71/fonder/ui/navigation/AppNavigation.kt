@@ -36,6 +36,7 @@ import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
+import se.partee71.fonder.ui.settings.SettingsViewModel
 import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
@@ -136,6 +137,7 @@ fun AppNavigation() {
                     onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
                     onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
                     onOpenFacit = { navController.navigate(Routes.FACIT) },
+                    onOpenBenchmarkPicker = { navController.navigate(Routes.BENCHMARK_PICKER) },
                 )
             }
             composable(
@@ -158,6 +160,18 @@ fun AppNavigation() {
             }
             composable(Routes.RISK_PROFILE) {
                 RiskProfilScreen(onSaved = { navController.popBackStack() })
+            }
+            // Fondsök i valläge (HEM-10, issue #102): samma skärm, men träffraden pekar ut en
+            // jämförelsefond i stället för att lägga till den i bevakningen. Valet skrivs av
+            // SettingsViewModel, som redan äger inställningarna — fondsök förblir en sökskärm.
+            composable(Routes.BENCHMARK_PICKER) {
+                val settingsViewModel: SettingsViewModel = hiltViewModel()
+                FundSearchScreen(
+                    onPickFund = { fund ->
+                        settingsViewModel.chooseBenchmark(fund)
+                        navController.popBackStack()
+                    },
+                )
             }
             composable(Routes.FACIT) {
                 FacitScreen()

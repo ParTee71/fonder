@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +55,7 @@ fun SettingsScreen(
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
+    onOpenBenchmarkPicker: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -84,6 +86,8 @@ fun SettingsScreen(
         onImportOrders = onImportOrders,
         onOpenRiskProfile = onOpenRiskProfile,
         onOpenFacit = onOpenFacit,
+        onOpenBenchmarkPicker = onOpenBenchmarkPicker,
+        onClearBenchmark = viewModel::clearBenchmark,
         onAccountTypeSelected = viewModel::setAccountType,
         onRefreshPricesNow = viewModel::refreshPricesNow,
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
@@ -104,6 +108,8 @@ fun SettingsContent(
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
+    onOpenBenchmarkPicker: () -> Unit = {},
+    onClearBenchmark: () -> Unit = {},
     onAccountTypeSelected: (AccountType) -> Unit = {},
     onRefreshPricesNow: () -> Unit = {},
     onExportBackup: () -> Unit = {},
@@ -163,6 +169,45 @@ fun SettingsContent(
                     optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
                     onSelect = onAccountTypeSelected,
                 )
+            }
+        }
+
+        // Jämförelsereferensen (HEM-10, issue #102) — appens val är ett förslag, användarens
+        // val vinner. Raden säger alltid vilket av de två som gäller just nu.
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.settings_benchmark_section), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    state.chosenBenchmarkName
+                        ?.let { stringResource(R.string.format_settings_benchmark_chosen, it) }
+                        ?: stringResource(R.string.settings_benchmark_automatic),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    stringResource(R.string.settings_benchmark_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                if (state.benchmarkPickFailed) {
+                    Text(
+                        stringResource(R.string.settings_benchmark_pick_failed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onOpenBenchmarkPicker) {
+                        Text(stringResource(R.string.settings_benchmark_button))
+                    }
+                    if (state.chosenBenchmarkName != null) {
+                        TextButton(onClick = onClearBenchmark) {
+                            Text(stringResource(R.string.settings_benchmark_clear))
+                        }
+                    }
+                }
             }
         }
 
