@@ -54,6 +54,19 @@ interface FundPriceRefreshScheduler {
      */
     fun triggerSwitchPlanScan()
 
+    /**
+     * Väljer och hämtar hem Hems referensfond (HEM-10) på begäran i stället för att vänta på
+     * backstopen. Anropas av [se.partee71.fonder.ui.hem.HemViewModel] när ingen referensfond är
+     * vald än — utan den vägen fanns ingen indexkurva alls förrän en backstop-körning råkat
+     * passera, alltså upp till ett halvt dygn efter installation eller uppgradering.
+     *
+     * Kostnaden bärs **en gång**: valet sparas, och nästa körning hoppar direkt till att hålla
+     * kursen färsk. Eget unikt arbetsnamn med `KEEP`, av samma skäl som [triggerSwitchPlanScan] —
+     * den manuella knappen (SET-2) ersätter allt som väntar under sitt namn och skulle annars
+     * kunna avbryta hämtningen mitt i.
+     */
+    fun triggerBenchmarkScan()
+
     fun observeIsRunning(): Flow<Boolean>
 }
 
@@ -124,13 +137,31 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         workManager.enqueueUniqueWork(SWITCH_PLAN_WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
+    override fun triggerBenchmarkScan() {
+        val request = OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
+            // KEY_FORCE av samma skäl som i triggerSwitchPlanScan: `runScans` gör ingenting om
+            // kursuppdateringen inte lyckades, och utan force rapporterar `refreshAll` framgång
+            // för en redan färsk cache utan att ha hämtat något.
+            .setInputData(
+                workDataOf(
+                    FundPriceUpdateWorker.KEY_FORCE to true,
+                    FundPriceUpdateWorker.KEY_SCAN_BENCHMARK to true,
+                ),
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+            .setConstraints(networkConstraints)
+            .build()
+        workManager.enqueueUniqueWork(BENCHMARK_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    }
+
     override fun observeIsRunning(): Flow<Boolean> =
         combine(
             workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(SWITCH_PLAN_WORK_NAME),
-        ) { oneTime, periodic, switchPlan ->
-            (oneTime + periodic + switchPlan).any { it.state == WorkInfo.State.RUNNING }
+            workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME),
+        ) { oneTime, periodic, switchPlan, benchmark ->
+            (oneTime + periodic + switchPlan + benchmark).any { it.state == WorkInfo.State.RUNNING }
         }
 
     companion object {
@@ -139,6 +170,9 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
 
         /** Eget unikt namn för bytesplansskanningen — se [FundPriceRefreshScheduler.triggerSwitchPlanScan]. */
         internal const val SWITCH_PLAN_WORK_NAME = "fonder_switch_plan_scan"
+
+        /** Eget unikt namn för referensfondsskanningen — se [FundPriceRefreshScheduler.triggerBenchmarkScan]. */
+        internal const val BENCHMARK_WORK_NAME = "fonder_benchmark_scan"
         private const val BACKSTOP_INTERVAL_HOURS = 12L
     }
 }

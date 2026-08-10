@@ -143,6 +143,9 @@ class HemViewModelTest {
 
     /** Räknar begärda omräkningar av bytesplanen (HEM-8, issue #88) och driver knappens släckta läge. */
     private var switchPlanScans = 0
+
+    /** Räknar begärda referensfondsskanningar (HEM-10) — ska gå exakt en gång, inte per emission. */
+    private var benchmarkScans = 0
     private val workRunning = MutableStateFlow(false)
 
     private val fakeScheduler = object : FundPriceRefreshScheduler {
@@ -151,6 +154,9 @@ class HemViewModelTest {
         override fun triggerManualRefresh() {}
         override fun triggerSwitchPlanScan() {
             switchPlanScans++
+        }
+        override fun triggerBenchmarkScan() {
+            benchmarkScans++
         }
         override fun observeIsRunning(): Flow<Boolean> = workRunning
     }
@@ -1068,6 +1074,58 @@ class HemViewModelTest {
             awaitItem()
 
             assertEquals(1, priceHistoryCalls.count { it == fond.fundId })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `referensfonden begars nar ingen ar vald, en gang och inte per emission`() = runTest(dispatcher) {
+        // Utan den här vägen valdes referensfonden bara av backstopen var 12:e timme — en ny
+        // installation visade "Ingen indexjämförelse än" i upp till ett halvt dygn.
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0000000001")
+        setUpHoldingForReturnSeries(fond)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            assertEquals(1, benchmarkScans)
+
+            // Ny emission (kursändring) ska inte ge en till skanning.
+            latestPrices.value = mapOf(
+                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0),
+            )
+            awaitItem()
+
+            assertEquals(1, benchmarkScans)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen skanning begars nar en referensfond redan ar vald`() = runTest(dispatcher) {
+        setUpHoldingForReturnSeries()
+        preferencesRepository.setBenchmarkIsin(BENCHMARK_ISIN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+
+            assertEquals(0, benchmarkScans)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen skanning begars utan innehav`() = runTest(dispatcher) {
+        // Ingen portfölj att jämföra — skanningen kostar en källfråga och ska inte gå på tomgång.
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertEquals(0, benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }
