@@ -666,12 +666,21 @@ class HemScreenTest {
     )
 
     @Test
+    fun avkastningsdiagrammet_forklarar_att_kurvorna_nollstalls_mot_perioden() {
+        // Nollställningen är inte självklar av bilden ensam — utan texten ser en kurva som
+        // startar på 0 % ut som en portfölj utan avkastning (HEM-9).
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
+        composeRule.onNodeWithText("startar på 0 %", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun avkastningsdiagrammet_ar_tredje_kortet_och_natt_via_skroll() {
         // UI-5: kortet ligger under totalen och periodraden, alltså utanför skärmen på en
         // telefon — det ska gå att skrolla till, inte bara finnas i semantikträdet (issue #63).
         composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
 
-        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Avkastning över tid").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -683,7 +692,7 @@ class HemScreenTest {
         }
         // Ett periodbyte får inte fälla kortet — diagrammet ritas om, rubriken står kvar.
         composeRule.onNodeWithText("1 år").performScrollTo().performClick()
-        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Avkastning över tid").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -724,7 +733,7 @@ class HemScreenTest {
 
         composeRule.onNodeWithText("Ingen indexjämförelse än", substring = true).performScrollTo().assertIsDisplayed()
         // Kurvan ska fortfarande finnas — en utebliven jämförelse döljer inte diagrammet.
-        composeRule.onNodeWithText("Total avkastning över tid").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Avkastning över tid").performScrollTo().assertIsDisplayed()
     }
 
     @Test

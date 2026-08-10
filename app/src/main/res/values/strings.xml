@@ -30,9 +30,9 @@
     <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
 
     <!-- Hem — avkastningsdiagram med indexjämförelse (HEM-9/HEM-10, issue #96) -->
-    <string name="hem_return_chart_title">Total avkastning över tid</string>
+    <string name="hem_return_chart_title">Avkastning över tid</string>
     <string name="hem_return_chart_series_portfolio">Din portfölj</string>
-    <string name="hem_return_chart_explain">Samma mått som procenten överst: värdet mot vad du betalat för de andelar du fortfarande äger. Insättningar markeras i diagrammet — nya pengar till dagens kurs flyttar procenten utan att något stigit eller fallit.</string>
+    <string name="hem_return_chart_explain">Utvecklingen under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Välj Allt för hela innehavstiden; då slutar din kurva på samma procent som visas överst. Insättningar markeras — nya pengar till dagens kurs flyttar procenten utan att något stigit eller fallit.</string>
     <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, i den fonden i stället. Skatt och courtage ingår inte.</string>
     <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
     <string name="hem_return_chart_partial">Delvis osäker: någon fond saknar kurs för delar av perioden och är utelämnad de dagarna.</string>
@@ -129,7 +129,7 @@
     <string name="fond_chart_indexed_explain">Båda kurvorna startar på 100 vid periodens början — jämförelsen visar utveckling, inte kurs i kronor.</string>
     <string name="fond_chart_partial_comparison">Delvis jämförelse: fonderna har olika lång historik, så bara den gemensamma perioden visas.</string>
     <string name="format_fond_chart_comparison_description">Jämförelsediagram, %1$s, %2$s, indexerade till 100 vid periodens början</string>
-    <string name="format_fond_chart_description_percent">Avkastningsdiagram, %1$s, %2$d punkter mellan %3$s och %4$s. Kurvor: %5$s</string>
+    <string name="format_fond_chart_description_percent">Avkastningsdiagram, %1$s, nollställt vid periodens början. %2$d punkter mellan %3$s och %4$s. Kurvor: %5$s</string>
 
     <!-- Bytesbeslut på fondkortet (ANA-10/ANA-11, issue #85) -->
     <string name="switch_section_title">Ska du byta?</string>
