@@ -161,6 +161,8 @@ class HemViewModelTest {
         override fun triggerBenchmarkScan() {
             benchmarkScans++
         }
+        override fun scheduleDriveBackup() {}
+        override fun triggerDriveBackupNow() {}
         override fun observeIsRunning(): Flow<Boolean> = workRunning
     }
 

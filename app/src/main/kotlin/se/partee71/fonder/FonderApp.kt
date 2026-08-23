@@ -32,5 +32,8 @@ class FonderApp : Application(), Configuration.Provider {
         // FundPriceUpdateWorker.refreshAll:s egen staleness-gate.
         fundPriceRefreshScheduler.scheduleOnLaunch()
         fundPriceRefreshScheduler.scheduleBackstop()
+        // Dygnsvis molnbackup till Drive (SET-7). Hoppar över tyst när ingen är inloggad, så
+        // den kostar ingenting för den som inte använder molnbackupen.
+        fundPriceRefreshScheduler.scheduleDriveBackup()
     }
 }

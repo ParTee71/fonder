@@ -28,6 +28,8 @@ class WorkerStatusViewModelTest {
         override fun triggerManualRefresh() {}
         override fun triggerSwitchPlanScan() {}
         override fun triggerBenchmarkScan() {}
+        override fun scheduleDriveBackup() {}
+        override fun triggerDriveBackupNow() {}
         override fun observeIsRunning(): Flow<Boolean> = isRunning
     }
 

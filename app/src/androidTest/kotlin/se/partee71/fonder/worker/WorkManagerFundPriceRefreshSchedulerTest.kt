@@ -146,4 +146,46 @@ class WorkManagerFundPriceRefreshSchedulerTest {
         assertEquals(1, scanInfos.size)
         assertTrue(scanInfos.first().state != WorkInfo.State.CANCELLED)
     }
+
+    @Test
+    fun scheduleDriveBackup_koar_ett_periodiskt_arbete_under_eget_namn() {
+        // Eget namn, inte kursuppdateringens: den manuella "Uppdatera nu" (SET-2) ersätter
+        // (REPLACE) allt som väntar under sitt namn och får inte kunna avbryta en
+        // säkerhetskopiering (SET-7).
+        scheduler.scheduleDriveBackup()
+
+        val infos = workManager.getWorkInfosForUniqueWork(
+            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_WORK_NAME,
+        ).get()
+
+        assertEquals(1, infos.size)
+    }
+
+    @Test
+    fun triggerDriveBackupNow_ror_inte_den_periodiska_korningen() {
+        scheduler.scheduleDriveBackup()
+        scheduler.triggerDriveBackupNow()
+
+        val periodic = workManager.getWorkInfosForUniqueWork(
+            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_WORK_NAME,
+        ).get()
+        val now = workManager.getWorkInfosForUniqueWork(
+            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_NOW_WORK_NAME,
+        ).get()
+
+        assertEquals(1, periodic.size)
+        assertEquals(1, now.size)
+    }
+
+    @Test
+    fun drive_backup_avbryter_inte_den_manuella_kursuppdateringen() {
+        scheduler.triggerManualRefresh()
+        scheduler.triggerDriveBackupNow()
+
+        val priceRefresh = workManager.getWorkInfosForUniqueWork(
+            WorkManagerFundPriceRefreshScheduler.ONE_TIME_WORK_NAME,
+        ).get()
+
+        assertEquals(1, priceRefresh.size)
+    }
 }

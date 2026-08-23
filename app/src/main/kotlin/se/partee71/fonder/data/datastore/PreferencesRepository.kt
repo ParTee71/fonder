@@ -2,6 +2,7 @@ package se.partee71.fonder.data.datastore
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -51,6 +52,8 @@ class PreferencesRepository @Inject constructor(
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
     private val benchmarkKey = stringPreferencesKey("benchmark_components")
     private val chosenBenchmarkKey = stringPreferencesKey("chosen_benchmark_isin")
+    private val lastDriveBackupKey = longPreferencesKey("last_drive_backup_epoch_millis")
+    private val driveBackupNeedsAuthKey = booleanPreferencesKey("drive_backup_needs_auth")
 
     val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
         prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -70,6 +73,31 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setLastPriceSyncEpochMillis(epochMillis: Long) {
         dataStore.edit { it[lastPriceSyncKey] = epochMillis }
+    }
+
+    /**
+     * Tidpunkten för senaste lyckade molnbackup till Drive (SET-7), null om ingen körts än.
+     * Ren cache-metadata som hör till **enheten**, inte till portföljen — ingår därför medvetet
+     * inte i backup-kontraktet (NFR-1), av samma skäl som [lastPriceSyncEpochMillis]. Att
+     * återställa en tidsstämpel för en kopia tagen på en annan telefon vore missvisande.
+     */
+    val lastDriveBackupEpochMillis: Flow<Long?> = preferences.map { prefs -> prefs[lastDriveBackupKey] }
+
+    suspend fun setLastDriveBackupEpochMillis(epochMillis: Long) {
+        dataStore.edit { it[lastDriveBackupKey] = epochMillis }
+    }
+
+    /**
+     * Sant när Drive-scopet (`drive.appdata`) inte är beviljat, så Inställningar kan erbjuda
+     * knappen som löser det. Sätts av [se.partee71.fonder.worker.DriveBackupWorker] när en
+     * bakgrundskörning stoppats av just det — en retry kan inte lösa saken, bara användaren.
+     * Cache-metadata, utanför backup-kontraktet (samma skäl som ovan).
+     */
+    val driveBackupNeedsAuth: Flow<Boolean> =
+        preferences.map { prefs -> prefs[driveBackupNeedsAuthKey] ?: false }
+
+    suspend fun setDriveBackupNeedsAuth(needsAuth: Boolean) {
+        dataStore.edit { it[driveBackupNeedsAuthKey] = needsAuth }
     }
 
     /**

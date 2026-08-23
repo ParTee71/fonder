@@ -32,8 +32,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 60
-        versionName = versionNameOverride ?: "0.51.0"
+        versionCode = 61
+        versionName = versionNameOverride ?: "0.52.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -196,6 +196,12 @@ dependencies {
     // Explicit, inte transitivt: FirebaseAuthRepository importerar kotlinx.coroutines.tasks.await
     // direkt, och versionen måste följa projektets övriga coroutines-version.
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Molnbackup till Drive (TP-7 steg 2, SET-7). play-services-auth krävs för
+    // Identity.getAuthorizationClient, som begär drive.appdata-scopet skilt från inloggningen.
+    implementation(libs.google.auth.play.services)
+    implementation(libs.google.api.client.android)
+    implementation(libs.google.api.services.drive)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
