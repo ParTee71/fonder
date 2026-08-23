@@ -692,7 +692,7 @@ class SettingsViewModelTest {
         }
         val vm = SettingsViewModel(
             PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler,
-            fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo,
+            fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo, fakeDriveRepo,
         )
 
         vm.uiState.test {
