@@ -59,8 +59,43 @@ jobs:
           name: test-results
           path: app/build/reports/tests/testDebugUnitTest/
 
+  # Sidoordnat build-and-test (inget needs:) — jobben kör samtidigt på var sin runner,
+  # så grinden kostar en extra runner men ingen extra väntetid.
+  #
+  # Skälet: CI byggde bara debug, som inte kör R8. Minifiering, resursskrympning och
+  # proguard-reglerna rördes därför av ingen automatik alls — de prövades först när
+  # någon försökte släppa. Det brast två gånger: pdfbox saknade JPEG-2000-avkodare låg
+  # latent i månader (#108), och Google API-klienten (#111) avvärjdes bara av ett
+  # manuellt releasebygge någon råkade tänka på. Varje nytt beroende var en obevakad
+  # R8-risk fram tills nästa släpp.
+  release-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Osignerat med flit: build.gradle.kts sätter bara signingConfig när SIGNING_*
+      # finns, så jobbet behöver varken keystore eller secrets — och fungerar därmed
+      # även från en fork. APK:n slängs; det är R8 vi är ute efter, inget installerbart
+      # (att publicera en APK är release.yml:s uppgift).
+      - name: Bygg release (R8 + resursskrympning)
+        run: ./gradlew :app:assembleRelease
+
   cancel-instrumented-on-failure:
-    needs: build-and-test
+    # Båda jobben, inte bara build-and-test: ett R8-fel ska också avbryta emulatorn,
+    # annars betalas 18 minuter för ett bygge som redan är dömt.
+    needs: [build-and-test, release-build]
     if: failure() || cancelled()
     runs-on: ubuntu-latest
     permissions:
