@@ -251,8 +251,15 @@
     <string name="theme_light">Ljust</string>
     <string name="theme_dark">Mörkt</string>
     <string name="theme_auto">Auto</string>
-    <string name="settings_account_section">Google-konto &amp; säkerhetskopiering</string>
-    <string name="settings_account_body">Inloggning och molnbackup läggs till i en kommande version.</string>
+    <string name="settings_account_section">Google-konto</string>
+    <string name="settings_account_signed_out">Inte inloggad</string>
+    <string name="format_settings_account_signed_in">Inloggad som %1$s</string>
+    <string name="settings_account_unknown_user">ditt Google-konto</string>
+    <string name="settings_account_body">Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Google Drive, som läggs till i en kommande version. Säkerhetskopiering till fil fungerar utan inloggning.</string>
+    <string name="settings_account_sign_in_button">Logga in med Google</string>
+    <string name="settings_account_sign_out_button">Logga ut</string>
+    <string name="sign_in_failed">Inloggningen misslyckades. Försök igen.</string>
+    <string name="sign_in_failed_no_credential">Inget Google-konto hittades på enheten. Lägg till ett konto i Androids inställningar och försök igen.</string>
     <!-- Kursuppdatering (SET-2, issue #27) -->
     <string name="settings_price_update_section">Kursuppdatering</string>
     <string name="settings_price_update_body">Kurser uppdateras automatiskt i bakgrunden. Vill du inte vänta kan du uppdatera direkt.</string>

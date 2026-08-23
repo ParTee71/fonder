@@ -15,6 +15,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Repot är publikt, och .gitignore skyddar inte mot GitHub-webbens uppladdning eller
+      # `git add -f` — så release-nyckeln checkades in en gång (commit 9403cf5) och låg
+      # publikt tills den upptäcktes. Den här grinden fäller bygget i stället, för alla
+      # nyckelfiler utom den avsiktligt incheckade debug-nyckeln (vars lösenord är Androids
+      # kända standardvärden och därför inte är en hemlighet).
+      - name: Ingen signeringsnyckel i repot
+        run: |
+          set -euo pipefail
+          found=$(git ls-files '*.jks' '*.keystore' '*.p12' '*.pem' \
+            | grep -v '^app/debug\.keystore$' || true)
+          if [ -n "$found" ]; then
+            echo "::error::Signeringsnyckel incheckad: $found — ta bort den och betrakta nyckeln som bränd (docs/GOOGLE-SETUP.md)"
+            exit 1
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

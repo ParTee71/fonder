@@ -71,6 +71,8 @@ hilt-navigation-compose              = { group = "androidx.hilt",            nam
 kotlinx-serialization-json           = { group = "org.jetbrains.kotlinx",    name = "kotlinx-serialization-json",     version.ref = "kotlinxSerializationJson" }
 kotlinx-coroutines-android           = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-android",     version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test              = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-test",        version.ref = "kotlinxCoroutines" }
+# Task.await() för Firebase Auth (TP-6) — samma coroutines-version som resten av projektet
+kotlinx-coroutines-play-services     = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutines" }
 coil-compose                         = { group = "io.coil-kt",               name = "coil-compose",                   version.ref = "coil" }
 androidx-core-splashscreen           = { group = "androidx.core",            name = "core-splashscreen",              version.ref = "coreSplashscreen" }
 androidx-compose-ui-text-googlefonts = { group = "androidx.compose.ui",      name = "ui-text-google-fonts" }

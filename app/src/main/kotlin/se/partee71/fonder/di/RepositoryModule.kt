@@ -6,7 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.auth.AuthRepository
-import se.partee71.fonder.data.auth.StubAuthRepository
+import se.partee71.fonder.data.auth.FirebaseAuthRepository
 import se.partee71.fonder.data.imports.PdfBoxTextExtractor
 import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.network.AvanzaClient
@@ -67,7 +67,7 @@ abstract class RepositoryModule {
     abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
 
     @Binds
-    abstract fun bindAuthRepository(impl: StubAuthRepository): AuthRepository
+    abstract fun bindAuthRepository(impl: FirebaseAuthRepository): AuthRepository
 
     @Binds
     abstract fun bindFundPriceRefreshScheduler(impl: WorkManagerFundPriceRefreshScheduler): FundPriceRefreshScheduler

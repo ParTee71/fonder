@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.50.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.51.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -49,9 +49,9 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Riskprofil som målfördelning över flera risknivåer, i stället för en enda nivå (SET-3/HEM-7/POR-9, #71)
 - [x] Bytesplan i ISK: rangordnade fondbyten mot målfördelningen, med facit-inspelning (SET-4/HEM-8, #70)
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
-- [ ] Google Drive-backup — steg 2 av TP-7, väntar på en OAuth-klient med `drive.appdata`
-      ([uppsättning](docs/GOOGLE-SETUP.md))
-- [ ] Google-inloggning — väntar på Firebase-projekt för fonder
+- [x] Google-inloggning — Firebase Auth + Credential Manager, kontokort i Inställningar
+      (TP-6, #106)
+- [ ] Google Drive-backup — steg 2 av TP-7, väntar på att `drive.appdata` tas i bruk
       ([uppsättning](docs/GOOGLE-SETUP.md))
 
 ---
@@ -83,8 +83,13 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 
 Google-inloggning (TP-6) och Drive-backup (TP-7 steg 2) kräver en `google-services.json`
 från Firebase Console i `app/`. Filen är **incheckad** — `google-services`-pluginet läser
-den vid varje bygge, så utan den i repot går CI inte att köra. Beroendena finns
-deklarerade i `gradle/libs.versions.toml` men kopplas in först i respektive issue.
+den vid varje bygge, så utan den i repot går CI inte att köra. Inloggningen är byggd sedan
+#106; Drive-beroendena ligger deklarerade i `gradle/libs.versions.toml` och kopplas in i
+sitt eget issue.
+
+Signeringsnycklar (`*.jks`, `*.keystore`) får **aldrig** checkas in — CI har en grind som
+fäller bygget om någon gör det. Undantaget är `app/debug.keystore`, som är avsiktligt
+incheckad med Androids kända standardlösenord.
 
 Uppsättningen — Firebase-projekt, SHA-1-fingeravtryck, OAuth-medgivandeskärm och Drive
 API — är dokumenterad steg för steg i **[docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md)**.
@@ -122,7 +127,7 @@ Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 
 ```
 data/
-├── auth/         AuthRepository (Google-inloggning — stub tills auth-issue)
+├── auth/         AuthRepository + FirebaseAuthRepository (Google-inloggning via Credential Manager, TP-6/#106)
 ├── datastore/    PreferencesRepository (tema, riskprofil #68 m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·

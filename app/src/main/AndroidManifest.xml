@@ -7,10 +7,20 @@
     <!-- Androids inbyggda Auto Backup (Google-kontots molnlagring) som interimistiskt
          skydd tills Drive-backupen (TP-7, NFR-1) är byggd — annars finns i dag inget sätt
          att återställa data efter en förlorad/nollställd enhet. fonder.db är litet, långt
-         under 25 MB-kvoten. Ingen känslig auth-data att exkludera ännu (StubAuthRepository). -->
+         under 25 MB-kvoten.
+
+         Regelfilerna pekas ut här, vilket de tidigare inte gjorde: backup_rules.xml fanns
+         men refererades aldrig, så Auto Backup tog med *hela* datakatalogen. Det spelade
+         ingen roll så länge inloggningen var en stub, men gör det i och med TP-6 — sedan
+         dess persisterar firebase-auth en session i appens filer, och den ska varken till
+         molnet eller till en ny enhet. Båda attributen behövs: fullBackupContent gäller
+         API 30 (minSdk), dataExtractionRules API 31+. Listorna är include-listor, så
+         skyddet är att sessionen inte står med — inte att den exkluderas. -->
     <application
         android:name=".FonderApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

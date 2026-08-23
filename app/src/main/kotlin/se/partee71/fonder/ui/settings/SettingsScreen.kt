@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
+import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.domain.model.AccountType
@@ -93,6 +94,9 @@ fun SettingsScreen(
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
         onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
         onBackupMessageDismissed = viewModel::onBackupMessageDismissed,
+        onSignIn = { viewModel.signIn(context) },
+        onSignOut = viewModel::signOut,
+        onSignInErrorDismissed = viewModel::onSignInErrorDismissed,
         onClearDatabase = viewModel::clearDatabase,
         onClearedMessageDismissed = viewModel::onClearedMessageDismissed,
         modifier = modifier,
@@ -115,6 +119,9 @@ fun SettingsContent(
     onExportBackup: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
     onBackupMessageDismissed: () -> Unit = {},
+    onSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+    onSignInErrorDismissed: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
     onClearedMessageDismissed: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -243,15 +250,53 @@ fun SettingsContent(
             }
         }
 
+        // Google-konto (TP-6). Inloggningen flyttar ingen data i sig — den är förutsättningen
+        // för molnbackupen (TP-7 steg 2), vilket kortets text säger rakt ut så att "inloggad"
+        // inte förväxlas med "säkerhetskopierad".
         Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(stringResource(R.string.settings_account_section), style = MaterialTheme.typography.titleSmall)
                 Text(
+                    state.googleUser?.let { user ->
+                        stringResource(
+                            R.string.format_settings_account_signed_in,
+                            user.email ?: user.displayName ?: stringResource(R.string.settings_account_unknown_user),
+                        )
+                    } ?: stringResource(R.string.settings_account_signed_out),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
                     stringResource(R.string.settings_account_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
+                // Ett avbrutet kontoval är inget fel och når aldrig hit — se
+                // SettingsViewModel.signIn. Kvitteras bort som övriga engångshändelser (#78).
+                state.signInError?.let { reason ->
+                    Text(
+                        signInErrorText(reason),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    TextButton(
+                        onClick = onSignInErrorDismissed,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    ) { Text(stringResource(R.string.close)) }
+                }
+                if (state.googleUser == null) {
+                    Button(
+                        onClick = onSignIn,
+                        enabled = !state.signInInProgress,
+                    ) { Text(stringResource(R.string.settings_account_sign_in_button)) }
+                } else {
+                    TextButton(
+                        onClick = onSignOut,
+                        enabled = !state.signInInProgress,
+                    ) { Text(stringResource(R.string.settings_account_sign_out_button)) }
+                }
             }
         }
 
@@ -409,6 +454,16 @@ private fun backupMessageText(message: BackupMessage): String = when (message) {
         BackupFormatException.Reason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_restore_failed_version)
         BackupFormatException.Reason.UNREADABLE -> stringResource(R.string.backup_restore_failed_unreadable)
     }
+}
+
+@Composable
+private fun signInErrorText(reason: SignInException.Reason): String = when (reason) {
+    SignInException.Reason.NO_CREDENTIAL -> stringResource(R.string.sign_in_failed_no_credential)
+    SignInException.Reason.FAILED -> stringResource(R.string.sign_in_failed)
+    // Kommer aldrig hit: ett avbrutet val filtreras bort i SettingsViewModel.signIn. Grenen
+    // finns för att `when` ska vara uttömmande utan `else`, så en ny orsak fäller kompileringen
+    // i stället för att tyst visa fel text.
+    SignInException.Reason.CANCELLED -> stringResource(R.string.sign_in_failed)
 }
 
 @Composable

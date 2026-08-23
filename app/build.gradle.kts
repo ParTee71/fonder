@@ -10,6 +10,10 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
+    // Läser app/google-services.json och genererar bl.a. R.string.default_web_client_id,
+    // som Credential Manager begär ID-token för (TP-6). Filen är incheckad — utan den
+    // fäller pluginet bygget, se docs/GOOGLE-SETUP.md.
+    alias(libs.plugins.google.services)
 }
 
 private val buildTimestamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
@@ -28,8 +32,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 59
-        versionName = versionNameOverride ?: "0.50.0"
+        versionCode = 60
+        versionName = versionNameOverride ?: "0.51.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -181,6 +185,17 @@ dependencies {
 
     // Diagram (kurshistorik i Fonddetalj, se issue #7)
     implementation(libs.vico.compose.m3)
+
+    // Google-inloggning (TP-6) — Firebase Auth växlar Googles ID-token mot en session,
+    // Credential Manager äger kontoväljaren (ersätter utfasade GoogleSignIn).
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services)
+    implementation(libs.googleid)
+    // Explicit, inte transitivt: FirebaseAuthRepository importerar kotlinx.coroutines.tasks.await
+    // direkt, och versionen måste följa projektets övriga coroutines-version.
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
