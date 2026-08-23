@@ -68,13 +68,19 @@ Proceed with v<new_name>, or a different version?
 
 ---
 
-## Step 3 — Update version + README
+## Step 3 — Update version + README version history
 
 1. Edit `app/build.gradle.kts`: `versionCode = <new>` and `versionName = "<new>"`. Verify the
    edit before committing.
 2. Update the version line near the top of `README.md`
    (`> Version: <new_name> (följer versionName/KRAVLISTA.md)`).
-3. Confirm `KRAVLISTA.md` already reflects the shipped behaviour (features update it as they
+3. **Add a new row to the README "Versionshistorik" table** for `<new_name>`, summarising the
+   user-visible changes shipped since the last release (mirror the style of the existing rows:
+   one dense sentence per theme, with the `(#NN)` PR/issue refs). Feature PRs land throughout the
+   cycle **without** touching this table — so at release time the row is *written here*, not merely
+   "confirmed". Read the commits from Step 2 to compose it. This is the table `CLAUDE.md`'s rule 3
+   refers to.
+4. Confirm `KRAVLISTA.md` already reflects the shipped behaviour (features update it as they
    land, per rule 3 in `CLAUDE.md`) and that the documented SDK levels still match
    `build.gradle.kts` (e.g. `compileSdk`) — fix if a build-config change slipped through
    without a requirement update.
