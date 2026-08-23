@@ -117,6 +117,20 @@ läggs upp.
 
 ---
 
+## Versionshistorik
+
+Tabellen skrivs vid varje release (se `.claude/skills/release`) och sammanfattar det
+**användarsynliga** som kommit sedan föregående version. Den är avsiktligt kort — motiven
+bakom besluten står i [KRAVLISTA.md](KRAVLISTA.md), som uppdateras löpande när varje
+ändring landar. Tabellen börjar vid 0.51.0; för allt före det är KRAVLISTAs `Historik`
+den fullständiga källan.
+
+| Version | Innehåll |
+|---|---|
+| 0.51.0 | **Google-inloggning** i Inställningar via Firebase Auth och Credential Manager (TP-6, #106): kortet visar inloggad adress och "Logga ut", eller "Inte inloggad" och en inloggningsknapp. Ett avbrutet kontoval visas aldrig som ett fel. Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Drive (TP-7 steg 2), vilket kortets text säger rakt ut. Auto Backup begränsas samtidigt till databasen och inställningarna; tidigare kopierades appens hela datakatalog, vilket nu även hade omfattat den sparade inloggningen (NFR-1) |
+
+---
+
 ## Arkitektur
 
 ```
