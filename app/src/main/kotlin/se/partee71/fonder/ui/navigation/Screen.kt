@@ -34,6 +34,8 @@ fun titleResFor(route: String?): Int? = when (route) {
     Routes.RISK_PROFILE -> se.partee71.fonder.R.string.riskprofil_title
     Routes.FACIT -> se.partee71.fonder.R.string.facit_title
     Routes.BENCHMARK_PICKER -> se.partee71.fonder.R.string.settings_benchmark_section
+    Routes.SWITCH_WATCH -> se.partee71.fonder.R.string.switch_watch_title
+    Routes.SWITCH_WATCH_PICKER -> se.partee71.fonder.R.string.switch_watch_add_candidate
     else -> null
 }
 
@@ -60,4 +62,16 @@ object Routes {
     /** Facit — utfallet av bytesplanens inspelade förslag, nås från Inställningar (SET-5, issue #80). */
     const val BENCHMARK_PICKER = "benchmark_picker"
     const val FACIT = "facit"
+
+    /** Pågående byte — perioden mellan sälj och köp med de bevakade alternativen (ANA-12, issue #114). */
+    const val SWITCH_WATCH = "switch-watch/{watchId}"
+    fun switchWatch(watchId: Long) = "switch-watch/$watchId"
+
+    /**
+     * Fondsök i valläge för att lägga till ett eget alternativ i en bevakning (ANA-13) — samma
+     * mönster som [BENCHMARK_PICKER], men rutten bär bevakningens id så den valda fonden hamnar
+     * i rätt bevakning även om skärmen återskapas.
+     */
+    const val SWITCH_WATCH_PICKER = "switch-watch/{watchId}/lagg-till"
+    fun switchWatchPicker(watchId: Long) = "switch-watch/$watchId/lagg-till"
 }

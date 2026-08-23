@@ -11,6 +11,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,15 +62,27 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
  */
 @Composable
 fun FondDetaljScreen(
+    onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FondDetaljViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Samma mönster som Hem (HEM-11): en nystartad bevakning öppnas direkt, annars ser knappen
+    // ut som om den inte gjorde något — bevakningen är tom tills kandidaterna hämtats.
+    LaunchedEffect(state.startedSwitchWatchId) {
+        state.startedSwitchWatchId?.let { watchId ->
+            onOpenSwitchWatch(watchId)
+            viewModel.onSwitchWatchOpened()
+        }
+    }
+
     FondDetaljContent(
         state = state,
         onIsinConfirmed = viewModel::onIsinConfirmed,
         onSuggestionExpanded = viewModel::onSuggestionExpanded,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        onStartSwitchWatch = viewModel::startSwitchWatch,
         modifier = modifier,
     )
 }
@@ -81,6 +94,7 @@ fun FondDetaljContent(
     onIsinConfirmed: (String) -> Unit = {},
     onSuggestionExpanded: (String) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -116,6 +130,7 @@ fun FondDetaljContent(
                             chartPoints = chartPoints,
                             onSuggestionExpanded = onSuggestionExpanded,
                             onSwitchFollowedChange = onSwitchFollowedChange,
+                            onStartSwitchWatch = onStartSwitchWatch,
                             modifier = Modifier.padding(vertical = 16.dp),
                         )
                         HorizontalDivider()
@@ -207,6 +222,7 @@ private fun SwitchDecisionSection(
     chartPoints: List<Pair<Long, Double>>,
     onSuggestionExpanded: (String) -> Unit,
     onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -228,6 +244,8 @@ private fun SwitchDecisionSection(
                     comparison = state.comparisons[suggestion.counterpartIsin(state.isin)],
                     onSuggestionExpanded = onSuggestionExpanded,
                     onSwitchFollowedChange = onSwitchFollowedChange,
+                    watched = suggestion.sellIsin in state.watchedSellIsins,
+                    onStartSwitchWatch = onStartSwitchWatch,
                 )
             }
         }
@@ -312,6 +330,8 @@ private fun SwitchPlanRow(
     comparison: ComparisonUiState?,
     onSuggestionExpanded: (String) -> Unit,
     onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    watched: Boolean,
+    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
 ) {
     val sellingThisFund = suggestion.sellIsin == fundIsin
     val counterpartName = if (sellingThisFund) suggestion.buyFundName else suggestion.sellFundName
@@ -362,6 +382,14 @@ private fun SwitchPlanRow(
             followed = suggestion.followed,
             onFollowedChange = { checked -> onSwitchFollowedChange(suggestion.recordId, checked) },
         )
+        // Bevaka alternativ (ANA-12) — först efter kvitteringen, av samma skäl som på Hem:
+        // bevakningen gäller perioden **efter** säljet, och en öppen bevakning för säljfonden
+        // ska inte kunna startas en gång till.
+        if (suggestion.followed && !watched) {
+            TextButton(onClick = { onStartSwitchWatch(suggestion) }) {
+                Text(stringResource(R.string.switch_watch_start))
+            }
+        }
     }
 }
 

@@ -17,7 +17,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,16 +43,35 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 /** Realiserat resultat per sälj (FIFO), en egen vy skild från orealiserad utveckling (issue #10). */
 @Composable
 fun SoldFundsScreen(
+    onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SoldFundsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    SoldFundsContent(state = state, modifier = modifier)
+
+    // En nystartad bevakning öppnas direkt — samma skäl som på Hem: den är tom tills
+    // kandidaterna hämtats, och att bli kvar här hade sett ut som att knappen inte gjorde något.
+    LaunchedEffect(state.startedSwitchWatchId) {
+        state.startedSwitchWatchId?.let { watchId ->
+            onOpenSwitchWatch(watchId)
+            viewModel.onSwitchWatchOpened()
+        }
+    }
+
+    SoldFundsContent(
+        state = state,
+        onStartSwitchWatch = viewModel::startSwitchWatch,
+        modifier = modifier,
+    )
 }
 
 /** Tillståndsdriven, testbar del av [SoldFundsScreen] — inget ViewModel/Hilt-beroende (issue #21). */
 @Composable
-fun SoldFundsContent(state: SoldFundsUiState, modifier: Modifier = Modifier) {
+fun SoldFundsContent(
+    state: SoldFundsUiState,
+    onStartSwitchWatch: (SoldFundRad) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     if (state.isEmpty) {
         EmptyState(
             title = stringResource(R.string.sold_funds_empty_title),
@@ -62,7 +83,7 @@ fun SoldFundsContent(state: SoldFundsUiState, modifier: Modifier = Modifier) {
             SoldFundsTotalCard(state = state)
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.rows, key = { it.sale.transactionId }) { row ->
-                    SoldFundRow(row = row)
+                    SoldFundRow(row = row, onStartSwitchWatch = onStartSwitchWatch)
                 }
             }
         }
@@ -95,7 +116,7 @@ private fun SoldFundsTotalCard(state: SoldFundsUiState) {
  * `rememberSaveable`) återanvänds ändå för konsekvens.
  */
 @Composable
-private fun SoldFundRow(row: SoldFundRad) {
+private fun SoldFundRow(row: SoldFundRad, onStartSwitchWatch: (SoldFundRad) -> Unit) {
     val sale = row.sale
     var expanded by rememberSaveable { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -151,6 +172,15 @@ private fun SoldFundRow(row: SoldFundRad) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
+                    }
+                    // Bevaka alternativ (SLD-5, issue #114) — den fristående vägen in i ett
+                    // pågående byte, för ett byte gjort utanför bytesplanen. Ligger i den
+                    // utfällda delen: raden i hopfällt läge är avsiktligt bara namn och
+                    // resultat (SLD-4), och en knapp där hade brutit den regeln för alla rader.
+                    if (row.canStartSwitchWatch) {
+                        TextButton(onClick = { onStartSwitchWatch(row) }) {
+                            Text(stringResource(R.string.switch_watch_start))
+                        }
                     }
                 }
             }

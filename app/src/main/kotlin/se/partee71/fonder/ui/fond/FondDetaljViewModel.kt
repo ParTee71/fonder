@@ -20,6 +20,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
+import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.AccountType
@@ -29,6 +30,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
@@ -78,6 +80,10 @@ data class FondDetaljUiState(
      * listan räknas fram live vid skärmöppning, raden skrivs av bakgrundsskanningen.
      */
     val recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
+    /** Säljfonder som redan har en öppen bevakning (ANA-12) — styr om ett kvitterat byte erbjuder "Bevaka alternativ". */
+    val watchedSellIsins: Set<String> = emptySet(),
+    /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [FondDetaljViewModel.onSwitchWatchOpened]. */
+    val startedSwitchWatchId: Long? = null,
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
 }
@@ -172,9 +178,13 @@ class FondDetaljViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val switchWatchRepository: SwitchWatchRepository,
 ) : ViewModel() {
 
     private val fundId: String = checkNotNull(savedStateHandle["fundId"])
+
+    /** Se [FondDetaljUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
+    private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
     private val suggestedIsin = MutableStateFlow<String?>(null)
     private val feeComparisonState = MutableStateFlow<FeeComparisonUiState?>(null)
 
@@ -260,12 +270,19 @@ class FondDetaljViewModel @Inject constructor(
         suggestionRecordRepository.observeHistory(),
     ) { accountType, batch, metadataByIsin, history -> PlanInput(accountType, batch, metadataByIsin, history) }
 
+    /** Öppna bevakningar och den nystartades id — hållna ihop så combinen nedan inte växer i onödan. */
+    private val switchWatchState: Flow<Pair<Set<String>, Long?>> = combine(
+        switchWatchRepository.observeOpen().map { watches -> watches.mapTo(mutableSetOf<String>()) { it.sellIsin } },
+        startedSwitchWatchId,
+    ) { sellIsins, startedId -> sellIsins to startedId }
+
     val uiState: StateFlow<FondDetaljUiState> = combine(
         baseUiState,
         feeComparisonState,
         planInput,
         comparisons,
-    ) { state, feeComparison, plan, comparisonsByIsin ->
+        switchWatchState,
+    ) { state, feeComparison, plan, comparisonsByIsin, (watchedSellIsins, startedWatchId) ->
         // Metadatan behövs för fondens egen risknivå **och** för att kunna slå upp planens
         // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
         // `metadata`-flödet ovan utan att blockera tillståndet.
@@ -277,12 +294,42 @@ class FondDetaljViewModel @Inject constructor(
             switchPlan = SwitchPlanResolver.forFund(resolvedPlan, state.isin),
             comparisons = comparisonsByIsin,
             recordedFeeSwitches = recordedFeeSwitches(plan.history, state.isin),
+            watchedSellIsins = watchedSellIsins,
+            startedSwitchWatchId = startedWatchId,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = FondDetaljUiState(),
     )
+
+    /**
+     * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12, issue
+     * #114) — identisk med Hems väg (`HemViewModel.startSwitchWatch`), eftersom det är samma
+     * förslag och samma inspelade rad: fondkortet och Hem får aldrig ge två olika bevakningar
+     * av samma byte.
+     */
+    fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
+        viewModelScope.launch {
+            val today = LocalDate.now()
+            if (switchWatchRepository.hasOpenFor(suggestion.sellIsin, today.toEpochDay())) return@launch
+            startedSwitchWatchId.value = switchWatchRepository.start(
+                SwitchWatch(
+                    sellIsin = suggestion.sellIsin,
+                    sellFundName = suggestion.sellFundName,
+                    soldAtEpochDay = today.toEpochDay(),
+                    proceedsKr = suggestion.switchValueKr,
+                    targetLevel = suggestion.toLevel,
+                    sourceRecordId = suggestion.recordId,
+                ),
+            )
+        }
+    }
+
+    /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
+    fun onSwitchWatchOpened() {
+        startedSwitchWatchId.value = null
+    }
 
     /**
      * De inspelade avgiftsbytena för fonden [isin], nycklade på kandidatens ISIN (issue #91).

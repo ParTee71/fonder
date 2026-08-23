@@ -415,7 +415,7 @@
     <string name="settings_backup_restore_button">Återställ från fil</string>
     <string name="backup_export_success">Säkerhetskopian har sparats.</string>
     <string name="backup_export_failed">Kunde inte spara säkerhetskopian. Ingenting har ändrats.</string>
-    <string name="format_backup_restore_success">Återställt: %1$d fonder, %2$d transaktioner och %3$d inspelade förslag.</string>
+    <string name="format_backup_restore_success">Återställt: %1$d fonder, %2$d transaktioner, %3$d inspelade förslag och %4$d bevakade byten.</string>
     <string name="backup_restore_failed_unreadable">Filen kunde inte läsas som en säkerhetskopia. Ingenting har ändrats.</string>
     <string name="backup_restore_failed_version">Filen kommer från en nyare version av appen och kan inte läsas. Ingenting har ändrats.</string>
     <string name="settings_drive_backup_title">Molnbackup till Google Drive</string>
@@ -437,4 +437,33 @@
     <string name="settings_clear_database_success">Databasen har tömts.</string>
     <string name="clear_database_confirm_title">Töm databasen?</string>
     <string name="clear_database_confirm_body">Alla fonder, transaktioner och cachade kurser raderas permanent. Detta går inte att ångra.</string>
+    <!-- Pågående byte (ANA-12/ANA-13/HEM-11/SLD-5, issue #114) -->
+    <string name="switch_watch_title">Pågående byte</string>
+    <string name="switch_watch_start">Bevaka alternativ</string>
+    <string name="format_switch_watch_sold">Sålt %1$s · %2$s</string>
+    <string name="format_switch_watch_amount">Belopp: %1$s</string>
+    <string name="format_switch_watch_day">Dag %1$d av %2$d i väntan på likviden</string>
+    <string name="format_switch_watch_expired">Bevakningen är äldre än %1$d dygn och beskriver inte längre läget.</string>
+    <string name="format_switch_watch_bought">Köpte %1$s</string>
+    <string name="switch_watch_closed">Bevakningen är avslutad.</string>
+    <string name="switch_watch_chart_unavailable">Kunde inte hämta kurshistorik för någon av fonderna — ingen jämförelse visas.</string>
+    <string name="switch_watch_change_label">Sedan säljdagen</string>
+    <string name="format_switch_watch_fee">Avgift %1$s</string>
+    <string name="switch_watch_history_unavailable">Ingen källa kunde ge kursen — utvecklingen går inte att visa för den här fonden.</string>
+    <string name="switch_watch_bought_action">Köpte den här</string>
+    <string name="switch_watch_remove_candidate">Ta bort</string>
+    <string name="switch_watch_add_candidate">Lägg till alternativ</string>
+    <string name="switch_watch_filling">Hämtar förslag på alternativ…</string>
+    <string name="switch_watch_empty_body">Inga alternativ bevakas än. Lägg till de fonder du överväger att byta till.</string>
+    <string name="switch_watch_missing_title">Bevakningen finns inte</string>
+    <string name="switch_watch_missing_body">Det pågående bytet har tagits bort eller återställts bort. Starta en ny bevakning från Sålda fonder eller från ett bytesförslag.</string>
+    <string name="switch_watch_isin_unavailable">Fonden kunde inte identifieras med ISIN och går därför inte att bevaka — kurserna hämtas på ISIN.</string>
+    <string name="format_switch_watch_limit">Du kan bevaka högst %1$d alternativ åt gången.</string>
+    <string name="switch_watch_cancel">Avbryt bevakningen</string>
+    <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. Kvitteringen registrerar bara vad du gjort — köpet lägger du in som en vanlig transaktion.</string>
+    <string name="hem_switch_watch_title">Pågående byte</string>
+    <string name="format_hem_switch_watch">Sålt %1$s · dag %2$d · %3$d alternativ bevakas</string>
+    <string name="format_hem_switch_watch_leader">Bäst sedan säljdagen: %1$s (%2$s)</string>
+    <string name="hem_switch_watch_open">Visa bevakningen</string>
+    <string name="hem_switch_watch_no_leader">Ingen utveckling uppmätt än — kurserna fylls på i bakgrunden.</string>
 </resources>

@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,15 +42,28 @@ import se.partee71.fonder.ui.theme.ReturnColors
 @Composable
 fun HemScreen(
     onFundClick: (String) -> Unit,
+    onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HemViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // En nystartad bevakning öppnas direkt: den är tom tills kandidaterna hämtats, och att
+    // lämna användaren kvar på Hem hade sett ut som att knappen inte gjorde något.
+    LaunchedEffect(state.startedSwitchWatchId) {
+        state.startedSwitchWatchId?.let { watchId ->
+            onOpenSwitchWatch(watchId)
+            viewModel.onSwitchWatchOpened()
+        }
+    }
+
     HemContent(
         state = state,
         onFundClick = onFundClick,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
+        onStartSwitchWatch = viewModel::startSwitchWatch,
+        onOpenSwitchWatch = onOpenSwitchWatch,
         modifier = modifier,
     )
 }
@@ -67,6 +81,8 @@ fun HemContent(
     onFundClick: (String) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onRecomputeSwitchPlan: () -> Unit = {},
+    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit = {},
+    onOpenSwitchWatch: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -78,6 +94,9 @@ fun HemContent(
 
         else -> LazyColumn(modifier = modifier.fillMaxSize()) {
             item { TotalCard(state = state) }
+            state.openSwitchWatch?.let { watch ->
+                item { SwitchWatchCard(watch = watch, onOpen = onOpenSwitchWatch) }
+            }
             item { PerformanceCard(performance = state.performance) }
             item { ReturnChartCard(state = state) }
             item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
@@ -91,8 +110,10 @@ fun HemContent(
                         switchPlan = state.switchPlan,
                         canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
                         recomputeRunning = state.backgroundWorkRunning,
+                        watchedSellIsins = state.watchedSellIsins,
                         onSwitchFollowedChange = onSwitchFollowedChange,
                         onRecomputeSwitchPlan = onRecomputeSwitchPlan,
+                        onStartSwitchWatch = onStartSwitchWatch,
                     )
                 }
             }
@@ -417,8 +438,10 @@ private fun RiskCard(
     switchPlan: List<SwitchSuggestionUi>,
     canRecomputeSwitchPlan: Boolean,
     recomputeRunning: Boolean,
+    watchedSellIsins: Set<String>,
     onSwitchFollowedChange: (Long, Boolean) -> Unit,
     onRecomputeSwitchPlan: () -> Unit,
+    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -477,7 +500,14 @@ private fun RiskCard(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                switchPlan.forEach { switch -> SwitchSuggestionRow(switch, onSwitchFollowedChange) }
+                switchPlan.forEach { switch ->
+                    SwitchSuggestionRow(
+                        switch = switch,
+                        watched = switch.sellIsin in watchedSellIsins,
+                        onFollowedChange = onSwitchFollowedChange,
+                        onStartSwitchWatch = onStartSwitchWatch,
+                    )
+                }
                 Text(
                     stringResource(R.string.hem_switch_plan_disclaimer),
                     style = MaterialTheme.typography.bodySmall,
@@ -528,7 +558,12 @@ private fun RiskCard(
  * ett verkligt utfall samma siffra.
  */
 @Composable
-private fun SwitchSuggestionRow(switch: SwitchSuggestionUi, onFollowedChange: (Long, Boolean) -> Unit) {
+private fun SwitchSuggestionRow(
+    switch: SwitchSuggestionUi,
+    watched: Boolean,
+    onFollowedChange: (Long, Boolean) -> Unit,
+    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit,
+) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(
             stringResource(
@@ -557,5 +592,54 @@ private fun SwitchSuggestionRow(switch: SwitchSuggestionUi, onFollowedChange: (L
             followed = switch.followed,
             onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
         )
+        // Först efter kvitteringen: bevakningen handlar om perioden **efter** säljet (ANA-12),
+        // och erbjuds den innan bytet gjorts mäter den dagar då pengarna fortfarande låg kvar.
+        // Finns redan en öppen bevakning för säljfonden erbjuds ingen ny — annars hade varje
+        // tryck startat ytterligare en bevakning av samma byte.
+        if (switch.followed && !watched) {
+            TextButton(onClick = { onStartSwitchWatch(switch) }) {
+                Text(stringResource(R.string.switch_watch_start))
+            }
+        }
+    }
+}
+
+/**
+ * Pågående byte (HEM-11, issue #114) — den enda vägen tillbaka till bevakningen när man lämnat
+ * skärmen, och därför inte bara dekoration. Visar ledaren bland alternativen ur **cachade**
+ * kurser: kortet ska rendera direkt, den dyra hämtningen hör hemma på bevakningens egen skärm.
+ */
+@Composable
+private fun SwitchWatchCard(watch: OpenSwitchWatchUi, onOpen: (Long) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.hem_switch_watch_title), style = MaterialTheme.typography.labelMedium)
+            Text(
+                stringResource(
+                    R.string.format_hem_switch_watch,
+                    watch.sellFundName,
+                    watch.daysWaiting,
+                    watch.candidateCount,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                text = if (watch.leaderName != null && watch.leaderChangeFraction != null) {
+                    stringResource(
+                        R.string.format_hem_switch_watch_leader,
+                        watch.leaderName,
+                        MoneyFormat.percentSigned(watch.leaderChangeFraction),
+                    )
+                } else {
+                    stringResource(R.string.hem_switch_watch_no_leader)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { onOpen(watch.watchId) }) {
+                Text(stringResource(R.string.hem_switch_watch_open))
+            }
+        }
     }
 }

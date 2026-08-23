@@ -26,6 +26,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import se.partee71.fonder.R
+import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
+import se.partee71.fonder.ui.bytesfonster.SwitchWatchViewModel
 import se.partee71.fonder.ui.components.WorkerStatusIcon
 import se.partee71.fonder.ui.facit.FacitScreen
 import se.partee71.fonder.ui.fond.FondDetaljScreen
@@ -120,7 +122,10 @@ fun AppNavigation() {
             modifier = Modifier.padding(innerPadding).imePadding(),
         ) {
             composable(Screen.Hem.route) {
-                HemScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
+                HemScreen(
+                    onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) },
+                    onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+                )
             }
             composable(Screen.Portfolj.route) {
                 PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
@@ -129,7 +134,9 @@ fun AppNavigation() {
                 TransaktionerScreen()
             }
             composable(Screen.Salda.route) {
-                SoldFundsScreen()
+                SoldFundsScreen(
+                    onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+                )
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
@@ -144,7 +151,9 @@ fun AppNavigation() {
                 route = Routes.FOND,
                 arguments = listOf(navArgument("fundId") { type = NavType.StringType }),
             ) {
-                FondDetaljScreen()
+                FondDetaljScreen(
+                    onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+                )
             }
             composable(Routes.FUND_SEARCH) {
                 FundSearchScreen()
@@ -175,6 +184,31 @@ fun AppNavigation() {
             }
             composable(Routes.FACIT) {
                 FacitScreen()
+            }
+            composable(
+                route = Routes.SWITCH_WATCH,
+                arguments = listOf(navArgument("watchId") { type = NavType.StringType }),
+            ) { entry ->
+                val watchId = entry.arguments?.getString("watchId")?.toLongOrNull()
+                SwitchWatchScreen(
+                    onAddCandidate = { watchId?.let { navController.navigate(Routes.switchWatchPicker(it)) } },
+                    onClosed = { navController.popBackStack() },
+                )
+            }
+            // Fondsök i valläge (ANA-13): samma skärm som HEM-10:s referensval, men träffen
+            // läggs till som bevakat alternativ i stället för att bli ny bevakad fond. Egen
+            // ViewModel för rutten — den får bevakningens id ur sina egna navigationsargument.
+            composable(
+                route = Routes.SWITCH_WATCH_PICKER,
+                arguments = listOf(navArgument("watchId") { type = NavType.StringType }),
+            ) {
+                val switchWatchViewModel: SwitchWatchViewModel = hiltViewModel()
+                FundSearchScreen(
+                    onPickFund = { fund ->
+                        switchWatchViewModel.onAddCandidate(fund)
+                        navController.popBackStack()
+                    },
+                )
             }
         }
     }

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
@@ -18,6 +20,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
+import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
@@ -25,6 +28,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
@@ -37,6 +41,7 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 import javax.inject.Inject
@@ -73,6 +78,24 @@ data class AnalysisSummary(
     val rodCount: Int = 0,
     /** Bara gul/röd, sorterat mest allvarligt (röd) först — se [HemScreen]. */
     val flagged: List<FlaggedHolding> = emptyList(),
+)
+
+/**
+ * Ett öppet pågående byte, redo för Hems kort (HEM-11, issue #114) — den enda vägen tillbaka
+ * till bevakningen när man lämnat skärmen.
+ *
+ * Ledaren räknas ur **cachade** kurser (fyllda budgeterat av bakgrundskörningen), aldrig ur ett
+ * nätverksanrop: Hem ska rendera direkt, och den dyra hämtningen hör hemma på bevakningens egen
+ * skärm (ANA-12). Är ingen kandidat utvärderad än sägs det ut i stället för att en tom rad
+ * läses som "inget har hänt".
+ */
+data class OpenSwitchWatchUi(
+    val watchId: Long,
+    val sellFundName: String,
+    val daysWaiting: Long,
+    val candidateCount: Int,
+    val leaderName: String? = null,
+    val leaderChangeFraction: Double? = null,
 )
 
 data class HemUiState(
@@ -114,6 +137,15 @@ data class HemUiState(
     val canRecomputeSwitchPlan: Boolean = false,
     /** Sant medan en bakgrundskörning pågår — knappen är då släckt, samma signal som bakgrundsindikatorn (NAV-6). */
     val backgroundWorkRunning: Boolean = false,
+    /** Öppen bevakning av ett pågående byte (HEM-11, issue #114), null när ingen pågår. */
+    val openSwitchWatch: OpenSwitchWatchUi? = null,
+    /**
+     * Säljfonder som redan har en öppen bevakning — styr om ett kvitterat byte erbjuder
+     * "Bevaka alternativ". Utan den hade samma sälj kunnat starta en bevakning per tryck.
+     */
+    val watchedSellIsins: Set<String> = emptySet(),
+    /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [HemViewModel.onSwitchWatchOpened]. */
+    val startedSwitchWatchId: Long? = null,
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 }
@@ -137,8 +169,54 @@ class HemViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val switchWatchRepository: SwitchWatchRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
+
+    /** Se [HemUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
+    private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
+
+    /**
+     * Hems läsning av pågående byten (HEM-11, issue #114): kortet för den öppna bevakningen och
+     * mängden säljfonder som redan bevakas.
+     *
+     * En bevakning som passerat färskhetsgränsen visas inte — den beskriver ett läge som inte
+     * finns kvar (ANA-12) — men ligger kvar i [SwitchWatchHemState.watchedSellIsins] tills
+     * bakgrundskörningen stängt den: annars hade Hem samtidigt dolt bevakningen och erbjudit en
+     * ny för samma sälj, och användaren fått två rader om samma byte.
+     */
+    private val switchWatches: Flow<SwitchWatchHemState> =
+        switchWatchRepository.observeOpen().flatMapLatest { watches ->
+            val today = LocalDate.now()
+            val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
+            val visible = watches.firstOrNull { !SwitchWatchCalc.isExpired(it, today) }
+                ?: return@flatMapLatest flowOf(SwitchWatchHemState(null, sellIsins))
+
+            fundPriceRepository.observeLatestPrices(visible.candidates.map { it.isin }).map { prices ->
+                val leader = SwitchWatchCalc.ranked(
+                    visible.candidates.map { candidate ->
+                        SwitchWatchCalc.outcome(
+                            candidate = candidate,
+                            latestNav = prices[candidate.isin]?.nav,
+                            proceedsKr = visible.proceedsKr,
+                            soldAtEpochDay = visible.soldAtEpochDay,
+                        )
+                    },
+                ).firstOrNull { it.isEvaluated }
+
+                SwitchWatchHemState(
+                    open = OpenSwitchWatchUi(
+                        watchId = visible.id,
+                        sellFundName = visible.sellFundName,
+                        daysWaiting = SwitchWatchCalc.daysWaiting(visible, today),
+                        candidateCount = visible.candidates.size,
+                        leaderName = leader?.candidate?.name,
+                        leaderChangeFraction = leader?.changeFraction,
+                    ),
+                    watchedSellIsins = sellIsins,
+                )
+            }
+        }
 
     /**
      * [PortfolioInput.funds] bärs med, inte bara de sammanräknade innehaven: avkastningskurvan
@@ -269,6 +347,12 @@ class HemViewModel @Inject constructor(
                     canRecomputeSwitchPlan = riskProfile != null && currentSettings.accountType == AccountType.ISK_KF,
                 )
             }
+        }.combine(switchWatches) { state, watches ->
+            // Egen gren av samma skäl som körstatusen nedan: en bevakning har ingenting med
+            // innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
+            state.copy(openSwitchWatch = watches.open, watchedSellIsins = watches.watchedSellIsins)
+        }.combine(startedSwitchWatchId) { state, startedId ->
+            state.copy(startedSwitchWatchId = startedId)
         }.combine(fundPriceRefreshScheduler.observeIsRunning()) { state, running ->
             // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
             // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
@@ -397,6 +481,38 @@ class HemViewModel @Inject constructor(
     }
 
     /**
+     * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12/HEM-8,
+     * issue #114). Säljdagen sätts till **idag**: kvitteringen görs när bytet gjorts, och ett
+     * påhittat tidigare datum hade mätt kandidaternas utveckling över dagar pengarna inte var
+     * fria (en bevakning för ett äldre sälj startas i stället från Sålda fonder, SLD-5, där det
+     * verkliga säljdatumet finns).
+     *
+     * Målnivån är förslagets `toLevel` — den nivå bytet skulle fylla — så de automatiska
+     * alternativen (ANA-13) hämtas ur samma pool som planens egen köpkandidat.
+     */
+    fun startSwitchWatch(suggestion: SwitchSuggestionUi) {
+        viewModelScope.launch {
+            val today = LocalDate.now()
+            if (switchWatchRepository.hasOpenFor(suggestion.sellIsin, today.toEpochDay())) return@launch
+            startedSwitchWatchId.value = switchWatchRepository.start(
+                SwitchWatch(
+                    sellIsin = suggestion.sellIsin,
+                    sellFundName = suggestion.sellFundName,
+                    soldAtEpochDay = today.toEpochDay(),
+                    proceedsKr = suggestion.switchValueKr,
+                    targetLevel = suggestion.toLevel,
+                    sourceRecordId = suggestion.recordId,
+                ),
+            )
+        }
+    }
+
+    /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
+    fun onSwitchWatchOpened() {
+        startedSwitchWatchId.value = null
+    }
+
+    /**
      * Ber om en omräkning av bytesplanen (HEM-8, issue #88) — knappen på riskkortet. Kör inte
      * själv: skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per
      * underviktad nivå och hör därför hemma i WorkManager, med nätverksvillkor och
@@ -405,6 +521,12 @@ class HemViewModel @Inject constructor(
     fun recomputeSwitchPlan() {
         fundPriceRefreshScheduler.triggerSwitchPlanScan()
     }
+
+    /** Se [switchWatches] — två svar ur samma flöde, hållna ihop så combinen inte växer i onödan. */
+    private data class SwitchWatchHemState(
+        val open: OpenSwitchWatchUi?,
+        val watchedSellIsins: Set<String>,
+    )
 
     private data class Settings(
         val riskProfile: RiskProfile?,
