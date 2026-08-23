@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.settings
 
+import android.app.PendingIntent
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -34,6 +35,8 @@ import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupRepository
+import se.partee71.fonder.data.repository.DriveBackupRepository
+import se.partee71.fonder.data.repository.DriveResult
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
@@ -46,6 +49,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -90,6 +94,8 @@ class SettingsViewModelTest {
         override fun triggerBenchmarkScan() {
             benchmarkScans++
         }
+        override fun scheduleDriveBackup() {}
+        override fun triggerDriveBackupNow() {}
         override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
     }
 
@@ -175,7 +181,24 @@ class SettingsViewModelTest {
         }
     }
 
-    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+    /** Drive-transporten som testet styr (SET-7). Fake, inte mock — samma princip som övriga datalager. */
+    private var driveUploadResult: DriveResult<String> = DriveResult.Success("file-id")
+    private var driveDownloadResult: DriveResult<String> = DriveResult.Success("{}")
+    private var uploadedJson: String? = null
+
+    private val fakeDriveRepo = object : DriveBackupRepository {
+        override suspend fun upload(json: String): DriveResult<String> {
+            uploadedJson = json
+            return driveUploadResult
+        }
+        override suspend fun downloadLatest(): DriveResult<String> = driveDownloadResult
+        override suspend fun list(): DriveResult<List<DriveBackupFile>> = DriveResult.Success(emptyList())
+    }
+
+    /** Uppsamlade auktoriseringsintent — UI:t startar dem, testet räknar dem. */
+    private val authorizationRequests = mutableListOf<PendingIntent>()
+
+    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -227,7 +250,7 @@ class SettingsViewModelTest {
     @Test
     fun `lastPriceSyncEpochMillis speglar preferences efter en uppdatering (SET-2)`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.uiState.test {
             awaitItem()
@@ -443,7 +466,7 @@ class SettingsViewModelTest {
     fun `valt referens-ISIN sparas och startar en skanning`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613"))
         advanceUntilIdle()
@@ -458,7 +481,7 @@ class SettingsViewModelTest {
         // Katalogens träffar saknar ISIN — hela jämförelsekedjan är ISIN-nycklad.
         val preferences = PreferencesRepository(dataStore)
         isinByFundId = mapOf("SHB1" to "SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null))
         advanceUntilIdle()
@@ -471,7 +494,7 @@ class SettingsViewModelTest {
         // Ett sparat fond-id som inget annat lager kan använda hade gett ett val som såg gjort
         // ut men aldrig gav en kurva.
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.uiState.test {
             awaitItem()
@@ -491,7 +514,7 @@ class SettingsViewModelTest {
     fun `rensat val faller tillbaka pa appens referens`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.clearBenchmark()
         advanceUntilIdle()
@@ -504,7 +527,7 @@ class SettingsViewModelTest {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.uiState.test {
             var state = awaitItem()
@@ -519,7 +542,7 @@ class SettingsViewModelTest {
     fun `ett val vars namn inte finns i cachen visas som ISIN, aldrig tomt`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
 
         vm.uiState.test {
             var state = awaitItem()
@@ -669,7 +692,7 @@ class SettingsViewModelTest {
         }
         val vm = SettingsViewModel(
             PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler,
-            fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo,
+            fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo, fakeDriveRepo,
         )
 
         vm.uiState.test {
@@ -679,6 +702,199 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, calls)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Molnbackup till Drive (SET-7) ---
+
+    private fun collectAuth(): (PendingIntent) -> Unit = { authorizationRequests += it }
+
+    @Test
+    fun `backupToDrive laddar upp den exporterade strangen`() = runTest(dispatcher) {
+        exportResult = Result.success("""{"formatVersion":1}""")
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertEquals("""{"formatVersion":1}""", uploadedJson)
+            assertEquals(BackupMessage.DriveSaved, state.backupMessage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en misslyckad export laddar aldrig upp nagot`() = runTest(dispatcher) {
+        // Går kontraktet inte att serialisera är felet i formatet, inte i transporten — och då
+        // ska ingenting skrivas till Drive.
+        exportResult = Result.failure(IllegalStateException("trasigt"))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertNull(uploadedJson)
+            assertEquals(BackupMessage.ExportFailed, state.backupMessage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `utloggad ger ett eget meddelande, inte ett allmant fel`() = runTest(dispatcher) {
+        driveUploadResult = DriveResult.NoAccount
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertEquals(BackupMessage.DriveFailed(signedOut = true), state.backupMessage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `saknad auktorisering startar Googles ruta och visar inget felmeddelande`() = runTest(dispatcher) {
+        // Användaren möts av Googles egen dialog — en röd rad bakom den vore förvirrande.
+        driveUploadResult = DriveResult.NeedsAuthorization(mockk(relaxed = true))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            advanceUntilIdle()
+
+            assertEquals(1, authorizationRequests.size)
+            assertNull(vm.uiState.value.backupMessage)
+            assertTrue(vm.uiState.value.driveBackupNeedsAuth)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `onDriveAuthorizationResolved rensar flaggan`() = runTest(dispatcher) {
+        driveUploadResult = DriveResult.NeedsAuthorization(mockk(relaxed = true))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            var state = awaitItem()
+            while (!state.driveBackupNeedsAuth) state = awaitItem()
+
+            vm.onDriveAuthorizationResolved()
+            state = awaitItem()
+            while (state.driveBackupNeedsAuth) state = awaitItem()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `restoreFromDrive lamnar den hamtade strangen till backup-kontraktet`() = runTest(dispatcher) {
+        driveDownloadResult = DriveResult.Success("""{"formatVersion":1,"funds":[]}""")
+        restoreResult = Result.success(RestoreSummary(2, 3, 4))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restoreFromDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertEquals("""{"formatVersion":1,"funds":[]}""", restoredJson)
+            assertEquals(BackupMessage.Restored(RestoreSummary(2, 3, 4)), state.backupMessage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en tom Drive-mapp ger ett eget meddelande och ror inte databasen`() = runTest(dispatcher) {
+        driveDownloadResult = DriveResult.NoBackupFound
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restoreFromDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertNull(restoredJson)
+            assertEquals(BackupMessage.DriveEmpty, state.backupMessage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en trasig kopia i Drive ger samma fel som en trasig fil`() = runTest(dispatcher) {
+        driveDownloadResult = DriveResult.Success("inte json")
+        restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNREADABLE))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restoreFromDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertEquals(
+                BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE),
+                state.backupMessage,
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `dubbeltryck startar inte tva samtidiga Drive-korningar`() = runTest(dispatcher) {
+        // Samma spärr som export/restore (issue #75): ingen synlig återkoppling förrän den är
+        // klar, och två parallella skulle skriva två kopior.
+        var uploads = 0
+        val countingDrive = object : DriveBackupRepository {
+            override suspend fun upload(json: String): DriveResult<String> {
+                uploads++
+                return DriveResult.Success("id")
+            }
+            override suspend fun downloadLatest(): DriveResult<String> = DriveResult.NoBackupFound
+            override suspend fun list(): DriveResult<List<DriveBackupFile>> = DriveResult.Success(emptyList())
+        }
+        val vm = SettingsViewModel(
+            PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo,
+            fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, countingDrive,
+        )
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            vm.backupToDrive(collectAuth())
+            advanceUntilIdle()
+
+            assertEquals(1, uploads)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `senaste molnbackup speglar preferences`() = runTest(dispatcher) {
+        val preferences = PreferencesRepository(dataStore)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+
+        vm.uiState.test {
+            assertNull(awaitItem().lastDriveBackupEpochMillis)
+            preferences.setLastDriveBackupEpochMillis(1_700_000_000_000L)
+            var state = awaitItem()
+            while (state.lastDriveBackupEpochMillis == null) state = awaitItem()
+
+            assertEquals(1_700_000_000_000L, state.lastDriveBackupEpochMillis)
             cancelAndIgnoreRemainingEvents()
         }
     }

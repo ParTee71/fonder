@@ -418,6 +418,17 @@
     <string name="format_backup_restore_success">Återställt: %1$d fonder, %2$d transaktioner och %3$d inspelade förslag.</string>
     <string name="backup_restore_failed_unreadable">Filen kunde inte läsas som en säkerhetskopia. Ingenting har ändrats.</string>
     <string name="backup_restore_failed_version">Filen kommer från en nyare version av appen och kan inte läsas. Ingenting har ändrats.</string>
+    <string name="settings_drive_backup_title">Molnbackup till Google Drive</string>
+    <string name="settings_drive_backup_body">Samma innehåll som filexporten, men skrivet automatiskt en gång per dygn till en dold mapp i din Google Drive som bara Fonder kommer åt. Kräver att du är inloggad. De fem senaste kopiorna behålls.</string>
+    <string name="settings_drive_backup_never">Ingen molnbackup har gjorts än.</string>
+    <string name="format_settings_drive_backup_last">Senaste molnbackup: %1$s</string>
+    <string name="settings_drive_backup_needs_auth">Fonder behöver din tillåtelse att använda Google Drive. Tryck på Säkerhetskopiera till Drive så frågar Google.</string>
+    <string name="settings_drive_backup_button">Säkerhetskopiera till Drive</string>
+    <string name="settings_drive_restore_button">Återställ från Drive</string>
+    <string name="drive_backup_success">Säkerhetskopian har skrivits till Google Drive.</string>
+    <string name="drive_backup_empty">Det finns ingen molnbackup att återställa från.</string>
+    <string name="drive_backup_signed_out">Logga in med Google först — molnbackupen behöver ett konto att skriva till.</string>
+    <string name="drive_backup_failed">Kunde inte nå Google Drive. Ingenting har ändrats. Försök igen.</string>
     <string name="backup_restore_confirm_title">Återställ från säkerhetskopia?</string>
     <string name="backup_restore_confirm_button">Återställ</string>
     <string name="backup_restore_confirm_body">Alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag ersätts med innehållet i filen. Det som finns i appen nu går förlorat.</string>

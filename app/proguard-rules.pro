@@ -19,3 +19,13 @@
 # JPXFilter.readJPX nås inte. Att dra in jp2-android vore att packa ett bildbibliotek
 # för en kodväg appen inte använder. Beteendet är oförändrat — klassen saknades redan.
 -dontwarn com.gemalto.jp2.**
+
+# Google API-klienten (Drive-backup, TP-7 steg 2) reflekterar över sina modellklasser när JSON
+# mappas, så R8 får inte krympa bort dem. Apache HTTP dras in transitivt men används inte —
+# NetHttpTransport är transporten — därav dontwarn i stället för keep.
+-keep class com.google.api.** { *; }
+-keep class com.google.apis.** { *; }
+-dontwarn com.google.api.**
+-dontwarn com.google.apis.**
+-dontwarn org.apache.http.**
+-dontwarn javax.naming.**

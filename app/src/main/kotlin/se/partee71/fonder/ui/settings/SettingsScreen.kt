@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,6 +82,21 @@ fun SettingsScreen(
         }
     }
 
+    // Drive-scopet begärs skilt från inloggningen och kan kräva att användaren godkänner det i
+    // Googles egen ruta. Den startas som en PendingIntent — därför måste den vägen gå via
+    // aktiviteten och inte via tillståndet (samma mekanik som SAF-väljarna ovan).
+    val driveAuthLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) {
+        // Utfallet rapporteras inte tillförlitligt av Identity-API:t. Flaggan rensas och nästa
+        // körning får avgöra — ett kvarliggande "behöver tillåtelse" efter ett beviljande är
+        // värre än ett som dyker upp igen.
+        viewModel.onDriveAuthorizationResolved()
+    }
+    val launchDriveAuth: (android.app.PendingIntent) -> Unit = { pendingIntent ->
+        driveAuthLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
+    }
+
     SettingsContent(
         state = state,
         onThemeSelected = viewModel::setThemeMode,
@@ -94,6 +111,8 @@ fun SettingsScreen(
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
         onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
         onBackupMessageDismissed = viewModel::onBackupMessageDismissed,
+        onBackupToDrive = { viewModel.backupToDrive(launchDriveAuth) },
+        onRestoreFromDrive = { viewModel.restoreFromDrive(launchDriveAuth) },
         onSignIn = { viewModel.signIn(context) },
         onSignOut = viewModel::signOut,
         onSignInErrorDismissed = viewModel::onSignInErrorDismissed,
@@ -119,6 +138,8 @@ fun SettingsContent(
     onExportBackup: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
     onBackupMessageDismissed: () -> Unit = {},
+    onBackupToDrive: () -> Unit = {},
+    onRestoreFromDrive: () -> Unit = {},
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onSignInErrorDismissed: () -> Unit = {},
@@ -129,6 +150,7 @@ fun SettingsContent(
     // rememberSaveable: en bekräftelsedialog ska inte försvinna tyst vid rotation (issue #78).
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
     var showRestoreConfirm by rememberSaveable { mutableStateOf(false) }
+    var showDriveRestoreConfirm by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -360,6 +382,46 @@ fun SettingsContent(
                         modifier = Modifier.padding(start = 8.dp),
                     ) { Text(stringResource(R.string.settings_backup_restore_button)) }
                 }
+
+                // Molnbackupen (SET-7) ligger i samma kort som filbackupen, inte i ett eget:
+                // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
+                // antytt två sorters säkerhetskopia.
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Text(
+                    stringResource(R.string.settings_drive_backup_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    stringResource(R.string.settings_drive_backup_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                Text(
+                    lastDriveBackupText(state.lastDriveBackupEpochMillis),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                if (state.driveBackupNeedsAuth) {
+                    Text(
+                        stringResource(R.string.settings_drive_backup_needs_auth),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                Row {
+                    Button(
+                        onClick = onBackupToDrive,
+                        enabled = !state.backupInProgress,
+                    ) { Text(stringResource(R.string.settings_drive_backup_button)) }
+                    TextButton(
+                        onClick = { showDriveRestoreConfirm = true },
+                        enabled = !state.backupInProgress,
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) { Text(stringResource(R.string.settings_drive_restore_button)) }
+                }
             }
         }
 
@@ -420,6 +482,25 @@ fun SettingsContent(
         )
     }
 
+    // Samma bekräftelse som filåterställningen, och med flit samma text: det är samma
+    // ersättning av samma data, bara från en annan plats.
+    if (showDriveRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDriveRestoreConfirm = false },
+            title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
+            text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDriveRestoreConfirm = false
+                    onRestoreFromDrive()
+                }) { Text(stringResource(R.string.backup_restore_confirm_button)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDriveRestoreConfirm = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
     // Bekräftelsen kommer före filväljaren, inte efter: en återställning ersätter all data, och
     // frågan ska ställas innan användaren är mitt i ett val (samma ordning som farozonen).
     if (showRestoreConfirm) {
@@ -441,6 +522,13 @@ fun SettingsContent(
 }
 
 @Composable
+private fun lastDriveBackupText(epochMillis: Long?): String {
+    if (epochMillis == null) return stringResource(R.string.settings_drive_backup_never)
+    val formatted = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(lastSyncFormatter)
+    return stringResource(R.string.format_settings_drive_backup_last, formatted)
+}
+
+@Composable
 private fun backupMessageText(message: BackupMessage): String = when (message) {
     BackupMessage.Exported -> stringResource(R.string.backup_export_success)
     BackupMessage.ExportFailed -> stringResource(R.string.backup_export_failed)
@@ -454,6 +542,11 @@ private fun backupMessageText(message: BackupMessage): String = when (message) {
         BackupFormatException.Reason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_restore_failed_version)
         BackupFormatException.Reason.UNREADABLE -> stringResource(R.string.backup_restore_failed_unreadable)
     }
+    BackupMessage.DriveSaved -> stringResource(R.string.drive_backup_success)
+    BackupMessage.DriveEmpty -> stringResource(R.string.drive_backup_empty)
+    is BackupMessage.DriveFailed ->
+        if (message.signedOut) stringResource(R.string.drive_backup_signed_out)
+        else stringResource(R.string.drive_backup_failed)
 }
 
 @Composable

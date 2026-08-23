@@ -67,6 +67,20 @@ interface FundPriceRefreshScheduler {
      */
     fun triggerBenchmarkScan()
 
+    /**
+     * Schemalägger den dygnsvisa molnbackupen till Drive (SET-7, TP-7 steg 2). Anropas vid
+     * appstart; `KEEP` gör upprepade anrop gratis.
+     *
+     * Eget unikt arbetsnamn och en **egen worker** ([DriveBackupWorker]) — till skillnad från
+     * bytesplans- och referensfondsskanningarna, som kör kursuppdateringens worker. En
+     * säkerhetskopiering får inte kunna avbrytas av den manuella "Uppdatera nu" (SET-2), som
+     * ersätter (`REPLACE`) allt som väntar under kursuppdateringens namn.
+     */
+    fun scheduleDriveBackup()
+
+    /** Kör molnbackupen nu (knappen i Inställningar, SET-7). Koalescerar med den periodiska. */
+    fun triggerDriveBackupNow()
+
     fun observeIsRunning(): Flow<Boolean>
 }
 
@@ -154,14 +168,36 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         workManager.enqueueUniqueWork(BENCHMARK_WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
+    override fun scheduleDriveBackup() {
+        val request = PeriodicWorkRequestBuilder<DriveBackupWorker>(DRIVE_BACKUP_INTERVAL_HOURS, TimeUnit.HOURS)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
+            .setConstraints(networkConstraints)
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            DRIVE_BACKUP_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    override fun triggerDriveBackupNow() {
+        val request = OneTimeWorkRequestBuilder<DriveBackupWorker>()
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
+            .setConstraints(networkConstraints)
+            .build()
+        workManager.enqueueUniqueWork(DRIVE_BACKUP_NOW_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    }
+
     override fun observeIsRunning(): Flow<Boolean> =
         combine(
             workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(SWITCH_PLAN_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME),
-        ) { oneTime, periodic, switchPlan, benchmark ->
-            (oneTime + periodic + switchPlan + benchmark).any { it.state == WorkInfo.State.RUNNING }
+            workManager.getWorkInfosForUniqueWorkFlow(DRIVE_BACKUP_NOW_WORK_NAME),
+        ) { oneTime, periodic, switchPlan, benchmark, driveBackup ->
+            (oneTime + periodic + switchPlan + benchmark + driveBackup)
+                .any { it.state == WorkInfo.State.RUNNING }
         }
 
     companion object {
@@ -174,5 +210,14 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         /** Eget unikt namn för referensfondsskanningen — se [FundPriceRefreshScheduler.triggerBenchmarkScan]. */
         internal const val BENCHMARK_WORK_NAME = "fonder_benchmark_scan"
         private const val BACKSTOP_INTERVAL_HOURS = 12L
+
+        /**
+         * Egna unika namn för molnbackupen (SET-7) — se
+         * [FundPriceRefreshScheduler.scheduleDriveBackup]. Den periodiska och den manuella
+         * körningen hålls isär så ett knapptryck inte skjuter fram nästa dygnsvisa körning.
+         */
+        internal const val DRIVE_BACKUP_WORK_NAME = "fonder_drive_backup"
+        internal const val DRIVE_BACKUP_NOW_WORK_NAME = "fonder_drive_backup_now"
+        private const val DRIVE_BACKUP_INTERVAL_HOURS = 24L
     }
 }

@@ -409,4 +409,75 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Inget Google-konto", substring = true).performScrollTo().assertIsDisplayed()
     }
+
+    // --- Molnbackup till Drive (SET-7) ---
+
+    @Test
+    fun visar_att_ingen_molnbackup_gjorts_an() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(lastDriveBackupEpochMillis = null)) }
+        }
+
+        composeRule.onNodeWithText("Ingen molnbackup har gjorts än.").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun visar_tidsstampel_for_senaste_molnbackup() {
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(state = SettingsUiState(lastDriveBackupEpochMillis = 1710504000000L))
+            }
+        }
+
+        composeRule.onNodeWithText("Senaste molnbackup:", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Ingen molnbackup har gjorts än.").assertDoesNotExist()
+    }
+
+    @Test
+    fun raden_om_saknad_tillatelse_visas_bara_nar_den_behovs() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(driveBackupNeedsAuth = true)) }
+        }
+
+        composeRule.onNodeWithText("behöver din tillåtelse", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sakerhetskopiera_till_drive_anropar_callbacken() {
+        var backups = 0
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onBackupToDrive = { backups++ }) }
+        }
+
+        composeRule.onNodeWithText("Säkerhetskopiera till Drive").performScrollTo().performClick()
+
+        assertEquals(1, backups)
+    }
+
+    @Test
+    fun drive_knapparna_ar_slackta_medan_en_korning_pagar() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(backupInProgress = true)) }
+        }
+
+        composeRule.onNodeWithText("Säkerhetskopiera till Drive").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("Återställ från Drive").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun aterstall_fran_drive_kraver_bekraftelse_forst() {
+        // Samma princip som filåterställningen: den ersätter all data, och frågan ska ställas
+        // innan något händer — inte efteråt.
+        var restores = 0
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onRestoreFromDrive = { restores++ }) }
+        }
+
+        composeRule.onNodeWithText("Återställ från Drive").performScrollTo().performClick()
+        assertEquals(0, restores)
+
+        composeRule.onNodeWithText("Återställ från säkerhetskopia?").assertExists()
+        composeRule.onNodeWithText("Återställ").performClick()
+        assertEquals(1, restores)
+    }
 }

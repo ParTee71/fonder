@@ -62,6 +62,8 @@ class RiskProfilViewModelTest {
             switchPlanScans++
         }
         override fun triggerBenchmarkScan() {}
+        override fun scheduleDriveBackup() {}
+        override fun triggerDriveBackupNow() {}
         override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
     }
 

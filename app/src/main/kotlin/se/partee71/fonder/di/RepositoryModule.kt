@@ -25,6 +25,8 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
 import se.partee71.fonder.data.repository.RoomSuggestionRecordRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
+import se.partee71.fonder.data.repository.DriveBackupRepository
+import se.partee71.fonder.data.repository.GoogleDriveBackupRepository
 import se.partee71.fonder.data.repository.LocalBackupRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -65,6 +67,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
+
+    @Binds
+    abstract fun bindDriveBackupRepository(impl: GoogleDriveBackupRepository): DriveBackupRepository
 
     @Binds
     abstract fun bindAuthRepository(impl: FirebaseAuthRepository): AuthRepository

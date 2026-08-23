@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.51.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.52.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -51,8 +51,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
 - [x] Google-inloggning — Firebase Auth + Credential Manager, kontokort i Inställningar
       (TP-6, #106)
-- [ ] Google Drive-backup — steg 2 av TP-7, väntar på att `drive.appdata` tas i bruk
-      ([uppsättning](docs/GOOGLE-SETUP.md))
+- [x] Google Drive-backup — dygnsvis molnbackup av hela backup-kontraktet till `appDataFolder`
+      (TP-7 steg 2 / SET-7, #110)
 
 ---
 
@@ -151,7 +151,8 @@ data/
 │                 (PDF-avräkningsnotor, flera filer samtidigt, #8-uppföljning)
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) ·
 │                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet + persisterad
-│                 billigare-alternativ-jämförelse + kända risknivåer, #57/#61/#68) · BackupRepository (stub)
+│                 billigare-alternativ-jämförelse + kända risknivåer, #57/#61/#68) ·
+│                 BackupRepository/LocalBackupRepository (fil, SET-6) · DriveBackupRepository (moln, SET-7)
 └── room/         AppDatabase (v9) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
