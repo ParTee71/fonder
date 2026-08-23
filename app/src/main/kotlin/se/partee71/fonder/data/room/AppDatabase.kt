@@ -9,12 +9,15 @@ import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
+import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
@@ -25,8 +28,10 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FxRateEntity::class,
         FundMetadataEntity::class,
         SuggestionRecordEntity::class,
+        SwitchWatchEntity::class,
+        SwitchWatchCandidateEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fxRateDao(): FxRateDao
     abstract fun fundMetadataDao(): FundMetadataDao
     abstract fun suggestionRecordDao(): SuggestionRecordDao
+    abstract fun switchWatchDao(): SwitchWatchDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -321,6 +327,58 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 14 → 15 (issue #114): `switch_watches` + `switch_watch_candidates` — det
+         * pågående bytet mellan sälj och köp (ANA-12/ANA-13).
+         *
+         * Två helt nya tabeller, inga befintliga rader rörs. Till skillnad från `fund_metadata`
+         * är innehållet **genuin användardata** (samma kategori som `suggestion_records`,
+         * NFR-1): säljdagen, beloppet och uppsättningen bevakade alternativ går inte att räkna
+         * fram ur NAV-historiken i efterhand.
+         *
+         * Kandidaternas främmande nyckel är `ON DELETE CASCADE` med index på `watchId` —
+         * indexet är inte valfritt, Rooms schemaverifiering kräver att det finns för
+         * FK-kolumnen och migreringen hade annars fallit på nästa uppstart.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `switch_watches` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sellIsin` TEXT NOT NULL,
+                        `sellFundName` TEXT NOT NULL,
+                        `soldAtEpochDay` INTEGER NOT NULL,
+                        `proceedsKr` REAL,
+                        `targetLevel` INTEGER,
+                        `sourceRecordId` INTEGER,
+                        `closedAtEpochDay` INTEGER,
+                        `boughtIsin` TEXT,
+                        `closeReason` TEXT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `switch_watch_candidates` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `watchId` INTEGER NOT NULL,
+                        `isin` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `navAtStart` REAL,
+                        `navAtStartEpochDay` INTEGER,
+                        `source` TEXT NOT NULL DEFAULT 'AUTO',
+                        `position` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`watchId`) REFERENCES `switch_watches`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_switch_watch_candidates_watchId` ON `switch_watch_candidates` (`watchId`)",
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -335,6 +393,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
+            MIGRATION_14_15,
         )
     }
 }

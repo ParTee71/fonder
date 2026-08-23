@@ -6,6 +6,7 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 
 /**
@@ -35,6 +36,13 @@ data class BackupPayload(
     val funds: List<Fund> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val suggestionRecords: List<SuggestionRecord> = emptyList(),
+    /**
+     * Pågående och avslutade byten med sina bevakade alternativ (ANA-12, issue #114). Genuin
+     * användardata av samma skäl som [suggestionRecords]: säljdagen, beloppet, uppsättningen
+     * bevakade alternativ och deras ankrade nollpunkt går inte att räkna fram ur NAV-historiken
+     * i efterhand — kandidaterna ligger per definition inte i kurscachen (ANA-11).
+     */
+    val switchWatches: List<SwitchWatch> = emptyList(),
     val riskProfile: RiskProfile? = null,
     val accountType: AccountType? = null,
     val themeMode: ThemeMode = ThemeMode.AUTO,
@@ -61,4 +69,5 @@ data class RestoreSummary(
     val funds: Int,
     val transactions: Int,
     val suggestionRecords: Int,
+    val switchWatches: Int = 0,
 )
