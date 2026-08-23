@@ -1299,10 +1299,12 @@ class HemViewModelTest {
         )
 
         viewModel().uiState.test {
+            // Vänta på att bevakningsgrenen hunnit in i tillståndet — inte på ytterligare en
+            // emission efter den. `expectMostRecentItem()` kastar när inget *nytt* kommit, och
+            // här är den sista emissionen redan den slutgiltiga: bevakningen är utgången, så
+            // kortet fylls aldrig i och inget mer händer.
             var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            advanceUntilIdle()
-            state = expectMostRecentItem()
+            while (state.loading || state.watchedSellIsins.isEmpty()) state = awaitItem()
 
             assertNull(state.openSwitchWatch)
             assertEquals(setOf("SE_SALJ"), state.watchedSellIsins)
