@@ -3,6 +3,7 @@ package se.partee71.fonder.data.room.entities
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundTag
@@ -42,8 +43,16 @@ data class FundMetadataEntity(
     /** Billigaste verifierat köpbara alternativets ISIN (ANA-9, HEM-6, issue #61) — se [FundMetadata.cheapestAlternativeIsin]. */
     val cheapestAlternativeIsin: String? = null,
     val cheapestAlternativeFee: Double? = null,
+    /**
+     * Samtliga visade alternativs ISIN som JSON-text (issue #93) — se
+     * [FundMetadata.shownAlternativeIsins]. Samma kolumnmönster som [tagsJson], och kodningen
+     * ligger av samma KSP-skäl i [FundAlternativeIsinsCodec] utanför entiteten.
+     */
+    val shownAlternativeIsinsJson: String = "[]",
     /** Null = aldrig jämfört. Satt (oavsett [cheapestAlternativeIsin]) = jämfört den dagen. */
     val comparisonResolvedAtEpochDay: Long? = null,
+    /** Källans 12-månadersavkastning (issue #70) — se [FundMetadata.developmentOneYear]. */
+    val developmentOneYear: Double? = null,
 ) {
     fun toDomain() = FundMetadata(
         isin = isin,
@@ -62,7 +71,9 @@ data class FundMetadataEntity(
         availableAtHandelsbanken = availableAtHandelsbanken,
         cheapestAlternativeIsin = cheapestAlternativeIsin,
         cheapestAlternativeFee = cheapestAlternativeFee,
+        shownAlternativeIsins = FundAlternativeIsinsCodec.decode(shownAlternativeIsinsJson),
         comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay,
+        developmentOneYear = developmentOneYear,
     )
 
     companion object {
@@ -89,7 +100,9 @@ data class FundMetadataEntity(
             fetchedAtEpochDay = fetchedAtEpochDay,
             cheapestAlternativeIsin = metadata.cheapestAlternativeIsin,
             cheapestAlternativeFee = metadata.cheapestAlternativeFee,
+            shownAlternativeIsinsJson = FundAlternativeIsinsCodec.encode(metadata.shownAlternativeIsins),
             comparisonResolvedAtEpochDay = metadata.comparisonResolvedAtEpochDay,
+            developmentOneYear = metadata.developmentOneYear,
         )
     }
 }
@@ -99,6 +112,22 @@ data class FundMetadataEntity(
  * `FundMetadataEntity` (se dess KDoc för varför: Rooms KSP-processor kunde annars inte
  * resolva `@Entity`-klassen).
  */
+/**
+ * JSON-(av)kodning av [FundMetadataEntity.shownAlternativeIsinsJson] — utanför entiteten av
+ * samma KSP-skäl som [FundTagsCodec], men `internal` eftersom
+ * [se.partee71.fonder.data.repository.FundMetadataRepository] skriver kolumnen direkt när en
+ * jämförelse sparas (issue #93).
+ */
+internal object FundAlternativeIsinsCodec {
+    private val json = Json { ignoreUnknownKeys = true }
+    private val isinListSerializer = ListSerializer(String.serializer())
+
+    fun encode(isins: List<String>): String = json.encodeToString(isinListSerializer, isins)
+
+    fun decode(isinsJson: String): List<String> =
+        runCatching { json.decodeFromString(isinListSerializer, isinsJson) }.getOrElse { emptyList() }
+}
+
 private object FundTagsCodec {
     private val json = Json { ignoreUnknownKeys = true }
     private val tagListSerializer = ListSerializer(FundTag.serializer())

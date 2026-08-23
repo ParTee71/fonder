@@ -43,4 +43,45 @@ object PortfolioRiskCalc {
         val weighted = if (includedValueKr == 0.0) null else weightedSum / includedValueKr
         return Result(weightedAverageRisk = weighted, includedValueKr = includedValueKr, excludedCount = excludedCount)
     }
+
+    /** Mål- och faktisk andel för en enskild risknivå, plus den härledda avvikelsen ur [deviationByLevel]. */
+    data class LevelDeviation(val level: Int, val targetFraction: Double, val actualFraction: Double) {
+        /** Mål minus faktisk — positiv betyder underviktad (köp här), negativ betyder överviktad (sälj här). */
+        val deviationFraction: Double get() = targetFraction - actualFraction
+    }
+
+    /**
+     * Innehavens faktiska fördelning per risknivå, som andelar av det **klassificerade**
+     * värdet — den fördelning [deviationByLevel] ska jämföra en målfördelning mot.
+     *
+     * [PortfolioExposureCalc.Bucket.fraction] duger inte rakt av: den divideras med
+     * `includedValueKr`, som också rymmer innehav vars risknivå är okänd (de hamnar i
+     * dimensionens okänd-hink, inte utanför nämnaren). Andelarna summerade då till mindre än
+     * 1 medan målet summerar till exakt 1, så *varje* nivå såg underviktad ut — en portfölj
+     * med 700 kr på nivå 4 och 300 kr utan känd risknivå rapporterades som 30 pp under målet
+     * trots att 100 % av det klassificerade värdet redan låg rätt. Samma nämnare som
+     * [compute] använder för sitt viktade snitt.
+     */
+    fun actualAllocation(byRiskLevel: PortfolioExposureCalc.Dimension): Map<Int, Double> {
+        val classifiedValueKr = byRiskLevel.buckets.sumOf { it.valueKr }
+        if (classifiedValueKr <= 0.0) return emptyMap()
+        return byRiskLevel.buckets.mapNotNull { bucket ->
+            bucket.label.toIntOrNull()?.let { level -> level to bucket.valueKr / classifiedValueKr }
+        }.toMap()
+    }
+
+    /**
+     * Avvikelse per risknivå (HEM-7/issue #71) — målfördelningen
+     * ([se.partee71.fonder.domain.model.RiskProfile.effectiveAllocation]) mot innehavens
+     * faktiska fördelning (t.ex. [PortfolioExposureCalc.Result.byRiskLevel]).
+     * Sorterat på störst underviktning först, vilket direkt pekar ut hinken som bör fyllas —
+     * det underlag issue #70 (bytesplan) konsumerar. Unionen av nivåer på båda sidor tas med,
+     * så en nivå som bara finns i den ena fördelningen ändå syns med sin fulla avvikelse.
+     */
+    fun deviationByLevel(targetAllocation: Map<Int, Double>, actualAllocation: Map<Int, Double>): List<LevelDeviation> {
+        val levels = (targetAllocation.keys + actualAllocation.keys).toSortedSet()
+        return levels
+            .map { level -> LevelDeviation(level, targetAllocation[level] ?: 0.0, actualAllocation[level] ?: 0.0) }
+            .sortedByDescending { it.deviationFraction }
+    }
 }

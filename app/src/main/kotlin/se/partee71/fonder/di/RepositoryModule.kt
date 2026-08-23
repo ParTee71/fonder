@@ -23,8 +23,10 @@ import se.partee71.fonder.data.repository.BackupRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
+import se.partee71.fonder.data.repository.RoomSuggestionRecordRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
-import se.partee71.fonder.data.repository.StubBackupRepository
+import se.partee71.fonder.data.repository.LocalBackupRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.fonder.worker.WorkManagerFundPriceRefreshScheduler
@@ -44,6 +46,9 @@ abstract class RepositoryModule {
     abstract fun bindFundMetadataRepository(impl: AvanzaFundMetadataRepository): FundMetadataRepository
 
     @Binds
+    abstract fun bindSuggestionRecordRepository(impl: RoomSuggestionRecordRepository): SuggestionRecordRepository
+
+    @Binds
     abstract fun bindFondlistaHtmlSource(impl: HandelsbankenFondlistaClient): FondlistaHtmlSource
 
     @Binds
@@ -59,7 +64,7 @@ abstract class RepositoryModule {
     abstract fun bindPdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
 
     @Binds
-    abstract fun bindBackupRepository(impl: StubBackupRepository): BackupRepository
+    abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
 
     @Binds
     abstract fun bindAuthRepository(impl: StubAuthRepository): AuthRepository

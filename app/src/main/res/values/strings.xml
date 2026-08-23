@@ -3,10 +3,10 @@
     <string name="app_name">Fonder</string>
 
     <!-- Gemensamma åtgärder -->
-    <string name="back">Tillbaka</string>
     <string name="save">Spara</string>
     <string name="delete">Ta bort</string>
     <string name="cancel">Avbryt</string>
+    <string name="back">Tillbaka</string>
     <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
@@ -28,6 +28,16 @@
     <!-- Hem (dashboard, issue #14) -->
     <string name="hem_empty_title">Ingen portfölj ännu</string>
     <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
+
+    <!-- Hem — avkastningsdiagram med indexjämförelse (HEM-9/HEM-10, issue #96) -->
+    <string name="hem_return_chart_title">Avkastning över tid</string>
+    <string name="hem_return_chart_series_portfolio">Din portfölj</string>
+    <string name="hem_return_chart_explain">Utvecklingen under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Välj Allt för hela innehavstiden; då slutar din kurva på samma procent som visas överst. Insättningar markeras — nya pengar till dagens kurs flyttar procenten utan att något stigit eller fallit.</string>
+    <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, där i stället. Blandningen speglar din nuvarande fördelning mellan aktier och räntor. Skatt och courtage ingår inte.</string>
+    <string name="format_hem_return_chart_benchmark_unclassified">%1$s av portföljen är blandfonder eller fonder utan känd typ och ingår inte i viktningen — jämförelsen är då en grov uppskattning.</string>
+    <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
+    <string name="hem_return_chart_partial">Delvis osäker: någon fond saknar kurs för delar av perioden och är utelämnad de dagarna.</string>
+    <string name="hem_return_chart_insufficient">För lite kurshistorik för att rita en kurva än. Den fylls på allt eftersom kurserna uppdateras.</string>
 
     <!-- Hem — analys-summering (issue #16, HEM-4) -->
     <string name="hem_analysis_title">Att se över</string>
@@ -63,11 +73,13 @@
     <string name="portfolj_exposure_type_title">Fondtyp</string>
     <string name="portfolj_exposure_region_title">Region</string>
     <string name="portfolj_exposure_region_explain">Region saknas ofta för ränte- och blandfonder.</string>
+    <string name="portfolj_exposure_risk_title">Risknivå</string>
     <string name="portfolj_exposure_index_title">Index vs. aktivt förvaltat</string>
     <string name="portfolj_exposure_index_label">Indexfond</string>
     <string name="portfolj_exposure_active_label">Aktivt förvaltad</string>
     <string name="portfolj_exposure_unknown_type">Okänd fondtyp</string>
     <string name="portfolj_exposure_unknown_region">Okänd region</string>
+    <string name="portfolj_exposure_unknown_risk">Okänd risknivå</string>
     <string name="format_portfolj_exposure_excluded">%1$d innehav saknar ISIN, fondmetadata eller känd kurs och räknas inte in i exponeringen.</string>
 
     <!-- Transaktioner -->
@@ -80,6 +92,10 @@
     <string name="format_transaktion_rad">%1$s andelar à %2$s</string>
     <string name="transaktion_delete_title">Ta bort transaktion?</string>
     <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
+    <string name="date_field_not_set">inget datum valt</string>
+    <string name="date_field_open_picker">Välj datum</string>
+    <string name="format_date_field_description">%1$s: %2$s</string>
+    <string name="transaktionsform_title">Ny transaktion</string>
     <string name="transaktionsform_fund_label">Fond</string>
     <string name="transaktionsform_date_label">Datum</string>
     <string name="transaktionsform_shares_label">Antal andelar</string>
@@ -104,10 +120,37 @@
     <string name="fond_isin_label">ISIN</string>
     <string name="fond_isin_missing_body">Ange fondens ISIN för att hämta kurshistorik för hela innehavstiden, inte bara senaste året.</string>
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
+    <string name="fond_chart_description_empty">Kursdiagram utan data för vald period</string>
+    <string name="format_fond_chart_description">Kursdiagram, %1$s, %2$d kurspunkter mellan %3$s och %4$s</string>
     <string name="fond_chart_period_1man">1 mån</string>
     <string name="fond_chart_period_3man">3 mån</string>
     <string name="fond_chart_period_1ar">1 år</string>
+    <string name="fond_chart_period_3ar">3 år</string>
+    <string name="fond_chart_period_5ar">5 år</string>
     <string name="fond_chart_period_allt">Allt</string>
+    <string name="fond_chart_series_holding">Din fond</string>
+    <string name="fond_chart_indexed_explain">Båda kurvorna startar på 100 vid periodens början — jämförelsen visar utveckling, inte kurs i kronor.</string>
+    <string name="fond_chart_partial_comparison">Delvis jämförelse: fonderna har olika lång historik, så bara den gemensamma perioden visas.</string>
+    <string name="format_fond_chart_comparison_description">Jämförelsediagram, %1$s, %2$s, indexerade till 100 vid periodens början</string>
+    <string name="format_fond_chart_description_percent">Avkastningsdiagram, %1$s, nollställt vid periodens början. %2$d punkter mellan %3$s och %4$s. Kurvor: %5$s</string>
+
+    <!-- Bytesbeslut på fondkortet (ANA-10/ANA-11, issue #85) -->
+    <string name="switch_section_title">Ska du byta?</string>
+    <string name="switch_section_explain">Förslagen nedan kommer från din riskprofil (bytesplanen) och från avgiftsjämförelsen. Fäll ut ett förslag för att se motivering och kursjämförelse. Appen genomför aldrig ett byte åt dig.</string>
+    <string name="switch_none_plan_body">Riskprofilens bytesplan föreslår inget byte för den här fonden just nu — den ges bara i ISK/KF och när någon risknivå avviker tillräckligt från din målfördelning.</string>
+    <string name="switch_none_not_a_holding">Bytesförslag ges bara för fonder du äger.</string>
+    <string name="format_switch_plan_to">%1$d. Byt till %2$s</string>
+    <string name="format_switch_plan_from">%1$d. Byt hit från %2$s</string>
+    <string name="switch_comparison_loading">Hämtar kurshistorik för jämförelsen …</string>
+    <string name="switch_comparison_unavailable">Kunde inte hämta kurshistorik för den föreslagna fonden — ingen jämförelse visas.</string>
+
+    <!-- Risknivå (UI-10, issue #85) -->
+    <string name="format_risk_level">Risk %1$d/%2$d</string>
+    <string name="format_risk_level_change">Risk %1$d → %2$d (av %3$d)</string>
+    <string name="risk_unknown_label">Risk okänd</string>
+    <string name="format_risk_level_description">Risknivå %1$d av %2$d</string>
+    <string name="format_risk_level_change_description">Risknivå %1$d av %3$d, efter bytet %2$d av %3$d</string>
+    <string name="risk_unknown_description">Risknivå okänd</string>
 
     <!-- Analys — nyckeltal och säljsignaler (issue #16, ANA-1–ANA-4) -->
     <string name="analys_section_title">Analys</string>
@@ -118,6 +161,7 @@
     <string name="analys_period_sedan_kop">Sedan köp</string>
     <string name="analys_cagr_label">Årlig snittavkastning (CAGR)</string>
     <string name="analys_gav_label">GAV</string>
+    <string name="format_analys_gav_label">GAV %1$s</string>
     <string name="analys_portfolio_share_label">Andel av portföljen</string>
     <string name="analys_status_gron">Inga signaler</string>
     <string name="analys_status_gul">Värt att se över</string>
@@ -136,6 +180,7 @@
     <string name="info_collapse">Dölj förklaring</string>
     <!-- Neutral kontext härledd ur analysen (AnalysisGuidance) — aldrig ett köp-/säljråd (ANA-3) -->
     <string name="analys_guidance_plus_mot_gav">Fonden ligger under sin topp, men du är fortfarande i plus mot ditt snittpris (GAV) — du har alltså inte förlorat pengar på innehavet, även om det tappat från toppen.</string>
+    <string name="analys_guidance_minus_mot_gav">Fonden ligger under sin topp och under ditt snittpris (GAV) — innehavet är alltså i minus just nu. Ett orealiserat minus blir en förlust först när du säljer; hur länge du tänkt spara spelar större roll än dagens kurs.</string>
     <string name="analys_guidance_djup_nedgang">Fonden har fallit rejält från toppen. Att sälja nu gör nedgången verklig; för en långsiktig sparare kan det vara läge att låta tiden verka i stället för att agera på ett fall som redan skett.</string>
     <string name="analys_guidance_under_trend">Kursen ligger under sin långa trend (200-dagarssnittet). Det är ett svaghetstecken att hålla ögonen på — inte ett besked om att sälja.</string>
     <string name="analys_guidance_svag_portfolj">Fonden har gått svagare än dina övriga fonder de senaste 3 månaderna. En kort period säger lite på egen hand — värt att följa över tid.</string>
@@ -188,9 +233,13 @@
     <string name="analys_glossary_sharpe_def">Avkastningen delad på volatiliteten — hur mycket avkastning fonden gett per enhet risk. Högre är bättre; gör det möjligt att jämföra fonder med olika svängningar rättvist.</string>
 
     <!-- Fondsök (lägg till fond i bevakningen) -->
+    <string name="fondsok_title">Lägg till fond</string>
     <string name="fondsok_label">Sök fond</string>
+    <string name="fondsok_load_failed_title">Kunde inte hämta fondlistan</string>
+    <string name="fondsok_load_failed_body">Kontrollera uppkopplingen och försök igen. Redan bevakade fonder påverkas inte.</string>
     <string name="fondsok_empty_title">Inga fonder hittades</string>
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
+    <string name="fondsok_pick">Välj</string>
     <string name="fondsok_added">Tillagd</string>
     <string name="fondsok_fab">Lägg till fond</string>
     <string name="fondsok_company_label">Fondbolag</string>
@@ -214,9 +263,54 @@
     <string name="settings_import_body">Importera befintliga fondinnehav från Handelsbankens Excel-export (\"Innehav Fonder\").</string>
     <string name="settings_import_button">Importera innehav</string>
     <!-- Riskprofil (SET-3, issue #68) -->
+    <string name="riskprofil_title">Riskprofil</string>
     <string name="settings_riskprofile_section">Riskprofil</string>
-    <string name="settings_riskprofile_body">Sätt en målrisknivå för portföljen och jämför den mot dina innehav.</string>
+    <string name="settings_riskprofile_body">Sätt en målfördelning för portföljen och jämför den mot dina innehav.</string>
     <string name="settings_riskprofile_button">Öppna riskprofil</string>
+    <!-- Kontotyp (SET-4, issue #70) -->
+    <string name="settings_account_type_section">Kontotyp</string>
+    <string name="settings_account_type_body">Styr om Hem föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
+    <string name="account_type_isk_kf">ISK/KF</string>
+    <string name="account_type_depa_af">Depå/AF</string>
+    <!-- Facit för bytesplanen (SET-5, issue #80) -->
+    <string name="facit_title">Facit</string>
+    <!-- Val av jämförelsereferens (HEM-10, issue #102) -->
+    <string name="settings_benchmark_section">Jämförelsefond</string>
+    <string name="settings_benchmark_automatic">Väljs automatiskt efter din fördelning mellan aktier och räntor.</string>
+    <string name="format_settings_benchmark_chosen">Ditt val: %1$s</string>
+    <string name="settings_benchmark_body">Fonden som Hems avkastningskurva jämförs mot. Ditt val gäller före appens. Saknar den kurshistorik lika långt tillbaka som ditt första köp visas ingen jämförelse.</string>
+    <string name="settings_benchmark_button">Välj fond</string>
+    <string name="settings_benchmark_clear">Använd appens val</string>
+    <string name="settings_benchmark_pick_failed">Fonden saknar ISIN och går inte att jämföra mot — välj en annan.</string>
+
+    <string name="settings_facit_section">Facit</string>
+    <string name="settings_facit_body">Se hur bytesförslagen på Hem gick jämfört med att ha behållit innehavet.</string>
+    <string name="settings_facit_button">Öppna facit</string>
+    <string name="facit_empty_title">Inget facit än</string>
+    <string name="facit_empty_body">Här visas utfallet av bytesförslagen från Hem. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
+    <string name="facit_summary_title">Meravkastning mot att ha behållit</string>
+    <string name="facit_summary_plan_title">Bytesplanen</string>
+    <string name="facit_summary_fee_title">Billigare alternativ</string>
+    <string name="facit_summary_fee_explain">Avgiftsbytena redovisas separat: där är vinsten den lägre avgiften, känd på förhand, medan bytesplanens utfall beror på hur fonderna går. Ett gemensamt snitt hade dolt skillnaden.</string>
+    <string name="facit_summary_all_label">Alla förslag</string>
+    <string name="facit_summary_followed_label">Enbart genomförda</string>
+    <string name="format_facit_evaluated_count">%1$d av %2$d förslag utvärderade</string>
+    <string name="facit_by_plan_index_title">Per plats i planen</string>
+    <string name="format_facit_plan_index_label">Plats %1$d</string>
+    <string name="facit_by_plan_index_explain">Planen är rangordnad, så det första bytet ska vara det starkaste. Presterar de lägre platserna sämre är det ett skäl att inte föreslå fler byten per plan.</string>
+    <string name="format_facit_row_funds">%1$s → %2$s</string>
+    <string name="format_facit_row_kind_and_date">%1$s · %2$s</string>
+    <string name="facit_kind_plan">Bytesplan</string>
+    <string name="facit_kind_fee">Billigare alternativ</string>
+    <string name="facit_row_excess_label">Meravkastning</string>
+    <string name="format_facit_plan_index_detail">Plats %1$d i planen</string>
+    <string name="format_facit_amount">Belopp: %1$s</string>
+    <string name="format_facit_legs">Såld fond %1$s · köpt fond %2$s sedan förslaget</string>
+    <string name="facit_not_evaluated_explain">Kunde inte utvärderas än — kursen för någon av fonderna är inte hämtad. Bakgrundsuppdateringen fyller på den efter hand.</string>
+    <string name="facit_followed_label">Genomförd</string>
+    <string name="facit_expand">Visa detaljer</string>
+    <string name="facit_collapse">Dölj detaljer</string>
+    <string name="facit_disclaimer">Måttet jämför de två fondernas kursutveckling sedan förslagsdagen. Det är inte din faktiska avkastning: den beror på vilken dag du bytte och på eventuella avgifter, och skatt räknas inte alls (bytesförslag ges bara i ISK/KF, där ett byte inte utlöser skatt). Bara förslag som faktiskt gavs mäts här — perioder utan plan syns inte.</string>
     <string name="settings_about_section">Om appen</string>
 
     <!-- Importera innehav (issue #8) -->
@@ -247,9 +341,9 @@
     <string name="settings_import_orders_section">Importera avräkningsnotor</string>
     <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
 
-    <!-- Riskprofil (SET-3, issue #68) -->
+    <!-- Riskprofil (SET-3, issue #68, målfördelning i issue #71) -->
     <string name="riskprofile_title">Riskprofil</string>
-    <string name="riskprofile_intro">Tre frågor föreslår en målrisknivå för portföljen. Förslaget är bara ett förslag — du väljer och sparar din egen nivå.</string>
+    <string name="riskprofile_intro">Tre frågor föreslår en målfördelning över risknivåer för portföljen. Förslaget är bara ett förslag — du justerar och sparar din egen fördelning.</string>
     <string name="riskprofile_q_horizon">Tidshorisont</string>
     <string name="risk_horizon_under_3">Mindre än 3 år</string>
     <string name="risk_horizon_3_7">3–7 år</string>
@@ -264,17 +358,35 @@
     <string name="risk_goal_bevara">Bevara värdet</string>
     <string name="risk_goal_balanserad">Balanserad tillväxt</string>
     <string name="risk_goal_maximal_tillvaxt">Maximal tillväxt</string>
-    <string name="format_riskprofile_suggested">Förslag: nivå %1$d</string>
-    <string name="riskprofile_level_title">Målrisknivå</string>
+    <string name="riskprofile_suggestion_hint">Enkätens förslag har fyllts i nedan. Justera andelarna om du vill.</string>
+    <string name="riskprofile_allocation_title">Målfördelning</string>
+    <string name="riskprofile_allocation_disclaimer">Fördelningarna är utgångspunkter, inte optima — ett verkligt optimum kräver uppgifter om ålder, övriga tillgångar och inkomst som appen varken har eller frågar om.</string>
+    <string name="format_riskprofile_level_label">Nivå %1$d</string>
+    <string name="format_riskprofile_allocation_sum">Summa: %1$d %%</string>
+    <string name="riskprofile_allocation_sum_error">Summan måste bli 100 % för att kunna sparas.</string>
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
     <string name="riskprofile_save_button">Spara</string>
 
-    <!-- Riskprofil på Hem (HEM-7, issue #68) -->
+    <!-- Riskprofil på Hem (HEM-7, issue #68, mål-mot-faktisk per nivå i issue #71) -->
     <string name="hem_risk_title">Riskprofil</string>
     <string name="hem_risk_target_label">Målnivå</string>
     <string name="hem_risk_actual_label">Innehavens snittnivå</string>
     <string name="hem_risk_explain">Innehavens genomsnittliga risknivå, viktad på aktuellt värde — inte portföljens samlade risk (korrelation och riskspridning räknas inte in).</string>
     <string name="format_hem_risk_excluded">%1$d fond(er) saknar känd risknivå och räknas inte in.</string>
+    <string name="hem_risk_distribution_title">Mål mot faktisk fördelning</string>
+    <string name="format_hem_risk_level">Nivå %1$d</string>
+    <string name="hem_risk_target_bar_label">Mål</string>
+    <string name="hem_risk_actual_bar_label">Faktisk</string>
+
+    <!-- Bytesplan på Hem (HEM-8, issue #70) -->
+    <string name="hem_switch_plan_title">Bytesplan</string>
+    <string name="format_hem_switch_plan_row">%1$d. Sälj %2$s (nivå %3$d) → Köp %4$s (nivå %5$d)</string>
+    <string name="format_hem_switch_plan_amount">Belopp: %1$s</string>
+    <string name="format_hem_switch_plan_fee_delta">Avgiftsskillnad: %1$s</string>
+    <string name="hem_switch_plan_recompute">Räkna om bytesplanen</string>
+    <string name="hem_switch_plan_recompute_running">Räknar om …</string>
+    <string name="hem_switch_plan_recompute_explain">Planen räknas normalt om automatiskt några gånger per dygn, och direkt när du ändrar riskprofil eller kontotyp. Avviker ingen risknivå tillräckligt mycket från ditt mål ges inget förslag — då ändras ingenting här.</string>
+    <string name="hem_switch_plan_disclaimer">Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria.</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>
     <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>
@@ -290,7 +402,19 @@
 
     <!-- Töm databas (farozon i Inställningar) -->
     <string name="settings_danger_section">Farozon</string>
-    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — molnbackup finns ännu inte.</string>
+    <string name="settings_backup_section">Säkerhetskopiering</string>
+    <string name="settings_backup_body">Exportera alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till en fil du väljer själv. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
+    <string name="settings_backup_export_button">Exportera till fil</string>
+    <string name="settings_backup_restore_button">Återställ från fil</string>
+    <string name="backup_export_success">Säkerhetskopian har sparats.</string>
+    <string name="backup_export_failed">Kunde inte spara säkerhetskopian. Ingenting har ändrats.</string>
+    <string name="format_backup_restore_success">Återställt: %1$d fonder, %2$d transaktioner och %3$d inspelade förslag.</string>
+    <string name="backup_restore_failed_unreadable">Filen kunde inte läsas som en säkerhetskopia. Ingenting har ändrats.</string>
+    <string name="backup_restore_failed_version">Filen kommer från en nyare version av appen och kan inte läsas. Ingenting har ändrats.</string>
+    <string name="backup_restore_confirm_title">Återställ från säkerhetskopia?</string>
+    <string name="backup_restore_confirm_button">Återställ</string>
+    <string name="backup_restore_confirm_body">Alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag ersätts med innehållet i filen. Det som finns i appen nu går förlorat.</string>
+    <string name="settings_danger_body">Tömmer all bevakad data (fonder, transaktioner och cachade kurser) permanent. Kan inte ångras — exportera en säkerhetskopia först om du vill kunna komma tillbaka.</string>
     <string name="settings_clear_database_button">Töm databasen</string>
     <string name="settings_clear_database_success">Databasen har tömts.</string>
     <string name="clear_database_confirm_title">Töm databasen?</string>

@@ -19,7 +19,12 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
+import kotlin.math.roundToInt
+
+/** Andelen (0.0..1.0) uttryckt som ett rundat heltalsprocent för visning/redigering i inmatningsfälten. */
+private fun percentTextOf(fraction: Double): String = (fraction * 100).roundToInt().toString()
 
 data class RiskProfilUiState(
     val availableLevels: List<Int> = emptyList(),
@@ -27,32 +32,57 @@ data class RiskProfilUiState(
     val reaction: DownturnReaction? = null,
     val goal: PrimaryGoal? = null,
     /** Enkätens förslag ur [RiskProfileCalc.suggest] — null om inte alla tre frågor är besvarade eller skalan är tom. */
-    val suggestedLevel: Int? = null,
-    /** Satt så fort användaren tar ett eget val i nivåväljaren — vinner alltid över [suggestedLevel]. */
-    val manualLevel: Int? = null,
+    val suggestedAllocation: Map<Int, Double>? = null,
+    /** Icke-null så fort användaren rör en enskild andel — vinner då alltid över [suggestedAllocation] i sin helhet. */
+    val manualAllocationText: Map<Int, String>? = null,
     val saved: Boolean = false,
 ) {
-    /** Det som faktiskt sparas vid `save()` — det egna valet vinner alltid över förslaget. */
-    val selectedLevel: Int? get() = manualLevel ?: suggestedLevel
+    /** Text att visa per tillgänglig nivås inmatningsfält — förslaget (rundat till heltalsprocent) tills ett eget värde skrivits in, annars de egna värdena (saknad nivå defaultar till "0"). */
+    val allocationText: Map<Int, String>
+        get() {
+            val manual = manualAllocationText
+            return if (manual != null) {
+                availableLevels.associateWith { level -> manual[level] ?: "0" }
+            } else {
+                availableLevels.associateWith { level -> suggestedAllocation?.get(level)?.let(::percentTextOf) ?: "0" }
+            }
+        }
+
+    /** Sant efter det första egna ändrade fältet — styr om förslagstexten fortfarande visas. */
+    val hasManualEdit: Boolean get() = manualAllocationText != null
+
+    val allocationSumPercent: Int get() = allocationText.values.sumOf { it.toIntOrNull() ?: 0 }
+
+    /** Det som faktiskt går att spara — bara giltigt när summan är (i praktiken) exakt 100 %, annars tom (ingen tyst normalisering). */
+    val effectiveAllocation: Map<Int, Double>
+        get() {
+            val fractions = allocationText
+                .mapValues { (_, text) -> (text.toIntOrNull() ?: 0) / 100.0 }
+                .filterValues { it > 0.0 }
+            return if (RiskProfileCalc.isCompleteAllocation(fractions)) fractions else emptyMap()
+        }
+
+    val canSave: Boolean get() = effectiveAllocation.isNotEmpty()
 }
 
 /**
- * Riskprofilens enkät + målrisknivå (SET-3, issue #68) — en engångsinställning under
- * Inställningar, inte en daglig destination (samma navigeringsmönster som import-skärmarna).
- * Enkäten *föreslår*, användaren äger och sparar den slutgiltiga nivån (se
- * [RiskProfileCalc]/[RiskProfile]).
+ * Riskprofilens enkät + målfördelning (SET-3, issue #68 → målfördelning i issue #71) — en
+ * engångsinställning under Inställningar, inte en daglig destination (samma
+ * navigeringsmönster som import-skärmarna). Enkäten *föreslår*, användaren äger och sparar den
+ * slutgiltiga fördelningen (se [RiskProfileCalc]/[RiskProfile]).
  */
 @HiltViewModel
 class RiskProfilViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private data class FormState(
         val horizon: TimeHorizon? = null,
         val reaction: DownturnReaction? = null,
         val goal: PrimaryGoal? = null,
-        val manualLevel: Int? = null,
+        val manualAllocationText: Map<Int, String>? = null,
         val saved: Boolean = false,
     )
 
@@ -62,16 +92,16 @@ class RiskProfilViewModel @Inject constructor(
     init {
         viewModelScope.launch { availableLevels.value = fundMetadataRepository.knownRiskLevels() }
         viewModelScope.launch {
-            // Förifyller enkäten med en redan sparad profils svar (om den enkätvägen sattes) så
-            // att en återbesökt riskprofil visar vad man svarade förra gången, inte en tom
-            // enkät — svaren och nivån hålls medvetet isär i persistensen (SET-3).
+            // Förifyller enkäten och fördelningen med en redan sparad profil så en återbesökt
+            // riskprofil visar vad man svarade/valde förra gången, inte en tom enkät — svaren
+            // och fördelningen hålls medvetet isär i persistensen (SET-3).
             preferences.riskProfile.first()?.let { saved ->
                 form.update {
                     it.copy(
                         horizon = saved.answers?.horizon,
                         reaction = saved.answers?.reaction,
                         goal = saved.answers?.goal,
-                        manualLevel = saved.targetRiskLevel,
+                        manualAllocationText = saved.effectiveAllocation.mapValues { (_, fraction) -> percentTextOf(fraction) },
                     )
                 }
             }
@@ -85,8 +115,8 @@ class RiskProfilViewModel @Inject constructor(
                 horizon = f.horizon,
                 reaction = f.reaction,
                 goal = f.goal,
-                suggestedLevel = suggestionOrNull(f, levels),
-                manualLevel = f.manualLevel,
+                suggestedAllocation = suggestionOrNull(f, levels),
+                manualAllocationText = f.manualAllocationText,
                 saved = f.saved,
             )
         }.stateIn(
@@ -95,7 +125,7 @@ class RiskProfilViewModel @Inject constructor(
             initialValue = RiskProfilUiState(),
         )
 
-    private fun suggestionOrNull(f: FormState, levels: List<Int>): Int? {
+    private fun suggestionOrNull(f: FormState, levels: List<Int>): Map<Int, Double>? {
         val horizon = f.horizon ?: return null
         val reaction = f.reaction ?: return null
         val goal = f.goal ?: return null
@@ -105,19 +135,33 @@ class RiskProfilViewModel @Inject constructor(
     fun onHorizonSelected(horizon: TimeHorizon) = form.update { it.copy(horizon = horizon) }
     fun onReactionSelected(reaction: DownturnReaction) = form.update { it.copy(reaction = reaction) }
     fun onGoalSelected(goal: PrimaryGoal) = form.update { it.copy(goal = goal) }
-    fun onLevelSelected(level: Int) = form.update { it.copy(manualLevel = level) }
+
+    fun onAllocationPercentChanged(level: Int, percentText: String) {
+        val base = uiState.value.allocationText
+        form.update { it.copy(manualAllocationText = base + (level to percentText)) }
+    }
 
     fun save() {
         val state = uiState.value
-        val level = state.selectedLevel ?: return
+        val allocation = state.effectiveAllocation
+        if (allocation.isEmpty()) return
         val answers = if (state.horizon != null && state.reaction != null && state.goal != null) {
             RiskProfileAnswers(state.horizon, state.reaction, state.goal)
         } else {
             null
         }
         viewModelScope.launch {
-            preferences.setRiskProfile(RiskProfile(targetRiskLevel = level, answers = answers))
+            val previousAllocation = preferences.riskProfile.first()?.effectiveAllocation
+            preferences.setRiskProfile(RiskProfile(targetAllocation = allocation, answers = answers))
             form.update { it.copy(saved = true) }
+
+            // Bytesplanen (HEM-8) mäts mot **målfördelningen** — ändras den är den inspelade
+            // planen inaktuell i samma sekund, och utan den här triggern fick man vänta upp till
+            // 12 timmar på backstopen (issue #88). Jämförelsen görs mot den sparade fördelningen,
+            // inte mot "sparade knappen trycktes": en oförändrad profil ska inte kosta en
+            // skanning (källfråga + budgeterad köpbarhetsverifiering per underviktad nivå).
+            // Enkätsvaren påverkar inte planen — bara fördelningen gör det.
+            if (allocation != previousAllocation) fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
 }

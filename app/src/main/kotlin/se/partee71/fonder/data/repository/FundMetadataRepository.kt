@@ -8,14 +8,18 @@ import se.partee71.fonder.data.network.AvanzaFundListParser
 import se.partee71.fonder.data.network.AvanzaFundListRequestBuilder
 import se.partee71.fonder.data.network.AvanzaSource
 import se.partee71.fonder.data.room.daos.FundMetadataDao
+import se.partee71.fonder.data.room.entities.FundAlternativeIsinsCodec
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.FundScreenSortDirection
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
+import se.partee71.fonder.domain.usecase.FundNameKey
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.FundScreenFilter
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,6 +75,29 @@ interface FundMetadataRepository {
     suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata>
 
     /**
+     * Som [metadataFor], men **enbart ur cachen** — läser aldrig nätverket, ens för en saknad
+     * eller inaktuell rad (SET-5/facit, issue #80). Facit slår upp fondnamn för varje inspelat
+     * förslag, och historiken kan innehålla hundratals ISIN: en cache-först-läsning hade blivit
+     * en burst av uppslag varje gång skärmen öppnas, exakt den kostnad HEM-5/HEM-8 redan lagt
+     * på bakgrundsworkerns backstop. Saknas raden utelämnas ISIN:et ur kartan — anroparen ska
+     * visa det som okänt, aldrig gissa.
+     */
+    suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata>
+
+    /**
+     * Risknivå per **normaliserat fondnamn** ([FundNameKey]) ur cachen, aldrig nätverket
+     * (UI-10, issue #85). Finns för fondsök, vars träffar kommer ur fondlista-katalogen och
+     * saknar ISIN (`HandelsbankenHtmlParser.parseFundCatalog`) — utan ett ISIN att slå upp är
+     * namnet den enda kopplingen till metadatan.
+     *
+     * Bara cachen, av samma skäl som [cachedMetadataFor]: katalogen är ~1500 fonder, och ett
+     * nätverksuppslag per rad vore en burst varje gång listan filtreras om. Fonder som inte
+     * hunnit hamna i cachen saknas därför i kartan och visas som okänd risk — cachen fylls på
+     * av innehavens (HEM-5/POR-9) och bytesplanens (HEM-8) egna uppslag över tid.
+     */
+    suspend fun cachedRiskByFundName(): Map<String, Int>
+
+    /**
      * Kända risknivåer på källans skala (TP-21, SET-3/issue #68) — unionen av senast kända
      * filtervokabulär ([se.partee71.fonder.data.datastore.PreferencesRepository.fundFilterVocabulary],
      * som bara fylls av Fondsök/ANA-9:s frågeflöden och därför kan vara tom för en användare
@@ -80,6 +107,20 @@ interface FundMetadataRepository {
      * aldrig en hårdkodad skala.
      */
     suspend fun knownRiskLevels(): List<Int>
+
+    /**
+     * Köpkandidater på [level] för bytesplanen (HEM-8, issue #70) — samma
+     * köpbarhetsverifieringsmekanik som [suggestCheaperAlternatives]/ANA-9 (issue #59): frågar
+     * källan för risknivån **sorterad på högst 12-månadersavkastning** (källans sida rymmer
+     * bara 20 träffar, TP-21 — sorteringen avgör därför vilken ände av nivån som blir synlig,
+     * se issue #75), behåller bara kandidater med känd [FundMetadata.developmentOneYear]
+     * (annars ingen signal att rangordna på, se [SwitchPlanCalc]) och känd avgift, och
+     * ISIN-verifierar köpbarhet budgeterat. Resultatet är rangordnat på avkastning, fallande.
+     * [excludeIsins] hoppas över innan verifiering (redan sålda/köpta i samma plan, eller
+     * redan innehavda fonder). Tom lista om inga kvalificerade, köpbara kandidater hittades —
+     * aldrig en gissad kandidat.
+     */
+    suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate>
 }
 
 @Singleton
@@ -157,6 +198,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
             availabilityResolvedAtEpochDay = existing?.availabilityResolvedAtEpochDay,
             cheapestAlternativeIsin = existing?.cheapestAlternativeIsin,
             cheapestAlternativeFee = existing?.cheapestAlternativeFee,
+            shownAlternativeIsinsJson = existing?.shownAlternativeIsinsJson ?: "[]",
             comparisonResolvedAtEpochDay = existing?.comparisonResolvedAtEpochDay,
         )
     }
@@ -171,7 +213,10 @@ class AvanzaFundMetadataRepository @Inject constructor(
             return cached.availableAtHandelsbanken
         }
 
-        val available = resolveViaFondlistaCatalog(cached.name, isin)
+        // Null = katalogen gick inte att hämta. Då är svaret okänt, inte "nej": skriv ingen
+        // cache, så nästa körning försöker igen i stället för att låsa fast en påhittad miss
+        // i AVAILABILITY_TTL_DAYS dygn.
+        val available = resolveViaFondlistaCatalog(cached.name, isin) ?: return null
         dao.upsert(
             cached.copy(
                 availableAtHandelsbanken = available,
@@ -187,9 +232,13 @@ class AvanzaFundMetadataRepository @Inject constructor(
      * `HandelsbankenFundPriceRepository.resolveFondlistaFundId`/`ImportFundMatcher` (regel 4).
      * Ren namnmatchning räcker inte: en andelsklassfamilj kan rangordna fel syskonfond högst
      * (issue #45), så bara en ISIN-bekräftad träff räknas som köpbar.
+     *
+     * **Null när katalogen inte kunde hämtas** — ett obesvarat "vet inte", skilt från ett
+     * verifierat `false`. Tidigare gav en tom katalog vid nätverksfel ett `false` som såg
+     * auktoritativt ut, cachades i 30 dygn och tyst slog ut både ANA-9 och hela bytesplanen.
      */
-    private suspend fun resolveViaFondlistaCatalog(fundName: String, isin: String): Boolean {
-        val catalog = fundPriceRepository.fetchFundCatalog()
+    private suspend fun resolveViaFondlistaCatalog(fundName: String, isin: String): Boolean? {
+        val catalog = fundPriceRepository.fetchFundCatalog() ?: return null
         val candidates = FundNameMatcher.rankedMatches(fundName, catalog.funds)
         return candidates
             .take(MAX_ISIN_VERIFICATIONS)
@@ -210,27 +259,34 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 verified += alternative
             }
         }
-        persistComparisonResult(isin, verified.firstOrNull())
+        persistComparisonResult(isin, verified)
         return verified
     }
 
     /**
      * Sparar resultatet av en jämförelse för portföljens samlade besparingspotential
-     * (HEM-6, issue #61) — [best] är redan rankad på störst besparing (samma sak som lägst
+     * (HEM-6, issue #61) — [shown] är redan rankad på störst besparing (samma sak som lägst
      * avgift, eftersom `annualSavingsKr` är monotont avtagande i kandidatens avgift för ett
-     * givet innehav och värde), så `verified.firstOrNull()` i anroparen är det billigaste
-     * verifierade alternativet. Kronbesparingen sparas medvetet inte — bara avgiften, så den
-     * kan räknas om ur innehavets aktuella värde vid visning i stället för att bli fel så
-     * fort NAV rör sig. [best] null (ingen kandidat kvalificerade eller verifierades) sparas
-     * som "jämfört, inget billigare hittades" — skilt från att aldrig ha jämförts alls, se
+     * givet innehav och värde), så det första elementet är det billigaste verifierade
+     * alternativet. Kronbesparingen sparas medvetet inte — bara avgiften, så den kan räknas om
+     * ur innehavets aktuella värde vid visning i stället för att bli fel så fort NAV rör sig.
+     * Tom [shown] (ingen kandidat kvalificerade eller verifierades) sparas som "jämfört, inget
+     * billigare hittades" — skilt från att aldrig ha jämförts alls, se
      * [FundMetadata.comparisonResolvedAtEpochDay].
+     *
+     * **Hela** listan sparas, inte bara det billigaste (issue #93): alternativen är varandras
+     * alternativ och vilket som helst av dem kan vara det användaren faktiskt byter till, så
+     * facit måste kunna spela in vart och ett som ett givet råd (SET-5). HEM-6 läser fortsatt
+     * bara `cheapestAlternative*`.
      */
-    private suspend fun persistComparisonResult(isin: String, best: FeeComparisonCalc.Alternative?) {
+    private suspend fun persistComparisonResult(isin: String, shown: List<FeeComparisonCalc.Alternative>) {
         val cached = dao.getByIsin(isin) ?: return
+        val best = shown.firstOrNull()
         dao.upsert(
             cached.copy(
                 cheapestAlternativeIsin = best?.candidate?.isin,
                 cheapestAlternativeFee = best?.candidateFeePercent,
+                shownAlternativeIsinsJson = FundAlternativeIsinsCodec.encode(shown.map { it.candidate.isin }),
                 comparisonResolvedAtEpochDay = LocalDate.now().toEpochDay(),
             ),
         )
@@ -244,13 +300,20 @@ class AvanzaFundMetadataRepository @Inject constructor(
      * filtret tyst" är bara meningsfull för kategoriska frågor — ett ISIN-uppslag skulle
      * annars förorena [lastKnownUnfilteredTotal] med totalen för en enda fond. Faller
      * tillbaka på cachen direkt vid nätverksfel, precis som [query].
+     *
+     * Returnerar alltid den **lagrade** raden, aldrig livesvaret rakt av: källan känner inte
+     * till appens härledda fält ([FundMetadata.availableAtHandelsbanken],
+     * `cheapestAlternative*`, [FundMetadata.comparisonResolvedAtEpochDay]), så ett livesvar
+     * bär dem alltid som null. [toEntityPreservingDerivedState] bevarar dem i databasen —
+     * men returnerades livesvaret tappades de ändå på vägen ut, och HEM-6 rapporterade
+     * "0 av N jämförda" trots en färsk sparad jämförelse.
      */
     private suspend fun findByIsin(isin: String): FundMetadata? {
         val live = fetchLive(FundScreenQuery(nameContains = isin))
         if (live != null && live.funds.isNotEmpty()) {
             dao.upsertAll(live.funds.map { it.toEntityPreservingDerivedState() })
         }
-        return live?.funds?.firstOrNull { it.isin == isin } ?: dao.getByIsin(isin)?.toDomain()
+        return dao.getByIsin(isin)?.toDomain()
     }
 
     override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
@@ -268,6 +331,22 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return result
     }
 
+    override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> {
+        val distinct = isins.distinct()
+        if (distinct.isEmpty()) return emptyMap()
+        // Ingen färskhetsgate här, till skillnad från metadataFor: en inaktuell rad är fortfarande
+        // rätt *namn* på fonden, och namnet är allt facit behöver. Att kasta den och hämta om vore
+        // just nätverkskostnaden metoden finns för att undvika.
+        return dao.getByIsins(distinct).associate { it.isin to it.toDomain() }
+    }
+
+    override suspend fun cachedRiskByFundName(): Map<String, Int> =
+        // Sista raden vinner vid namnkollision (andelsklasser med identiskt normaliserat namn).
+        // Ett godtyckligt men konsekvent val: alternativet vore att utelämna kollisioner helt,
+        // men två andelsklasser av samma fond har i praktiken samma risknivå — det är den
+        // siffran som visas, oavsett vilken rad den lästes ur.
+        dao.getKnownRisks().associate { FundNameKey.of(it.name) to it.risk }
+
     override suspend fun knownRiskLevels(): List<Int> {
         // Källans egen `type`-sträng för risk-dimensionen är "risk" (verifierat live
         // 2026-08-01, samma `filterCounts`-svar som TP-21 i övrigt bygger vokabulären ur).
@@ -276,11 +355,69 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return (fromVocabulary + fromCache).distinct().sorted()
     }
 
+    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
+        // Källans sida är hårt låst till 20 träffar (TP-21), så sorteringen avgör *vilken ände*
+        // av nivån som ens blir synlig. Tidigare hämtades den billigaste änden, varpå
+        // SwitchPlanCalcs kvartilregel bara kunde särskilja de billigaste fonderna inbördes och
+        // den uppmätta avkastningskanten (#72) aldrig applicerades — issue #75, punkt 3.
+        val results = query(
+            FundScreenQuery(
+                risk = listOf(level.toString()),
+                sortField = SORT_FIELD_DEVELOPMENT_ONE_YEAR,
+                sortDirection = FundScreenSortDirection.DESCENDING,
+            ),
+        )
+        // Rangordna om lokalt oavsett vad källan gav: ett okänt sortField ignoreras tyst av
+        // källan ("fail open", samma verifierade beteende som filtren i [query]), och då vore
+        // sidan sorterad på något helt annat utan att något syntes.
+        val eligible = results
+            .filter { it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null }
+            .sortedByDescending { it.developmentOneYear }
+        if (!results.isSortedByOneYearDescending()) {
+            Log.w(TAG, "Källan verkar ha ignorerat sorteringen på $SORT_FIELD_DEVELOPMENT_ONE_YEAR — rangordnar kandidaterna lokalt")
+        }
+
+        val verified = mutableListOf<SwitchPlanCalc.Candidate>()
+        for (metadata in eligible.take(MAX_SWITCH_VERIFICATION_ATTEMPTS)) {
+            if (verified.size >= MAX_SWITCH_CANDIDATES) break
+            if (resolveHandelsbankenAvailability(metadata.isin) == true) {
+                verified += SwitchPlanCalc.Candidate(metadata, metadata.developmentOneYear!!)
+            }
+        }
+        return verified
+    }
+
+    /**
+     * Sant om sidan faktiskt kom avkastningssorterad (fallande) från källan — rader utan känd
+     * `developmentOneYear` hoppas över, de säger inget om ordningen. Bara en signal till loggen:
+     * rangordningen görs lokalt ändå, se [findSwitchCandidates].
+     */
+    private fun List<FundMetadata>.isSortedByOneYearDescending(): Boolean {
+        val known = mapNotNull { it.developmentOneYear }
+        return known.zipWithNext().all { (first, second) -> first >= second }
+    }
+
     private companion object {
         const val TAG = "FundMetadataRepository"
         const val MAX_ISIN_VERIFICATIONS = 5
         const val MAX_VERIFIED_ALTERNATIVES = 3
         const val MAX_VERIFICATION_ATTEMPTS = 10
         const val RISK_VOCABULARY_KEY = "risk"
+
+        /**
+         * Källans sorteringsnyckel för 12-månadersavkastning — samma namn som fältet i svaret
+         * ([AvanzaFundListParser]). En **transportnyckel**, i samma kategori som filternamnen i
+         * [se.partee71.fonder.data.network.AvanzaFundListRequestBuilder]: skulle källan inte
+         * känna igen den ignoreras den tyst, vilket [findSwitchCandidates] både loggar och
+         * kompenserar för genom att rangordna lokalt. Delas med [FundScreenFilter], som
+         * sorterar på samma nyckel när frågan besvaras ur cachen (ÖV-6).
+         */
+        const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = FundScreenFilter.SORT_FIELD_DEVELOPMENT_ONE_YEAR
+
+        /** Tak på antal verifierat köpbara kandidater per risknivå (HEM-8, issue #70) — samma budgetprincip som ANA-9. */
+        const val MAX_SWITCH_CANDIDATES = 5
+
+        /** Tak på antal prövade kandidater innan verifieringen ger upp för nivån, även om inga bekräftas. */
+        const val MAX_SWITCH_VERIFICATION_ATTEMPTS = 10
     }
 }

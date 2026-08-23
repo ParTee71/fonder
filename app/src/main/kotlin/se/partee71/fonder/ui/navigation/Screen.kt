@@ -21,6 +21,22 @@ enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
     }
 }
 
+/**
+ * Rubrik för en icke-toppnivårutt (toppnivåernas titlar bor i [Screen.labelRes]). Null för en
+ * okänd rutt — då visas ingen `TopAppBar` alls, i stället för en tom.
+ */
+fun titleResFor(route: String?): Int? = when (route) {
+    Routes.FOND -> se.partee71.fonder.R.string.fond_title
+    Routes.FUND_SEARCH -> se.partee71.fonder.R.string.fondsok_title
+    Routes.TRANSACTION_FORM -> se.partee71.fonder.R.string.transaktionsform_title
+    Routes.IMPORT_HOLDINGS -> se.partee71.fonder.R.string.import_title
+    Routes.IMPORT_ORDERS -> se.partee71.fonder.R.string.import_orders_title
+    Routes.RISK_PROFILE -> se.partee71.fonder.R.string.riskprofil_title
+    Routes.FACIT -> se.partee71.fonder.R.string.facit_title
+    Routes.BENCHMARK_PICKER -> se.partee71.fonder.R.string.settings_benchmark_section
+    else -> null
+}
+
 object Routes {
     /** Fonddetalj för ett givet fundId (Handelsbankens fondlista-id, se issue #2/#3). */
     const val FOND = "fond/{fundId}"
@@ -40,4 +56,8 @@ object Routes {
 
     /** Riskprofil — engångsenkät + målrisknivå, nås från Inställningar (SET-3, issue #68). */
     const val RISK_PROFILE = "risk-profile"
+
+    /** Facit — utfallet av bytesplanens inspelade förslag, nås från Inställningar (SET-5, issue #80). */
+    const val BENCHMARK_PICKER = "benchmark_picker"
+    const val FACIT = "facit"
 }

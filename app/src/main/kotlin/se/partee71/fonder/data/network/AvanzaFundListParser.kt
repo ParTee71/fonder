@@ -37,6 +37,7 @@ object AvanzaFundListParser {
         val indexFund: Boolean = false,
         val startDate: String? = null,
         val minimumBuy: Double? = null,
+        val developmentOneYear: Double? = null,
         val tagList: List<TagView> = emptyList(),
     )
 
@@ -53,10 +54,17 @@ object AvanzaFundListParser {
         val vocabulary: FundFilterVocabulary,
     )
 
-    /** Tomt resultat (aldrig en krasch) om svaret inte går att tolka som förväntat — samma princip som övriga parsers i `data/network`. */
-    fun parse(responseJson: String): ParsedFundListPage {
+    /**
+     * **Null** (aldrig en krasch) om svaret inte går att tolka som förväntat — medvetet skilt
+     * från ett giltigt svar med noll fonder. `FundListView` har obligatoriska fält, så en enda
+     * fondpost utan `isin` (eller ett omdöpt fält hos källan) fäller avkodningen av *hela*
+     * svaret; returnerades det som en tom sida såg det ut som ett svar, och
+     * `FundMetadataRepository.query` hoppade då över sin offline-fallback: fondsöket visade en
+     * tom lista trots full cache, och `lastKnownUnfilteredTotal` förgiftades till 0.
+     */
+    fun parse(responseJson: String): ParsedFundListPage? {
         val response = runCatching { json.decodeFromString<FundListResponse>(responseJson) }.getOrNull()
-            ?: return ParsedFundListPage(emptyList(), 0, FundFilterVocabulary())
+            ?: return null
 
         return ParsedFundListPage(
             funds = response.fundListViews.map { it.toDomain() },
@@ -91,5 +99,6 @@ object AvanzaFundListParser {
         startDateEpochDay = startDate?.let { runCatching { LocalDate.parse(it).toEpochDay() }.getOrNull() },
         minimumBuy = minimumBuy,
         tags = tagList.map { FundTag(title = it.title, category = it.fundTagCategory) },
+        developmentOneYear = developmentOneYear,
     )
 }

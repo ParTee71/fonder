@@ -34,7 +34,11 @@ object PortfolioCalc {
                     fund = fund,
                     netShares = position.shares,
                     netInvested = position.costBasis,
-                    firstPurchaseEpochDay = txsForFund.minOfOrNull { it.epochDay },
+                    // Äldsta **kvarvarande** köp-lott, inte fondens äldsta transaktion: en fond
+                    // som sålts av helt och köpts igen ska räknas från det nya köpet, annars
+                    // beskriver datumet och netInvested två olika positioner (och ANA-1:s
+                    // "sedan köp" annualiserar över år positionen inte funnits).
+                    firstPurchaseEpochDay = position.firstPurchaseEpochDay,
                 )
             }
             .sortedBy { it.fund.name.lowercase() }

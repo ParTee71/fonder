@@ -5,7 +5,7 @@ import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.IsinPricePoint
 import java.time.DayOfWeek
 import java.time.Instant
-import java.time.ZoneOffset
+import java.time.ZoneId
 
 /**
  * Parsar JSON-svar från avanza.se:s fond-API. Isolerad från [AvanzaClient] så ett brott i
@@ -14,6 +14,13 @@ import java.time.ZoneOffset
 object AvanzaJsonParser {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Marknadens tidszon — källans kurspunkter är stämplade på lokal midnatt i Stockholm,
+     * se [parseChart]. Fast zon, inte enhetens: NAV-datumet är en egenskap hos den svenska
+     * handelsdagen och ska inte flytta sig för att telefonen står på en resa.
+     */
+    private val MARKET_ZONE: ZoneId = ZoneId.of("Europe/Stockholm")
 
     @Serializable
     private data class SearchResponse(val fundSearchViews: List<FundSearchView> = emptyList())
@@ -51,6 +58,12 @@ object AvanzaJsonParser {
      * procentavkastning, och `resolution=DAY` så långa spann inte nedsamplas till veckopunkter
      * — se [AvanzaClient.chartUrl]). Saknade (null) punkter filtreras bort.
      *
+     * **Tidsstämplarna är lokal midnatt i Stockholm**, inte UTC-midnatt, och måste tolkas i
+     * [MARKET_ZONE] — annars hamnar varje kurs en kalenderdag för tidigt. Verifierat mot
+     * källans eget svar: `1577919600000` är 23:00:00Z, alltså 00:00 den 2020-01-02 svensk tid.
+     * En UTC-tolkning gav 2020-01-01 (nyårsdagen, ingen NAV sätts då) och lät dessutom
+     * helgfiltret nedan kasta varje **måndagskurs**, eftersom den då daterades på söndagen.
+     *
      * **Helgdaterade punkter förkastas** (issue #39): källan levererar ibland kurser daterade
      * på lördag/söndag — verifierat 2026-07-27, där en fonds serie hoppade över fredagen och
      * gav en söndag i stället. Någon NAV den dagen finns inte, och eftersom datumet är *nyare*
@@ -65,7 +78,7 @@ object AvanzaJsonParser {
             ?.dataSerie
             ?.mapNotNull { point ->
                 val nav = point.y ?: return@mapNotNull null
-                val date = Instant.ofEpochMilli(point.x).atZone(ZoneOffset.UTC).toLocalDate()
+                val date = Instant.ofEpochMilli(point.x).atZone(MARKET_ZONE).toLocalDate()
                 if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) {
                     return@mapNotNull null
                 }

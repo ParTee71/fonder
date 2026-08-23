@@ -1,9 +1,9 @@
 # Fonder – Android
 
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
-och visa utveckling i tabell och diagram — med molnbackup via Google Drive.
+och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.30.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.50.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -38,8 +38,21 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (HEM-6, #61)
 - [x] Exponeringskarta i Portfölj — andel per fondtyp, region, index/aktivt (POR-9, #66)
 - [x] Riskprofil — enkät, målrisknivå och jämförelse mot innehavens faktiska risk (SET-3/HEM-7, #68)
-- [ ] Google Drive-backup — väntar på Firebase-projekt för fonder
+- [x] Fondkortet som beslutsstöd — byte överst, foldouts, risknivå överallt och
+      jämförelsediagram mot föreslagen fond (ANA-10/ANA-11/UI-10, #85)
+- [x] Bytesplanen räknas om på begäran — knapp på riskkortet plus automatiskt vid ändrad
+      riskprofil/kontotyp (HEM-8/SET-3/SET-4, #88)
+- [x] "Genomförd"-kvittering även på fondkortets bytesförslag, via delad komponent (ANA-10, #90)
+- [x] Avgiftsbytena spelas in i facit och kan kvitteras, redovisade skilt från bytesplanens
+      byten (ANA-9/ANA-10/SET-5, #91) — varje visat alternativ, oberoende av jämförelsens
+      TTL (#93)
+- [x] Riskprofil som målfördelning över flera risknivåer, i stället för en enda nivå (SET-3/HEM-7/POR-9, #71)
+- [x] Bytesplan i ISK: rangordnade fondbyten mot målfördelningen, med facit-inspelning (SET-4/HEM-8, #70)
+- [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
+- [ ] Google Drive-backup — steg 2 av TP-7, väntar på en OAuth-klient med `drive.appdata`
+      ([uppsättning](docs/GOOGLE-SETUP.md))
 - [ ] Google-inloggning — väntar på Firebase-projekt för fonder
+      ([uppsättning](docs/GOOGLE-SETUP.md))
 
 ---
 
@@ -65,6 +78,37 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 ```
 
 Öppna i Android Studio och kör på en enhet/emulator (API 30+).
+
+### Google Services
+
+Google-inloggning (TP-6) och Drive-backup (TP-7 steg 2) kräver en `google-services.json`
+från Firebase Console i `app/`. Filen är **incheckad** — `google-services`-pluginet läser
+den vid varje bygge, så utan den i repot går CI inte att köra. Beroendena finns
+deklarerade i `gradle/libs.versions.toml` men kopplas in först i respektive issue.
+
+Uppsättningen — Firebase-projekt, SHA-1-fingeravtryck, OAuth-medgivandeskärm och Drive
+API — är dokumenterad steg för steg i **[docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md)**.
+
+---
+
+## Releasebygge och signering
+
+Releasebygget signeras med `app/fonder.jks` (git-ignorerad). Lösenord läses ur
+`local.properties` eller miljövariabler — saknas de byggs `release` osignerat i stället
+för att fela.
+
+**local.properties (lokalt, git-ignorerad):**
+```properties
+signing.storePassword=<lösenord>
+signing.keyAlias=fonder
+signing.keyPassword=<lösenord>
+```
+
+**GitHub Secrets (CI):** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`,
+`SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. `.github/workflows/release.yml` avkodar
+keystoren, bygger och publicerar en signerad APK — hela släppet går därmed att köra från
+telefonen. Se [docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md) för hur nyckeln skapas och
+läggs upp.
 
 ---
 
@@ -115,8 +159,9 @@ ui/
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
-├── fond/         FondDetaljScreen + ViewModel (kurshistorik i diagram och tabell sedan första köpet, #7 ·
-│                 Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
+├── fond/         FondDetaljScreen + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
+│                 jämförelsediagram, ANA-10/ANA-11/#85 · kurshistorik i diagram sedan första köpet, #7 ·
+│                 hopfälld Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
 ├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
@@ -124,8 +169,9 @@ ui/
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
-│                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 …)
-├── diagram/      Delade diagram (FundLineChart)
+│                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
+│                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
+├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)
 ```

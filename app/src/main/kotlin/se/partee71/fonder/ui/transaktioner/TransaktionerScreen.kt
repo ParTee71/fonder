@@ -16,7 +16,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,7 +40,10 @@ fun TransaktionerScreen(
     viewModel: TransaktionerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var pendingDelete by remember { mutableStateOf<TransaktionRad?>(null) }
+    // Id:t, inte hela raden: rememberSaveable kräver ett sparbart värde, och raden slås ändå
+    // upp ur tillståndet. Utan det försvann bekräftelsedialogen tyst vid rotation (issue #78).
+    var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val pendingDelete = pendingDeleteId?.let { id -> state.rows.firstOrNull { it.transaction.id == id } }
 
     if (state.isEmpty) {
         EmptyState(
@@ -51,24 +54,24 @@ fun TransaktionerScreen(
     } else {
         LazyColumn(modifier = modifier.fillMaxSize()) {
             items(state.rows, key = { it.transaction.id }) { row ->
-                TransactionRow(row = row, onLongPress = { pendingDelete = row })
+                TransactionRow(row = row, onLongPress = { pendingDeleteId = row.transaction.id })
             }
         }
     }
 
     pendingDelete?.let { row ->
         AlertDialog(
-            onDismissRequest = { pendingDelete = null },
+            onDismissRequest = { pendingDeleteId = null },
             title = { Text(stringResource(R.string.transaktion_delete_title)) },
             text = { Text(stringResource(R.string.format_transaktion_delete_confirm, row.fundName)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteTransaction(row.transaction.id)
-                    pendingDelete = null
+                    pendingDeleteId = null
                 }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { pendingDeleteId = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }

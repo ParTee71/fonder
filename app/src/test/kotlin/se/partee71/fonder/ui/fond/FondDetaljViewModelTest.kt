@@ -1,8 +1,13 @@
 package se.partee71.fonder.ui.fond
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,31 +17,46 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
+import se.partee71.fonder.domain.model.FundTag
+import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FondDetaljViewModelTest {
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
     private val dispatcher = StandardTestDispatcher()
+    private lateinit var dataStore: DataStore<Preferences>
+    private lateinit var preferencesRepository: PreferencesRepository
 
     private val fund = Fund(fundId = "SHB0000442", name = "Fond A")
     private val funds = MutableStateFlow(listOf(fund))
@@ -85,6 +105,10 @@ class FondDetaljViewModelTest {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
         }
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> {
+            historyForIsinCalls += isin
+            return historyByIsin[isin].orEmpty()
+        }
         override suspend fun suggestIsin(fundName: String): String? {
             suggestIsinCalledWith = fundName
             return suggestIsinReturn
@@ -98,22 +122,69 @@ class FondDetaljViewModelTest {
     private var suggestCheaperAlternativesCall: Pair<String, Double>? = null
     private var suggestCheaperAlternativesReturn: List<FeeComparisonCalc.Alternative>? = emptyList()
 
+    /** Metadata per ISIN — fondens egen risknivå (UI-10) och bytesplanens uppslag (ANA-10). */
+    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
+
+    /** Kurshistorik per ISIN för jämförelsediagrammet (ANA-11), och räknaren som visar att den hämtas lazily. */
+    private var historyByIsin: Map<String, List<FundPrice>> = emptyMap()
+    private val historyForIsinCalls = mutableListOf<String>()
+
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
         override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
         override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
+        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
             suggestCheaperAlternativesCall = isin to holdingValue
             return suggestCheaperAlternativesReturn
         }
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
+        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
     }
 
-    private fun viewModel() =
-        FondDetaljViewModel(SavedStateHandle(mapOf("fundId" to fund.fundId)), fakeTransactionRepo, fakePriceRepo, fakeFundMetadataRepo)
+    private val fakeSuggestionRecordRepo = object : SuggestionRecordRepository {
+        val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> =
+            records.map { list -> list.filter { it.kind == SuggestionKind.RISK_PLAN } }
+        /** Nyast först, precis som DAO:ns `observeHistory` — ordningen är en del av kontraktet (issue #91). */
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { list ->
+            list.sortedWith(
+                compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                    .thenByDescending { it.batchEpochMillis }
+                    .thenBy { it.planIndex },
+            )
+        }
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
+        override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+        override suspend fun setFollowed(id: Long, followed: Boolean) {
+            records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
+        }
+        override suspend fun prune(today: LocalDate) {}
+    }
 
-    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    private fun viewModel() = FondDetaljViewModel(
+        SavedStateHandle(mapOf("fundId" to fund.fundId)),
+        fakeTransactionRepo,
+        fakePriceRepo,
+        fakeFundMetadataRepo,
+        preferencesRepository,
+        fakeSuggestionRecordRepo,
+    )
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+        // Samma dispatcher som testet (se HemViewModelTest) — undviker en flaky Turbine-timeout
+        // om DataStores egen skrivning annars kör på en frikopplad klocka.
+        dataStore = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + SupervisorJob()),
+            produceFile = { tempFolder.newFile("fond_test.preferences_pb") },
+        )
+        preferencesRepository = PreferencesRepository(dataStore)
+    }
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
@@ -337,6 +408,38 @@ class FondDetaljViewModelTest {
     }
 
     @Test
+    fun `feeComparison kommer aven nar kurserna landar forst efter forsta tillstandet`() = runTest(dispatcher) {
+        // Regression (issue #75): jobbet låste på `first { !it.loading }`. För ett innehav vars
+        // kurscache ännu var tom var analysen null just då, jobbet gav upp för gott — och
+        // ANA-9-kortet dök aldrig upp trots att refreshSince i samma init fyllde cachen strax
+        // efter. Här seedas innehavet *utan* kurser, som i verkligheten vid en nyimport.
+        val today = LocalDate.now()
+        funds.value = listOf(fund.copy(isin = "SE0004297927"))
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull("Utan kurser finns ingen analys ännu", state.analysis)
+            assertNull(state.feeComparison)
+
+            // Kurserna landar (motsvarar att refreshSince fyllt cachen).
+            history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+            latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+
+            state = awaitItem()
+            while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
+
+            assertEquals(FeeComparisonUiState.NoCheaperAlternative, state.feeComparison)
+            assertEquals("SE0004297927", suggestCheaperAlternativesCall?.first)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `feeComparison forblir null om fonden inte ar ett kvarvarande innehav`() = runTest(dispatcher) {
         // Inga transaktioner — inget innehav, inget kort ska visas alls (skiljs från "Unavailable").
         val vm = viewModel()
@@ -433,5 +536,297 @@ class FondDetaljViewModelTest {
             assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Bytesbeslutet på fondkortet (ANA-10/ANA-11/UI-10, issue #85) ---
+
+    private fun metadata(isin: String, name: String, risk: Int?, fee: Double?) = FundMetadata(
+        isin = isin, name = name, orderbookId = "ob-$isin", totalFee = fee, managementFee = fee,
+        category = "Sverige", fundType = "EQUITY_FUND", companyName = "Bolaget", risk = risk,
+        indexFund = true, startDateEpochDay = null, minimumBuy = null, tags = emptyList<FundTag>(),
+    )
+
+    /** Seedar ett innehav med ISIN, en ISK/KF-kontotyp och en färsk inspelad bytesplan. */
+    private suspend fun setUpSwitchPlan(
+        followed: Boolean? = null,
+        suggestedAtEpochDay: Long = LocalDate.now().toEpochDay(),
+        accountType: AccountType = AccountType.ISK_KF,
+    ) {
+        setUpHolding(isin = "SE0004297927")
+        metadataByIsin = mapOf(
+            "SE0004297927" to metadata("SE0004297927", "Fond A", risk = 5, fee = 1.2),
+            "SE0000581434" to metadata("SE0000581434", "Fond B", risk = 4, fee = 0.4),
+        )
+        preferencesRepository.setAccountType(accountType)
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                id = 7, suggestedAtEpochDay = suggestedAtEpochDay, planIndex = 0,
+                sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 90.0,
+                switchValueKr = 4000.0, followed = followed,
+            ),
+        )
+    }
+
+    @Test
+    fun `visar fondens egen risknniva ur metadatan`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        metadataByIsin = mapOf("SE0004297927" to metadata("SE0004297927", "Fond A", risk = 6, fee = 1.2))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.riskLevel == null) state = awaitItem()
+            assertEquals(6, state.riskLevel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `risknniva forblir null nar metadatan inte kanner fonden`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        metadataByIsin = emptyMap()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertNull("Okänd risk ska aldrig gissas (ANA-4)", state.riskLevel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `visar bytesplanens forslag som ror fonden`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+
+            val suggestion = state.switchPlan.single()
+            assertEquals(0, suggestion.planIndex)
+            assertEquals("Fond B", suggestion.buyFundName)
+            assertEquals(5, suggestion.fromLevel)
+            assertEquals(4, suggestion.toLevel)
+            assertEquals(4000.0, suggestion.switchValueKr)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `visar ingen bytesplan utan ISK eller KF`() = runTest(dispatcher) {
+        setUpSwitchPlan(accountType = AccountType.DEPA_AF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue("SET-4-gaten gäller även på fondkortet", state.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `visar ingen bytesplan nar den inspelade planen ar for gammal`() = runTest(dispatcher) {
+        // Äldre än SwitchPlanCalc.PLAN_TTL_DAYS — ett gammalt råd ska försvinna, inte ligga kvar.
+        setUpSwitchPlan(suggestedAtEpochDay = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS + 1).toEpochDay())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue(state.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `visar inte bytesforslag som handlar om andra fonder`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        metadataByIsin = mapOf(
+            "SE0004297927" to metadata("SE0004297927", "Fond A", risk = 5, fee = 1.2),
+            "SE0000581434" to metadata("SE0000581434", "Fond B", risk = 4, fee = 0.4),
+            "SE0009778954" to metadata("SE0009778954", "Fond C", risk = 3, fee = 0.3),
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                id = 9, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0,
+                sellIsin = "SE0000581434", buyIsin = "SE0009778954",
+                sellNavAtSuggestion = 90.0, buyNavAtSuggestion = 80.0, switchValueKr = 1000.0,
+            ),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue("Planen nämner inte den öppnade fonden", state.switchPlan.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `hamtar kandidatens kurshistorik forst nar forslaget falls ut, och bara en gang`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        historyByIsin = mapOf(
+            "SE0000581434" to listOf(
+                FundPrice(fundId = "SE0000581434", epochDay = 200, nav = 110.0),
+                FundPrice(fundId = "SE0000581434", epochDay = 100, nav = 100.0),
+            ),
+        )
+
+        val vm = viewModel()
+        // Tillståndet måste kollektas: uiState delas med WhileSubscribed, så utan en aktiv
+        // prenumerant körs uppströmsflödet aldrig och `value` stannar på initialtillståndet.
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            advanceUntilIdle()
+            assertTrue("Ingen hämtning innan något fällts ut", historyForIsinCalls.isEmpty())
+
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
+
+            assertEquals(listOf("SE0000581434"), historyForIsinCalls)
+            val comparison = vm.uiState.value.comparisons["SE0000581434"]
+            assertEquals(listOf(100L to 100.0, 200L to 110.0), (comparison as ComparisonUiState.Ready).points)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `kandidat utan hamtbar historik markeras som ojamforbar`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        historyByIsin = emptyMap()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            vm.onSuggestionExpanded("SE0000581434")
+            advanceUntilIdle()
+
+            assertEquals(ComparisonUiState.Unavailable, vm.uiState.value.comparisons["SE0000581434"])
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    // --- Kvittering av avgiftsbytet (ANA-9/SET-5, issue #91) ---
+
+    /** Seedar ett innehav med ISIN och en inspelad FEE-rad för kandidaten [buyIsin]. */
+    private suspend fun setUpRecordedFeeSwitch(
+        buyIsin: String = "SE0000581434",
+        followed: Boolean? = null,
+        suggestedAtEpochDay: Long = LocalDate.now().toEpochDay(),
+        id: Long = 21,
+    ) {
+        setUpHolding(isin = "SE0004297927")
+        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value + SuggestionRecord(
+            id = id, suggestedAtEpochDay = suggestedAtEpochDay, planIndex = 0,
+            sellIsin = "SE0004297927", buyIsin = buyIsin,
+            sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 90.0,
+            switchValueKr = 10_000.0, followed = followed, kind = SuggestionKind.FEE,
+        )
+    }
+
+    @Test
+    fun `inspelat avgiftsbyte exponeras med sitt rad-id och sin kvittering`() = runTest(dispatcher) {
+        setUpRecordedFeeSwitch(followed = true)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+            val recorded = state.recordedFeeSwitches.getValue("SE0000581434")
+            assertEquals(21L, recorded.recordId)
+            assertTrue(recorded.followed)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `alternativ utan inspelad rad saknas i kartan — ingen kryssruta som inte skriver nagonstans`() =
+        runTest(dispatcher) {
+            // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen.
+            // Ett alternativ som just dykt upp har alltså inget att kvittera mot ännu.
+            setUpRecordedFeeSwitch(buyIsin = "SE0009778954")
+
+            val vm = viewModel()
+            vm.uiState.test {
+                var state = awaitItem()
+                while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+                assertNull(state.recordedFeeSwitches["SE0000581434"])
+                cancelAndIgnoreRemainingEvents()
+            }
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun `planens rader hamnar aldrig bland avgiftsbytena`() = runTest(dispatcher) {
+        // De två sorterna mäts var för sig; skulle en riskplansrad räknas som ett avgiftsbyte
+        // hade kvitteringen på avgiftsraden skrivit mot fel rad i facit.
+        setUpSwitchPlan()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+            advanceUntilIdle()
+
+            assertTrue(state.recordedFeeSwitches.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `senaste inspelningen per kandidat vinner`() = runTest(dispatcher) {
+        // observeHistory är nyast först: kvitteringen ska gälla dagens råd, inte ett halvår
+        // gammalt som råkar nämna samma kandidat.
+        setUpRecordedFeeSwitch(id = 5, suggestedAtEpochDay = LocalDate.now().minusDays(180).toEpochDay())
+        setUpRecordedFeeSwitch(id = 6, suggestedAtEpochDay = LocalDate.now().toEpochDay())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+
+            assertEquals(6L, state.recordedFeeSwitches.getValue("SE0000581434").recordId)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `setSwitchFollowed skriver flaggan pa den inspelade raden`() = runTest(dispatcher) {
+        // Samma rad som Hems bytesplan skriver mot (SET-5) — en kvittering på fondkortet och
+        // en på Hem ska vara samma händelse, inte två olika mätningar.
+        setUpSwitchPlan()
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.setSwitchFollowed(recordId = 7, followed = true)
+        advanceUntilIdle()
+
+        assertEquals(true, fakeSuggestionRecordRepo.records.value.single().followed)
     }
 }

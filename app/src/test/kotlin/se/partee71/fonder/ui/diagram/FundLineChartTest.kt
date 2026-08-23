@@ -44,4 +44,17 @@ class FundLineChartTest {
 
         assertTrue(minY < maxY)
     }
+
+    @Test
+    fun `avkastningsaxeln pads runt kurvans egna min-max, utan tvingad nollinje`() {
+        // Samma intervallregel som fondens kursdiagram (issue #96, uppföljning): en portfölj som
+        // rört sig mellan +3 % och +8 % ska fylla diagramhöjden, inte tryckas ihop mot en nolla
+        // som ligger utanför den visade perioden. Tecknet syns på axeletiketterna i stället.
+        val minY = PriceRangeProvider.getMinY(0.03, 0.08, extraStore)
+        val maxY = PriceRangeProvider.getMaxY(0.03, 0.08, extraStore)
+
+        assertTrue("nollinjen ska inte tvingas in", minY > 0.0)
+        assertEquals(0.025, minY, 1e-9)
+        assertEquals(0.085, maxY, 1e-9)
+    }
 }

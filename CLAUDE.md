@@ -88,6 +88,16 @@ mot `master`** så kör Actions båda.
 > I fjärr-/telefonsessioner finns ingen Android SDK och Google Maven kan vara blockerad —
 > försök därför **inte** köra `./gradlew` där. Lita på CI.
 
+**Länka alltid APK:n efter ett bygge.** Har en körning producerat en installerbar APK ska
+svaret alltid avslutas med **länken till den** — release-sidan (t.ex.
+`https://github.com/ParTee71/fonder/releases/tag/debug-snapshot`) eller, för ett bygge som
+bara laddar upp en artifact, artifact-länken. Gäller **alla** byggen: debug-snapshot
+(`release-debug.yml`), signerad release (`release.yml`) och varje ombyggnad av samma commit.
+Skälet är praktiskt: appen installeras från telefonen, och ett "bygget är grönt" utan länk
+tvingar fram ett extra steg för att hitta filen. Räcker inte länken ensam — säg också vilken
+commit och `versionName` APK:n är byggd på, så en installation går att knyta till rätt
+ändring.
+
 **En PR i taget.** Öppna/driv aldrig flera PR:ar mot `master` samtidigt — låt den första
 mergeas (eller stängas) innan nästa öppnas. Parallella PR:ar mot samma bas (särskilt när
 båda rör `KRAVLISTA.md`/`README.md`/`versionName`) ger nästan alltid en mergekonflikt på

@@ -73,6 +73,7 @@ class ImportHoldingsViewModelTest {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
         }
+        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
         override suspend fun lookupIsin(fundId: String): String? = null
@@ -490,6 +491,32 @@ class ImportHoldingsViewModelTest {
             assertEquals(handelsbankenFund.copy(isin = "SE0000582033"), addedFunds.first())
             assertEquals(1, addedTransactions.size)
             assertEquals(1.9378, addedTransactions.first().shares, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `tva snabba tryck pa importera ger inte dubbla transaktioner`() = runTest(dispatcher) {
+        // Regression (issue #75): importen gav ingen synlig återkoppling förrän `imported` slog
+        // om, så ett andra tryck under skrivningarna startade en andra genomkörning av samma
+        // lista — dubbla andelar och dubbelt investerat belopp för varje importerad fond.
+        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        vm.uiState.test {
+            awaitItem()
+            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.canImport)
+
+            vm.import()
+            // Knappen är släckt medan importen pågår, och ett andra tryck är verkningslöst.
+            assertFalse(vm.uiState.value.canImport)
+            vm.import()
+
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(1, addedTransactions.size)
             cancelAndIgnoreRemainingEvents()
         }
     }

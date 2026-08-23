@@ -3,6 +3,7 @@ package se.partee71.fonder.data.network
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * Fixturerna nedan är trimmade utdrag av verkliga JSON-svar från avanza.se:s odokumenterade
@@ -72,6 +73,24 @@ class AvanzaJsonParserTest {
         assertEquals(3, prices.size)
         assertEquals(429.25, prices.first().nav, 1e-9)
         assertEquals("SEK", prices.first().currency)
+        // Stämplarna är lokal midnatt i Stockholm (23:00:00Z i januari), inte UTC-midnatt: en
+        // UTC-tolkning gav 2020-01-01 (nyårsdagen — ingen svensk fond sätter NAV då) och sköt
+        // hela serien en dag fel. 2020-01-06 är trettondedag jul, därav hoppet till 01-07.
+        assertEquals(
+            listOf(LocalDate.of(2020, 1, 2), LocalDate.of(2020, 1, 3), LocalDate.of(2020, 1, 7)),
+            prices.map { LocalDate.ofEpochDay(it.epochDay) },
+        )
+    }
+
+    @Test
+    fun `parseChart tappar inte mandagskurser`() {
+        // Måndag 2026-07-27 kommer som söndag 2026-07-26 22:00Z (CEST). Tolkas stämpeln som UTC
+        // dateras kursen på söndagen och kastas sedan av helgfiltret — varje måndag försvann.
+        val chartResponse = """{"dataSerie":[{"x":1785103200000,"y":103.0}]}"""
+
+        val prices = AvanzaJsonParser.parseChart(chartResponse, currency = "SEK")
+
+        assertEquals(listOf(LocalDate.of(2026, 7, 27)), prices.map { LocalDate.ofEpochDay(it.epochDay) })
     }
 
     @Test

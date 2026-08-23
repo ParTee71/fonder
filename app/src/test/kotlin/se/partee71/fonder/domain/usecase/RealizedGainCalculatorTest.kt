@@ -136,6 +136,23 @@ class RealizedGainCalculatorTest {
         assertEquals(4.0, positions.getValue("F1").shares, 1e-9)
         // 4 kvarvarande andelar ur den yngre lotten à 200 kr.
         assertEquals(800.0, positions.getValue("F1").costBasis, 1e-9)
+        // Den äldre lotten är helt konsumerad, så positionen räknas från det yngre köpet —
+        // samma position som costBasis beskriver (POR-6).
+        assertEquals(150L, positions.getValue("F1").firstPurchaseEpochDay)
+    }
+
+    @Test
+    fun `remainingPositions behaller aldsta kop-lotten nar den bara delvis konsumerats`() {
+        val transactions = listOf(
+            kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
+            kop("F1", day = 150, shares = 5.0, price = 200.0, id = 2),
+            salj("F1", day = 200, shares = 2.0, price = 150.0, id = 3),
+        )
+
+        val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
+
+        assertEquals(8.0, position.shares, 1e-9)
+        assertEquals(100L, position.firstPurchaseEpochDay)
     }
 
     @Test

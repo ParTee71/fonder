@@ -10,6 +10,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -25,10 +26,15 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ExposureBar
+import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
+import se.partee71.fonder.ui.diagram.ChartSeries
+import se.partee71.fonder.ui.diagram.ChartValueAxis
+import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 
@@ -39,7 +45,13 @@ fun HemScreen(
     viewModel: HemViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    HemContent(state = state, onFundClick = onFundClick, modifier = modifier)
+    HemContent(
+        state = state,
+        onFundClick = onFundClick,
+        onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -50,7 +62,13 @@ fun HemScreen(
  * stället för att göra det nåbart (UI-5, issue #63).
  */
 @Composable
-fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: Modifier = Modifier) {
+fun HemContent(
+    state: HemUiState,
+    onFundClick: (String) -> Unit = {},
+    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onRecomputeSwitchPlan: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     when {
         state.isEmpty -> EmptyState(
             title = stringResource(R.string.hem_empty_title),
@@ -61,10 +79,22 @@ fun HemContent(state: HemUiState, onFundClick: (String) -> Unit = {}, modifier: 
         else -> LazyColumn(modifier = modifier.fillMaxSize()) {
             item { TotalCard(state = state) }
             item { PerformanceCard(performance = state.performance) }
+            item { ReturnChartCard(state = state) }
             item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
             item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
             state.riskProfile?.let { riskProfile ->
-                item { RiskCard(riskProfile = riskProfile, portfolioRisk = state.portfolioRisk) }
+                item {
+                    RiskCard(
+                        riskProfile = riskProfile,
+                        portfolioRisk = state.portfolioRisk,
+                        levelDeviations = state.riskLevelDeviations,
+                        switchPlan = state.switchPlan,
+                        canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
+                        recomputeRunning = state.backgroundWorkRunning,
+                        onSwitchFollowedChange = onSwitchFollowedChange,
+                        onRecomputeSwitchPlan = onRecomputeSwitchPlan,
+                    )
+                }
             }
         }
     }
@@ -124,6 +154,89 @@ private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerfo
                 partial = monthPartial,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
+        }
+    }
+}
+
+/**
+ * Under den här andelen oklassificerat värde sägs ingenting: en blandning som vilar på 95 % av
+ * portföljen är i praktiken exakt, och en notis om varje blandfond hade blivit brus.
+ */
+private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
+
+/**
+ * Portföljens totala avkastning i procent över tid (HEM-9, issue #96) med indexjämförelsen som
+ * skuggportfölj (HEM-10) — samma delade [FundLineChart] som Fonddetalj (regel 4), i procentläge
+ * ([ChartValueAxis.PROCENT]) så y-axeln alltid visar nollinjen och serierna inte indexeras.
+ *
+ * Köpdagarna markeras med flit: måttet är kassaflödesokänsligt, så en insättning flyttar kurvan
+ * utan att någon avkastning skett — utan markörerna hade den rörelsen sett ut som ett resultat.
+ *
+ * Tre olika "det går inte"-lägen hålls isär i stället för att bakas ihop till ett tomt diagram:
+ * ingen kurva alls (för lite historik), en kurva utan jämförelse (referensfonden inte hämtad än)
+ * och en kurva räknad utan något innehav en viss dag (HEM-2:s delvis osäker).
+ */
+@Composable
+private fun ReturnChartCard(state: HemUiState) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.hem_return_chart_title), style = MaterialTheme.typography.labelMedium)
+            if (state.returnSeries.isEmpty) {
+                Text(
+                    stringResource(R.string.hem_return_chart_insufficient),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                return@Column
+            }
+            val benchmark = state.benchmarkSeries
+            FundLineChart(
+                points = state.returnSeries.points,
+                purchaseEpochDays = state.purchaseEpochDays,
+                primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
+                comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
+                valueAxis = ChartValueAxis.PROCENT,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.hem_return_chart_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                if (benchmark != null) {
+                    stringResource(R.string.format_hem_return_chart_benchmark_explain, benchmark.fundName)
+                } else {
+                    stringResource(R.string.hem_return_chart_benchmark_missing)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
+            // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
+            // (HEM-10) — inte döljas bakom en exakt procentsats i teckenförklaringen.
+            if (benchmark != null && benchmark.unclassifiedFraction >= UNCLASSIFIED_NOTICE_THRESHOLD) {
+                Text(
+                    stringResource(
+                        R.string.format_hem_return_chart_benchmark_unclassified,
+                        MoneyFormat.percent(benchmark.unclassifiedFraction),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (state.returnSeries.partial) {
+                Text(
+                    stringResource(R.string.hem_return_chart_partial),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
     }
 }
@@ -282,13 +395,31 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
 }
 
 /**
- * Målrisknivå (SET-3) mot innehavens faktiska, värdeviktade risknivå (HEM-7, issue #68) — ren
- * läsvy, ingen åtgärdsknapp. Återanvänder [PeriodRow]s `valueText`-läge (regel 4, samma
- * användning som ANA-7:s riskmått) i stället för en ny komponent, eftersom en risknivå är ett
- * neutralt, icke-avkastningsfärgat mått — inte en andel som [se.partee71.fonder.ui.components.ExposureBar] (#66) visar.
+ * Målfördelning (SET-3) mot innehavens faktiska fördelning per risknivå (HEM-7, uppgraderad
+ * från en enskild målnivå till en fördelning i issue #71) — ren läsvy, ingen åtgärdsknapp.
+ * Det värdeviktade snittet ([RiskProfile.weightedTargetLevel] mot
+ * [PortfolioRiskCalc.Result.weightedAverageRisk]) visas kvar som en sammanfattning överst
+ * (samma [PeriodRow]-mönster som tidigare, regel 4), men huvudinnehållet är nu per-nivå-raderna
+ * längre ned — en enda skalär kan inte skilja en 50/50-mix av nivå 1 och 6 från 100 % nivå
+ * 3,5, se [PortfolioRiskCalc]s precisionsanmärkning. Per-nivå-raderna återanvänder
+ * [se.partee71.fonder.ui.components.ExposureBar] (regel 4) — här är den rätt komponenten,
+ * till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel.
+ *
+ * [switchPlan] (HEM-8, issue #70) visas längst ned, bara i ISK/KF med en avvikelse stor nog
+ * att motivera ett förslag — läst ur den senast inspelade facit-batchen
+ * ([se.partee71.fonder.ui.hem.HemViewModel.buildSwitchPlan]), inte omräknad live.
  */
 @Composable
-private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.Result) {
+private fun RiskCard(
+    riskProfile: RiskProfile,
+    portfolioRisk: PortfolioRiskCalc.Result,
+    levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
+    switchPlan: List<SwitchSuggestionUi>,
+    canRecomputeSwitchPlan: Boolean,
+    recomputeRunning: Boolean,
+    onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onRecomputeSwitchPlan: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(stringResource(R.string.hem_risk_title), style = MaterialTheme.typography.labelMedium)
@@ -296,7 +427,7 @@ private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.
                 label = stringResource(R.string.hem_risk_target_label),
                 amount = null,
                 fraction = null,
-                valueText = riskProfile.targetRiskLevel.toString(),
+                valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
                 modifier = Modifier.padding(top = 8.dp),
             )
             PeriodRow(
@@ -320,6 +451,111 @@ private fun RiskCard(riskProfile: RiskProfile, portfolioRisk: PortfolioRiskCalc.
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            if (levelDeviations.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.hem_risk_distribution_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                levelDeviations.sortedBy { it.level }.forEach { deviation ->
+                    Text(
+                        stringResource(R.string.format_hem_risk_level, deviation.level),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
+                    ExposureBar(
+                        label = stringResource(R.string.hem_risk_actual_bar_label),
+                        fraction = deviation.actualFraction,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+            if (switchPlan.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.hem_switch_plan_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                switchPlan.forEach { switch -> SwitchSuggestionRow(switch, onSwitchFollowedChange) }
+                Text(
+                    stringResource(R.string.hem_switch_plan_disclaimer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            // Omräkning på begäran (issue #88) — visas bara när en plan alls kan ges (ISK/KF +
+            // satt profil, SET-3/SET-4), annars vore knappen ett löfte SET-4-gaten vägrar
+            // infria. Släckt medan något jobb kör, samma signal som bakgrundsindikatorn (NAV-6).
+            if (canRecomputeSwitchPlan) {
+                TextButton(
+                    onClick = onRecomputeSwitchPlan,
+                    enabled = !recomputeRunning,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text(
+                        stringResource(
+                            if (recomputeRunning) R.string.hem_switch_plan_recompute_running else R.string.hem_switch_plan_recompute,
+                        ),
+                    )
+                }
+                Text(
+                    stringResource(R.string.hem_switch_plan_recompute_explain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+    }
+}
+
+/**
+ * En rad i bytesplanen (HEM-8, issue #70) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus belopp
+ * och avgiftsskillnad. Ren läsvy, ingen åtgärdsknapp (samma princip som resten av kortet):
+ * planen är ett rangordnat förslag, inte en knapp att trycka på.
+ *
+ * Beloppsraden är inte kosmetisk: bytet storleksbestäms till gapet, inte till hela positionen
+ * (issue #75), så "Sälj X" utan belopp vore ett annat — och sämre — råd än det planen räknat
+ * fram. Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
+ *
+ * Rangordningen kommer ur [SwitchSuggestionUi.planIndex], aldrig ur listpositionen — planen är
+ * girig och sekventiell, så numret är en del av rådet.
+ *
+ * "Genomförd" är den enda interaktionen (SET-5, issue #80) och är fortfarande inte en
+ * åtgärdsknapp: den utför inget byte, den **registrerar** att användaren gjorde det, så facit
+ * kan mäta följda råd separat från alla givna råd. Utan den skillnaden vore ett hypotetiskt och
+ * ett verkligt utfall samma siffra.
+ */
+@Composable
+private fun SwitchSuggestionRow(switch: SwitchSuggestionUi, onFollowedChange: (Long, Boolean) -> Unit) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            stringResource(
+                R.string.format_hem_switch_plan_row,
+                switch.planIndex + 1,
+                switch.sellFundName,
+                switch.fromLevel,
+                switch.buyFundName,
+                switch.toLevel,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        switch.switchValueKr?.let { valueKr ->
+            Text(
+                stringResource(R.string.format_hem_switch_plan_amount, MoneyFormat.kr(valueKr)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FollowedToggleRow(
+            followed = switch.followed,
+            onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
+        )
     }
 }

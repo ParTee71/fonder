@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -18,6 +20,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.data.repository.refreshFund
+import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
@@ -42,6 +45,12 @@ data class PortfoljUiState(
     val analysis: Map<String, FundAnalysisCalc.Analysis> = emptyMap(),
     /** Exponeringskarta: andel per fondtyp/region/index-aktivt (POR-9, issue #66). */
     val exposure: PortfolioExposureCalc.Result = EMPTY_EXPOSURE,
+    /**
+     * Risknivå (1–7, TP-21) per innehav (UI-10, issue #85). Nyckel: `Fund.fundId`. En fond utan
+     * känd risknivå saknas i kartan och visas som okänd — aldrig gissad (ANA-4-principen).
+     * Läses ur samma [metadata]-flöde som exponeringskartan, alltså utan extra nätverksanrop.
+     */
+    val riskLevels: Map<String, Int> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 }
@@ -71,10 +80,29 @@ class PortfoljViewModel @Inject constructor(
             PortfolioCalc.computeHoldings(funds, transactions) to transactions
         }
 
+    /**
+     * Fondmetadata i ett **eget** flöde, inte hämtad inne i tillståndets `map`.
+     * [FundMetadataRepository.metadataFor] gör ett sekventiellt nätverksuppslag per ISIN som
+     * saknas eller är inaktuell i cachen — låg det i `map` blockerades hela `uiState` på
+     * nätverket, så vyn stod kvar i `loading` och ritade totalen som "0,00 kr · Kurs saknas"
+     * så länge uppkopplingen hängde, trots att innehav och värden fanns lokalt. Nu ritas
+     * portföljen direkt och exponeringskartan (POR-9) fylls i när metadatan landar.
+     */
+    private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
+    private var metadataJob: Job? = null
+    private var metadataIsins: List<String>? = null
+
+    private fun refreshMetadata(isins: List<String>) {
+        if (isins == metadataIsins) return
+        metadataIsins = isins
+        metadataJob?.cancel()
+        metadataJob = viewModelScope.launch { metadata.value = fundMetadataRepository.metadataFor(isins) }
+    }
+
     val uiState: StateFlow<PortfoljUiState> =
         baseHoldings.flatMapLatest { (holdings, transactions) ->
             val fundIds = holdings.map { it.fund.fundId }
-            fundPriceRepository.observeLatestPrices(fundIds).map { prices ->
+            combine(fundPriceRepository.observeLatestPrices(fundIds), metadata) { prices, metadataByIsin ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
                 val performance = enriched.associate { holding ->
@@ -85,8 +113,7 @@ class PortfoljViewModel @Inject constructor(
                     )
                     holding.fund.fundId to PortfolioPerformanceCalc.holdingPerformance(holding, today, history)
                 }
-                val isins = enriched.mapNotNull { it.fund.isin }
-                val metadataByIsin = fundMetadataRepository.metadataFor(isins)
+                refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 PortfoljUiState(
                     loading = false,
                     holdings = enriched,
@@ -98,6 +125,10 @@ class PortfoljViewModel @Inject constructor(
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     analysis = buildAnalysis(enriched, transactions, today),
                     exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin),
+                    riskLevels = enriched.mapNotNull { holding ->
+                        val risk = holding.fund.isin?.let { metadataByIsin[it]?.risk } ?: return@mapNotNull null
+                        holding.fund.fundId to risk
+                    }.toMap(),
                 )
             }
         }.stateIn(

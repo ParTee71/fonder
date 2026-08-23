@@ -8,11 +8,13 @@ import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
+import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 
 @Database(
@@ -22,8 +24,9 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         FundPriceEntity::class,
         FxRateEntity::class,
         FundMetadataEntity::class,
+        SuggestionRecordEntity::class,
     ],
-    version = 9,
+    version = 14,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fundPriceDao(): FundPriceDao
     abstract fun fxRateDao(): FxRateDao
     abstract fun fundMetadataDao(): FundMetadataDao
+    abstract fun suggestionRecordDao(): SuggestionRecordDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -218,6 +222,105 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 9 → 10 (issue #70), två delar:
+         *
+         * 1. Lägger till `developmentOneYear` (nullable) på `fund_metadata` — källans
+         *    12-månadersavkastning, enda undantaget från principen att inte cacha källans
+         *    avkastningsmått (se [se.partee71.fonder.domain.model.FundMetadata]s KDoc):
+         *    behövs för att rangordna köpkandidater bytesplanen (HEM-8) aldrig själv har hållit
+         *    NAV-historik för. Befintliga rader (inklusive #61:s jämförelsefält) rörs inte.
+         *
+         * 2. Ny tabell `suggestion_records` — facit-inspelningen för varje föreslaget byte
+         *    (datum, plats i planen, sälj-/köp-ISIN, NAV-utgångsläge). Till skillnad från
+         *    `fund_metadata` är det här **genuin användardata** (samma kategori som
+         *    `RiskProfile`, NFR-1): förslagstidpunkten kan inte återskapas ur NAV-historiken i
+         *    efterhand om den går förlorad.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `developmentOneYear` REAL")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `suggestion_records` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `suggestedAtEpochDay` INTEGER NOT NULL,
+                        `planIndex` INTEGER NOT NULL,
+                        `sellIsin` TEXT NOT NULL,
+                        `buyIsin` TEXT NOT NULL,
+                        `sellNavAtSuggestion` REAL NOT NULL,
+                        `buyNavAtSuggestion` REAL NOT NULL,
+                        `followed` INTEGER
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Version 10 → 11 (issue #75, punkt 1): `switchValueKr` (nullable) på
+         * `suggestion_records` — beloppet ett bytesförslag avser. Bytet storleksbestäms numera
+         * till gapet i stället för till hela positionen
+         * ([se.partee71.fonder.domain.usecase.SwitchPlanCalc]), så beloppet är en del av rådet
+         * och måste både sparas och visas.
+         *
+         * Nullable, inte `NOT NULL DEFAULT 0`: en rad inspelad före den här versionen avsåg
+         * hela positionen med ett belopp som aldrig sparades, och 0 kr hade varit ett påhittat
+         * värde som inte gick att skilja från ett verkligt (samma princip som att aldrig gissa
+         * en okänd avgift, HEM-5). Befintliga rader rörs i övrigt inte.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `switchValueKr` REAL")
+            }
+        }
+
+        /**
+         * Version 11 → 12 (issue #75, fynd B): `batchEpochMillis` (NOT NULL DEFAULT 0) på
+         * `suggestion_records` — vilken **körning** raden hör till.
+         *
+         * Hem visade "den senast inspelade planen" som *alla rader från det senaste dygnet*,
+         * men backstopen kör var 12:e timme, så två körningar landar normalt samma dygn. Ändras
+         * portföljen däremellan räknas en annan plan fram, och dygnsdedupen (`existsForDay`)
+         * spärrar bara identiska sälj-/köp-par — resultatet blev en visad "plan" som var två
+         * planer sammanslagna: samma fond kunde säljas två gånger och två rader bära
+         * `planIndex 0`. Med ett körnings-id kan den senaste batchen läsas för sig.
+         *
+         * `DEFAULT 0` för befintliga rader: de saknar körnings-id, och att gruppera dem per
+         * dygn (som förut) är den enda tolkning som finns — ingen data går förlorad, och
+         * historiska rader beter sig exakt som tidigare. Inspelade förslag är genuin
+         * användardata (NFR-1); tabellen utökas bara.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `batchEpochMillis` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * Version 12 → 13: `suggestion_records.kind` skiljer bytesplanens byten (HEM-8) från
+         * avgiftsbytena (ANA-9, issue #91). Befintliga rader **är** riskplansbyten, så defaulten
+         * i SQL är det värdet — ingen datamigrering behövs, bara kolumnen.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'RISK_PLAN'")
+            }
+        }
+
+        /**
+         * Version 13 → 14: `fund_metadata.shownAlternativeIsinsJson` — samtliga alternativ
+         * ANA-9 visade, inte bara det billigaste (issue #93), så facit kan spela in varje
+         * *givet* råd. `'[]'` för befintliga rader: de vet bara vilket alternativ som var
+         * billigast, och att gissa resten vore att hitta på råd som aldrig gavs. Nästa
+         * jämförelse fyller listan.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fund_metadata` ADD COLUMN `shownAlternativeIsinsJson` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -227,6 +330,11 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+            MIGRATION_13_14,
         )
     }
 }

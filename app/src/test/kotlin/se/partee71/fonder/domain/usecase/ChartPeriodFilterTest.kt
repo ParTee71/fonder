@@ -41,6 +41,7 @@ class ChartPeriodFilterTest {
 
         val result = ChartPeriodFilter.apply(points, Period.ALLT)
 
+
         assertEquals(points, result)
     }
 
@@ -70,5 +71,45 @@ class ChartPeriodFilterTest {
         val result = ChartPeriodFilter.apply(ordnat, Period.EN_MANAD)
 
         assertEquals(setOf(latest, latest - 5), result.map { it.first }.toSet())
+    }
+
+    @Test
+    fun `tre och fem ar avgransar till sina egna fonster`() {
+        val latest = 20_000L
+        val points = listOf(
+            point(latest),
+            point(latest - 900),   // inom 3 år
+            point(latest - 1_500), // inom 5 år, utanför 3
+            point(latest - 2_500), // utanför båda
+        )
+
+        assertEquals(
+            setOf(latest, latest - 900),
+            ChartPeriodFilter.apply(points, Period.TRE_AR).map { it.first }.toSet(),
+        )
+        assertEquals(
+            setOf(latest, latest - 900, latest - 1_500),
+            ChartPeriodFilter.apply(points, Period.FEM_AR).map { it.first }.toSet(),
+        )
+    }
+
+    @Test
+    fun `en kortare historik an perioden ger hela historiken, inte ett halvtomt fonster`() {
+        // Den som köpt nyligen ska se sin kurva under "5 år", inte ett tomt diagram — samma
+        // princip som redan gäller för de kortare perioderna.
+        val latest = 20_000L
+        val points = listOf(point(latest - 200), point(latest))
+
+        val result = ChartPeriodFilter.apply(points, Period.FEM_AR)
+
+        assertEquals(points.map { it.first }.toSet(), result.map { it.first }.toSet())
+    }
+
+    @Test
+    fun `perioderna ar ordnade fran kortast till langst, med Allt sist`() {
+        // Ordningen är chipparnas ordning i UI:t — en ny period får inte hamna mitt i skalan.
+        val dagar = Period.entries.map { it.days }
+
+        assertEquals(listOf(30L, 90L, 365L, 1_095L, 1_825L, null), dagar)
     }
 }

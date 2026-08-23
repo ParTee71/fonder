@@ -251,6 +251,39 @@ class PortfoljScreenTest {
     }
 
     @Test
+    fun risknivadimensionen_visas_stigande_pa_niva() {
+        // Störst värde ligger medvetet på den högsta nivån — en fallande värde-sortering hade
+        // gett omvänd radordning; POR-9 kräver stigande på nivå i stället (issue #71).
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
+        val exposure = PortfolioExposureCalc.Result(
+            byType = emptyDimension,
+            byRegion = emptyDimension,
+            byRiskLevel = PortfolioExposureCalc.Dimension(
+                buckets = listOf(
+                    PortfolioExposureCalc.Bucket("3", 100.0, 0.1),
+                    PortfolioExposureCalc.Bucket("6", 900.0, 0.9),
+                ),
+                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+            ),
+            indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0,
+            excludedCount = 0,
+        )
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding), exposure = exposure)
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risknivå").assertExists()
+        val riskLevelNodes = composeRule.onAllNodesWithText("3", substring = false)
+        riskLevelNodes.assertCountEquals(1)
+        composeRule.onNodeWithText("6").assertExists()
+        composeRule.onNodeWithText("10,0 %").assertExists()
+        composeRule.onNodeWithText("90,0 %").assertExists()
+    }
+
+    @Test
     fun okand_region_visas_separat_och_tydligt_markt() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
         val exposure = PortfolioExposureCalc.Result(
@@ -327,5 +360,35 @@ class PortfoljScreenTest {
         // Index 0/1 = TotalCard/ExposureCard, holdings börjar på index 2 -> sista (10:e) på index 11.
         composeRule.onNodeWithTag(PORTFOLJ_LIST_TEST_TAG).performScrollToIndex(11)
         composeRule.onNodeWithText("Innehav 10").assertIsDisplayed()
+    }
+
+    // --- Risknivå på innehavsraden (UI-10, issue #85) ---
+
+    @Test
+    fun innehavsrad_visar_risknivan() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(holding),
+            riskLevels = mapOf(fond.fundId to 5),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risk 5/7").assertExists()
+    }
+
+    @Test
+    fun innehavsrad_utan_kand_risk_markeras_som_okand() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
+        val state = PortfoljUiState(loading = false, holdings = listOf(holding))
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithText("Risk okänd").assertExists()
     }
 }

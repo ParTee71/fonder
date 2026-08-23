@@ -23,7 +23,9 @@ class FundScreenFilterTest {
         companyName: String? = null,
         risk: Int? = null,
         tags: List<FundTag> = emptyList(),
+        developmentOneYear: Double? = null,
     ) = FundMetadata(
+        developmentOneYear = developmentOneYear,
         isin = isin,
         name = name,
         orderbookId = isin,
@@ -172,5 +174,57 @@ class FundScreenFilterTest {
         val page = FundScreenFilter.apply(funds, FundScreenQuery())
 
         assertEquals(listOf("Alfa", "Zebra"), page.map { it.name })
+    }
+
+    @Test
+    fun `apply sorterar pa developmentOneYear fallande`() {
+        // Regression (issue #75): nyckeln kändes inte igen och föll till namnsortering, som med
+        // DESCENDING blev *omvänt alfabetisk*. Eftersom sidan klipps till 20 rader efter
+        // sorteringen hamnade nivåns bästa fonder aldrig ens på sidan, och den lokala
+        // omrangordningen i findSwitchCandidates kunde inte kompensera.
+        val funds = listOf(
+            fund("A", name = "Avanza Global", developmentOneYear = 0.21),
+            fund("B", name = "Öhman Sverige", developmentOneYear = 0.05),
+            fund("C", name = "Handelsbanken Global", developmentOneYear = 0.13),
+        )
+        val query = FundScreenQuery(
+            sortField = FundScreenFilter.SORT_FIELD_DEVELOPMENT_ONE_YEAR,
+            sortDirection = FundScreenSortDirection.DESCENDING,
+        )
+
+        val page = FundScreenFilter.apply(funds, query)
+
+        assertEquals(listOf("A", "C", "B"), page.map { it.isin })
+    }
+
+    @Test
+    fun `apply lagger fonder med okant varde sist aven i fallande ordning`() {
+        // asReversed() vände tidigare även nullsLast, så okänd avgift hamnade överst.
+        val funds = listOf(
+            fund("UTAN", totalFee = null),
+            fund("LAG", totalFee = 0.1),
+            fund("HOG", totalFee = 0.9),
+        )
+        val query = FundScreenQuery(
+            sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
+            sortDirection = FundScreenSortDirection.DESCENDING,
+        )
+
+        val page = FundScreenFilter.apply(funds, query)
+
+        assertEquals(listOf("HOG", "LAG", "UTAN"), page.map { it.isin })
+    }
+
+    @Test
+    fun `apply lagger fonder med okant varde sist aven i stigande ordning`() {
+        val funds = listOf(fund("UTAN", totalFee = null), fund("HOG", totalFee = 0.9), fund("LAG", totalFee = 0.1))
+        val query = FundScreenQuery(
+            sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
+            sortDirection = FundScreenSortDirection.ASCENDING,
+        )
+
+        val page = FundScreenFilter.apply(funds, query)
+
+        assertEquals(listOf("LAG", "HOG", "UTAN"), page.map { it.isin })
     }
 }

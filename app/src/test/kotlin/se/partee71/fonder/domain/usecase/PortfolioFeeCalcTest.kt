@@ -214,4 +214,28 @@ class PortfolioFeeCalcTest {
         assertEquals(2, result.comparedCount)
         assertEquals(2, result.comparableCount)
     }
+
+    @Test
+    fun `besparing blir aldrig negativ nar den egna avgiften sjunkit under det sparade alternativet`() {
+        // Regression (issue #75): cheapestAlternativeFee är en ögonblicksbild som bevaras i
+        // COMPARISON_TTL_DAYS. Sjunker fondens egen avgift under den inom fönstret blev
+        // differensen negativ, och HEM-6 skrev ut "du kan spara -180,00 kr per år".
+        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val metadataByIsin = mapOf(
+            "SEA" to metadata(
+                "SEA",
+                totalFee = 0.15,
+                cheapestAlternativeFee = 0.21,
+                comparisonResolvedAtEpochDay = today.toEpochDay(),
+            ),
+        )
+
+        val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
+
+        assertNull(result.byHolding.single().annualSavingsKr)
+        assertEquals(0.0, result.totalAnnualSavingsKr, 1e-9)
+        // Jämförelsen är fortfarande gjord — "inget billigare" är inte samma sak som "osökt".
+        assertTrue(result.byHolding.single().wasCompared)
+        assertEquals(1, result.comparedCount)
+    }
 }

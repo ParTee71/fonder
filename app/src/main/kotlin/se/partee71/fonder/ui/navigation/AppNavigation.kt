@@ -1,10 +1,13 @@
 package se.partee71.fonder.ui.navigation
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -24,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.components.WorkerStatusIcon
+import se.partee71.fonder.ui.facit.FacitScreen
 import se.partee71.fonder.ui.fond.FondDetaljScreen
 import se.partee71.fonder.ui.fondsok.FundSearchScreen
 import se.partee71.fonder.ui.hem.HemScreen
@@ -32,6 +36,7 @@ import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
+import se.partee71.fonder.ui.settings.SettingsViewModel
 import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
@@ -48,12 +53,27 @@ fun AppNavigation() {
 
     Scaffold(
         topBar = {
-            val title = topLevel.firstOrNull { it.route == currentRoute }?.labelRes
+            // Toppnivåerna bär sin titel i Screen, övriga rutter i titleResFor. Utan den andra
+            // halvan saknade Fonddetalj, Fondsök, transaktionsformuläret, importflödena och
+            // Riskprofil både rubrik och bakåtpil — enda vägen tillbaka var systemgesten, och
+            // ingenting i appen berättade var man var (issue #78).
+            val topLevelTitle = topLevel.firstOrNull { it.route == currentRoute }?.labelRes
+            val title = topLevelTitle ?: titleResFor(currentRoute)
             if (title != null) {
                 val workerStatusViewModel: WorkerStatusViewModel = hiltViewModel()
                 val isRunning by workerStatusViewModel.isRunning.collectAsStateWithLifecycle()
                 TopAppBar(
                     title = { Text(stringResource(title)) },
+                    navigationIcon = {
+                        if (topLevelTitle == null) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.back),
+                                )
+                            }
+                        }
+                    },
                     actions = { WorkerStatusIcon(isRunning = isRunning) },
                 )
             }
@@ -92,7 +112,12 @@ fun AppNavigation() {
         NavHost(
             navController = navController,
             startDestination = Screen.START.route,
-            modifier = Modifier.padding(innerPadding),
+            // imePadding på ett ställe i stället för per skärm (regel 4): appen kör
+            // enableEdgeToEdge, och Scaffolds standardinsets är bara systemBars — tangentbordet
+            // låg därför **över** transaktionsformulärets Spara-knapp, ISIN-fältet i Fonddetalj
+            // och sökfältet i Fondsök. `adjustResize` räcker inte edge-to-edge på API 30+, där
+            // IME är en inset appen själv måste konsumera (issue #78).
+            modifier = Modifier.padding(innerPadding).imePadding(),
         ) {
             composable(Screen.Hem.route) {
                 HemScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
@@ -111,6 +136,8 @@ fun AppNavigation() {
                     onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
                     onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
                     onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
+                    onOpenFacit = { navController.navigate(Routes.FACIT) },
+                    onOpenBenchmarkPicker = { navController.navigate(Routes.BENCHMARK_PICKER) },
                 )
             }
             composable(
@@ -133,6 +160,21 @@ fun AppNavigation() {
             }
             composable(Routes.RISK_PROFILE) {
                 RiskProfilScreen(onSaved = { navController.popBackStack() })
+            }
+            // Fondsök i valläge (HEM-10, issue #102): samma skärm, men träffraden pekar ut en
+            // jämförelsefond i stället för att lägga till den i bevakningen. Valet skrivs av
+            // SettingsViewModel, som redan äger inställningarna — fondsök förblir en sökskärm.
+            composable(Routes.BENCHMARK_PICKER) {
+                val settingsViewModel: SettingsViewModel = hiltViewModel()
+                FundSearchScreen(
+                    onPickFund = { fund ->
+                        settingsViewModel.chooseBenchmark(fund)
+                        navController.popBackStack()
+                    },
+                )
+            }
+            composable(Routes.FACIT) {
+                FacitScreen()
             }
         }
     }

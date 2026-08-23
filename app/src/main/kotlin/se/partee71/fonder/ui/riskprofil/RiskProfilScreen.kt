@@ -1,18 +1,26 @@
 package se.partee71.fonder.ui.riskprofil
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,7 +43,7 @@ fun RiskProfilScreen(
         onHorizonSelected = viewModel::onHorizonSelected,
         onReactionSelected = viewModel::onReactionSelected,
         onGoalSelected = viewModel::onGoalSelected,
-        onLevelSelected = viewModel::onLevelSelected,
+        onAllocationPercentChanged = viewModel::onAllocationPercentChanged,
         onSave = viewModel::save,
         modifier = modifier,
     )
@@ -46,6 +54,11 @@ fun RiskProfilScreen(
  * #68, samma mönster som Hem/Portfölj sedan issue #14). Fast `Column` +
  * `verticalScroll` (inte en lazy `items()`-lista) — rätt UI-5-metod för en formulärvy där
  * innehållet inte växer med antalet innehav.
+ *
+ * Målnivån ersattes av en **målfördelning** i issue #71: en rad per tillgänglig risknivå med
+ * ett procentfält, i stället för [ChoiceChipRow]s enda-val. Summan måste bli exakt 100 % för
+ * att Spara-knappen ska aktiveras — går den inte ihop sparas ingenting (ingen tyst
+ * normalisering, [RiskProfilUiState.effectiveAllocation]).
  */
 @Composable
 fun RiskProfilContent(
@@ -53,7 +66,7 @@ fun RiskProfilContent(
     onHorizonSelected: (TimeHorizon) -> Unit = {},
     onReactionSelected: (DownturnReaction) -> Unit = {},
     onGoalSelected: (PrimaryGoal) -> Unit = {},
-    onLevelSelected: (Int) -> Unit = {},
+    onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
     onSave: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -96,18 +109,24 @@ fun RiskProfilContent(
             )
         }
 
-        if (state.suggestedLevel != null && state.manualLevel == null) {
+        if (state.suggestedAllocation != null && !state.hasManualEdit) {
             Text(
-                stringResource(R.string.format_riskprofile_suggested, state.suggestedLevel),
+                stringResource(R.string.riskprofile_suggestion_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )
         }
 
         Text(
-            stringResource(R.string.riskprofile_level_title),
+            stringResource(R.string.riskprofile_allocation_title),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+        )
+        Text(
+            stringResource(R.string.riskprofile_allocation_disclaimer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
         )
         if (state.availableLevels.isEmpty()) {
             Text(
@@ -116,17 +135,32 @@ fun RiskProfilContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            ChoiceChipRow(
-                options = state.availableLevels,
-                selected = state.selectedLevel,
-                optionLabel = { it.toString() },
-                onSelect = onLevelSelected,
+            state.availableLevels.forEach { level ->
+                AllocationRow(
+                    level = level,
+                    percentText = state.allocationText[level].orEmpty(),
+                    onPercentChange = { onAllocationPercentChanged(level, it) },
+                )
+            }
+            Text(
+                stringResource(R.string.format_riskprofile_allocation_sum, state.allocationSumPercent),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (state.canSave) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
             )
+            if (!state.canSave) {
+                Text(
+                    stringResource(R.string.riskprofile_allocation_sum_error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
 
         Button(
             onClick = onSave,
-            enabled = state.selectedLevel != null,
+            enabled = state.canSave,
             modifier = Modifier.padding(top = 24.dp),
         ) { Text(stringResource(R.string.riskprofile_save_button)) }
     }
@@ -137,6 +171,31 @@ private fun QuestionSection(title: String, content: @Composable () -> Unit) {
     Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
     content()
 }
+
+@Composable
+private fun AllocationRow(level: Int, percentText: String, onPercentChange: (String) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Text(
+            stringResource(R.string.format_riskprofile_level_label, level),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedTextField(
+            value = percentText,
+            onValueChange = onPercentChange,
+            suffix = { Text("%") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(100.dp).testTag(allocationFieldTestTag(level)),
+        )
+    }
+}
+
+/** Testtagg per nivås procentfält (instrumenttest, issue #71) — text ändras (0 %, 25 % …) så `onNodeWithText` inte pålitligt kan hitta rätt fält, till skillnad från raden och etiketten. */
+fun allocationFieldTestTag(level: Int): String = "riskprofile_allocation_$level"
 
 private fun TimeHorizon.labelRes(): Int = when (this) {
     TimeHorizon.UNDER_3_AR -> R.string.risk_horizon_under_3

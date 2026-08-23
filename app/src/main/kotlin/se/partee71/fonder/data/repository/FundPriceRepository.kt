@@ -1,9 +1,11 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
 import se.partee71.fonder.data.network.FxRateSource
@@ -77,6 +79,21 @@ interface FundPriceRepository {
      */
     suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
 
+    /**
+     * Kurshistorik för ett [isin] **utan** att cacha den (ANA-11, issue #85) — underlaget till
+     * jämförelsediagrammet mot en föreslagen fond, som appen inte äger.
+     *
+     * Skiljer sig från [refreshSince] just i att inget skrivs till `fund_prices`: den cachen är
+     * sanningen om **bevakade** fonder, nycklad på `Fund.fundId`, och en kandidat har ingen
+     * sådan identitet. Att skriva in den under sitt ISIN hade fyllt kurscachen med rader som
+     * inget innehav pekar på — och sedan sett ut som en riktig fond för varje läsare av cachen.
+     * Anroparen får hålla resultatet i minnet så länge det behövs.
+     *
+     * Bästa-försök mot samma ISIN-källkedja som [refreshSince] (TP-14). Tom lista om ingen källa
+     * kan leverera — anroparen visar då "kunde inte jämföras" i stället för ett tomt diagram.
+     */
+    suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice>
+
     /** Föreslår ett ISIN för [fundName] via namnsökning mot samma källkedja som [refreshSince], eller null om ingen rimlig träff. */
     suspend fun suggestIsin(fundName: String): String?
 
@@ -96,8 +113,14 @@ interface FundPriceRepository {
      */
     suspend fun lookupIsin(fundId: String): String?
 
-    /** Alla fondbolag + **hela plattformens** fondkatalog (en hämtning) för fondsök-UI. */
-    suspend fun fetchFundCatalog(): FundCatalog
+    /**
+     * Alla fondbolag + **hela plattformens** fondkatalog (en hämtning) för fondsök-UI.
+     * **Null vid fel** — samma princip som [fetchFundsForCompany]. Skillnaden mot en tom
+     * katalog är avgörande för anropare som tolkar frånvaro som ett svar: en tom katalog vid
+     * nätverksfel fick `FundMetadataRepository.resolveHandelsbankenAvailability` att slå fast
+     * "fonden går inte att köpa" och cacha den missen i 30 dygn.
+     */
+    suspend fun fetchFundCatalog(): FundCatalog?
 
     /**
      * Fonderna som fondbolaget [companyId] har på plattformen — källans eget filter
@@ -206,7 +229,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     ): List<FundPrice>? =
         runCatching {
             val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
-            toValueCurrency(HandelsbankenHtmlParser.parseHistory(html, cacheFundId))
+            // Parsningen (inte bara HTTP-anropet) måste av anroparens tråd: en backfill kan vara
+            // flera MB HTML, och FondDetalj/Portfölj anropar det här från viewModelScope
+            // (Main.immediate) — DOM-bygget och radselektionen frös då UI:t i sekunder.
+            val prices = withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
+            toValueCurrency(prices)
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
                 dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
@@ -389,6 +416,29 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     private fun IsinPricePoint.toEntity(fundId: String) =
         FundPriceEntity(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
 
+    /**
+     * Kurshistorik för en fond appen **inte** äger — ingen cache-skrivning, se gränssnittets
+     * KDoc. `fundId` sätts till ISIN:et i de returnerade [FundPrice]-objekten enbart för att
+     * modellen kräver ett värde; de lever bara i anroparens minne och når aldrig `fund_prices`.
+     *
+     * Ingen valutakonvertering (jämför [toValueCurrency]): jämförelsediagrammet indexerar båda
+     * serierna till 100 vid periodens start ([se.partee71.fonder.domain.usecase.ChartSeriesNormalizer]),
+     * och en indexerad kurva är okänslig för vilken valuta grundserien står i så länge den är
+     * konsekvent inom serien.
+     */
+    override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> {
+        for (source in isinSources) {
+            val points = runCatching { source.fetchHistory(isin, from, to) }
+                .onFailure { e -> Log.w(TAG, "ISIN-källa gav fel för jämförelsehistorik $isin, provar nästa i kedjan", e) }
+                .getOrNull()
+            if (!points.isNullOrEmpty()) {
+                return points.map { FundPrice(fundId = isin, epochDay = it.epochDay, nav = it.nav, currency = it.currency) }
+            }
+        }
+        Log.w(TAG, "Ingen ISIN-källa kunde ge jämförelsehistorik för $isin")
+        return emptyList()
+    }
+
     override suspend fun suggestIsin(fundName: String): String? {
         for (source in isinSources) {
             val isin = runCatching { source.suggestIsin(fundName) }
@@ -412,24 +462,31 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     }
 
     override suspend fun lookupIsin(fundId: String): String? =
-        runCatching { HandelsbankenHtmlParser.parseIsin(fundPageClient.fetchFundPage(fundId)) }
+        runCatching {
+            val html = fundPageClient.fetchFundPage(fundId)
+            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseIsin(html) }
+        }
             .onFailure { e -> Log.w(TAG, "Kunde inte slå upp ISIN för fund $fundId", e) }
             .getOrNull()
 
     // Utan `company` levererar källan hela plattformens katalog, inte bara Handelsbankens egna
     // fonder (KRAVLISTA TP-18) — bolagslistan finns med i samma svar.
-    override suspend fun fetchFundCatalog(): FundCatalog =
-        fetchCatalogPage(company = null)
-            ?.let { html ->
+    // Parsningen körs av anroparens tråd, se fetchAndCacheFromFondlista — katalogsvaret är
+    // drygt hundra kilobyte HTML och hämtas från Fondsöks viewModelScope.
+    override suspend fun fetchFundCatalog(): FundCatalog? =
+        fetchCatalogPage(company = null)?.let { html ->
+            withContext(Dispatchers.Default) {
                 FundCatalog(
                     companies = HandelsbankenHtmlParser.parseFundCompanies(html),
                     funds = HandelsbankenHtmlParser.parseFundCatalog(html),
                 )
             }
-            ?: FundCatalog(companies = emptyList(), funds = emptyList())
+        }
 
     override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
-        fetchCatalogPage(company = companyId)?.let(HandelsbankenHtmlParser::parseFundCatalog)
+        fetchCatalogPage(company = companyId)?.let { html ->
+            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseFundCatalog(html) }
+        }
 
     /** Katalogsidan för ett (eller inget) fondbolag. Null vid fel — anroparen behåller då sin nuvarande lista. */
     private suspend fun fetchCatalogPage(company: String?): String? =

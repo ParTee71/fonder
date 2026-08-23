@@ -72,6 +72,26 @@ class AvanzaPriceSourceTest {
         assertEquals("SEK", prices.first().currency)
     }
 
+    @Test
+    fun `fetchHistory hamtar kurser aven nar guide-anropet felar`() = runTest {
+        // Regression: valutan ur `guide` används inte här (punkterna märks alltid VALUE_CURRENCY),
+        // men anropet gjordes ändå — svarade källan 500 på /guide medan /chart var friskt
+        // slutade fonden uppdateras på grund av en endpoint vars svar kastades bort.
+        val guideFails = object : AvanzaSource {
+            override suspend fun search(query: String): String = searchHit
+            override suspend fun fetchGuide(orderbookId: String): String = throw IOException("500 från /guide")
+            override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String =
+                """{"dataSerie":[{"x":1577919600000,"y":429.25}]}"""
+            override suspend fun fetchFundList(requestBody: String): String = """{"fundListViews":[]}"""
+        }
+
+        val prices = AvanzaPriceSource(guideFails).fetchHistory(isin, LocalDate.of(2020, 1, 1), LocalDate.of(2020, 6, 1))
+
+        assertEquals(1, prices.size)
+        assertEquals(429.25, prices.first().nav, 1e-9)
+        assertEquals("SEK", prices.first().currency)
+    }
+
     @Test(expected = IOException::class)
     fun `fetchHistory kastar vidare natverksfel till anroparen`() = runTest {
         val failingSource = object : AvanzaSource {

@@ -3,7 +3,7 @@
 > App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut
 > värde och visa utveckling i tabell och diagram, med molnbackup och Google-inloggning.
 >
-> Version: 0.30.0 · Paket: `se.partee71.fonder` · Språk: Svenska
+> Version: 0.37.0 · Paket: `se.partee71.fonder` · Språk: Svenska
 
 ---
 
@@ -35,12 +35,12 @@
 | TP-4 | Lokal lagring i **Room** (`exportSchema = true`); inställningar i **DataStore (Preferences)**. |
 | TP-5 | Bakgrundsjobb via **WorkManager** (Hilt-integrerad worker): handelsdagsmedveten kursuppdatering för bevakade fonder — en billig launch-gate vid appstart plus en gles periodisk backstop (12h), båda gated av staleness (se TP-17, issue #27; ersätter den tidigare fasta 24h-periodiken). |
 | TP-6 | Inloggning via **Firebase Auth + Google Credential Manager**. *(planerad)* |
-| TP-7 | Molnbackup via **Google Drive (appDataFolder)**. *(planerad)* |
+| TP-7 | Backup av all användardata, i två steg. **Steg 1 (byggt, SET-6):** export/återställning mot en användarvald **lokal fil** via SAF (Storage Access Framework) — versionerat JSON-format (`BackupPayload`/`BackupSerializer`), ingen inloggning, inget nätverk, och därmed en rundtur som går att köra i CI. **Steg 2 (planerad):** samma sträng skriven till **Google Drive (`appDataFolder`)** — ett rent transportbyte bakom `BackupRepository`, formatet är redan låst och testat. Steg 2 kräver en **OAuth-klient i ett Google Cloud-projekt** (Drive API påslaget, SHA-1 för både debug- och release-nyckel, scope `drive.appdata`); Firebase behövs bara för TP-6:s inloggning, inte för Drive. |
 | TP-8 | Krävd behörighet: `INTERNET`. |
 | TP-9 | Fondidentitet: **`FundId`** (Handelsbankens fondlista-plattforms egen kod, t.ex. `SHB0000442`). Fonder matchade enbart via ISIN (TP-13/TP-14) saknar en sådan kod och får ISIN:et som `FundId` — de bär i stället ett uppslaget **`fondlistaFundId`** (Room-migrering 4→5, issue #39) som *bara* används som nyckel vid kurshämtning; identitet och transaktionernas främmande nyckel följer alltid `FundId`. ~~Källan exponerar inget ISIN.~~ *(borttaget — fondens egen sida `/shb/sv/funds/<fundid>` bär ISIN i faktabladslänkens `Identifier`-parameter, se TP-18; `FundPriceRepository.lookupIsin` läser det.)* |
 | TP-10 | Fondkurs-HTML parsas med **Jsoup**; HTTP via **OkHttp**. Parsern är isolerad (`HandelsbankenHtmlParser`) — se risknotis i #2/#3 (odokumenterad, inofficiell källa). |
 | TP-11 | Fondbolag ↔ fond hämtas från **källans egen `company`-parameter** (`FundPriceRepository.fetchFundsForCompany`, se TP-18) — exakt, inte approximerat. ~~Kopplingen saknas i källan och approximeras av appens `FundCompanyMatcher.matches` (Handelsbanken via `FundId`-prefix `SHB`, övriga bolag via namnprefix).~~ *(borttaget, issue #37 — antagandet att sidans filter inte filtrerade fondlistan var fel.)* `FundCompanyMatcher.coreBrandName` finns kvar, men bara som ledtråd åt `FundNameMatcher` vid importmatchning (TP-13). |
-| TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). En periodväljare (1 mån/3 mån/1 år/Allt, `ChartPeriodFilter`, issue #51) styr vilken del av historiken som skickas till diagrammet — förvalt 1 månad, hela den valda periodens punkter synliga direkt (`Zoom.Content`, issue #53 — Vicos standardzoom tillät annars aldrig mer utzoomat än "naturligt" punktavstånd, så perioder med fler punkter än vad som fick plats visade bara svansen), skrollat till slutet så senaste kursen syns direkt (`Scroll.Absolute.End`). ~~Zoomar som standard in till den senaste månaden och skrollar till slutet (`Zoom.max(Zoom.Content, Zoom.x(30.0))`)~~ *(borttaget, issue #51 — ersatt av periodväljaren: filtrerar den faktiska datan i stället för att bara zooma vyn, så att även y-axeln följer den valda perioden, se nedan)*. Y-axeln pads runt kursens eget min/max inom den valda perioden (`PriceRangeProvider`, issue #49) i stället för Vicos standard som alltid tvingar in noll — annars klämdes en fonds faktiska rörelse ihop mot en avlägsen nollinje. ~~Baseras på hela historiken, inte bara den synliga zoomade delen~~ *(borttaget, issue #51 — periodväljaren filtrerar datan innan den når Vico, så både x- och y-axeln nu räknas ut från exakt den period som visas)*. Fondens köpdagar som ingår i den visade perioden markeras med en linje och ett datum (`PurchaseMarkerFilter`, issue #55) — kan vara flera; en köpdag som inte råkar sammanfalla med en cachad kursdag snappas till närmaste kurspunkt, annars visar Vicos persistenta markörer (kräver exakt matchande x-värde) ingen markör alls. |
+| TP-12 | Diagram med **Vico** (`com.patrykandpatrick.vico:compose-m3`), wrappat i delad `FundLineChart` (`ui/diagram/`) — resten av appen rör aldrig Vico-API:t direkt (regel 4). En periodväljare (1 mån/3 mån/1 år/3 år/5 år/Allt, `ChartPeriodFilter`, issue #51) styr vilken del av historiken som skickas till diagrammet — treårs- och femårsfönstren tillkom med HEM-9, eftersom steget från 1 år till Allt hoppade över det spann där en jämförelse mot index börjar betyda något, och Allt är förankrad i första köpet och därför olika lång för olika portföljer. Raden skrollar (`LazyRow`, `CHART_PERIOD_ROW_TEST_TAG`) — sex chippar får inte plats på en telefon, och en fast rad hade klippt bort den sista i stället för att göra den nåbar (UI-5) — förvalt 1 månad, hela den valda periodens punkter synliga direkt (`Zoom.Content`, issue #53 — Vicos standardzoom tillät annars aldrig mer utzoomat än "naturligt" punktavstånd, så perioder med fler punkter än vad som fick plats visade bara svansen), skrollat till slutet så senaste kursen syns direkt (`Scroll.Absolute.End`). ~~Zoomar som standard in till den senaste månaden och skrollar till slutet (`Zoom.max(Zoom.Content, Zoom.x(30.0))`)~~ *(borttaget, issue #51 — ersatt av periodväljaren: filtrerar den faktiska datan i stället för att bara zooma vyn, så att även y-axeln följer den valda perioden, se nedan)*. Y-axeln pads runt kursens eget min/max inom den valda perioden (`PriceRangeProvider`, issue #49) i stället för Vicos standard som alltid tvingar in noll — annars klämdes en fonds faktiska rörelse ihop mot en avlägsen nollinje. ~~Baseras på hela historiken, inte bara den synliga zoomade delen~~ *(borttaget, issue #51 — periodväljaren filtrerar datan innan den når Vico, så både x- och y-axeln nu räknas ut från exakt den period som visas)*. Fondens köpdagar som ingår i den visade perioden markeras med en linje och ett datum (`PurchaseMarkerFilter`, issue #55) — kan vara flera; en köpdag som inte råkar sammanfalla med en cachad kursdag snappas till närmaste kurspunkt, annars visar Vicos persistenta markörer (kräver exakt matchande x-värde) ingen markör alls. |
 | TP-13 | Innehavsimport (`HoldingsImportParser`, `data/imports/`) parsar Handelsbankens "Innehav Fonder"-export utan extra bibliotek (ren DOM-parsning). Exporten visade sig i praktiken vara kalkylbladets råa XML direkt, inte en riktig zip-baserad `.xlsx` — parsern hanterar båda formaten (zip-magibyte avgör). Identifierar fonder med **ISIN**, till skillnad från appens `FundId` (TP-9). Fondmatchning sker i prioritetsordning (#8-uppföljning, utökad i #37 och #45): (1) redan bevakad fond med samma ISIN, (2) namnträff i fondlista-katalogen **verifierad mot ISIN** via `FundPriceRepository.lookupIsin` (TP-18 — ger ett riktigt `FundId` och rätt andelsklass; flera rankade kandidater prövas i turordning, `FundNameMatcher.rankedMatches`, upp till fem per importrad — en andelsklassfamilj kan göra att fel syskonfond rankas högst, se #45), (3) exakt ISIN-träff via `FundPriceRepository.findFundByIsin` (TP-14 — täcker fondbolag som saknas i katalogen), (4) `FundNameMatcher` på fondnamn som sista utväg (overifierad, högst rankade kandidaten), med fondbolagets **kärnnamn** (`FundCompanyMatcher.coreBrandName`) som ledtråd. Inköpsdatum uppskattas mot kurshistorik (`refresh()`/`refreshSince()`) med **ett** sökfönster på 30 år för alla rader — ~~fem år för fonder utan ISIN (Handelsbankens fasta fönster)~~ *(borttaget, issue #37: fondlista har inget femårstak, se TP-18)*. Saknas en tillförlitlig träff antas datumet vara sökfönstrets början i stället för dagens datum. Isolerad, odokumenterat exportformat — se risknotis i #8. |
 | TP-14 | Fonder har ett valfritt **`isin`**-fält (Room-migrering 2→3, nullable) utöver `FundId` (TP-9), för att hämta kurshistorik **sedan första köpet** ~~— inte begränsat av Handelsbankens fasta 5-årsfönster~~ *(borttaget, issue #37: något sådant fönster har källan aldrig haft, se TP-18)*. Sedan #37 är den här kedjan **reserv**: `refreshSince` provar fondlista först och går hit bara när den inte kan leverera — sedan #39 även för fonder vars `fundId` är ett ISIN, via ett uppslaget `fondlistaFundId` (TP-9/TP-18). Chart-anropet ger **alltid värdet i kronor**, oavsett fondens egen valuta (verifierat 2026-07-28: CPR Invest hade NAV 193,48 USD hos fondlista samma dag som Avanza gav 1878,75) — punkterna märks därför `SEK`, inte valutan ur `guide`, som är fondens egen. **Känd defekt i källan:** den levererar ibland kurser daterade på lördag/söndag (verifierat 2026-07-27; en fonds serie hoppade över fredagen och gav en söndag i stället). Sådana punkter förkastas i `AvanzaJsonParser` — en helgdaterad kurs finns inte, och eftersom datumet är *nyare* än senaste handelsdag gjorde den `isPriceStale` (TP-17) falskt negativ, så fonden ansågs färsk och slutade uppdateras. Migrering 4→5 rensar även redan cachade helgrader. Källa: **Avanzas odokumenterade fond-API** (`_api/fund-guide/search` för ISIN/namn → `orderbookId`, `_api/fund-guide/guide` för valuta, `_api/fund-guide/chart/{orderbookId}/{from}/{to}?raw=true&resolution=DAY` för daglig NAV, godtyckligt datumintervall — **`resolution=DAY` krävs**, annars nedsamplar Avanza långa spann till veckopunkter, se uppföljning nedan) — ingen inloggning krävs, verifierat live 2026-07-05 (chart-anropet omverifierat 2026-07-20). Isolerad i `data/network` (`AvanzaSource`/`AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`), samma riskprofil som TP-10 (odokumenterad källa, kan sluta fungera utan förvarning). `FundPriceRepository.refreshSince`/`suggestIsin`/`findFundByIsin` provar en **prioritetsordnad lista** av `IsinPriceHistorySource` (i dag bara Avanza) — Nordnet och Morningstar undersöktes men saknade en bekräftat inloggningsfri sökväg från ISIN till en identifierare, och är därför inte implementerade. Fonder tillagda via import får ISIN direkt från exportfilen (TP-13); fonder tillagda via fondsök saknar ISIN tills ett föreslås (namnsökning mot samma källa) och bekräftas av användaren i Fonddetalj. `findFundByIsin` slår upp en fond exakt via ISIN och ger den `Fund.fundId == isin` (inget Handelsbanken-FundId finns) — används av importflödet (TP-13) för fonder som saknas i Handelsbankens katalog. |
 | TP-15 | Realiserat resultat vid försäljning beräknas av **`RealizedGainCalculator`** (`domain/usecase/`), en ren/testbar FIFO-motor (äldsta köp-lott konsumeras först) som delas mellan "Sålda fonder"-vyn (`compute`, en post per säljtransaktion) och portföljens kvarvarande anskaffningsvärde (`remainingPositions`, POR-1) — samma sanning på båda ställena. `Transaction` har ett fält **`fee`** (avgift i kr, default 0.0, Room-migrering 3→4) som dras av från säljtransaktionens eget resultat; avgift på köp räknas **inte** in i anskaffningsvärdet (medvetet avgränsat till sälj-sidan). Säljs fler andelar än historiken visar köpta flaggas den delen som `uncoveredShares` — resultatet visas ändå, men markerat som osäkert (SLD-2), i stället för att tystas ner eller gissas. |
@@ -61,7 +61,12 @@
 | UI-2 | Rubriker/UI i **Space Grotesk**; belopp och sifferkolumner med **tabulära siffror**. |
 | UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. |
 | UI-4 | Tema kan väljas: **Ljust / Mörkt / Auto** (sparas i DataStore). |
+| UI-6 | Ingen text får tränga undan ett värde: i en rad med etikett och värde är **etiketten** det som kapas (`weight` + ellips), aldrig beloppet. Långa fondnamn är normalfallet, inte ett kantfall (issue #78). |
+| UI-7 | Tangentbordet får aldrig ligga över det fält som skrivs i eller knappen som sparar. Appen kör edge-to-edge, så IME-insetet konsumeras centralt i `AppNavigation` (`imePadding`) i stället för per skärm (issue #78). |
+| UI-8 | Varje skärm som inte är en toppnivåflik har **rubrik och bakåtknapp** i `TopAppBar` — systemets bakåtgest är aldrig den enda vägen tillbaka (issue #78). |
+| UI-9 | Tillstånd som användaren skulle förlora vid en rotation — öppna bekräftelsedialoger, valda filter/perioder, egen inmatning — sparas med `rememberSaveable` (issue #75/#78). |
 | UI-5 | Varje skärm vars innehåll kan överstiga skärmhöjden är **skrollbar** (`LazyColumn`, eller `verticalScroll` för korta fasta vyer) — innehåll får aldrig klippas bort utan att gå att nå. Gäller särskilt vyer med kort/sektioner som växer med antalet innehav eller flaggade fonder (t.ex. HEM-4, HEM-5). Ett tillstånd som får plats i en testviewport kan ändå klippas i den riktiga appen, där `Scaffold`s topp- och bottenfält tar bort utrymme — instrumenterade tester för sådana vyer ska därför verifiera skrollbarhet, inte bara att en nod finns i semantikträdet (`assertExists()`, som inte fångar avklippt men komponerat innehåll, issue #63). Metoden beror på om innehållet är genuint lazy-virtualiserat: `onNodeWithText(...).performScrollTo().assertIsDisplayed()` kräver att noden **redan är komponerad** (fungerar för rader samlade under en enda icke-lazy `Column` inuti ett `item {}`, t.ex. HEM-4:s flaggade fonder) — för en riktig lazy `items()`-lista (t.ex. Portföljs innehavsrader) är sista raden inte komponerad förrän listan skrollats dit, och testet måste i stället tagga `LazyColumn`n (`Modifier.testTag`) och använda `onNodeWithTag(...).performScrollToIndex(n)` (issue #66 — fångad i CI, inte antagen). |
+| UI-10 | En fonds **risknivå** (källans skala 1–7, TP-21) visas överallt en enskild fond visas: Fonddetaljs rubrik, varje bytesförslag (ANA-10), portföljens innehavsrader och fondsökens träffrader. Alltid via den delade `RiskBadge` (`ui/components/`, regel 4) med **siffran i text** ("Risk 5/7", "Risk 5 → 4" för ett byte) och en beskrivande `contentDescription` — aldrig som enbart en färg (jfr UI-3, och paletten har redan trafikljuset upptaget av ANA-3). Okänd risknivå skrivs ut som **"Risk okänd"** i stället för att märkningen uteblir (ANA-4-principen). I fondsök saknar katalogens träffar ISIN, så nivån slås upp på **normaliserat fondnamn** (`FundNameKey`) mot den lokala metadatacachen — aldrig via nätverket, och aldrig via en ungefärlig namnmatchning som kunde måla en annan fonds risksiffra på raden (issue #85). |
 
 ---
 
@@ -70,7 +75,7 @@
 | ID | Krav |
 |----|------|
 | NAV-1 | Toppnivå med navigeringsrad: **Hem**, **Portfölj**, **Transaktioner**, **Sålda**, **Inställningar**. Hem är startskärmen (issue #14). |
-| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik sedan första köpet i diagram (`FundLineChart`, `ui/diagram/`) och tabell (datum + kurs), med tomt-tillstånd om ingen historik finns än. Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt med ett namnbaserat förslag om ett hittades), se TP-14. |
+| NAV-2 | Från Portfölj kan man öppna **Fonddetalj** — kurshistorik sedan första köpet i diagram (`FundLineChart`, `ui/diagram/`), ~~och tabell (datum + kurs)~~ *(tabellen borttagen, issue #85 — diagrammet visar samma sak, och en backfillad fond gav flera tusen rader)*, med tomt-tillstånd om ingen historik finns än. Saknar fonden ISIN visas ett fält för att ange/bekräfta det (förifyllt med ett namnbaserat förslag om ett hittades), se TP-14. |
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). Listan täcker **hela plattformens katalog** (~1500 fonder, inte bara Handelsbankens ~470) och bolagsfiltret hämtas från källan (TP-11/TP-18) — ett bolagsbyte kostar ett nätverksanrop, och en misslyckad hämtning behåller föregående lista i stället för att tömma vyn. En tillagd fond får sitt **ISIN** direkt från källan (TP-18), utan att först behöva bekräfta ett namnbaserat förslag i Fonddetalj (jfr NAV-2/TP-14). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | NAV-5 | En egen flik **Sålda** i toppnavigeringen öppnar vyn över sålda fonder (se avsnitt 6, SLD-1). |
@@ -80,10 +85,10 @@
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
 | POR-4 | Läggs en fond utan cachad kurs till bevakningen hämtas dess kurs automatiskt en gång (utöver den dagliga bakgrundsuppdateringen, TP-5). |
 | POR-5 | Portföljens innehavsrader visar även **dag-, vecka- och månadsförändring** per fond (kr + %), utöver nuvarande värde/vinst (POR-3). Måttet är förankrat i fondens **senaste kända NAV-dag** (referensdagen), inte väggklockans "idag": "En dag" är referensdagens NAV mot dagen före, "senaste veckan/månaden" mot 7/30 dagar före referensdagen. Det gör raderna beräkningsbara även innan dagens NAV publicerats eller för fonder vars NAV släpar (utländska fonder rapporterar med fördröjning) — då visas den senaste faktiska rörelsen, och hur färsk referensdagen är framgår av "Värde per \<datum\>" (POR-7). Räcker inte kurshistoriken [Period.days] dagar bak från referensdagen (t.ex. nytillagd fond, eller bara en enda känd kurs) markeras just den perioden som otillräcklig data i stället för ett gissat `0` (issue #14/#18). ~~Är fondens senast kända kurs äldre än periodens start visas i stället "Kurs ej uppdaterad".~~ *(borttaget — periodmåttet ankras nu i senaste NAV, inte "idag", så en eftersläpande kurs ger den senaste faktiska rörelsen i stället för en tom rad; färskheten visas via POR-7)* |
-| POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
+| POR-6 | Varje innehavsrad visar **datum för första köp** och det kvarvarande FIFO-anskaffningsvärdet ("Inköpsvärde", TP-15) för fonden, utöver nuvarande värde/vinst (issue #18). Datumet avser den **äldsta kvarvarande** köp-lotten, samma position som anskaffningsvärdet beskriver — en fond som sålts av helt och köpts igen räknas från det nya köpet. Samma information visas överst i Fonddetalj för fonder som är kvarvarande innehav. |
 | POR-7 | Totalkortet och varje innehavsrad i Portfölj och Hem visar **"Värde per \<datum\>"** — NAV-datumet värdet är räknat på (`ValueAsOfRow`, `ui/components/`, regel 4), diskret under värdet. Totalens datum är det **äldsta** bland de ingående innehavens NAV (samma "svagaste länk"-princip som "delvis osäker", HEM-2) — gör en normal endagsförskjutning mot en extern källa (t.ex. banken) begriplig i stället för att se ut som ett fel (issue #27). Visas inget om värdet är okänt. |
 | POR-8 | Varje innehavsrad i Portfölj visar den befintliga säljsignal-statusen (`StatusDot`, ANA-3) och en ev. triggad vinstsignal (ANA-8) direkt på kortet, utan att behöva öppna Fonddetalj (issue #26). Visas inget om analysen saknar tillräcklig data (ANA-4). |
-| POR-9 | Portfölj visar en **exponeringskarta**: andel av portföljens värde per **fondtyp**, **region** och **index vs. aktivt förvaltat**, viktat på innehavens aktuella värde. Fondtypen läses ur källans `TYPE`-tagg (exakt en per fond, verifierat 999/999) — **inte** ur `FundMetadata.fundType`, som är en engelsk kod vars gruppering dessutom skiljer sig från taggens. Region slår ihop `COMMON_REGION` och `OTHER_REGION` (verifierat aldrig samtidiga, och aldrig fler än en per fond); index/aktiv läses ur `FundMetadata.indexFund` (alltid satt). Etiketterna är källans egna svenska titlar, oöversatta, så en ny kategori källan inför inte tappas bort. Procenten räknas på hela det medräknade värdet inklusive okänt, så varje dimension summerar till 100 %. Innehav utan ISIN, metadataträff eller känd kurs exkluderas helt och räknas separat (samma princip som HEM-5); ett känt innehav utan regiontagg (vanligt för ränte-, bland- och alternativa fonder) hamnar i en egen "okänd region"-hink, aldrig gissad eller dold. `MISC`/`INTEREST` ingår inte — flera fonder bär mer än en tagg där, vilket skulle dubbelräkna värde; `INDUSTRY`/`ALIGNMENT` ingår inte heller på grund av låg täckning. Att öppna Portfölj utlöser aldrig en köpbarhets- eller alternativskanning (samma avgränsning som HEM-5) — bara cache-först-uppslag via `metadataFor`. Ingen köp- eller rebalanseringsrekommendation — ren inventering (issue #66). |
+| POR-9 | Portfölj visar en **exponeringskarta**: andel av portföljens värde per **fondtyp**, **region**, **risknivå** och **index vs. aktivt förvaltat**, viktat på innehavens aktuella värde. Fondtypen läses ur källans `TYPE`-tagg (exakt en per fond, verifierat 999/999) — **inte** ur `FundMetadata.fundType`, som är en engelsk kod vars gruppering dessutom skiljer sig från taggens. Region slår ihop `COMMON_REGION` och `OTHER_REGION` (verifierat aldrig samtidiga, och aldrig fler än en per fond); index/aktiv läses ur `FundMetadata.indexFund` (alltid satt). Risknivå läses ur `FundMetadata.risk` (TP-21) och är, till skillnad från övriga dimensioner, sorterad **stigande på nivå** i stället för fallande på värde — en ordnad skala ska visas i sin egen ordning (issue #71). Etiketterna är källans egna svenska titlar, oöversatta, så en ny kategori källan inför inte tappas bort. Procenten räknas på hela det medräknade värdet inklusive okänt, så varje dimension summerar till 100 %. Innehav utan ISIN, metadataträff eller känd kurs exkluderas helt och räknas separat (samma princip som HEM-5); ett känt innehav utan regiontagg eller känd risknivå (vanligt för ränte-, bland- och alternativa fonder) hamnar i en egen "okänd"-hink, aldrig gissad eller dold. `MISC`/`INTEREST` ingår inte — flera fonder bär mer än en tagg där, vilket skulle dubbelräkna värde; `INDUSTRY`/`ALIGNMENT` ingår inte heller på grund av låg täckning. Att öppna Portfölj utlöser aldrig en köpbarhets- eller alternativskanning (samma avgränsning som HEM-5) — bara cache-först-uppslag via `metadataFor`. Ingen köp- eller rebalanseringsrekommendation — ren inventering (issue #66, risknivådimensionen issue #71). |
 | TRX-1 | Transaktionslistan visar fondnamn, köp/sälj, datum, antal andelar och kurs/andel per rad. |
 | TRX-2 | Långtryck på en transaktionsrad visar en bekräftelsedialog innan den tas bort permanent. |
 | IMP-1 | Från Inställningar kan man öppna **Importera innehav**: väljer en `.xlsx`-fil (Handelsbankens "Innehav Fonder"-export), granskar/korrigerar föreslagen fondmatchning och uppskattat inköpsdatum per rad, väljer bort enskilda rader, och importerar de bekräftade raderna som transaktioner (ÖV-8). |
@@ -95,9 +100,12 @@
 | IMP-7 | Filer som inte kan tolkas alls (t.ex. inte en avräkningsnota) räknas upp tydligt i stället för att tystas ner eller krascha importet — övriga filers transaktioner importeras ändå. |
 | IMP-8 | Osäker fondmatchning markeras tydligt (samma princip som IMP-2) — användaren väljer fond manuellt bland Handelsbankens katalog. Datum/kurs/antal andelar är redan exakta från notan, men kan ändå korrigeras manuellt om tolkningen skulle träffa fel. Matchade transaktioner triggar nu även en kursuppdatering för fonden (samma "bara om inaktuell"-princip som IMP-4) — misslyckas den markeras raden ("Kurs kunde inte hämtas") i stället för att tystas ner (issue #19). |
 | IMP-9 | När import är klar visas en stängbar modal (titel + antal importerade poster + en tydlig **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy — stängning återgår till Inställningar. Gäller båda importflödena (issue #19). |
-| SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Irreversibelt — molnbackup (TP-7) är ännu inte byggt, så det finns inget sätt att återställa data efter en tömning. |
+| SET-1 | Från Inställningar kan man **tömma hela databasen** (alla fonder, transaktioner, inspelade bytesförslag och cachade kurser) i en tydligt markerad "farozon", bakom en bekräftelsedialog. Själva tömningen är irreversibel, men sedan SET-6 finns en väg tillbaka: farozonens text uppmanar uttryckligen att **exportera en säkerhetskopia först**, och en sådan fil återställer allt utom cachen. |
 | SET-2 | Inställningar visar ett **kursuppdateringskort** med "Senast uppdaterad: \<tidsstämpel\>" (eller "Aldrig uppdaterad") och en **"Uppdatera nu"-knapp** som forcerar en kursuppdatering oavsett staleness-gate (TP-17, issue #27) — bypassar launch-gate/backstopens "bara om inaktuellt"-princip, för den som inte vill vänta. |
-| SET-3 | Inställningar har en **Riskprofil** (egen undersida) — tre frågor (tidshorisont, reaktion vid en 30 %-nedgång, primärt mål) som **föreslår** en målrisknivå på källans egen riskskala (`FundMetadata.risk`, TP-21). Skalans giltiga nivåer är unionen av senast kända filtervokabulär (`FundFilterVocabulary["risk"]`, som bara fylls av Fondsök/ANA-9:s frågeflöden) och redan cachade fonders egen `risk` (fylld av HEM-5/POR-9:s `metadataFor`-anrop, mer pålitligt populerad för en användare med innehav) — aldrig hårdkodad, samma princip som TP-21:s övriga filtervärden. Förslaget är just ett förslag: **användaren äger målnivån** och kan sätta eller ändra den direkt i nivåväljaren utan att svara på enkäten — det egna valet vinner alltid över förslaget. Både den valda nivån och de underliggande svaren persisteras i `PreferencesRepository` (DataStore), separat från varandra, så en framtida ändring av poängsättningen (`RiskProfileCalc`) inte tyst skriver om en gammal slutsats. Detta är **genuin användardata** och ska ingå i backup-kontraktet (NFR-1), till skillnad från `lastPriceSyncEpochMillis`/`fundFilterVocabulary` som är ren cache-metadata; Drive-backup (TP-7) är fortfarande en stub, så fältet är täckt av rundturstest på DataStore-nivå i väntan på den. Poängsättningen är ett kodifierat omdöme, inte ett verifierbart faktum som ANA-9:s avgiftsjämförelse — den ligger därför samlad på ett ställe (`RiskProfileCalc`), i klartext och enhetstestad. Ingen köp- eller rebalanseringsrekommendation — den kräver ett eget issue (issue #68). |
+| SET-3 | Inställningar har en **Riskprofil** (egen undersida) — tre frågor (tidshorisont, reaktion vid en 30 %-nedgång, primärt mål) som **föreslår** en **målfördelning** över risknivåer på källans egen riskskala (`FundMetadata.risk`, TP-21), t.ex. 25 % nivå 3, 50 % nivå 4, 25 % nivå 5 — en enda nivå är specialfallet `{N: 100 %}` (issue #71, uppgraderat från #68:s enda skalära målnivå, som inte kunde skilja en 25/50/25-blandning från en enda fond på nivå 4). Enkäten mappar svaren till en av fem namngivna fördelningar (Bevarande / Försiktig / Balanserad / Tillväxt / Offensiv), grundade i uppmätt volatilitet, värsta nedgång, återhämtningstid och sammansättning per risknivå (6 års NAV-historik). **Tidshorisonten är en hård spärr**, inte en av flera poäng, som ingen risktolerans kan häva: under 3 år ger alltid Bevarande, motiverat av att uppmätt återhämtningstid efter värsta nedgången var 2,0–2,6 år på samtliga nivåer. Profilerna ökar risk genom **bredare aktieexponering (nivå 4), inte genom mer tematisk koncentration (nivå 5)** — nivå 5 domineras av enskilda teman och länder (ny teknik, Kina, fastigheter: 71 av 216 undersökta fonder branschtaggade mot 15 av 220 på nivå 4), och koncentrationsrisk är enligt teorin inte kompenserad på samma sätt som marknadsrisk. Skalans giltiga nivåer är unionen av senast kända filtervokabulär (`FundFilterVocabulary["risk"]`, som bara fylls av Fondsök/ANA-9:s frågeflöden) och redan cachade fonders egen `risk` (fylld av HEM-5/POR-9:s `metadataFor`-anrop, mer pålitligt populerad för en användare med innehav) — aldrig hårdkodad, samma princip som TP-21:s övriga filtervärden. Förslaget är just ett förslag: **användaren äger målfördelningen** och kan justera enskilda nivåers andelar direkt utan att svara på enkäten — det egna valet vinner alltid över förslaget. **Summan måste bli exakt 100 % för att kunna sparas** — går den inte ihop sparas ingenting, ingen tyst normalisering. Fördelningarna är **utgångspunkter, inte optima**, vilket UI-texten säger — ett verkligt optimum kräver ålder, övriga tillgångar och inkomststabilitet, uppgifter appen varken har eller frågar om. Både fördelningen och de underliggande svaren persisteras i `PreferencesRepository` (DataStore), separat från varandra, så en framtida ändring av poängsättningen (`RiskProfileCalc`) inte tyst skriver om en gammal slutsats. En profil sparad i #68:s tidigare skalära format (`targetRiskLevel`) migreras till `{N: 100 %}` vid inläsning och går aldrig förlorad — verifierat med ett explicit regressionstest, eftersom `PreferencesRepository.riskProfile` annars tyst skulle svälja en föråldrad JSON-form och profilen försvinna spårlöst. Detta är **genuin användardata** och ska ingå i backup-kontraktet (NFR-1), till skillnad från `lastPriceSyncEpochMillis`/`fundFilterVocabulary` som är ren cache-metadata; Drive-backup (TP-7) är fortfarande en stub, så fältet är täckt av rundturstest på DataStore-nivå i väntan på den. Poängsättningen är ett kodifierat omdöme, inte ett verifierbart faktum som ANA-9:s avgiftsjämförelse — den ligger därför samlad på ett ställe (`RiskProfileCalc`), i klartext och enhetstestad. Ingen köp- eller rebalanseringsrekommendation här — den ligger i SET-4/HEM-8 (issue #70). Att spara en **ändrad** målfördelning startar en omräkning av bytesplanen (HEM-8, issue #88) — en oförändrad fördelning gör det inte, eftersom skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per underviktad nivå. |
+| SET-4 | Inställningar har ett val av **kontotyp** — ISK/KF eller depå/AF. Valet styr om bytesförslag (HEM-8) ges alls: i ISK/KF finns ingen realisationsskatt och ett fondbyte kostar i praktiken ingenting, medan ett byte i depå/AF utlöser 30 % skatt på vinsten — en position som gått upp 50 % kräver då ~19 procentenheters meravkastning första året bara för att gå jämnt ut, långt över vad någon signal appen har kan leverera. Utan gjort val ges **inga** förslag; appen gissar aldrig kontotyp. Genuin användarinput, ingår i backup-kontraktet (NFR-1) — samma kategori som SET-3 (issue #70). Byte **till** ISK/KF startar en omräkning av bytesplanen (HEM-8, issue #88) — först då kan en plan alls finnas. Byte till depå/AF startar ingen: där ges ingen plan att räkna om. |
+| SET-5 | Inställningar har ett **Facit** (egen undersida, samma mönster som SET-3) som redovisar utfallet av bytesplanens inspelade förslag (HEM-8, `suggestion_records`) mot att ha behållit innehavet. Per förslag visas sälj- och köpfond, förslagsdatum, plats i planen, belopp och **meravkastningen sedan förslagsdagen** — köpfondens NAV-utveckling minus säljfondens, i procent med kronbeloppet (`switchValueKr` × skillnaden) under, semantiskt färgat efter procenten (`SwitchOutcomeCalc`, `domain/usecase/`). Överst summeras **två skilda mått som aldrig slås ihop**: alla inspelade förslag (hur bra rådet var) och enbart de användaren markerat som genomförda (HEM-8) — ett oföljt förslag är ett hypotetiskt utfall, ett följt ett verkligt, och en gemensam siffra mäter ingetdera. Procenten är ett enkelt snitt över utvärderade förslag (varje råd väger lika) medan kronorna är en summa över dem som dessutom har ett känt belopp — två olika aggregat, inte samma tal i olika enheter, och antalet utvärderade av totalt redovisas därför explicit. Snittet visas dessutom **per plats i planen**, eftersom `planIndex` sparades just för att göra mätbart om lägre rankade byten presterar sämre innan `SwitchPlanCalc.MAX_SWITCHES_PER_PLAN` höjs. Sedan issue #91 redovisas de **två sorterna av råd var för sig** — bytesplanens byten (HEM-8) och avgiftsbytena (ANA-9, `SuggestionRecord.kind`) — och slås aldrig ihop till ett snitt: ett avgiftsbyte görs för en **känd** besparing, ett riskplansbyte för ett förväntat utfall, och ett gemensamt tal hade dolt att den ena sortens råd är säkrare än den andra. Varje sektion visas bara när dess sort har inspelade rader; snittet **per plats i planen** räknar bara bytesplanens rader, eftersom ett avgiftsbyte inte ingår i någon rangordning (dess `planIndex` är alltid 0) och just det talet avgör om `MAX_SWITCHES_PER_PLAN` kan höjas. Rader inspelade före issue #75 saknar belopp och visas då med procent men utan kronor, aldrig med ett påhittat belopp; saknas NAV för endera sidan markeras raden som ej utvärderad, aldrig som noll (ANA-4-principen). **Skärmen läser bara cachen** — NAV ur den lokala kurscachen och fondnamn ur `FundMetadataRepository.cachedMetadataFor` (som till skillnad från `metadataFor` aldrig går till nätet). Köpsidans kurser, som per definition tillhör fonder appen aldrig ägt, fylls i budgeterat av den befintliga worker-backstopen (`FundPriceUpdateWorker.scanOutcomeNavs`, högst fyra ISIN per körning, nyast förslag först) — samma princip som HEM-6/HEM-8, aldrig en hämtning när skärmen öppnas. Texten anger uttryckligen vad måttet inte omfattar: skatt, courtage, att bytet i verkligheten kan ha skett en annan dag än förslagsdagen, och att bara faktiskt givna förslag mäts (perioder utan plan syns inte). Issue #80. |
+| SET-6 | Inställningar har ett kort för **säkerhetskopiering** — *Exportera till fil* och *Återställ från fil* — som skriver och läser hela backup-kontraktet (NFR-1) via systemets filväljare (SAF), utan inloggning eller nätverk (issue #82, TP-7 steg 1). Filen är **versionerad JSON** (`formatVersion`): en fil från en *nyare* app avvisas med ett eget felmeddelande i stället för att läsas in med bara de fält den här versionen känner igen — en delvis inläst säkerhetskopia är värre än ingen. Trasig eller otolkbar fil ger fel och lämnar databasen orörd; ingen halv återställning kan uppstå, eftersom Room-halvan körs i en enda transaktion. Innehållet är **bara genuin användardata**: fonder, transaktioner, riskprofil (SET-3, inklusive legacy-fältet `targetRiskLevel`), kontotyp (SET-4), samtliga inspelade förslag (HEM-8/ANA-9/SET-5, inklusive `followed`, `switchValueKr`, `batchEpochMillis` och `kind`) samt temavalet och det egna valet av jämförelsefond (HEM-10, `chosenBenchmarkIsin`). `fund_prices`, `fx_rates` och `fund_metadata` ingår **inte** — härledd cache som hämtas om från källan, och som skulle mångdubbla filen utan att skydda något oåterskapbart; de töms heller inte av en återställning, så lokal kurshistorik behålls. Återställning **ersätter**, den slår inte ihop: det är en återställning, inte en import (merge dubblerar transaktioner utan väg tillbaka — importflödena IMP-1/IMP-6 täcker det fallet). Den ligger därför bakom en bekräftelsedialog och redovisar efteråt vad som faktiskt skrevs, så "klart" inte kan förväxlas med "tomt". Filen är **oskyddad klartext** med innehav och belopp, vilket kortets text säger rakt ut — användaren väljer själv var den hamnar. |
 
 ---
 
@@ -105,7 +113,7 @@
 
 | ID | Krav |
 |----|------|
-| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Androids inbyggda **Auto Backup** (Google-kontots molnlagring) är påslaget som interimistiskt skydd (`allowBackup="true"`) tills en egen, testbar Drive-backup (TP-7) finns — täcker en förlorad/nollställd enhet, men är inte en app-styrd rundtur. *(fullständig Drive-backup planerad)* |
+| NFR-1 | All persisterad användardata ska överleva en **backup → restore-rundtur** utan förlust. Rundturen är sedan SET-6 **app-styrd och testad**: `BackupPayload` definierar kontraktet, och `BackupRoundTripTest` kör backup → SET-1-tömning → restore mot riktig Room och riktig DataStore. Ett fält som läggs till i en kontraktsbärande modell utan att komma med i formatet fäller `BackupSerializerTest`s fältvakt, i stället för att tyst falla ur varje framtida säkerhetskopia. Androids **Auto Backup** (`allowBackup="true"`) ligger kvar som komplement — den täcker en förlorad enhet utan att användaren gjort något, men är inte en rundtur appen kan verifiera. *(molnbackup via Drive planerad, TP-7 steg 2)* |
 | NFR-2 | Ingen beteendeändring utan **tester** på berörd nivå (enhet/instrument/migrering). |
 | NFR-3 | Room-schemaändring kräver **migrering** utan dataförlust. |
 
@@ -132,7 +140,10 @@
 | HEM-4 | Hem visar ett **analys-summeringskort**: antal fonder per säljsignal-status (avsnitt 8) och en lista över gul-/rödflaggade fonder (namn + kort triggertext), där varje rad öppnar fondens Fonddetalj. Inga flaggade fonder visar ett lugnt tomt-tillstånd ("Inga fonder flaggade") i stället för att dölja kortet (issue #16). |
 | HEM-5 | Hem visar portföljens **totala fondavgift i kronor per år** — summan av varje innehavs `totalFee` × nuvarande värde (TP-21, där `totalFee` är allt-inkluderat: förvaltning + handelskostnader, verifierat live 2026-07-31). Texten klargör att avgiften redan är avdragen ur fondens NAV och inte är en separat debitering. Under totalen visas **en rad per innehav med känd avgift, störst avgift först**, som öppnar fonden i Fonddetalj vid klick (issue #63) — annars var totalen inte handlingsbar: att veta vad avgifterna kostar totalt hjälper inte utan att veta vilken fond som gör det. Innehav utan ISIN, metadataträff eller känd avgift räknas aldrig som noll — de exkluderas ur totalen och redovisas med antal (samma princip som ANA-4/POR-3); ett innehav som helt saknar känd kurs hoppas tyst över (dess "kurs saknas"-läge äger redan POR-3, blandas inte ihop med okänd avgift). Avgiftsmetadata som är äldre än `FundMetadataFreshness.FEE_TTL_DAYS` (30 dygn) hämtas om i bakgrunden via `FundMetadataRepository.metadataFor`, som svarar ur cachen utan nätanrop för färska rader. Ingen köpbarhets- eller alternativskanning sker vid Hem-öppning — den kostnaden hör till ANA-9/`suggestCheaperAlternatives`, budgeterad och engångskörd i Fonddetalj, inte startskärmen (issue #60). |
 | HEM-6 | Hem visar portföljens **samlade besparingspotential per år** — summan av (innehavets avgift − billigaste verifierat köpbara alternativets avgift) × innehavets aktuella värde, för innehav med ett **färskt** jämförelseresultat — samt "N av M genomsökta" (antal innehav med ett färskt resultat, av totalt jämförbara). Kronbeloppet räknas alltid ur innehavets aktuella värde, aldrig ur ett sparat kronbelopp — den sparade `cheapestAlternativeFee` (ANA-9) är värdeoberoende, kronorna är det inte. "Aldrig genomsökt" (`comparisonResolvedAtEpochDay` null) och "genomsökt utan träff" (satt datum, `cheapestAlternativeIsin` null) är skilda tillstånd i både data och UI — en avgiftsrad utan besparing visar antingen ingen text (aldrig sökt) eller "Redan bland de billigaste i sin kategori" (samma text som ANA-9:s eget kort, regel 4), aldrig samma text för båda. Ett resultat äldre än `FundMetadataFreshness.COMPARISON_TTL_DAYS` (30 dygn) räknas som osökt, aldrig som en aktuell rekommendation — ett gammalt råd (fonden kan ha höjt avgiften eller slutat säljas hos Handelsbanken sedan dess) är fel på ett sätt gammal avgiftsdata inte är. Ifyllnaden sker **inkrementellt** (högst två innehav per körning, störst värde först, `FundPriceUpdateWorker.scanComparisons`) via den befintliga periodiska bakgrundskörningen (`FundPriceRefreshScheduler.scheduleBackstop`, var 12:e timme) — aldrig vid appstart eller den manuella kursuppdateringen, eftersom en fullständig skanning kan kosta hundratals hämtningar mot Handelsbankens fondlista (issue #61). Ingen egen worker eller schemaläggare — rider med på den som redan itererar alla bevakade fonder (regel 4). |
-| HEM-7 | Hem visar innehavens **genomsnittliga risknivå, viktad på värde** (`Σ(värde × risk) / Σ(värde)`, TP-21) jämfört med målrisknivån från riskprofilen (SET-3) — bara om en profil är satt, annars uteblir raden helt. Måttet är uttryckligen ett värdeviktat medel av de enskilda fondernas risknivåer — **inte** portföljens risk: korrelation och diversifiering modelleras inte, och en 50/50-mix av nivå 1 och 6 räknas identiskt med en enda fond på nivå 3,5. Texten säger vad måttet är, samma precisionsprincip som ANA-1 använder när den skiljer fondens kursutveckling från den egna avkastningen. Innehav utan ISIN, metadataträff eller känd risknivå exkluderas och räknas separat (samma princip som HEM-5/POR-9) — aldrig en gissad risksiffra. Ren läsvy: ingen åtgärdsknapp och ingen uppmaning att köpa eller sälja (issue #68). |
+| HEM-7 | Hem visar riskprofilens (SET-3) **målfördelning mot innehavens faktiska fördelning, per risknivå** — bara om en profil är satt, annars uteblir kortet helt (issue #71, uppgraderat från #68:s enda skalära jämförelse, som inte kunde skilja en 25/50/25-blandning från en enda fond på nivå 4). Det värdeviktade snittet (`Σ(värde × risk) / Σ(värde)`, TP-21) finns kvar som en sammanfattning överst, med samma förbehåll som tidigare: det är uttryckligen ett värdeviktat medel av de enskilda fondernas risknivåer — **inte** portföljens risk, korrelation och diversifiering modelleras inte, och en 50/50-mix av nivå 1 och 6 räknas identiskt med en enda fond på nivå 3,5 (samma precisionsprincip som ANA-1 använder när den skiljer fondens kursutveckling från den egna avkastningen). Per-nivå-jämförelsen använder samma delade stapelkomponent som POR-9:s exponeringskarta (`ExposureBar`, regel 4) — här är den rätt komponenten, till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel. Innehav utan ISIN, metadataträff eller känd risknivå exkluderas och räknas separat (samma princip som HEM-5/POR-9) — aldrig en gissad risksiffra. Ren läsvy: ingen åtgärdsknapp och ingen uppmaning att köpa eller sälja här — det ligger i HEM-8, som konsumerar avvikelsen per nivå. |
+| HEM-8 | Riskkortet på Hem (HEM-7) föreslår en **rangordnad bytesplan** mot riskprofilens målfördelning (SET-3/#71) — men **bara** när kontotypen är ISK/KF (SET-4), någon risknivå avviker minst `MIN_GAP_PP` (5 procentenheter) från målet, och den inspelade planen är högst `PLAN_TTL_DAYS` (7 dygn) gammal — ett äldre råd visas inte alls, det är prissatt mot en portfölj som sedan dess rört sig (samma princip som HEM-6:s jämförelse-TTL). Planen räknas fram girigt och sekventiellt (bästa bytet, simulera, räkna om gapet, nästa) så att två byten inte fyller samma hink och tillsammans skjuter över, och **varje byte storleksbestäms till gapet** — det minsta av positionens värde, underviktens underskott och överviktens överskott. Utan den begränsningen kunde ett enda byte skjuta rakt förbi målet (en 10 pp avvikelse med ett stort innehav på den överviktade nivån blev 50 pp åt andra hållet, varpå nästa byte sålde tillbaka — issue #75); den sekventiella omräkningen skyddade bara mot att *två* byten fyllde samma hink. En delvis såld position ligger kvar med sitt återstående värde och kan fylla en annan underviktad nivå. Eftersom bytet därmed sällan avser hela positionen **visas och sparas beloppet** (`SuggestionRecord.switchValueKr`) — "sälj fonden" utan belopp vore ett annat, sämre råd än det planen räknat fram. Planen begränsas till `MAX_SWITCHES_PER_PLAN` (3) byten — inte av matematiska skäl utan beteendemässiga: byten är gratis i ISK skattemässigt men inte beteendemässigt (Barber & Odean 2000: mest aktiva femtedelen småsparare underpresterade ~6,5 pp/år). Listan är rangordnad så att man kan följa bara det första bytet. Säljkandidaten tas ur den mest **överviktade** nivån (högst avgift bland flera innehav på samma nivå), köpkandidaten ur den mest **underviktade**: bland ISIN-verifierat köpbara fonder hos Handelsbanken (samma mekanik som ANA-9) väljs **översta kvartilen på 12-månadersavkastning, därefter lägst avgift**. Kandidaterna hämtas från källan **sorterade på högst 12-månadersavkastning** och rangordnas om lokalt: källans sida rymmer bara 20 träffar (TP-21), så sorteringen avgör vilken ände av risknivån som ens blir synlig — hämtades den billigaste änden (som före issue #75) kunde kvartilregeln bara särskilja de billigaste fonderna inbördes och den uppmätta avkastningskanten uteblev helt — grundat i ett flerperiodstest på 97 fonder över sex års NAV-historik (topp-kvartilen gav +1,7–2,6 procentenheter mot medianfonden, bättre i ~75 % av perioderna), medan kortare/längre lookback-fönster och riskjustering testades och förkastades (issue #72). Är fördelningen i linje ges ingen plan. Texten anger uttryckligen osäkerheten: rätt ~3 gånger av 4, uppmätt spann −10 till +13 procentenheter, en risknivå och ett marknadsklimat, samt överlevnadsbias som blåser upp resultatet. Varje förslag sparas med datum, plats i planen, belopp och NAV-utgångsläge (`SuggestionRecord`) så utfallet kan mätas mot att ha behållit innehavet — genuin användardata, ingår i backup-kontraktet (NFR-1). Bakgrundsifyllningen (kandidatsökning, köpbarhetsverifiering och facit-inspelningen) rider på den befintliga periodiska worker-backstopen (samma princip som HEM-6) — aldrig vid appstart eller manuell uppdatering; Hem läser bara den senast inspelade planen, räknar aldrig om den live (issue #70); sedan issue #91 läses uttryckligen bara rader med `kind = RISK_PLAN`, så ett avgiftsbyte (ANA-9) som spelats in samma dygn aldrig kan presenteras som ett steg i en plan det inte ingick i. Varje förslag kan **markeras som genomfört** (`SuggestionRecord.followed`) direkt på Hem — markeringen utför inget byte, den registrerar att användaren gjorde det, och är det som låter facit (SET-5) mäta följda råd separat från alla givna råd. Samma markering finns även på facit-sidan, eftersom planen på Hem försvinner efter `PLAN_TTL_DAYS` och ett äldre förslag annars aldrig gick att markera i efterhand (issue #80). Planen räknas om av bakgrundsjobbets backstop (var 12:e timme) **och på begäran** (issue #88): riskkortet har en knapp **"Räkna om bytesplanen"** — visad bara när en plan alls kan ges (satt profil + ISK/KF), släckt medan en körning pågår, med bakgrundsindikatorn (NAV-6) som kvitto — och en omräkning startas automatiskt när målfördelningen (SET-3) eller kontotypen (SET-4) ändras. Skanningen körs alltid via `WorkManager` under ett **eget** unikt arbetsnamn, så den manuella "Uppdatera nu" (SET-2, `REPLACE`) inte kan avbryta den, och koalesceras (`KEEP`) så upprepade tryck aldrig ger två parallella skanningar. Avviker ingen nivå tillräckligt skrivs inget nytt förslag — kortet ser då likadant ut efteråt, och appen påstår aldrig motsatsen. |
+| HEM-9 | Hem visar som **tredje kort** ett diagram över portföljens **totala avkastning i procent över tid** — samma mått som totalkortets procentsiffra ((värde − nettoinvesterat) / nettoinvesterat med FIFO-anskaffningsvärde, TP-15), räknat om för varje känd NAV-dag sedan första köpet (`PortfolioReturnSeriesCalc`, `domain/usecase/`). Kurvan och totalkortet svarar per definition identiskt på samma fråga; ett regressionstest jämför sista punkten mot `PortfolioCalc.totalGainLossFraction`, eftersom två siffror på samma skärm som glider isär är värre än en. Tidslinjen är **kända NAV-dagar**, inte kalenderdagar — en helg är inte en dag portföljen rörde sig. Samma periodväljare som fondens diagram (1 mån / 3 mån / 1 år / 3 år / 5 år / Allt, issue #51) via den delade `FundLineChart` (regel 4), utökad med ett **procentläge**, där y-axeln pads runt kurvans egna min/max precis som kursdiagrammet (issue #49) — tecknet syns på axeletiketterna (`+12,3 %` / `−5,0 %`), så nollinjen behöver inte tvingas in i bilden och gör det inte heller. Kurvan **nollställs mot den visade periodens första dag** (`ChartSeriesNormalizer.rebaseReturns`), så diagrammet svarar på "hur gick det under den här perioden?". Med **Allt** vald är basdagen första köpet, där avkastningen per definition är 0 %, och kurvan är då oförändrad — slutpunkten är fortfarande exakt totalkortets procent, verifierat med ett regressionstest mot `PortfolioCalc.totalGainLossFraction`. Måttet är **kassaflödesokänsligt** precis som HEM-1 — en insättning flyttar kvoten utan att någon avkastning skett — och köpdagarna markeras därför i diagrammet. Saknar ett innehav NAV en viss dag utesluts det ur **både** värde och investerat den dagen och kurvan markeras **delvis osäker** (HEM-2), aldrig som ett 0; en fond som sedan sålts av helt räknas ändå med för de dagar den faktiskt ägdes. Räcker historiken inte till en enda punkt visas en förklarande text i stället för ett tomt diagram. Issue #96. |
+| HEM-10 | HEM-9:s diagram innehåller en **indexjämförelse som skuggportfölj** — samma insättningar och uttag, samma dagar och samma kronbelopp, lagda i referensfonden i stället, mätt med **samma** formel som portföljkurvan. Det är en verklig jämförelse, inte två kurvor bredvid varandra: kurvorna delar kassaflöden, så skillnaden mellan dem är alternativkostnaden för de egna fondvalen och inte en artefakt av när pengarna sattes in. Appen har ingen indexdata, bara fond-NAV (TP-9/TP-14) — referensen är därför **indexfonder som proxy**, valda av `IndexBenchmarkSelector` (`domain/usecase/`) ur källans katalog: indexfond, rätt fondtyp enligt källans egna taggar (TP-21, omfiltrerat lokalt eftersom källan ignorerar okända filter tyst), lägst `totalFee`, med deterministiska tie-breaks (längst historik, därefter ISIN). Sedan issue #101 är referensen en **viktad blandning som speglar portföljens egen aktieandel**, härledd ur `PortfolioExposureCalc.byType` (POR-9): en 100 %-ig aktiereferens mot en portfölj med räntefonder svarar inte på "valde jag bra fonder?" utan på "hade jag mer aktier än referensen?", och det svaret ges av marknadens riktning snarare än av användarens beslut. **Blandfonder och okänd fondtyp klassificeras inte** — de räknas varken som aktier eller räntor, andelen beräknas över klassificerat värde, och överstiger den oklassificerade delen 10 % säger kortet det rakt ut; att gissa 50/50 på en blandfond vore samma sorts tysta antagande som HEM-5 vägrar göra för okänd avgift. Vikterna är **dagens**, inte historiska (fondmetadata finns bara i nuform), vilket kortet säger. En vikt under 5 % tas bort och resten normaliseras om — en referensdel på någon procent flyttar inte kurvan mätbart men kostar ett fondval och en full historikbackfill vid varje skanning. Saknas en räntekandidat i katalogen läggs vikten på aktiedelen, markerat. **Användaren kan välja referens själv** (issue #102): Inställningar har en *Jämförelsefond*-rad som öppnar fondsök i valläge (samma skärm, `onPickFund`, regel 4) och ett eget val vinner alltid över appens — det ersätter hela blandningen, för väljer man en fond är det den man vill mätas mot, inte den plus appens gissning om resten. Valet lagras i ett **eget fält** (`chosenBenchmarkIsin`), skilt från den härledda blandningen: annars gick det inte att skilja "användaren valde X" från "appen råkade välja X", och nästa skanning hade kunnat skriva över ett medvetet val — samma distinktion som SET-3 gör mellan enkätens förslag och den sparade fördelningen. Det är **genuin användardata** och ingår därför i backup-kontraktet (NFR-1/SET-6), till skillnad från appens egen blandning. Katalogens träffar saknar ISIN, så det slås upp vid valet; går det inte sparas ingenting och raden säger varför, eftersom ett fond-id inget annat lager kan använda hade gett ett val som såg gjort ut men aldrig gav en kurva. Ett sparat eller rensat val startar en skanning direkt (samma princip som issue #88), annars hade den valda fondens historik dröjt till nästa backstop. Appens eget val **sparas** (`PreferencesRepository.benchmark`) i stället för att härledas på nytt vid varje läsning — annars kunde en katalogändring byta referens och rita om historiken utan att något hänt i portföljen. En referens sparad i issue #96:s äldre skalära form läses som en enkomponentsblandning, aldrig kastad. Det är **härledd cache-metadata, inte ett användarval**, och ligger därför utanför backup-kontraktet (NFR-1), samma kategori som `lastPriceSyncEpochMillis`/`fundFilterVocabulary`. Referensen namnges alltid i teckenförklaringen och i texten under diagrammet (UI-3), en blandning med sina andelar ("70 % X / 30 % Y") — jämförelsen namnger sin egen referens, den påstår aldrig att den är "index" i abstrakt mening. Kan appen inte namnge varje del ges ingen jämförelse alls: ett ISIN i teckenförklaringen är obegripligt, och en onämnd referens går inte att bedöma. Val och hämtning görs av bakgrundsjobbet (`FundPriceUpdateWorker.scanBenchmark`), aldrig av en hämtning när Hem öppnas — men **på begäran första gången**: saknas referensfond ber Hem om en skanning direkt (`triggerBenchmarkScan`, eget arbetsnamn med `KEEP`, högst en begäran per skärmlivstid), i stället för att vänta på backstopen. Enbart backstopen hade betytt upp till ett halvt dygn utan indexkurva efter installation eller uppgradering, utan att något var fel. Därefter är valet sparat och backstopen håller bara kursen färsk, samma budgetprincip som HEM-6/HEM-8. Når historiken inte tillbaka till **varje** transaktionsdag ges ingen kurva alls: en skuggportfölj som saknar en insättning har inte samma kassaflöden, och portföljkurvan visas då ensam med en förklaring. Båda kurvorna **nollställs mot periodens första gemensamma dag** (HEM-9), så avståndet mellan dem är just den periodens skillnad och inte historiens. Utan det ritas två ackumulerade avkastningar sedan respektive start som parallella band på olika höjd — en portfölj på +45 % under en indexfond på +75 % — och den fråga en enmånadsvy ställer, vilken av dem växte mest den här månaden, går inte att läsa ur bilden. Nollställningen räknar **kvot**, inte skillnad i procentenheter: +100 % → +110 % är en uppgång på 5 % under perioden, inte 10 procentenheter. Serierna indexeras däremot inte till 100 som i ANA-11 — de är redan samma enhet, och skalan ska förbli läsbar som procent. Skatt, courtage och att bytet i verkligheten kostat något ingår inte, vilket texten säger rakt ut. Issue #96. |
 
 ---
 
@@ -148,16 +159,427 @@
 | ANA-6 | Fonddetalj visar en **neutral kontexttext** härledd ur analysen (`AnalysisGuidance`, ett rent domänlager som `FundAnalysisCalc`) som sätter signalerna i sammanhang för en nybörjare — t.ex. att kursen ligger under toppen men fortfarande över GAV, eller att en djup nedgång kan tala för att låta tiden verka snarare än att agera — samt en kort **ordlista** ("Så funkar analysen": NAV, GAV, CAGR, glidande medelvärde, avstånd från topp, tidshorisont, ränta-på-ränta, volatilitet, Sharpe-kvot). Saknar analysen beräknad status (otillräcklig data, ANA-4) visas ingen kontexttext. ~~Språket är alltid förklarande, aldrig rådgivande (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* |
 | ANA-7 | Analys visar två **riskmått** per innehav, beräknade ur NAV-historiken med fasta konstanter (dokumenterade i `FundAnalysisCalc`): **volatilitet** (annualiserad standardavvikelse på dagsavkastningar, ×√252) och **Sharpe-kvot** ((annualiserad avkastning − fast riskfri ränta 0 %) / volatilitet). Räcker inte historiken (färre än ~60 dagsavkastningar) markeras måttet som otillräcklig data i stället för att gissas (ANA-4); är volatiliteten 0 saknas Sharpe (ingen division med noll). Måtten visas via delade `PeriodRow`/`ExpandableInfoRow` med utfällbar förklaring och ordlisttermer (ANA-5/ANA-6). ~~Neutralt språk, aldrig rådgivning (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* Inget nytt persisterat fält (härlett ur befintlig kurshistorik). |
 | ANA-8 | En fjärde signal, **vinstsignal (S4)**, flaggar när ett innehavs orealiserade vinst mot GAV är minst **+50 %** (fast tröskel, dokumenterad i `FundAnalysisCalc`). Till skillnad från S1–S3 (ANA-2) är det ingen risksignal — den deltar **inte** i den sammanslagna statusen (ANA-3) och visas med en egen markering (`ProfitTakeBadge`, `ui/components/`, regel 4), skild från risk-trafikljuset, eftersom paletten (UI-1) redan har både den gula och gröna nivåfärgen upptagna. Otillräcklig data (samma gate som GAV-nyckeltalet, ANA-1) visar ingen signal (ANA-4). ~~Aldrig ett köp-/säljråd (ANA-3).~~ *(borttaget, issue #59 — se ANA-9)* issue #26. |
-| ANA-9 | Fonddetalj föreslår för ett kvarvarande innehav **billigare, likvärdiga alternativ** — appens första rådgivande funktion (se ANA-3/ANA-5/ANA-6/ANA-7/ANA-8). En kandidat visas bara vid **identisk taggmängd och samma indexstatus** som innehavet (TP-21), **strikt lägre totalavgift** och ISIN-verifierad köpbarhet hos Handelsbanken (`FundNameMatcher`, samma princip som `ImportFundMatcher`, TP-13/issue #45) — rankad på **årsbesparing i kronor** (avgiftsskillnad × innehavets nuvarande värde, `FeeComparisonCalc`, `domain/usecase/`). Köpbarheten verifieras budgeterat (högst tre kandidater visas, högst tio prövas) och asynkront — jämförelsen blockerar aldrig Fonddetalj. Innehav utan ISIN, utan metadataträff eller utan känd avgift visar "kunde inte jämföras" (ANA-4-principen); inga kvalificerade alternativ visar ett lugnt "redan bland de billigaste" i stället för ett tomt kort. Kortet anger uttryckligen vad jämförelsen omfattar (avgift vid identisk exponering, inte innehav/avkastning/risk) och vad den inte gör. Resultatet (billigaste alternativets ISIN och avgift, plus jämförelsedatum — aldrig ett kronbelopp) persisteras på fondens `fund_metadata`-rad (Room 8→9, `cheapestAlternativeIsin`/`cheapestAlternativeFee`/`comparisonResolvedAtEpochDay`) varje gång jämförelsen körs, vilket driver portföljens samlade besparingspotential på Hem (HEM-6, issue #61). |
+| ANA-9 | Fonddetalj föreslår för ett kvarvarande innehav **billigare, likvärdiga alternativ** — appens första rådgivande funktion (se ANA-3/ANA-5/ANA-6/ANA-7/ANA-8). En kandidat visas bara vid **identisk taggmängd och samma indexstatus** som innehavet (TP-21), **strikt lägre totalavgift** och ISIN-verifierad köpbarhet hos Handelsbanken (`FundNameMatcher`, samma princip som `ImportFundMatcher`, TP-13/issue #45) — rankad på **årsbesparing i kronor** (avgiftsskillnad × innehavets nuvarande värde, `FeeComparisonCalc`, `domain/usecase/`). Köpbarheten verifieras budgeterat (högst tre kandidater visas, högst tio prövas) och asynkront — jämförelsen blockerar aldrig Fonddetalj. Innehav utan ISIN, utan metadataträff eller utan känd avgift visar "kunde inte jämföras" (ANA-4-principen); inga kvalificerade alternativ visar ett lugnt "redan bland de billigaste" i stället för ett tomt kort. Kortet anger uttryckligen vad jämförelsen omfattar (avgift vid identisk exponering, inte innehav/avkastning/risk) och vad den inte gör. Resultatet (billigaste alternativets ISIN och avgift, plus jämförelsedatum — aldrig ett kronbelopp) persisteras på fondens `fund_metadata`-rad (Room 8→9, `cheapestAlternativeIsin`/`cheapestAlternativeFee`/`comparisonResolvedAtEpochDay`) varje gång jämförelsen körs, vilket driver portföljens samlade besparingspotential på Hem (HEM-6, issue #61). Samtliga **visade** alternativ sparas på fondens metadatarad (Room 13→14, `shownAlternativeIsins`, rangordnade som i kortet) och spelas in som förslag i facit (`SuggestionRecord` med `kind = FEE`, SET-5, issue #91/#93) — med samma NAV-utgångsläge som bytesplanens rader, men avseende **hela** positionen (ett avgiftsbyte byter andelsklass/fond, det storleksbestäms inte till ett gap som HEM-8:s byten). Varje alternativ får en egen rad, inte bara det billigaste: de är varandras alternativ och vilket som helst kan vara det användaren byter till — spelades bara det översta in gick de övriga aldrig att kvittera. Inspelningen görs av bakgrundsskanningen (`FundPriceUpdateWorker.scanComparisons`) för **alla** innehav med ett sparat jämförelseresultat, oavsett vem som räknade fram det, och är budgeterad per körning (störst innehavsvärde först). Den får uttryckligen **inte** hänga på omskanningens TTL-urval: Fonddetalj kör samma jämförelse vid varje skärmöppning och stämplar `comparisonResolvedAtEpochDay`, så just de fonder användaren tittar på blev då permanent överhoppade och kvitteringen dök aldrig upp för dem (issue #93). Ett råd spelas in för att det **gavs**, inte för att det råkade räknas om. Saknas endera fondens NAV spelas den raden **inte** in — utfallet mäts mot just de kurserna, och en rad som aldrig kan utvärderas skulle ändå räknas som ett givet råd; övriga alternativ spelas in ändå. Dedupspärren per dygn nycklas på sorten, så ett riskplansbyte och ett avgiftsbyte för samma fondpar aldrig blockerar varandra. |
+| ANA-10 | Fonddetalj **leder med bytesbeslutet** (issue #85): under rubriken (fondnamn + säljsignal-status ANA-3 + risknivå UI-10) och den neutrala kontexttexten (ANA-6) ligger ett bytesavsnitt som samlar båda källorna appen har till ett bytesförslag för fonden — riskprofilens inspelade bytesplan (HEM-8) i **båda** riktningarna ("Byt till X" när fonden är säljkandidat, "Byt hit från Y" när den är köpkandidat, rangordning ur `planIndex`) och de billigare, likvärdiga alternativen (ANA-9). Varje förslag är en utfällbar rad (`ExpandableInfoRow`) med namn, risknivå och det tal som avgör (bytesbelopp respektive årsbesparing); utfälld visar den motiveringen och jämförelsediagrammet (ANA-11). Finns inget förslag anges **varför** — fonden ägs inte, eller planen kräver ISK/KF och en avvikelse mot målfördelningen — aldrig en tom yta. Analysens nyckeltal (ANA-1/ANA-7), signalförklaringarna (ANA-5) och ordlistan (ANA-6) ligger **hopfällda** i delade `ExpandableSection` under diagrammet. Fortfarande ingen åtgärdsknapp: appen genomför aldrig ett byte. Ett förslag ur bytesplanen kan **kvitteras som genomfört** direkt på fondkortet (samma delade `FollowedToggleRow` och samma inspelade rad som Hem och Facit skriver mot, SET-5) — kvitteringen ligger utanför den utfällbara raden, så den går att göra utan att först fälla ut jämförelsen (issue #90). Sedan issue #91 kan även **varje visat billigare alternativ** (ANA-9) kvitteras — men bara det som har en inspelad rad att skriva mot. Listan räknas om live vid varje skärmöppning medan inspelningen sker i bakgrundsskanningen, så ett alternativ som just dykt upp saknar rad; då visas **ingen** kryssruta för raden, aldrig en kryssruta som tyst inte skriver någonstans (ANA-4-principen). |
+| ANA-11 | Ett utfällt bytesförslag (ANA-10) visar ett **jämförelsediagram** med innehavets och den föreslagna fondens kursutveckling i samma `FundLineChart` (regel 4 — komponenten utökades med flera serier, ingen ny diagramvariant), **indexerade till 100** vid periodens första gemensamma dag (`ChartSeriesNormalizer`, `domain/usecase/`); rå NAV går inte att jämföra mellan två fonder på en gemensam y-axel. Har kandidaten kortare historik beskärs jämförelsen till den gemensamma perioden och märks som **delvis** (samma princip som HEM-2/ANA-4). Kandidatens kurshistorik hämtas **först när förslaget fälls ut** (ett nätverksanrop per kandidat, TP-14) och hålls bara i minnet — den skrivs aldrig till kurscachen, som är sanningen om bevakade fonder. Går den inte att hämta sägs det ut i stället för att ett tomt diagram ritas. |
 
 ---
 
 ## Följdkrav (planerade — se GitHub-issues)
 
-Drive-backup och Google-inloggning läggs till som egna krav i respektive avsnitt när de
-implementeras — väntar på att ett Firebase-projekt sätts upp för fonder (`google-services.json`).
+Google-inloggning (TP-6) läggs till som eget krav när det implementeras — väntar på att ett
+Firebase-projekt sätts upp för fonder (`google-services.json`). Molnbackupen (TP-7 steg 2) väntar
+på en OAuth-klient med Drive API och `drive.appdata`-scope; den lokala rundturen finns sedan SET-6
+och formatet ändras inte av att transporten byts. Konsolstegen för båda — Firebase-projekt,
+SHA-1 för debug- och releasenyckeln, medgivandeskärm och Drive API — är dokumenterade i
+[docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md), tillsammans med releasesigneringen; beroendena är
+deklarerade i versionskatalogen men avsiktligt inte inkopplade, eftersom `google-services`-pluginet
+fäller bygget så länge `app/google-services.json` saknas.
 
 ## Historik
+
+- **Procenten överst hade ingen historik och ingen måttstock (#96):** Nya rader **HEM-9**
+  (avkastningskurva som tredje kort) och **HEM-10** (indexjämförelse som skuggportfölj).
+  Ingen schemaändring, ingen ny persisterad användardata.
+
+  1. **En siffra utan väg dit.** Totalkortet visade "+12,4 %" och periodkortet tre
+     punktmätningar (HEM-1). En portfölj som legat still på +12 % i ett halvår och en som just
+     återhämtat sig från −8 % såg exakt likadana ut. Kurvan är samma mått som siffran, räknat om
+     per NAV-dag — inte ett nytt avkastningsbegrepp bredvid det gamla, vilket ett regressionstest
+     mot `PortfolioCalc.totalGainLossFraction` håller fast vid.
+  2. **Alternativkostnaden saknades helt.** HEM-5/HEM-6 säger vad avgifterna kostar, men appen
+     kunde inte svara på om de egna fondvalen var värda dem. Skuggportföljen lägger *samma*
+     kassaflöden i en indexfond: delade insättningsdagar gör skillnaden mellan kurvorna till ett
+     svar på just den frågan, i stället för en artefakt av när pengarna sattes in. En rå
+     indexkurva bredvid hade jämfört ett kassaflödespåverkat mått med ett som inte är det.
+  3. **Ingen indexdata finns — bara fond-NAV.** Referensen är därför en indexfond som proxy, och
+     det är också det ärligare alternativet: en fond man kunnat köpa, med sin avgift redan i
+     kursen, snarare än ett teoretiskt index utan kostnader. Fonden namnges alltid (UI-3).
+  4. **Valet sparas, för att kurvan inte ska rita om sig själv.** Ett urval som härleds vid varje
+     läsning kan byta fond så fort källans katalog ändras, och hela jämförelsehistoriken hade
+     ändrats utan att något hänt i portföljen. `benchmarkIsin` är härledd cache — samma kategori
+     som `fundFilterVocabulary` — och ligger därför utanför backup-kontraktet (NFR-1). Den dagen
+     användaren själv får välja blir det ett annat, genuint fält som ska in i kontraktet.
+  5. **Kurvorna nollställs mot den visade perioden (efterjustering).** Först ritades två
+     ackumulerade avkastningar sedan respektive start rakt av, och i en enmånadsvy blev det två
+     parallella band på olika höjd — portföljen på +45 %, indexfonden på +75 % — där periodens
+     faktiska skillnad inte gick att läsa. Båda nollställs nu vid periodens första gemensamma
+     dag, som kvot och inte som skillnad i procentenheter. Med "Allt" är basdagen första köpet
+     (0 % per definition), så HEM-9:s koppling till totalkortets procent består.
+  6. **Serierna indexeras inte till 100 som i ANA-11.** Indexering löser att två *kurser* inte
+     går att jämföra på en gemensam y-axel; två avkastningskurvor är redan samma enhet, och att
+     indexera dem hade räknat bort just den skillnad jämförelsen finns för. Y-axeln delar däremot
+     kursdiagrammets intervallregel (#49) — den pads runt kurvans egna min/max i stället för att
+     tvinga in nollinjen, så rörelsen fyller diagramhöjden; plus eller minus läses av på
+     etiketternas tecken.
+  7. **Referensfonden fick en väg fram redan första dagen.** Först satte bara backstopen
+     skanningsflaggan, så en ny installation visade "Ingen indexjämförelse än" i upp till ett
+     halvt dygn utan att något var fel. Hem ber nu om skanningen när ingen fond är vald — en
+     gång, under eget arbetsnamn — och betalar därmed engångskostnaden när den faktiskt behövs.
+  8. **Tre hämtningar blev en.** Hem läste redan samma fonds kurshistorik två gånger per
+     emission (dag/vecka/månad + analysen); kurvan behövde en tredje. De slogs ihop till en
+     hämtning med det vidaste fönstret, där varje läsare klipper till sitt eget i minnet —
+     analysen räknar volatilitet på hela listan den får (ANA-7) och måste därför få exakt sitt.
+
+- **Avgiftsbytena spelades aldrig in för de fonder man faktiskt tittar på (#93):** **ANA-9**
+  utökad (alla visade alternativ sparas och spelas in), **ANA-10** utökad (kryssruta på varje
+  alternativ). Room 13→14: `fund_metadata.shownAlternativeIsinsJson`.
+
+  1. **Buggen.** #91 hängde inspelningen på `scanComparisons` urval, som bara tar innehav vars
+     jämförelse hunnit bli **inaktuell** (30 dygn). Men Fonddetalj kör samma jämförelse vid
+     varje skärmöppning och stämplar `comparisonResolvedAtEpochDay` — alltså blev just de
+     fonder användaren öppnar permanent överhoppade, och kvitteringen dök aldrig upp för dem.
+     Inspelningen hängde på "rådet räknades om" när den skulle hänga på "råd gavs".
+  2. **Två pass med skilda urval.** Omskanningen är dyr och behåller sin TTL-gate och sin
+     budget. Inspelningen går på **alla** innehav med ett sparat resultat, oavsett vem som
+     räknade fram det, med en egen budget i antal rader per körning.
+  3. **Alla visade alternativ, inte bara det billigaste.** De tre är varandras alternativ och
+     vilket som helst kan vara det man byter till; bara det översta gick att kvittera. Därför
+     sparas hela den visade listan på metadataraden — det billigaste ensamt räckte inte som
+     underlag, och de övriga går inte att återskapa i efterhand.
+  4. **Gamla rader gissar inte.** Migreringen sätter `'[]'`, inte en lista härledd ur
+     `cheapestAlternativeIsin`: en gammal rad vet bara vilket alternativ som var billigast, och
+     att fylla på med det hade sett ut som att jämförelsen visade ett alternativ när den visade
+     tre. Nästa jämförelse fyller listan.
+
+- **Avgiftsbytena hamnade i facit (#91):** **ANA-9** utökad (inspelning), **ANA-10** utökad
+  (kvittering på fondkortet), **SET-5** utökad (två skilda summeringar), **SET-6**/**NFR-1**
+  utökade med det nya fältet. Room 12→13: `suggestion_records.kind`.
+
+  1. **Halva rådgivningen mättes inte.** ANA-9 har gett konkreta bytesråd sedan #59, men bara
+     HEM-8:s riskplansbyten spelades in. Facit kunde alltså inte säga något alls om den sortens
+     råd — och kryssrutan #90 medvetet lämnade utanför saknade en rad att skriva till.
+  2. **Sorten är data, inte en etikett.** `SuggestionKind` (`RISK_PLAN`/`FEE`) styr både vilken
+     summering raden räknas i och vilka vyer som ser den. Migreringen sätter `RISK_PLAN` på alla
+     befintliga rader — varje rad som fanns då *är* ett bytesplansbyte.
+  3. **Fyndet under förfiningen:** `observeLatestBatch` valde dygn och körning med `MAX()` utan
+     hänsyn till sorten. Det vanligaste dygnet är just det där planen inte gav något men
+     avgiftsskanningen spelade in en rad — då hade Hem visat avgiftsbytet som "1. Sälj X → Köp Y"
+     i en plan det aldrig ingick i, eller ingen plan alls. Filtret sitter därför i **alla tre**
+     nivåerna av frågan, och dedupspärren `existsForDay` nycklas på sorten av samma skäl.
+  4. **Ingen kryssruta utan rad.** Alternativlistan räknas om live vid varje skärmöppning medan
+     inspelningen sker i bakgrundsjobbet, så asymmetrin är väntad. Ett alternativ utan inspelad
+     rad visas utan kvittering i stället för med en som tyst inte skriver någonstans.
+  5. **Måtten slås aldrig ihop.** Ett avgiftsbyte görs för en känd besparing, ett riskplansbyte
+     för ett förväntat utfall — samma skäl som redan höll "alla" och "enbart genomförda" isär.
+
+- **"Genomförd" även på fondkortet (#90):** **ANA-10** utökad. Bytesplanens förslag gick att
+  kvittera på Hem och i Facit men inte på fondkortet — trots att det är samma inspelade rad,
+  och trots att det är på fondkortet man fattar beslutet. Facit (SET-5) mäter *följda* råd
+  separat från alla givna råd, så en oåtkomlig kvittering är en systematisk underrapportering,
+  inte bara en saknad knapp.
+
+  1. **Delad komponent i stället för en tredje kopia.** Kryssrutan fanns redan i två egna
+     varianter (Hem, Facit) med samma `toggleable`-på-hela-raden-resonemang. Den bor nu i
+     `ui/components/FollowedToggleRow` och alla tre skärmarna använder den (regel 4).
+  2. **Utanför den utfällbara raden.** `ExpandableInfoRow`s rubrik är en `clickable` som slår
+     ihop sina barns semantik — en kryssruta där hade blivit en del av "fäll ut"-noden i
+     stället för en egen växlare, och ett klick hade fällt ut raden i stället för att kvittera.
+  3. **ANA-9:s billigare alternativ är medvetet utanför.** De spelas aldrig in som
+     `SuggestionRecord`, så det finns ingen rad att skriva flaggan till — att göra dem
+     kvitterbara kräver ny persisterad data och är en egen avvägning.
+
+- **Bytesplanen på begäran (#88):** **HEM-8** utökad (knapp på riskkortet + automatisk omräkning),
+  **SET-3**/**SET-4** utökade med sina respektive triggers.
+
+  1. **Bara backstopen räknade.** `KEY_SCAN_SWITCH_PLAN` sattes uteslutande av den periodiska
+     körningen var 12:e timme. Den som just svarat på riskprofilenkäten eller valt ISK/KF fick
+     alltså "ingen plan" i upp till ett halvt dygn — utan att något var fel och utan att kunna
+     göra något åt det.
+  2. **Två vägar, inte en.** Händelsestyrt när planens *enda* användarstyrda indata ändras
+     (målfördelning, kontotyp), plus en uttrycklig knapp för allt annat som kan ha ändrats
+     (nya köp, kursrörelser). Båda går genom samma nya `triggerSwitchPlanScan`.
+  3. **Eget unikt arbetsnamn.** "Uppdatera nu" (SET-2) kör `REPLACE` under sitt namn och hade
+     annars kunnat avbryta en pågående skanning mitt i — och tvärtom. `KEEP` på det nya namnet
+     gör dessutom ett andra tryck till en no-op i stället för en andra dyr körning.
+  4. **`KEY_FORCE` följer med.** `runScans` gör ingenting om kursuppdateringen inte lyckades,
+     och `refreshAll` hoppar över allt som redan är färskt. Utan force hade jobbet rapporterat
+     framgång utan att ha räknat om något.
+  5. **Tystnad är ett giltigt svar.** Avviker ingen nivå ≥ `MIN_GAP_PP` skrivs inget förslag.
+     Knappen visar därför inget "klart"-kvitto som skulle antyda att ett råd räknats fram —
+     bakgrundsindikatorn (NAV-6) är kvittot, och den förklarande texten står kvar.
+
+- **Fondkortet blev ett beslutsstöd (#85):** Nya rader **ANA-10** (bytesavsnitt överst, resten i
+  foldouts), **ANA-11** (jämförelsediagram mot föreslagen fond) och **UI-10** (risknivå överallt
+  en fond visas); **NAV-2** ändrad — den radvisa kurstabellen är struken.
+
+  1. **Beslutet låg utspritt.** Säljsignalen stod överst i analysen, de billigare alternativen
+     långt ned, och riskprofilens bytesplan bara på Hem — fast det är den enda funktion som
+     namnger vilken fond man ska sälja och vilken man ska köpa. Frågan man öppnar kortet för
+     ("ska jag byta, och till vad?") krävde alltså tre olika vyer. Nu samlas båda källorna i ett
+     avsnitt överst, och `SwitchPlanResolver` (utbruten ur `HemViewModel`) gör att fondkortet och
+     Hem läser samma plan med samma regler — två kopior hade kunnat ge två olika råd om samma byte.
+  2. **Risknivån fanns redan, men visades aldrig per fond.** Den låg i `FundMetadata.risk` och
+     användes för att *räkna* (HEM-7/HEM-8) utan att någonsin visas, så ett bytesförslag gick inte
+     att bedöma. Den delade `RiskBadge` bär siffran i text, aldrig som färg — paletten har redan
+     trafikljuset upptaget av ANA-3 och vinstsignalen av ANA-8.
+  3. **Ett förslag utan kurva måste tas på tro.** Jämförelsediagrammet indexerar båda fonderna
+     till 100 vid periodens första gemensamma dag; utan indexering är kurvorna oläsbara
+     tillsammans (12 kr mot 1 400 kr). Kandidatens historik hämtas lazily och hålls i minnet —
+     den skrivs medvetet **inte** till `fund_prices`, som är sanningen om bevakade fonder.
+  4. **Kurstabellen tillförde inget.** Flera tusen rader för en backfillad fond, med samma
+     information som diagrammet redan visar bättre. Borttagen, och NAV-2 struken i samma ändring.
+  5. **Ingen persisterad data ändras.** Allt läses ur befintliga tabeller (`fund_metadata`,
+     `suggestion_records`) eller hålls i minnet, så backup-kontraktet (NFR-1) och
+     `BackupSerializerTest`s fältvakt är oförändrade — ingen Room-migrering behövdes.
+
+- **Säkerhetskopiering till fil (#82):** Ny rad **SET-6** — backup-kedjan som `BackupRepository`
+  lovat sedan projektstart men aldrig levererat: stubben returnerade `Result.success(Unit)` utan
+  att göra någonting, så NFR-1 var ett löfte utan täckning. Under tiden hann data som inte går
+  att återskapa samlas: handinmatade och PDF-importerade transaktioner, riskprofilen, kontotypen
+  och hela facit-inspelningen — vars `followed` är ett *val* och inte en mätning.
+
+  1. **Steg 1 av TP-7, inte hela TP-7.** Molndelen kräver en OAuth-klient (Drive API, SHA-1 för
+     båda nycklarna, scope `drive.appdata`) som måste sättas upp för hand. Den lokala filen
+     kräver ingenting av det, och bygger ändå hela det som Drive sedan bara transporterar.
+     Kontraktet är därför en **sträng**, inte en `Uri` eller en fil: `LocalBackupRepository`
+     lämnar den till SAF i dag, Drive skriver samma sträng i morgon, formatet ändras inte.
+     Noteringen om att Firebase blockerade backupen är samtidigt rättad — Firebase behövs bara
+     för TP-6:s inloggning.
+  2. **Formatet är byggt på domänmodellerna, inte Room-entiteterna.** Entiteterna följer schemat
+     och ändras av migreringar; filformatet ska inte glida med dem. Ett fält som byter kolumnnamn
+     ska kräva ett medvetet beslut i `BackupPayload`.
+  3. **Fail closed på versionen.** `formatVersion` läses *innan* innehållet avkodas, så en fil
+     från en nyare app avvisas med ett eget felmeddelande i stället för att läsas in med de fält
+     den här versionen råkar känna igen. Utan den kontrollen hade dessutom en godtycklig
+     JSON-fil avkodats till en payload med bara defaultvärden — alltså en "lyckad" återställning
+     som tömmer allt.
+  4. **En fältvakt mot tyst förlust.** `BackupSerializerTest` låser formatets nyckelmängd per
+     modell. Läggs ett fält till i `Fund`/`Transaction`/`SuggestionRecord`/`RiskProfile` utan att
+     tas med går testet sönder — i stället för att fältet försvinner ur varje framtida
+     säkerhetskopia utan att någon märker det. Det är den enda mekanism som gör regel 1 svår att
+     bryta av misstag.
+  5. **Återställning ersätter, den slår inte ihop.** Det här är en återställning, inte en import:
+     merge dubblerar transaktioner utan väg tillbaka, och IMP-1/IMP-6 täcker redan det fallet.
+     Room-halvan körs i en transaktion så en halv återställning inte kan uppstå; DataStore skrivs
+     efter databasen, eftersom omvänd ordning hade gett återställda inställningar till en portfölj
+     som inte kom fram.
+  6. **Cachen står utanför i båda riktningarna.** `fund_prices`, `fx_rates` och `fund_metadata`
+     ingår inte i filen och töms inte av en återställning — en återställd fond behåller den
+     kurshistorik som redan finns lokalt, och resten hämtas om av backstopen.
+  7. **SET-1 fick sin väg tillbaka.** Farozonens text sa "molnbackup finns ännu inte"; nu
+     uppmanar den att exportera först. Rundturstestet kör tömningen mitt i backup → restore, så
+     det bevisar något annat än att en orörd databas är orörd.
+
+  Ingen Room-migrering: schemat är oförändrat. `StubBackupRepository` och dess TODO-lista är
+  borta — kontraktet står nu i `BackupPayload`, där det går att testa.
+
+- **Facit för bytesplanen (#80):** Ny rad **SET-5** — en egen undersida från Inställningar som
+  redovisar utfallet av HEM-8:s inspelade bytesförslag mot att ha behållit innehavet.
+  Inspelningen har funnits sedan #70/#75 men ingenting läste den: raderna växte med varje
+  backstop-körning, ingick i backup-kontraktet, gallrades efter två år — och försvann utan att
+  någonsin ha visats.
+
+  1. **Utfallsberäkningen** ligger i en ny ren, testbar `SwitchOutcomeCalc` (`domain/usecase/`),
+     i samma anda som `SwitchPlanCalc`: meravkastning = köpfondens kursutveckling sedan
+     förslagsdagen minus säljfondens, plus kronbeloppet på det belopp förslaget avsåg. Saknad
+     kurs ger *ej utvärderat*, aldrig 0 — annars hade "vi vet inte än" lästs som "bytet gav
+     ingenting". Ett NAV-utgångsläge på noll behandlas som saknad data i stället för att
+     divideras med.
+  2. **`followed` fick äntligen en skrivväg.** Kolumnen har funnits sedan tabellen skapades (Room 9→10) men
+     sattes aldrig av någon. Nu finns "Genomförd" både på Hems bytesplan och på facit-raden — den
+     senare därför att planen på Hem försvinner efter `PLAN_TTL_DAYS` och ett äldre förslag
+     annars aldrig gick att markera i efterhand. **Ingen migrering behövdes.**
+  3. **Två mått, aldrig ett.** Alla inspelade förslag mäter hur bra rådet var; enbart de
+     genomförda mäter vad det faktiskt gav. De slås aldrig ihop.
+  4. **Skärmen läser bara cachen.** `FundMetadataRepository.cachedMetadataFor` (ny, cache-bara)
+     slår upp fondnamnen och kurserna kommer ur den lokala kurscachen. Köpsidans NAV — fonder
+     appen aldrig ägt — fylls i budgeterat av `FundPriceUpdateWorker.scanOutcomeNavs` på den
+     befintliga backstopen, samma princip som HEM-6/HEM-8. En redovisningsvy ska aldrig kosta en
+     burst av nätverksanrop.
+  5. **`PeriodRow` fick `stackValue`** (regel 4) — kronbeloppet på egen rad under procenten, i
+     stället för en ny komponentvariant. Opt-in, så varje befintligt anropsställe renderar
+     exakt som förut.
+
+- **Kodgranskning av UI-lagret (#78):** Elva fynd i `ui/`, varav två som visade fel siffra
+  eller fel färg. Fyra nya krav (UI-6–UI-9) formaliserar det som saknades.
+
+  1. **Långa fondnamn klämde bort beloppet (UI-6).** `PeriodRow`s etikett saknade `weight`, och
+     en `Row` mäter oviktade barn i tur och ordning — ett fondnamn som fyllde raden lämnade noll
+     bredd till värdet, så HEM-5:s årsavgift och ANA-9:s besparing försvann ur vyn. Etiketten
+     kapas nu med ellips i både `PeriodRow` och `ExposureBar`.
+  2. **GAV-raden färgades grön även vid förlust (UI-3).** Raden skickade in GAV **per andel** —
+     ett pris, alltid positivt — i beloppsplatsen, och `PeriodRow` färgade efter beloppet. Ett
+     innehav 30 % under GAV visades som "−30,0 % · 100,00 kr" i grönt. Färgen tas nu ur
+     procenten, och GAV-priset står i etiketten i stället för på den plats som bär vinst/förlust
+     i kronor på varje annan rad.
+  3. **Tangentbordet täckte formulären (UI-7).** Appen kör `enableEdgeToEdge`, där IME är en
+     inset appen själv måste konsumera — `adjustResize` räcker inte på API 30+. Det fanns ingen
+     inset-hantering alls, så Spara-knappen i transaktionsformuläret låg under tangentbordet.
+  4. **Detaljskärmarna saknade rubrik och bakåtknapp (UI-8).** `TopAppBar` renderades bara för
+     toppnivåflikarna, och ingen skärm hade en egen `Scaffold`.
+  5. **"Databasen tömd" spelades upp igen.** Flaggan i `SettingsViewModel` nollställdes aldrig
+     och speglades lokalt via ett `LaunchedEffect` — meddelandet kom tillbaka vid varje rotation
+     och varje återbesök. Nu läses det ur tillståndet och kvitteras, och har därmed också en väg ut.
+  6. **Dialogtillstånd tappades vid rotation (UI-9).** Bekräftelsedialogerna för radering och
+     databastömning samt diagrammets valda period använde `remember`.
+  7. **Fondsök erbjöd fonder som redan bevakas.** "Tillagd" byggde bara på sessionens egna
+     tillägg; det härleds nu ur Room.
+  8. **Diagramkedjan räknades om vid varje kurstick.** Punktlistan sorterades och mappades om i
+     composition utan `remember`, vilket triggade periodfilter, `LaunchedEffect` och en ny
+     Vico-transaktion även när det visade fönstret var oförändrat.
+  9. **`DateField` läckte dialogen vid rotation** (`WindowLeaked`) och presenterade ett
+     skrivskyddat textfält utan aktiverbar åtgärd för skärmläsare. Dialogen stängs nu vid
+     `onDispose`, och komponenten presenteras som en knapp med etikett och värde.
+  10. **Fondsök skilde inte nätverksfel från "inga träffar".** Sedan #75 returnerar
+      `fetchFundCatalog()` null vid fel — signalen når nu UI:t som ett eget tillstånd.
+  11. **Kursdiagrammet var osynligt för skärmläsare (UI-3:s anda).** Vico-canvasen har nu en
+      `contentDescription` med vald period, antal punkter och kursspann.
+
+  Ingen persisterad data och ingen migrering — rent presentationslager.
+
+
+- **Tysta fel ur kodgranskningen av hela projektet (#75):** Inget nytt krav — buggar som alla
+  gjorde fel *utan att synas*. De sex första delar grundmönster: frånvaro av data behandlades
+  som ett svar.
+  1. **NAV-datum en dag fel, och varje måndagskurs borttappad (TP-14).** Avanzas
+     chart-stämplar är lokal midnatt i Stockholm, inte UTC — `AvanzaJsonParser` tolkade dem
+     som UTC, daterade varje kurs en dag för tidigt och lät helgfiltret från #39 kasta
+     måndagarna (de blev söndagar). Fondlista daterar samma fond rätt, så en fond som växlade
+     källa fick två olika NAV på angränsande dagar.
+  2. **`upsertFund` raderade ett bekräftat ISIN (NAV-2/TP-14).** `@Insert(REPLACE)` skrev hela
+     raden, så en fond från katalogen (`isin = null`) nollade det ISIN användaren själv skrivit
+     in — och därmed kurskedjan. Repositoryt slår nu ihop mot lagrad rad och bevarar
+     `isin`/`fondlistaFundId` när det inkommande värdet är null.
+  3. **Sparad avgiftsjämförelse tappades vid omhämtning (HEM-6/ANA-9).** `findByIsin`
+     returnerade källans livesvar, som aldrig bär appens härledda fält — jämförelsen låg kvar
+     i databasen men försvann på vägen ut, så Hem visade "0 av N jämförda" och 0 kr
+     besparingspotential trots en färsk jämförelse. Returnerar nu den lagrade raden.
+  4. **Nätverksfel tolkades som "fonden går inte att köpa" (ANA-9/HEM-8).** En misslyckad
+     kataloghämtning gav en tom katalog, som blev ett `false` och cachades i 30 dygn — en enda
+     offline-körning kunde tyst släcka både billigare-alternativ och hela bytesplanen en månad
+     framåt. `fetchFundCatalog` returnerar nu **null vid fel** (samma princip som
+     `fetchFundsForCompany`), och köpbarheten lämnas oavgjord i stället för att cachas.
+  5. **Fondbyte i transaktionsformuläret lämnade kvar föregående fonds kurs (NAV-4).** Fältet
+     nollas nu vid bytet och ett pågående uppslag avbryts — annars kunde en transaktion sparas
+     till fel fonds NAV, med tyst fel i GAV, realiserat resultat och all analys.
+  6. **En trasig inställningsfil låste appen på splash-skärmen (NFR-1).** DataStore saknade
+     `ReplaceFileCorruptionHandler`, och flödena i `PreferencesRepository` fångade inga
+     I/O-fel; en trunkerad fil (t.ex. efter en Auto Backup-återställning) kastade in i
+     `MainViewModel.themeMode`, som splash-skärmen väntar på. Nu återställs standard­värden
+     i stället, och Room-databasen förblir åtkomlig.
+
+  Därefter elva fel av medelgrad, i samma granskning:
+
+  7. **Riskavvikelsen på Hem räknades mot fel nämnare (HEM-7).** Målfördelningen summerar till
+     1, men den faktiska fördelningen kom från `PortfolioExposureCalc`, vars andelar divideras
+     med ett värde som *också* rymmer innehav med okänd risknivå — varje nivå såg därför
+     underviktad ut. Ny `PortfolioRiskCalc.actualAllocation` normaliserar mot det
+     klassificerade värdet, samma nämnare som riskmåttet redan använder.
+  8. **"Datum för första köp" avsåg fel position (POR-6).** Datumet togs ur *alla* fondens
+     transaktioner medan anskaffningsvärdet bara gäller kvarvarande lotter. En fond som sålts
+     av helt och köpts igen visade "investerat sedan" flera år tillbaka, och ANA-1
+     annualiserade "sedan köp" över år positionen inte funnits. `RemainingPosition` bär nu
+     den äldsta kvarvarande lottens datum.
+  9. **Offline-sorteringen förstod bara avgift (TP-21/ÖV-6).** Ett okänt `sortField` föll tyst
+     till namnsortering — bytesplanens kandidatfråga (`developmentOneYear`) gav offline
+     omvänt alfabetisk ordning, och eftersom sidan klipps till 20 rader *efter* sorteringen
+     kom nivåns bästa fonder aldrig med. Dessutom vände `asReversed()` även null-hanteringen,
+     så fonder med okänd avgift hamnade först i fallande ordning.
+  10. **Vinst-/förlustfärgerna följde systemets tema, inte appens (UI-1).** `ReturnColors`/
+      `StatusColors` läste `isSystemInDarkTheme()` i stället för det läge `FonderTheme`
+      faktiskt applicerade: valde användaren "Ljust" på en telefon i mörkt läge ritades varje
+      belopp och statusprick i en ljus lågkontrastfärg på vit bakgrund.
+  11. **Billigare-alternativ-kortet kunde utebli helt (ANA-9).** Jobbet låste på det första
+      icke-laddande tillståndet; för ett innehav med tom kurscache var analysen null just då
+      och kortet dök aldrig upp, trots att kurserna landade sekunder senare.
+  12. **Portföljvyn blockerades på nätverket (POR-1/POR-9).** Metadatauppslaget (ett
+      sekventiellt anrop per ISIN) låg inne i tillståndsflödet, så vyn stod kvar i laddläge
+      och visade "0,00 kr · Kurs saknas" så länge uppkopplingen hängde — trots att innehav
+      och värden fanns lokalt. Metadata hämtas nu i ett eget flöde och fyller på när den
+      landar.
+  13. **Ett fel på ett oanvänt anrop fällde hela kurshämtningen (TP-14).** `AvanzaPriceSource`
+      hämtade fondens valuta trots att punkterna alltid märks i kronor; svarade den endpointen
+      fel slutade fonden uppdateras.
+  14. **Ett otolkbart svar såg ut som "inga fonder" (TP-21/ÖV-6).** Fondlisteparsern gav en tom
+      sida i stället för null, så offline-fallbacken hoppades över: fondsöket visade tomt trots
+      full cache, och baslinjen för "källan ignorerade filtret" förgiftades till 0.
+  15. **HTML-parsningen körde på anroparens tråd (TP-18).** En backfill kan vara flera MB HTML
+      och startas från Fonddetalj/Portfölj/Fondsök — DOM-bygget frös UI:t. Parsningen ligger nu
+      på en bakgrundsdispatcher, som HTTP-anropet redan gjorde.
+  16. **Dubbeltryck importerade allt två gånger (IMP-1/NAV-4).** Varken importflödena eller
+      transaktionsformuläret hade någon spärr, och knappen släcktes först när allt var skrivet
+      — ett andra tryck gav dubbla andelar och dubbelt investerat belopp. Anropen är nu
+      idempotenta under pågående skrivning.
+  17. **"Töm databasen" lämnade kvar inspelade bytesförslag (SET-1).** `suggestion_records` är
+      genuin användardata (samma skäl som att den ingår i backup-kontraktet) men rensades
+      aldrig: Hem visade råd prissatta mot en portfölj som inte längre fanns, och dygnsdedupen
+      spärrade en nyberäknad plan. `fund_metadata`/`fx_rates` rensas fortsatt medvetet inte —
+      ren cache.
+
+  Slutligen resten av granskningens fynd, inklusive bytesplanskedjan:
+
+  18. **Bytesplanen räknade mot en omnormaliserad delportfölj (HEM-8).** Ett innehav utan känd
+      `totalFee` föll ur *hela* beräkningen — även ur nämnaren och ur sin egen nivås vikt. En
+      perfekt balanserad 50/50-portfölj såg då ut som 0/100 och fick ett byte som gjorde den
+      75/25. Avgiften krävs nu bara för att *sälja* en position, inte för att räkna med den.
+  19. **"Senaste inspelade planen" var hela senaste dygnet (HEM-8).** Backstopen kör var 12:e
+      timme, så två körningar landar samma dygn; dygnsdedupen spärrar bara identiska
+      sälj-/köp-par. Hem kunde därför visa två sammanslagna planer — samma fond såld två
+      gånger, två rader med samma rangordning. Nytt fält `batchEpochMillis` (migrering 11→12)
+      identifierar körningen; rader från före dess har 0 och grupperas per dygn som förut.
+  20. **Rangordningen i UI:t var listpositionen (HEM-8).** Föll byte 0 bort visades byte 1 som
+      "1." — fast planen är girig och sekventiell, så att följa byte 1 ensamt flyttar
+      portföljen *bort* från målet. `planIndex` bärs nu till UI:t, och saknas det första bytet
+      visas ingen plan alls.
+  21. **Hem reagerade inte på ändrad riskprofil eller kontotyp (SET-3/SET-4).** Värdena lästes
+      med `first()` inne i tillståndsflödet, så inget emitterades om vid en ändring — och
+      eftersom bottennavigeringen sparar skärmens tillstånd kunde SET-4-gaten stå kvar på det
+      gamla valet i upp till 12 timmar. Inställningarna ingår nu i flödet, och metadata hämtas
+      i ett eget flöde (samma fix som punkt 12 gav Portfölj).
+  22. **Skanningarna körde även när kursuppdateringen misslyckats (HEM-6/HEM-8).** De läste då
+      ur en cache workern precis bevisat att den inte kunde uppdatera, och spelade in ett
+      NAV-utgångsläge som var flera dagar gammalt — ett korrumperat facit som inte går att
+      rätta i efterhand. Dessutom kördes hela skanningen om vid varje backoff-försök.
+  23. **En ISIN-fond utan köphistorik fick aldrig någon kurs (TP-13/TP-14).** Grenvalet i den
+      dagliga uppdateringen var villkorat på både ISIN *och* känt köpdatum; en bevakad men
+      aldrig köpt ISIN-fond föll därför i grenen som frågar fondlista med ISIN:et som
+      fondnyckel — samma dödläge som punkt 2 beskrev.
+  24. **Besparingspotentialen kunde bli negativ (HEM-6).** Den sparade alternativavgiften är en
+      ögonblicksbild; sjunker den egna avgiften under den inom jämförelsens TTL skrev Hem ut
+      "du kan spara -180,00 kr per år". En icke-positiv besparing räknas nu som "inget
+      billigare hittades".
+  25. **En gulflaggad fond kunde bli helt utan vägledning (ANA-6).** Låg fonden under toppen
+      *och* under GAV gav `AnalysisGuidance` en tom lista — samma utfall som "otillräcklig
+      data", i just det läge där sammanhanget behövs mest. Ny kontextnyckel för det läget.
+  26. **ISIN-fältet i Fonddetalj tappades vid rotation (NAV-2).** Ett handinskrivet ISIN
+      återställdes tyst till maskinens förslag, som kan vara fel — sparades det utan omläsning
+      hamnade fel ISIN på fonden.
+
+  Och de fem sista punkterna ur granskningens ursprungliga lista:
+
+  27. **Kandidatsökningen körde för varje målnivå (HEM-8).** En källfråga plus upp till tio
+      köpbarhetsuppslag per nivå, var 12:e timme — för nivåer planen ändå aldrig köper på.
+      Gapen räknas nu först (ur redan känd data, utan nätverk) och kandidater hämtas bara för
+      **underviktade** nivåer, precis den budget `KEY_SCAN_SWITCH_PLAN` alltid dokumenterat.
+  28. **Bytesplanen på Hem hade ingen färskhetsgräns (HEM-8).** Slutade backstopen köra låg ett
+      gammalt "Sälj X → Köp Y" kvar, prissatt mot en portfölj som sedan dess rört sig. Nu gäller
+      `SwitchPlanCalc.PLAN_TTL_DAYS` (7 dygn), samma princip som HEM-6:s jämförelse-TTL men
+      snävare — ett bytesförslag åldras fortare än en avgiftsuppgift.
+  29. **`suggestion_records` rensades aldrig (NFR-1).** Tabellen växte med varje
+      backstop-körning och ingår i backup-kontraktet, så payloaden växte med den. Retention på
+      två år (`SuggestionRecordRepository.RETENTION_DAYS`) körs efter inspelningen — ett tak mot
+      obegränsad tillväxt, inte en gallring av användbar facit-historik. Hem läser dessutom
+      bara den senaste körningens rader, via SQL i stället för genom att materialisera hela
+      historiken vid varje emission.
+  30. **Död API-yta på `SuggestionRecordDao` (kodhygien).** `observeAll()` är borttagen —
+      produktionsläsaren är nu `observeLatestBatch()`, och `getAll()` är verifieringsfrågan
+      testerna faktiskt använder.
+  31. **`sellNavOf` härledde NAV via en division (kodhygien).** `currentValue / netShares`
+      reproducerade exakt den kurs skanningen redan hade i handen, till priset av en
+      nollvakt och ett flyttalsfel. Kursen läses nu direkt.
+  32. **`SwitchPlanCalc.Plan.gapClosedPp` mätte inte det namnet sa (kodhygien).** Fältet
+      summerade den *flyttade andelen av portföljen*, inte hur mycket av gapet som stängts —
+      i granskningens överskjutningsfall rapporterade det `100.0` för en plan som lämnade
+      avvikelsen oförändrad. Ingen produktionsläsare fanns; bara fyra enhetstester
+      asserterade det, var och en bredvid `sellValueKr`-assertioner som redan bar samma
+      information. Fältet är borttaget i stället för omdefinierat, och därmed också
+      `Plan`-omslaget som inte längre hade något att bära: `plan()` returnerar bytena direkt.
+
+  Migrering 11→12 (`batchEpochMillis`) med rundturstest; fältet är med i backup-kontraktet av
+  samma skäl som resten av `suggestion_records`. I övrigt ingen ny persisterad data — men
+  punkt 2, 6, 17 och 29 rör data som omfattas av kontraktet, och punkt 6 är precis den
+  återställningsväg NFR-1 vilar på tills Drive-backup (TP-7) finns.
 
 - **Handelsdagsmedveten kursuppdatering, bakgrundsindikator och "Värde per datum" (#27):**
   Kursuppdateringen räknas om kring handelsdagar i stället för fasta tidsintervall — ny ren

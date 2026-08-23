@@ -132,4 +132,43 @@ class FundMetadataDaoTest {
         assertEquals(0.21, loaded?.cheapestAlternativeFee ?: -1.0, 1e-9)
         assertEquals(20100L, loaded?.comparisonResolvedAtEpochDay)
     }
+
+    @Test
+    fun `listan over visade alternativ gar rundturen och defaultar till tom`() = runTest {
+        // Issue #93: facit spelar in ett råd per visat alternativ, så ordningen är en del av
+        // datat — den är kortets rangordning (störst årsbesparing först), inte en mängd.
+        dao.upsert(entity("SE1"))
+        assertEquals(emptyList<String>(), dao.getByIsin("SE1")!!.toDomain().shownAlternativeIsins)
+
+        dao.upsert(entity("SE1").copy(shownAlternativeIsinsJson = """["SE2","SE3","SE4"]"""))
+
+        assertEquals(listOf("SE2", "SE3", "SE4"), dao.getByIsin("SE1")!!.toDomain().shownAlternativeIsins)
+    }
+
+    @Test
+    fun `trasig json i listan lases som tom i stallet for att krascha`() = runTest {
+        dao.upsert(entity("SE1").copy(shownAlternativeIsinsJson = "inte json"))
+
+        assertEquals(emptyList<String>(), dao.getByIsin("SE1")!!.toDomain().shownAlternativeIsins)
+    }
+
+    // --- Risknivå per fondnamn (UI-10, issue #85) ---
+
+    @Test
+    fun `getKnownRisks ger namn och risknniva for rader med kand risk`() = runTest {
+        dao.upsertAll(listOf(entity("SE1", name = "Fond Ett"), entity("SE2", name = "Fond Tva")))
+
+        val risks = dao.getKnownRisks()
+
+        assertEquals(setOf("Fond Ett" to 4, "Fond Tva" to 4), risks.map { it.name to it.risk }.toSet())
+    }
+
+    @Test
+    fun `getKnownRisks utelamnar rader utan risknniva i stallet for att ge noll`() = runTest {
+        dao.upsertAll(listOf(entity("SE1", name = "Fond Ett"), entity("SE2", name = "Fond Tva").copy(risk = null)))
+
+        val risks = dao.getKnownRisks()
+
+        assertEquals(listOf("Fond Ett"), risks.map { it.name })
+    }
 }
