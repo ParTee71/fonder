@@ -25,7 +25,7 @@ Vid **varje** kodändring ska du, innan du anser arbetet klart, gå igenom alla 
 All användardata (fonder, transaktioner, inställningar) måste överleva en
 **backup → restore-rundtur** utan förlust. Lägger du till eller ändrar ett persisterat
 fält/en entitet ska det in i hela backup-kedjan *och* täckas av rundturstest.
-→ Skill: **data-safety-backup** (kopieras från Dagboken vid behov).
+→ Skill: **data-safety-backup** · **room-migrations**.
 
 ### 2. Tester på alla nivåer
 Ingen beteendeändring utan att tester läggs till eller uppdateras på rätt nivå
@@ -114,9 +114,11 @@ Detaljer i [README.md](README.md).
 
 ## Skills i detta repo (`.claude/skills/`)
 
-Generella Android/Kotlin-skills är kopierade från Dagboken. Projektspecifika skills
-(backup, kravlista, tester, delade komponenter) tas in från Dagboken och anpassas när
-respektive feature byggs.
+Generella Android/Kotlin-skills är kopierade från Dagboken. De projektspecifika är
+**anpassade till Fonder**, inte kopierade rakt av — Dagbokens backup går mot Drive och
+dess migreringstester mot `MigrationTestHelper`, medan Fonders kontrakt är
+`BackupPayload` mot en lokal fil och migreringstesterna bygger det gamla schemat för
+hand. Läs skillen, inte Dagbokens motsvarighet.
 
 | Skill | När |
 |---|---|
@@ -124,6 +126,12 @@ respektive feature byggs.
 | `android-data-layer` | Repository/Room/DAO/offline-först. |
 | `compose-expert` · `kotlin-coroutines` · `kotlin-flows` | Compose-, coroutine- och flow-detaljer. |
 | `android-gradle-logic` | Gradle/version catalogs/build-konfiguration. |
+| `data-safety-backup` | Regel 1 — persisterad data, backup-kontraktet, rundturen. |
+| `testing-strategy` | Regel 2 — nivåer, fakes, och den flakiness som redan bitit. |
+| `requirements-kravlista` | Regel 3 — ID-serier, hur en kravrad skrivs här, historiken. |
+| `shared-ui-components` | Regel 4 — katalogen i `ui/components/` och `ui/diagram/`. |
+| `room-migrations` | Schemaändringar, defaultvärden och migreringstesterna. |
+| `firebase-auth` | Google-inloggning (TP-6) — Credential Manager, `AuthRepository`. |
 | `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt de fyra reglerna). |
 | `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt de fyra reglerna. |
 | `release` | Endast vid uttrycklig release. |
