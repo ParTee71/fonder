@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -37,7 +38,11 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
 /**
@@ -760,6 +765,7 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = FakeSwitchWatchRepository(),
         )
 
         assertTrue("inget förslag får spelas in på inaktuella kurser", suggestionRepo.recorded.isEmpty())
@@ -782,6 +788,7 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = FakeSwitchWatchRepository(),
         )
 
         assertEquals(1, suggestionRepo.recorded.size)
@@ -928,6 +935,70 @@ class FundPriceUpdateWorkerTest {
     )
 
     @Test
+    fun `scanSwitchWatches fyller kandidaternas kurser och hoppar over bevakade fonder`() = runTest {
+        // Hems kort (HEM-11) ska kunna peka ut ledaren utan nätverk — därför cachas kandidaternas
+        // senaste kurs här. Säljsidan är en bevakad fond och uppdateras redan av refreshAll.
+        val today = LocalDate.now()
+        funds.value = listOf(Fund(fundId = "SHB1", name = "Såld", isin = "SE_TRACKED"))
+        listOf("SE_A", "SE_B").forEach { isin ->
+            fundByIsin[isin] = Fund(fundId = isin, name = "Kandidat $isin", isin = isin)
+        }
+        fundByIsin["SE_TRACKED"] = Fund(fundId = "SE_TRACKED", name = "Såld", isin = "SE_TRACKED")
+        val watchRepo = FakeSwitchWatchRepository()
+        watchRepo.start(
+            SwitchWatch(
+                sellIsin = "SE_TRACKED",
+                sellFundName = "Såld",
+                soldAtEpochDay = today.minusDays(1).toEpochDay(),
+                candidates = listOf(
+                    SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A"),
+                    SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B"),
+                    SwitchWatchCandidate(isin = "SE_TRACKED", name = "Såld"),
+                ),
+            ),
+        )
+
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
+
+        assertEquals(listOf("SE_A", "SE_B"), refreshSinceCalls.map { it.second })
+        assertTrue(refreshCalls.isEmpty())
+    }
+
+    @Test
+    fun `scanSwitchWatches stanger utgangna bevakningar utan att radera dem`() = runTest {
+        val today = LocalDate.now()
+        val watchRepo = FakeSwitchWatchRepository()
+        watchRepo.start(
+            SwitchWatch(
+                sellIsin = "SE_GAMMAL",
+                sellFundName = "Gammal",
+                soldAtEpochDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
+            ),
+        )
+
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
+
+        val watch = watchRepo.watches.value.single()
+        assertFalse(watch.isOpen)
+        assertEquals(SwitchWatchCloseReason.UTGANGEN, watch.closeReason)
+        // Raden bär vad användaren gjorde — den stängs, den raderas aldrig.
+        assertNull(watch.boughtIsin)
+    }
+
+    @Test
+    fun `scanSwitchWatches gor inget utan oppna bevakningar`() = runTest {
+        FundPriceUpdateWorker.scanSwitchWatches(
+            fakeTransactionRepo,
+            fakeFundPriceRepo,
+            FakeSwitchWatchRepository(),
+            LocalDate.now(),
+        )
+
+        assertTrue(refreshSinceCalls.isEmpty())
+        assertTrue(refreshCalls.isEmpty())
+    }
+
+    @Test
     fun `scanOutcomeNavs hamtar kurs for kopkandidaten via ISIN-kedjan`() = runTest {
         val today = LocalDate.now()
         fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat", isin = "SE_CAND")
@@ -1072,6 +1143,7 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
+            switchWatchRepository = FakeSwitchWatchRepository(),
         )
         assertTrue(queriesRun.isEmpty())
         assertTrue(refreshSinceCalls.isEmpty())
@@ -1086,6 +1158,7 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
+            switchWatchRepository = FakeSwitchWatchRepository(),
         )
         assertEquals(listOf("SE_BILLIG"), preferencesRepository.benchmark.first().map { it.isin })
         assertEquals(listOf("SE_BILLIG"), refreshSinceCalls.map { it.second })

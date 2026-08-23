@@ -15,6 +15,8 @@ import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import se.partee71.fonder.domain.model.Fund
 
@@ -34,7 +36,7 @@ class RoomTransactionRepositoryTest {
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java,
         ).build()
-        repository = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao())
+        repository = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao())
     }
 
     @After
@@ -64,12 +66,31 @@ class RoomTransactionRepositoryTest {
             ),
         )
 
+        // Pågående byten (ANA-12, issue #114) är användardata i samma kategori — och en
+        // bevakning som överlevde tömningen hade pekat på en säljfond som inte finns kvar.
+        val watchId = db.switchWatchDao().insertWatch(
+            SwitchWatchEntity(
+                sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 100,
+                proceedsKr = 1_000.0, targetLevel = 4, sourceRecordId = null,
+                closedAtEpochDay = null, boughtIsin = null, closeReason = null,
+            ),
+        )
+        db.switchWatchDao().insertCandidates(
+            listOf(
+                SwitchWatchCandidateEntity(
+                    watchId = watchId, isin = "SE0001466368", name = "Kandidat",
+                    navAtStart = 120.0, navAtStartEpochDay = 100,
+                ),
+            ),
+        )
+
         repository.clearAll()
 
         assertTrue(repository.observeFunds().first().isEmpty())
         assertTrue(repository.observeTransactions().first().isEmpty())
         assertTrue(db.fundPriceDao().getRange("SHB0000442", 0, 200).isEmpty())
         assertTrue(db.suggestionRecordDao().getAll().isEmpty())
+        assertTrue(db.switchWatchDao().getAll().isEmpty())
     }
 
     @Test

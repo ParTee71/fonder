@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -113,5 +114,43 @@ class SoldFundsScreenTest {
         composeRule.onNodeWithText("Fond A").performClick()
 
         composeRule.onNodeWithText("Osäkert resultat", substring = true).assertExists()
+    }
+    @Test
+    fun bevaka_alternativ_visas_bara_expanderat_och_bara_nar_saljet_kan_bevakas() {
+        // Hopfällt läge är avsiktligt bara namn och resultat (SLD-4) — knappen ligger i den
+        // utfällda delen, annars hade regeln brutits för varje rad.
+        val state = SoldFundsUiState(
+            loading = false,
+            rows = listOf(
+                SoldFundRad(sale = sale(), fundName = "Fond A", fundIsin = "SE_A", canStartSwitchWatch = true),
+            ),
+        )
+        var started: SoldFundRad? = null
+
+        composeRule.setContent {
+            FonderTheme { SoldFundsContent(state = state, onStartSwitchWatch = { started = it }) }
+        }
+
+        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Fond A").performClick()
+        composeRule.onNodeWithText("Bevaka alternativ").performClick()
+
+        assertEquals("SE_A", started?.fundIsin)
+    }
+
+    @Test
+    fun ett_salj_utan_isin_erbjuder_ingen_bevakning() {
+        val state = SoldFundsUiState(
+            loading = false,
+            rows = listOf(SoldFundRad(sale = sale(), fundName = "Fond A", fundIsin = null, canStartSwitchWatch = false)),
+        )
+
+        composeRule.setContent {
+            FonderTheme { SoldFundsContent(state = state) }
+        }
+        composeRule.onNodeWithText("Fond A").performClick()
+
+        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
     }
 }

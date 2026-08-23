@@ -27,6 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -164,6 +165,8 @@ class FondDetaljViewModelTest {
         override suspend fun prune(today: LocalDate) {}
     }
 
+    private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
+
     private fun viewModel() = FondDetaljViewModel(
         SavedStateHandle(mapOf("fundId" to fund.fundId)),
         fakeTransactionRepo,
@@ -171,6 +174,7 @@ class FondDetaljViewModelTest {
         fakeFundMetadataRepo,
         preferencesRepository,
         fakeSuggestionRecordRepo,
+        fakeSwitchWatchRepo,
     )
 
     @Before
