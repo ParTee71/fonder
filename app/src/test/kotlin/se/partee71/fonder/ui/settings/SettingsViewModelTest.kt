@@ -1,9 +1,11 @@
 package se.partee71.fonder.ui.settings
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
+import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,6 +28,9 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.auth.AuthRepository
+import se.partee71.fonder.data.auth.AuthUser
+import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupRepository
@@ -150,7 +155,27 @@ class SettingsViewModelTest {
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
-    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+    /**
+     * Inloggat läge som testet styr. Fake i stället för mock av samma skäl som resten av
+     * datalagret här: `currentUser` är ett hett flöde som ska kunna emittera mitt i ett test —
+     * det är just den vägen den riktiga [se.partee71.fonder.data.auth.FirebaseAuthRepository]
+     * rapporterar en session som gått ut.
+     */
+    private val authUser = MutableStateFlow<AuthUser?>(null)
+    private var signInResult: Result<AuthUser> = Result.success(AuthUser("uid-1", "Test Testsson", "test@example.com"))
+    private var signOutCalled = false
+
+    private val fakeAuthRepo = object : AuthRepository {
+        override val currentUser: Flow<AuthUser?> = authUser
+        override suspend fun signInWithGoogle(activityContext: Context): Result<AuthUser> =
+            signInResult.onSuccess { authUser.value = it }
+        override suspend fun signOut() {
+            signOutCalled = true
+            authUser.value = null
+        }
+    }
+
+    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -202,7 +227,7 @@ class SettingsViewModelTest {
     @Test
     fun `lastPriceSyncEpochMillis speglar preferences efter en uppdatering (SET-2)`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.uiState.test {
             awaitItem()
@@ -418,7 +443,7 @@ class SettingsViewModelTest {
     fun `valt referens-ISIN sparas och startar en skanning`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613"))
         advanceUntilIdle()
@@ -433,7 +458,7 @@ class SettingsViewModelTest {
         // Katalogens träffar saknar ISIN — hela jämförelsekedjan är ISIN-nycklad.
         val preferences = PreferencesRepository(dataStore)
         isinByFundId = mapOf("SHB1" to "SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null))
         advanceUntilIdle()
@@ -446,7 +471,7 @@ class SettingsViewModelTest {
         // Ett sparat fond-id som inget annat lager kan använda hade gett ett val som såg gjort
         // ut men aldrig gav en kurva.
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.uiState.test {
             awaitItem()
@@ -466,7 +491,7 @@ class SettingsViewModelTest {
     fun `rensat val faller tillbaka pa appens referens`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.clearBenchmark()
         advanceUntilIdle()
@@ -479,7 +504,7 @@ class SettingsViewModelTest {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.uiState.test {
             var state = awaitItem()
@@ -494,13 +519,166 @@ class SettingsViewModelTest {
     fun `ett val vars namn inte finns i cachen visas som ISIN, aldrig tomt`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo)
 
         vm.uiState.test {
             var state = awaitItem()
             while (state.chosenBenchmarkName == null) state = awaitItem()
 
             assertEquals("SE0011527613", state.chosenBenchmarkName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Google-inloggning (TP-6) ---
+
+    /**
+     * Credential Manager kräver ett aktivitets-context, men fakear det aldrig — en relaxad mock
+     * räcker, eftersom fakerepot ignorerar värdet. Poängen är att ViewModel:en ska gå att testa
+     * utan Firebase på klassvägen, vilket är hela skälet till att AuthRepository lämnar ut
+     * [AuthUser] och inte FirebaseUser.
+     */
+    private val activityContext: Context = mockk(relaxed = true)
+
+    @Test
+    fun `en lyckad inloggning speglas i uiState via currentUser`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            assertNull(awaitItem().googleUser)
+
+            vm.signIn(activityContext)
+            var state = awaitItem()
+            while (state.googleUser == null) state = awaitItem()
+
+            assertEquals("test@example.com", state.googleUser?.email)
+            assertNull(state.signInError)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett avbrutet kontoval ger inget felmeddelande`() = runTest(dispatcher) {
+        // Att stänga kontoväljaren är ett val, inte ett fel. Visades det som ett fick användaren
+        // en röd rad för något hen själv just gjorde med flit.
+        signInResult = Result.failure(SignInException(SignInException.Reason.CANCELLED))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            advanceUntilIdle()
+
+            // Läser StateFlow:ens värde i stället för att vänta på en emission: utebliven
+            // emission är själva poängen här, och ett awaitItem/expectMostRecentItem hade
+            // gjort testet beroende av om combine råkar konflatera signInInProgress-svängen
+            // eller inte. Prenumerationen finns (vi står i test-blocket), så .value är aktuellt.
+            assertNull(vm.uiState.value.signInError)
+            assertFalse(vm.uiState.value.signInInProgress)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett riktigt fel visas med sin orsak`() = runTest(dispatcher) {
+        signInResult = Result.failure(SignInException(SignInException.Reason.NO_CREDENTIAL))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            var state = awaitItem()
+            while (state.signInError == null) state = awaitItem()
+
+            assertEquals(SignInException.Reason.NO_CREDENTIAL, state.signInError)
+            assertNull(state.googleUser)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett fel utan orsak faller tillbaka pa FAILED i stallet for att forsvinna`() = runTest(dispatcher) {
+        // Ett undantag som inte är en SignInException (kastat under vägen, inte mappat i
+        // repositoryt) får inte ge ett tyst misslyckande där knappen bara slutar snurra.
+        signInResult = Result.failure(IllegalStateException("oväntat"))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            var state = awaitItem()
+            while (state.signInError == null) state = awaitItem()
+
+            assertEquals(SignInException.Reason.FAILED, state.signInError)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `onSignInErrorDismissed kvitterar felet sa det inte spelas upp igen`() = runTest(dispatcher) {
+        // Samma engångshändelse-princip som issue #78: uiState är WhileSubscribed, så ett fel
+        // som ligger kvar som tillstånd kommer tillbaka vid varje återbesök i Inställningar.
+        signInResult = Result.failure(SignInException(SignInException.Reason.FAILED))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            var state = awaitItem()
+            while (state.signInError == null) state = awaitItem()
+
+            vm.onSignInErrorDismissed()
+            state = awaitItem()
+            while (state.signInError != null) state = awaitItem()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `signOut loggar ut och tommer anvandaren i uiState`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            var state = awaitItem()
+            while (state.googleUser == null) state = awaitItem()
+
+            vm.signOut()
+            state = awaitItem()
+            while (state.googleUser != null) state = awaitItem()
+
+            assertTrue(signOutCalled)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `dubbeltryck pa logga in startar inte tva samtidiga inloggningar`() = runTest(dispatcher) {
+        // Samma spärr som export/restore (issue #75): kontoväljaren ger ingen synlig
+        // återkoppling förrän den öppnats, och två parallella anrop ger två väljare.
+        var calls = 0
+        val countingAuthRepo = object : AuthRepository {
+            override val currentUser: Flow<AuthUser?> = authUser
+            override suspend fun signInWithGoogle(activityContext: Context): Result<AuthUser> {
+                calls++
+                return signInResult.onSuccess { authUser.value = it }
+            }
+            override suspend fun signOut() = Unit
+        }
+        val vm = SettingsViewModel(
+            PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler,
+            fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo,
+        )
+
+        vm.uiState.test {
+            awaitItem()
+            vm.signIn(activityContext)
+            vm.signIn(activityContext)
+            advanceUntilIdle()
+
+            assertEquals(1, calls)
             cancelAndIgnoreRemainingEvents()
         }
     }

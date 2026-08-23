@@ -13,6 +13,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.data.auth.AuthUser
+import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.domain.model.AccountType
@@ -330,5 +332,81 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Välj fond").performScrollTo().performClick()
 
         assertEquals(1, opened)
+    }
+
+    // --- Google-konto (TP-6) ---
+
+    @Test
+    fun utloggad_visar_logga_in_och_inte_logga_ut() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(googleUser = null)) }
+        }
+
+        composeRule.onNodeWithText("Inte inloggad").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Logga in med Google").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Logga ut").assertDoesNotExist()
+    }
+
+    @Test
+    fun inloggad_visar_mejladressen_och_logga_ut() {
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(
+                        googleUser = AuthUser("uid-1", "Test Testsson", "test@example.com"),
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("test@example.com", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Logga ut").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Logga in med Google").assertDoesNotExist()
+    }
+
+    @Test
+    fun anvandare_utan_mejladress_visas_anda_aldrig_som_tom_rad() {
+        // Ett Google-konto utan läsbar mejladress ska ge en begriplig rad, inte "Inloggad som ".
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(state = SettingsUiState(googleUser = AuthUser("uid-1", null, null)))
+            }
+        }
+
+        composeRule.onNodeWithText("ditt Google-konto", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun logga_in_knappen_anropar_callbacken() {
+        var signIns = 0
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(), onSignIn = { signIns++ }) }
+        }
+
+        composeRule.onNodeWithText("Logga in med Google").performScrollTo().performClick()
+
+        assertEquals(1, signIns)
+    }
+
+    @Test
+    fun logga_in_knappen_ar_slackt_medan_inloggning_pagar() {
+        composeRule.setContent {
+            FonderTheme { SettingsContent(state = SettingsUiState(signInInProgress = true)) }
+        }
+
+        composeRule.onNodeWithText("Logga in med Google").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun ett_inloggningsfel_visas_med_sin_egen_text() {
+        composeRule.setContent {
+            FonderTheme {
+                SettingsContent(
+                    state = SettingsUiState(signInError = SignInException.Reason.NO_CREDENTIAL),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Inget Google-konto", substring = true).performScrollTo().assertIsDisplayed()
     }
 }

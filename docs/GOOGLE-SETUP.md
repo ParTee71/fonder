@@ -287,26 +287,22 @@ utan scopet svarar Drive med 403.
 
 ## Steg 5 — Vad implementationen sedan behöver
 
-Beroendena är redan deklarerade i `gradle/libs.versions.toml` men **inte inkopplade** —
-det görs i respektive issue, eftersom `google-services`-pluginet fäller bygget så länge
-`app/google-services.json` saknas.
+**Google-inloggning (TP-6) — byggd i issue #106.** Pluginet är applicerat, beroendena
+inkopplade och `FirebaseAuthRepository` ersätter stubben bakom `AuthRepository`. Två
+detaljer värda att känna till om något krånglar:
 
-**Google-inloggning (TP-6):**
+- Kontoväljaren är `GetSignInWithGoogleOption` (helsida), inte `GetGoogleIdOption`
+  (bottenark) — den senare faller med "Failed to retrieve an ID token" när ingen
+  inloggning redan är cachad, alltså just vid första inloggningen.
+- Manifestet pekar sedan dess ut `backup_rules.xml` och `data_extraction_rules.xml`, som
+  det inte gjorde förut. Auto Backup tog annars med appens hela datakatalog inklusive den
+  Firebase-session som nu persisteras där — en session ska varken till molnet eller till
+  en ny enhet.
 
-- `app/build.gradle.kts`: `alias(libs.plugins.google.services)` i `plugins { }`,
-  och rot-`build.gradle.kts`: `alias(libs.plugins.google.services) apply false`
-- Beroenden: `firebase.bom` (platform), `firebase.auth`, `credentials`,
-  `credentials.play.services`, `googleid`
-- `FirebaseAuthRepository` ersätter `StubAuthRepository` bakom befintligt
-  `AuthRepository`-interface. Använd `GetSignInWithGoogleOption` (helsidesväljare), inte
-  `GetGoogleIdOption` (bottenark, faller på "Failed to retrieve an ID token" utan cachad
-  inloggning).
-- Auto Backup i manifestet behöver då exkludera auth-tokens ur `backup_rules.xml` —
-  kommentaren där utgår i dag från att inget känsligt finns lagrat.
+**Drive-backup (TP-7 steg 2)** — beroendena är deklarerade i `gradle/libs.versions.toml`
+men **inte inkopplade**; det görs i sitt eget issue:
 
-**Drive-backup (TP-7 steg 2):**
-
-- Beroenden: `google.auth.play.services`, `google.api.client.android`,
+- Beroenden att koppla in: `google.auth.play.services`, `google.api.client.android`,
   `google.api.services.drive`
 - `DriveBackupRepository` implementerar samma `BackupRepository`-interface som
   `LocalBackupRepository` — kontraktet är en **sträng**, så formatet (`BackupPayload`/

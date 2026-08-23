@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import se.partee71.fonder.data.auth.AuthRepository
+import se.partee71.fonder.data.auth.AuthUser
+import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
@@ -39,6 +43,13 @@ sealed interface BackupMessage {
     data class RestoreFailed(val reason: BackupFormatException.Reason) : BackupMessage
 }
 
+/** Kontodelen av tillståndet (TP-6) — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
+private data class AccountState(
+    val user: AuthUser? = null,
+    val signInInProgress: Boolean = false,
+    val signInError: SignInException.Reason? = null,
+)
+
 data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val databaseCleared: Boolean = false,
@@ -61,6 +72,15 @@ data class SettingsUiState(
      * tyst behålla den gamla referensen.
      */
     val benchmarkPickFailed: Boolean = false,
+    /** Inloggad Google-användare, null när ingen är inloggad (TP-6). */
+    val googleUser: AuthUser? = null,
+    /** Sant medan kontoväljaren är uppe — knappen släcks, samma princip som [backupInProgress]. */
+    val signInInProgress: Boolean = false,
+    /**
+     * Varför senaste inloggningsförsök misslyckades, null när inget fel finns att visa.
+     * `CANCELLED` hamnar aldrig här: att stänga kontoväljaren är ett val, inte ett fel.
+     */
+    val signInError: SignInException.Reason? = null,
 )
 
 /** Referensvalets del av tillståndet — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
@@ -80,12 +100,22 @@ class SettingsViewModel @Inject constructor(
     private val backupRepository: BackupRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val databaseCleared = MutableStateFlow(false)
     private val backupState = MutableStateFlow(BackupState())
     private var backupJob: Job? = null
     private val benchmarkPickFailed = MutableStateFlow(false)
+    private val signInInProgress = MutableStateFlow(false)
+    private val signInError = MutableStateFlow<SignInException.Reason?>(null)
+    private var signInJob: Job? = null
+
+    /** Egen gren av samma skäl som [benchmarkState]: `combine` tar högst fem flöden. */
+    private val accountState: Flow<AccountState> =
+        combine(authRepository.currentUser, signInInProgress, signInError) { user, inProgress, error ->
+            AccountState(user = user, signInInProgress = inProgress, signInError = error)
+        }
 
     /**
      * Egen gren, inte en sjätte flöde i combinen nedan: `combine` tar högst fem, och
@@ -120,6 +150,12 @@ class SettingsViewModel @Inject constructor(
             state.copy(
                 chosenBenchmarkName = benchmark.chosenName,
                 benchmarkPickFailed = benchmark.pickFailed,
+            )
+        }.combine(accountState) { state, account ->
+            state.copy(
+                googleUser = account.user,
+                signInInProgress = account.signInInProgress,
+                signInError = account.signInError,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -262,5 +298,43 @@ class SettingsViewModel @Inject constructor(
     /** Kvitterar backup-meddelandet — en händelse, inte ett tillstånd (samma princip som [onClearedMessageDismissed]). */
     fun onBackupMessageDismissed() {
         backupState.update { it.copy(message = null) }
+    }
+
+    /**
+     * Loggar in med Google (TP-6). [activityContext] måste vara aktivitetens — Credential Manager
+     * ritar kontoväljaren ovanpå den aktiva aktiviteten och kan inte använda applikationens
+     * context. Därför tar den här metoden ett context, till skillnad från resten av ViewModel:en.
+     *
+     * Den inloggade användaren sätts inte här: den kommer via [AuthRepository.currentUser], som
+     * också fångar ändringar appen inte själv startat (utgången token, konto borttaget på
+     * enheten). En lokal spegling hade kunnat visa en inloggad användare som inte längre finns.
+     *
+     * Ett avbrutet val (`CANCELLED`) lämnar inget felmeddelande — användaren stängde rutan med
+     * flit och vet redan varför ingen inloggning skedde.
+     */
+    fun signIn(activityContext: Context) {
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+            signInInProgress.value = true
+            signInError.value = null
+            val result = authRepository.signInWithGoogle(activityContext)
+            signInInProgress.value = false
+            result.onFailure { error ->
+                val reason = (error as? SignInException)?.reason ?: SignInException.Reason.FAILED
+                signInError.value = reason.takeIf { it != SignInException.Reason.CANCELLED }
+            }
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            signInError.value = null
+            authRepository.signOut()
+        }
+    }
+
+    /** Kvitterar inloggningsfelet — en händelse, inte ett tillstånd (samma princip som [onBackupMessageDismissed]). */
+    fun onSignInErrorDismissed() {
+        signInError.value = null
     }
 }

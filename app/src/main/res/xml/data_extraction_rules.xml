@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31) motsvarighet till backup_rules.xml. Samma include-lista i båda
+  sektionerna, av samma skäl: bara appens egen användardata ska ut, inte allt som råkar
+  ligga i datakatalogen.
+
+  Att listan är en **include**-lista är det som håller Firebase Auth-sessionen borta —
+  den persisteras av firebase-auth i egna filer (TP-6), och en session som återställs på
+  en annan enhet är både meningslös och känslig. Inget behöver därför exkluderas
+  explicit: det som inte står här kommer inte med.
+-->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="fonder.db" />
