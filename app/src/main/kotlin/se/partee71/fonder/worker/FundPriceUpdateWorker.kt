@@ -12,6 +12,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
+import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.AccountType
@@ -24,6 +25,7 @@ import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
 /**
@@ -49,6 +51,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val switchWatchRepository: SwitchWatchRepository,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -66,6 +69,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             fundMetadataRepository = fundMetadataRepository,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRecordRepository,
+            switchWatchRepository = switchWatchRepository,
         )
 
         return if (success) Result.success() else Result.retry()
@@ -134,6 +138,16 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val MAX_FEE_RECORDINGS_PER_RUN = 6
 
         /**
+         * Högst så här många kandidat-NAV fylls på per körning för pågående byten (ANA-12/HEM-11,
+         * issue #114). Satt till [se.partee71.fonder.domain.usecase.SwitchWatchCalc.MAX_CANDIDATES]
+         * med flit, till skillnad från [MAX_OUTCOME_NAVS_PER_RUN]s inkrementella ifyllnad: Hems
+         * kort pekar ut vilket alternativ som gått bäst, och en halvfylld cache hade utsett en
+         * ledare bland de kandidater som råkade hinna med — ett svar som ser lika säkert ut men
+         * är fel. En bevakning är dessutom kortlivad (14 dygn) och normalt ensam.
+         */
+        private const val MAX_WATCH_NAVS_PER_RUN = SwitchWatchCalc.MAX_CANDIDATES
+
+        /**
          * Hur långt bak [resolveBuyNav] hämtar historik för en köpkandidat. Bara den senaste
          * kursen behövs — fönstret ska bara vara långt nog att överleva helger och röda dagar,
          * inte backfilla en historik appen ändå aldrig haft för fonden.
@@ -169,6 +183,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             fundMetadataRepository: FundMetadataRepository,
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
+            switchWatchRepository: SwitchWatchRepository,
         ) {
             if (!refreshSucceeded) return
             if (scanComparisons) {
@@ -177,6 +192,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             if (scanSwitchPlan) {
                 scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
+                scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository)
             }
             if (scanBenchmark) {
                 scanBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository)
@@ -296,6 +312,41 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 .take(MAX_OUTCOME_NAVS_PER_RUN)
 
             targets.forEach { isin -> resolveBuyNav(isin, fundPriceRepository, today) }
+        }
+
+        /**
+         * Håller pågående byten (ANA-12, issue #114) aktuella: stänger utgångna bevakningar och
+         * fyller på kandidaternas senast kända NAV, så Hems kort (HEM-11) kan peka ut ledaren
+         * **utan nätverk** när skärmen ritas.
+         *
+         * Gated av [KEY_SCAN_SWITCH_PLAN], inte av en egen nyckel — samma familj, samma
+         * budgetresonemang och samma backstop som [scanOutcomeNavs].
+         *
+         * Kurserna cachas under ISIN:et som fondnyckel, precis som facits köpsida: det är samma
+         * sorts fond (en appen aldrig ägt) och samma väg in. Det motsäger inte ANA-11 —
+         * *diagrammets* historik hämtas fortfarande utan att cachas — men en enskild senaste kurs
+         * måste finnas lokalt för att kortet ska kunna säga något alls i vila.
+         *
+         * Redan bevakade fonder hoppas över: deras kurs uppdateras redan av [refreshAll] under
+         * fondens egen `fundId`, och en hämtning till hade lagt en dubblettrad under en annan nyckel.
+         */
+        internal suspend fun scanSwitchWatches(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            switchWatchRepository: SwitchWatchRepository,
+            today: LocalDate = LocalDate.now(),
+        ) {
+            switchWatchRepository.expireStale(today)
+
+            val open = switchWatchRepository.observeOpen().first()
+            if (open.isEmpty()) return
+
+            val trackedIsins = transactionRepository.observeFunds().first().mapNotNull { it.isin }.toSet()
+            open.flatMap { watch -> watch.candidates.map { it.isin } }
+                .filterNot { it in trackedIsins }
+                .distinct()
+                .take(MAX_WATCH_NAVS_PER_RUN)
+                .forEach { isin -> resolveBuyNav(isin, fundPriceRepository, today) }
         }
 
         /**
