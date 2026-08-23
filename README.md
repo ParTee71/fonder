@@ -83,9 +83,8 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 
 Google-inloggning (TP-6) och Drive-backup (TP-7 steg 2) kräver en `google-services.json`
 från Firebase Console i `app/`. Filen är **incheckad** — `google-services`-pluginet läser
-den vid varje bygge, så utan den i repot går CI inte att köra. Inloggningen är byggd sedan
-#106; Drive-beroendena ligger deklarerade i `gradle/libs.versions.toml` och kopplas in i
-sitt eget issue.
+den vid varje bygge, så utan den i repot går CI inte att köra. Både inloggningen (#106) och
+molnbackupen (#110) är byggda och inkopplade.
 
 Signeringsnycklar (`*.jks`, `*.keystore`) får **aldrig** checkas in — CI har en grind som
 fäller bygget om någon gör det. Undantaget är `app/debug.keystore`, som är avsiktligt
@@ -127,6 +126,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.52.0 | **Molnbackup till Google Drive** (TP-7 steg 2 / SET-7, #110): säkerhetskopieringskortet i Inställningar skriver nu hela innehållet till en dold mapp i din Drive — automatiskt en gång per dygn, och på begäran med en knapp. Kortet visar när den senaste kopian togs, och säger till när Drive behöver din tillåtelse. Det är den första återställningsvägen appen både kan sköta åt dig och själv verifiera; filexporten finns kvar och fungerar utan konto och utan nätverk. Återställning från Drive ersätter all data och ligger bakom samma bekräftelse som filåterställningen. De fem senaste kopiorna behålls |
 | 0.51.0 | **Google-inloggning** i Inställningar via Firebase Auth och Credential Manager (TP-6, #106): kortet visar inloggad adress och "Logga ut", eller "Inte inloggad" och en inloggningsknapp. Ett avbrutet kontoval visas aldrig som ett fel. Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Drive (TP-7 steg 2), vilket kortets text säger rakt ut. Auto Backup begränsas samtidigt till databasen och inställningarna; tidigare kopierades appens hela datakatalog, vilket nu även hade omfattat den sparade inloggningen (NFR-1) |
 
 ---
