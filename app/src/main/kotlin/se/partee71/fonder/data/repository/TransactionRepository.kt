@@ -7,6 +7,7 @@ import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
+import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
@@ -53,6 +54,7 @@ class RoomTransactionRepository @Inject constructor(
     private val transactionDao: TransactionDao,
     private val fundPriceDao: FundPriceDao,
     private val suggestionRecordDao: SuggestionRecordDao,
+    private val switchWatchDao: SwitchWatchDao,
 ) : TransactionRepository {
 
     override fun observeFunds(): Flow<List<Fund>> =
@@ -87,6 +89,9 @@ class RoomTransactionRepository @Inject constructor(
             transactionDao.deleteAll()
             fundPriceDao.deleteAll()
             suggestionRecordDao.deleteAll()
+            // Bevakade byten är användardata i samma kategori som förslagen (NFR-1) och töms
+            // med dem (SET-1) — kandidaterna följer med via ON DELETE CASCADE.
+            switchWatchDao.deleteAll()
             fundDao.deleteAll()
         }
     }

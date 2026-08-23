@@ -6,11 +6,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -18,6 +20,10 @@ import org.junit.Test
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.TransactionType
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -38,12 +44,17 @@ class SoldFundsViewModelTest {
         override suspend fun clearAll() {}
     }
 
+    private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
+    private val fakeMetadataRepo = FakeFundMetadataRepository()
+
+    private fun viewModel() = SoldFundsViewModel(fakeRepo, fakeSwitchWatchRepo, fakeMetadataRepo)
+
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
     fun `tom transaktionshistorik ger tomt tillstand`() = runTest(dispatcher) {
-        val vm = SoldFundsViewModel(fakeRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -64,7 +75,7 @@ class SoldFundsViewModelTest {
             Transaction(id = 3, fundId = fondB.fundId, type = TransactionType.KOP, epochDay = 100, shares = 5.0, pricePerShare = 200.0),
             Transaction(id = 4, fundId = fondB.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 190.0),
         )
-        val vm = SoldFundsViewModel(fakeRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -84,7 +95,7 @@ class SoldFundsViewModelTest {
         transactions.value = listOf(
             Transaction(id = 1, fundId = fund.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 150.0),
         )
-        val vm = SoldFundsViewModel(fakeRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -101,7 +112,7 @@ class SoldFundsViewModelTest {
             Transaction(id = 1, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 100, shares = 10.0, pricePerShare = 100.0),
             Transaction(id = 2, fundId = "SHB0000442", type = TransactionType.SALJ, epochDay = 200, shares = 10.0, pricePerShare = 150.0),
         )
-        val vm = SoldFundsViewModel(fakeRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -122,7 +133,7 @@ class SoldFundsViewModelTest {
             Transaction(id = 1, fundId = "SE0003653302", type = TransactionType.KOP, epochDay = 100, shares = 5.0, pricePerShare = 200.0),
             Transaction(id = 2, fundId = "SE0003653302", type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 210.0),
         )
-        val vm = SoldFundsViewModel(fakeRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -131,4 +142,93 @@ class SoldFundsViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+    @Test
+    fun `ett salj med kant ISIN kan starta en bevakning, ett utan kan inte (SLD-5)`() = runTest(dispatcher) {
+        val medIsin = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
+        val utanIsin = Fund(fundId = "SHB0000627", name = "Utan ISIN", isin = null)
+        funds.value = listOf(medIsin, utanIsin)
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = medIsin.fundId, type = TransactionType.KOP, epochDay = 100, shares = 10.0, pricePerShare = 100.0),
+            Transaction(id = 2, fundId = medIsin.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 10.0, pricePerShare = 150.0),
+            Transaction(id = 3, fundId = utanIsin.fundId, type = TransactionType.KOP, epochDay = 100, shares = 5.0, pricePerShare = 100.0),
+            Transaction(id = 4, fundId = utanIsin.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 5.0, pricePerShare = 120.0),
+        )
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            // Kurserna hämtas på ISIN — utan det går fonden varken att jämföra eller följa.
+            assertTrue(state.rows.first { it.fundName == "Med ISIN" }.canStartSwitchWatch)
+            assertFalse(state.rows.first { it.fundName == "Utan ISIN" }.canStartSwitchWatch)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `startSwitchWatch anvander saljets datum och likvid, inte dagens`() = runTest(dispatcher) {
+        val fond = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = fond.fundId, type = TransactionType.KOP, epochDay = 100, shares = 10.0, pricePerShare = 100.0),
+            Transaction(id = 2, fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 10.0, pricePerShare = 150.0, fee = 25.0),
+        )
+        fakeMetadataRepo.metadataByIsin = mapOf("SE_MED" to metadata("SE_MED", risk = 6))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            vm.startSwitchWatch(state.rows.single())
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val watch = fakeSwitchWatchRepo.watches.value.single()
+        assertEquals("SE_MED", watch.sellIsin)
+        // Utvecklingen ska mätas från dagen pengarna frigjordes, inte från idag.
+        assertEquals(200L, watch.soldAtEpochDay)
+        assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
+        // Målnivån är säljfondens egen risknivå ur cachen — det närmaste "något likvärdigt".
+        assertEquals(6, watch.targetLevel)
+        assertNull(watch.sourceRecordId)
+    }
+
+    @Test
+    fun `ett salj som redan bevakas erbjuder ingen ny bevakning`() = runTest(dispatcher) {
+        val fond = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = fond.fundId, type = TransactionType.KOP, epochDay = 100, shares = 10.0, pricePerShare = 100.0),
+            Transaction(id = 2, fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 200, shares = 10.0, pricePerShare = 150.0),
+        )
+        fakeSwitchWatchRepo.start(
+            SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = 200),
+        )
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertFalse(state.rows.single().canStartSwitchWatch)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun metadata(isin: String, risk: Int?) = FundMetadata(
+        isin = isin,
+        name = "Fond $isin",
+        orderbookId = isin,
+        totalFee = 0.4,
+        managementFee = 0.4,
+        category = null,
+        fundType = null,
+        companyName = null,
+        risk = risk,
+        indexFund = false,
+        startDateEpochDay = null,
+        minimumBuy = null,
+        tags = emptyList(),
+    )
 }

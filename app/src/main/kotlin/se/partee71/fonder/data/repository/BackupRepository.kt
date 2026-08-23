@@ -6,9 +6,11 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
+import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,6 +52,7 @@ class LocalBackupRepository @Inject constructor(
     private val fundDao: FundDao,
     private val transactionDao: TransactionDao,
     private val suggestionRecordDao: SuggestionRecordDao,
+    private val switchWatchDao: SwitchWatchDao,
     private val preferences: PreferencesRepository,
 ) : BackupRepository {
 
@@ -60,6 +63,7 @@ class LocalBackupRepository @Inject constructor(
                 funds = fundDao.getAll().map(FundEntity::toDomain),
                 transactions = transactionDao.getAll().map(TransactionEntity::toDomain),
                 suggestionRecords = suggestionRecordDao.getAll().map(SuggestionRecordEntity::toDomain),
+                switchWatches = switchWatchDao.getAll().map(SwitchWatchWithCandidates::toDomain),
                 riskProfile = preferences.riskProfile.first(),
                 accountType = preferences.accountType.first(),
                 themeMode = preferences.themeMode.first(),
@@ -86,11 +90,23 @@ class LocalBackupRepository @Inject constructor(
             database.withTransaction {
                 transactionDao.deleteAll()
                 suggestionRecordDao.deleteAll()
+                // Kandidaterna följer med sin bevakning via ON DELETE CASCADE (Room 14→15) —
+                // en egen tömning här hade varit en andra sanning om samma relation.
+                switchWatchDao.deleteAll()
                 fundDao.deleteAll()
 
                 payload.funds.forEach { fundDao.upsert(FundEntity.fromDomain(it)) }
                 payload.transactions.forEach { transactionDao.insert(TransactionEntity.fromDomain(it)) }
                 payload.suggestionRecords.forEach { suggestionRecordDao.insert(SuggestionRecordEntity.fromDomain(it)) }
+                payload.switchWatches.forEach { watch ->
+                    val row = SwitchWatchWithCandidates.fromDomain(watch)
+                    // Kandidaterna knyts till det id insättningen faktiskt gav i stället för
+                    // till filens: normalt är de identiska, men en kandidat som pekar på fel
+                    // bevakning är värre än ett omnumrerat id — den syns inte alls.
+                    val watchId = switchWatchDao.insertWatch(row.watch)
+                    val candidates = row.candidates.map { it.copy(id = 0, watchId = watchId) }
+                    if (candidates.isNotEmpty()) switchWatchDao.insertCandidates(candidates)
+                }
             }
 
             payload.riskProfile?.let { preferences.setRiskProfile(it) }
@@ -106,6 +122,7 @@ class LocalBackupRepository @Inject constructor(
                 funds = payload.funds.size,
                 transactions = payload.transactions.size,
                 suggestionRecords = payload.suggestionRecords.size,
+                switchWatches = payload.switchWatches.size,
             )
         }
     }

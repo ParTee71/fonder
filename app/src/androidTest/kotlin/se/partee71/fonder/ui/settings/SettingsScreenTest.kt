@@ -245,13 +245,17 @@ class SettingsScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SettingsContent(
-                    state = SettingsUiState(backupMessage = BackupMessage.Restored(RestoreSummary(2, 5, 3))),
+                    state = SettingsUiState(backupMessage = BackupMessage.Restored(RestoreSummary(2, 5, 3, 1))),
                     onBackupMessageDismissed = { dismissed = true },
                 )
             }
         }
 
-        composeRule.onNodeWithText("Återställt: 2 fonder, 5 transaktioner och 3 inspelade förslag.").assertExists()
+        // Kvittensen räknar även bevakade byten sedan issue #114 — "klart" får aldrig kunna
+        // betyda "tomt" för någon del av kontraktet.
+        composeRule.onNodeWithText(
+            "Återställt: 2 fonder, 5 transaktioner, 3 inspelade förslag och 1 bevakade byten.",
+        ).assertExists()
         composeRule.onNodeWithText("Stäng").performScrollTo().performClick()
 
         assertTrue(dismissed)

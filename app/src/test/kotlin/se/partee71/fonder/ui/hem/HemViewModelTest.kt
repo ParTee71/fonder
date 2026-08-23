@@ -30,6 +30,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -44,12 +45,16 @@ import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 
@@ -166,12 +171,15 @@ class HemViewModelTest {
         override fun observeIsRunning(): Flow<Boolean> = workRunning
     }
 
+    private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
+
     private fun viewModel() = HemViewModel(
         fakeTransactionRepo,
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
         fakeSuggestionRecordRepo,
+        fakeSwitchWatchRepo,
         fakeScheduler,
     )
 
@@ -1230,6 +1238,110 @@ class HemViewModelTest {
             assertEquals(0.30, benchmark.points.last().second, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `en oppen bevakning visas som kort med ledaren ur cachade kurser (HEM-11)`() = runTest(dispatcher) {
+        // Kortet ska rendera utan nätverk: ledaren räknas ur kurscachen, som bakgrundskörningen
+        // fyller budgeterat — inte ur en hämtning Hem gör själv.
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_SALJ"))
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(
+            "SHB0000442" to FundPrice("SHB0000442", LocalDate.now().toEpochDay(), 100.0),
+            "SE_A" to FundPrice("SE_A", LocalDate.now().toEpochDay(), 105.0),
+            "SE_B" to FundPrice("SE_B", LocalDate.now().toEpochDay(), 110.0),
+        )
+        fakeSwitchWatchRepo.start(
+            SwitchWatch(
+                sellIsin = "SE_SALJ",
+                sellFundName = "Fond A",
+                soldAtEpochDay = LocalDate.now().minusDays(2).toEpochDay(),
+                proceedsKr = 10_000.0,
+                candidates = listOf(
+                    SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A", navAtStart = 100.0),
+                    SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B", navAtStart = 100.0),
+                ),
+            ),
+        )
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.openSwitchWatch == null) state = awaitItem()
+
+            val watch = state.openSwitchWatch!!
+            assertEquals("Fond A", watch.sellFundName)
+            assertEquals(2, watch.daysWaiting)
+            assertEquals(2, watch.candidateCount)
+            assertEquals("Kandidat B", watch.leaderName)
+            assertEquals(0.10, watch.leaderChangeFraction!!, 1e-9)
+            assertEquals(setOf("SE_SALJ"), state.watchedSellIsins)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en utgangen bevakning visas inte men blockerar fortfarande en ny for samma salj`() = runTest(dispatcher) {
+        // Den beskriver inte längre läget (ANA-12) — men att samtidigt dölja den och erbjuda en
+        // ny hade gett två rader om samma byte tills bakgrundskörningen hunnit stänga den.
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_SALJ"))
+        transactions.value = listOf(
+            Transaction(id = 1, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf("SHB0000442" to FundPrice("SHB0000442", LocalDate.now().toEpochDay(), 100.0))
+        fakeSwitchWatchRepo.start(
+            SwitchWatch(
+                sellIsin = "SE_SALJ",
+                sellFundName = "Fond A",
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
+            ),
+        )
+
+        viewModel().uiState.test {
+            // Vänta på att bevakningsgrenen hunnit in i tillståndet — inte på ytterligare en
+            // emission efter den. `expectMostRecentItem()` kastar när inget *nytt* kommit, och
+            // här är den sista emissionen redan den slutgiltiga: bevakningen är utgången, så
+            // kortet fylls aldrig i och inget mer händer.
+            var state = awaitItem()
+            while (state.loading || state.watchedSellIsins.isEmpty()) state = awaitItem()
+
+            assertNull(state.openSwitchWatch)
+            assertEquals(setOf("SE_SALJ"), state.watchedSellIsins)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `startSwitchWatch skapar en bevakning ur forslaget och startar den bara en gang`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val suggestion = SwitchPlanResolver.Suggestion(
+            recordId = 42,
+            planIndex = 0,
+            sellIsin = "SE_SALJ",
+            buyIsin = "SE_KOP",
+            sellFundName = "Fond A",
+            buyFundName = "Fond B",
+            fromLevel = 6,
+            toLevel = 4,
+            feeDeltaPercent = -0.1,
+            switchValueKr = 4_200.0,
+            followed = true,
+        )
+
+        vm.startSwitchWatch(suggestion)
+        advanceUntilIdle()
+        vm.startSwitchWatch(suggestion)
+        advanceUntilIdle()
+
+        val watch = fakeSwitchWatchRepo.watches.value.single()
+        assertEquals("SE_SALJ", watch.sellIsin)
+        assertEquals("Fond A", watch.sellFundName)
+        assertEquals(LocalDate.now().toEpochDay(), watch.soldAtEpochDay)
+        assertEquals(4_200.0, watch.proceedsKr!!, 1e-9)
+        // Målnivån är den nivå bytet skulle fylla — annars föreslås alternativ på fel risk.
+        assertEquals(4, watch.targetLevel)
+        assertEquals(42L, watch.sourceRecordId)
     }
 
     private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = FundMetadata(

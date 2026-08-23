@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
@@ -803,5 +804,110 @@ class HemScreenTest {
 
         composeRule.onNodeWithContentDescription("Avkastningsdiagram", substring = true)
             .assertExists()
+    }
+    @Test
+    fun kortet_for_pagaende_byte_visar_ledaren_och_oppnar_bevakningen() {
+        var opened: Long? = null
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            openSwitchWatch = OpenSwitchWatchUi(
+                watchId = 7,
+                sellFundName = "Fond A",
+                daysWaiting = 2,
+                candidateCount = 3,
+                leaderName = "Kandidat B",
+                leaderChangeFraction = 0.021,
+            ),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state, onOpenSwitchWatch = { opened = it }) }
+        }
+
+        composeRule.onNodeWithText("Sålt Fond A · dag 2 · 3 alternativ bevakas").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Bäst sedan säljdagen: Kandidat B", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Visa bevakningen").performClick()
+
+        assertEquals(7L, opened)
+    }
+
+    @Test
+    fun utan_uppmatt_utveckling_sags_det_ut_i_stallet_for_en_tom_rad() {
+        // Kandidaternas kurser fylls på av bakgrundskörningen — tills dess finns ingen ledare,
+        // och en tom rad hade lästs som "inget har hänt" (ANA-4-principen).
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            openSwitchWatch = OpenSwitchWatchUi(
+                watchId = 7,
+                sellFundName = "Fond A",
+                daysWaiting = 1,
+                candidateCount = 2,
+            ),
+        )
+
+        composeRule.setContent { FonderTheme { HemContent(state = state) } }
+
+        composeRule.onNodeWithText("Ingen utveckling uppmätt än", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    /** Ett förslag i bytesplanen (HEM-8) — gemensamt underlag för bevakningstesterna nedan. */
+    private fun switchSuggestion(followed: Boolean) = SwitchPlanResolver.Suggestion(
+        recordId = 1,
+        planIndex = 0,
+        sellIsin = "SE_SALJ",
+        buyIsin = "SE_KOP",
+        sellFundName = "Fond A",
+        buyFundName = "Fond B",
+        fromLevel = 6,
+        toLevel = 4,
+        feeDeltaPercent = -0.1,
+        switchValueKr = 4_200.0,
+        followed = followed,
+    )
+
+    private fun switchPlanState(followed: Boolean, watchedSellIsins: Set<String> = emptySet()) = HemUiState(
+        loading = false,
+        hasHoldings = true,
+        riskProfile = RiskProfile(targetAllocation = mapOf(4 to 1.0)),
+        switchPlan = listOf(switchSuggestion(followed)),
+        watchedSellIsins = watchedSellIsins,
+    )
+
+    @Test
+    fun ett_okvitterat_byte_erbjuder_ingen_bevakning() {
+        // Bevakningen gäller perioden **efter** säljet — erbjuds den innan bytet gjorts mäter
+        // den dagar då pengarna fortfarande låg kvar.
+        composeRule.setContent { FonderTheme { HemContent(state = switchPlanState(followed = false)) } }
+
+        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
+    }
+
+    @Test
+    fun ett_salj_som_redan_bevakas_erbjuder_ingen_ny_bevakning() {
+        // Annars hade varje tryck startat ytterligare en bevakning av samma byte.
+        composeRule.setContent {
+            FonderTheme { HemContent(state = switchPlanState(followed = true, watchedSellIsins = setOf("SE_SALJ"))) }
+        }
+
+        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
+    }
+
+    @Test
+    fun ett_kvitterat_byte_utan_bevakning_erbjuder_att_starta_en() {
+        var started: SwitchPlanResolver.Suggestion? = null
+
+        composeRule.setContent {
+            FonderTheme {
+                HemContent(
+                    state = switchPlanState(followed = true),
+                    onStartSwitchWatch = { started = it },
+                )
+            }
+        }
+        composeRule.onNodeWithText("Bevaka alternativ").performScrollTo().performClick()
+
+        assertEquals(1L, started?.recordId)
     }
 }

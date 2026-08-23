@@ -537,6 +537,7 @@ private fun backupMessageText(message: BackupMessage): String = when (message) {
         message.summary.funds,
         message.summary.transactions,
         message.summary.suggestionRecords,
+        message.summary.switchWatches,
     )
     is BackupMessage.RestoreFailed -> when (message.reason) {
         BackupFormatException.Reason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_restore_failed_version)

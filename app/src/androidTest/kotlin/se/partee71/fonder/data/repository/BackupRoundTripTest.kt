@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -26,6 +27,8 @@ import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.DownturnReaction
@@ -33,6 +36,8 @@ import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TimeHorizon
 
 /**
@@ -64,8 +69,8 @@ class BackupRoundTripTest {
             produceFile = { tempFolder.newFile("backup_roundtrip.preferences_pb") },
         )
         preferences = PreferencesRepository(dataStore)
-        backup = LocalBackupRepository(db, db.fundDao(), db.transactionDao(), db.suggestionRecordDao(), preferences)
-        transactions = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao())
+        backup = LocalBackupRepository(db, db.fundDao(), db.transactionDao(), db.suggestionRecordDao(), db.switchWatchDao(), preferences)
+        transactions = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao())
     }
 
     @After
@@ -107,6 +112,38 @@ class BackupRoundTripTest {
                 kind = SuggestionKind.FEE.name,
             ),
         )
+        // Ett öppet och ett avslutat byte (ANA-12, issue #114). Nollpunkten (navAtStart) kan
+        // inte återskapas i efterhand — kandidaten ligger inte i kurscachen (ANA-11) — och det
+        // avslutade bytet bär vad användaren faktiskt köpte.
+        val watchId = db.switchWatchDao().insertWatch(
+            SwitchWatchEntity(
+                id = 1, sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 19_900,
+                proceedsKr = 12_500.0, targetLevel = 4, sourceRecordId = 1,
+                closedAtEpochDay = null, boughtIsin = null, closeReason = null,
+            ),
+        )
+        db.switchWatchDao().insertCandidates(
+            listOf(
+                SwitchWatchCandidateEntity(
+                    watchId = watchId, isin = "SE0001466368", name = "Kandidat A",
+                    navAtStart = 95.25, navAtStartEpochDay = 19_900,
+                    source = SwitchWatchCandidateSource.AUTO.name, position = 0,
+                ),
+                SwitchWatchCandidateEntity(
+                    watchId = watchId, isin = "SE0004617590", name = "Kandidat B",
+                    navAtStart = null, navAtStartEpochDay = null,
+                    source = SwitchWatchCandidateSource.MANUELL.name, position = 1,
+                ),
+            ),
+        )
+        db.switchWatchDao().insertWatch(
+            SwitchWatchEntity(
+                id = 2, sellIsin = "SE0005991445", sellFundName = "Fond C", soldAtEpochDay = 19_500,
+                proceedsKr = null, targetLevel = null, sourceRecordId = null,
+                closedAtEpochDay = 19_505, boughtIsin = "SE0001466368",
+                closeReason = SwitchWatchCloseReason.KOPT.name,
+            ),
+        )
         preferences.setRiskProfile(
             RiskProfile(
                 targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
@@ -131,10 +168,14 @@ class BackupRoundTripTest {
         assertTrue(db.fundDao().getAll().isEmpty())
         assertTrue(db.transactionDao().getAll().isEmpty())
         assertTrue(db.suggestionRecordDao().getAll().isEmpty())
+        assertTrue(db.switchWatchDao().getAll().isEmpty())
 
         val summary = backup.restore(json).getOrThrow()
 
-        assertEquals(RestoreSummary(funds = 2, transactions = 2, suggestionRecords = 3), summary)
+        assertEquals(
+            RestoreSummary(funds = 2, transactions = 2, suggestionRecords = 3, switchWatches = 2),
+            summary,
+        )
 
         val funds = db.fundDao().getAll().sortedBy { it.fundId }
         assertEquals(listOf("LU0055631609", "SHB0000442"), funds.map { it.fundId })
@@ -161,6 +202,31 @@ class BackupRoundTripTest {
         assertEquals(listOf(0, 1, 0), records.map { it.planIndex })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
         assertEquals(95.25, records[0].buyNavAtSuggestion, 1e-9)
+
+        val watches = db.switchWatchDao().getAll().map { it.toDomain() }.sortedBy { it.id }
+        assertEquals(listOf("SE0000582033", "SE0005991445"), watches.map { it.sellIsin })
+        val open = watches.first()
+        assertEquals("Fond A", open.sellFundName)
+        assertEquals(19_900L, open.soldAtEpochDay)
+        assertEquals(12_500.0, open.proceedsKr!!, 1e-9)
+        assertEquals(4, open.targetLevel)
+        assertEquals(1L, open.sourceRecordId)
+        assertTrue(open.isOpen)
+        // Ordningen, källan och nollpunkten måste alla överleva: utan nollpunkten går
+        // utvecklingen sedan säljdagen aldrig att visa igen.
+        assertEquals(listOf("SE0001466368", "SE0004617590"), open.candidates.map { it.isin })
+        assertEquals(listOf(95.25, null), open.candidates.map { it.navAtStart })
+        assertEquals(listOf(19_900L, null), open.candidates.map { it.navAtStartEpochDay })
+        assertEquals(
+            listOf(SwitchWatchCandidateSource.AUTO, SwitchWatchCandidateSource.MANUELL),
+            open.candidates.map { it.source },
+        )
+
+        val closed = watches.last()
+        assertFalse(closed.isOpen)
+        assertEquals("SE0001466368", closed.boughtIsin)
+        assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
+        assertNull(closed.proceedsKr)
 
         val profile = preferences.riskProfile.first()
         assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), profile?.targetAllocation)

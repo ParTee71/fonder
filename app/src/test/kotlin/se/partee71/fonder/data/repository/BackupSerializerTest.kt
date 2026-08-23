@@ -1,6 +1,7 @@
 package se.partee71.fonder.data.repository
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -16,6 +17,10 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -61,6 +66,41 @@ class BackupSerializerTest {
                 sellNavAtSuggestion = 190.0, buyNavAtSuggestion = 70.0,
                 switchValueKr = 1_000.0, followed = null, batchEpochMillis = 0,
                 kind = SuggestionKind.FEE,
+            ),
+        ),
+        switchWatches = listOf(
+            SwitchWatch(
+                id = 2,
+                sellIsin = "SE0000582033",
+                sellFundName = "Fond A",
+                soldAtEpochDay = 19_900,
+                proceedsKr = 12_500.0,
+                targetLevel = 4,
+                sourceRecordId = 3,
+                candidates = listOf(
+                    SwitchWatchCandidate(
+                        id = 5, watchId = 2, isin = "SE0001466368", name = "Kandidat A",
+                        navAtStart = 95.25, navAtStartEpochDay = 19_900,
+                        source = SwitchWatchCandidateSource.AUTO, position = 0,
+                    ),
+                    SwitchWatchCandidate(
+                        id = 6, watchId = 2, isin = "SE0004617590", name = "Kandidat B",
+                        navAtStart = null, navAtStartEpochDay = null,
+                        source = SwitchWatchCandidateSource.MANUELL, position = 1,
+                    ),
+                ),
+            ),
+            SwitchWatch(
+                id = 3,
+                sellIsin = "SE0005991445",
+                sellFundName = "Fond C",
+                soldAtEpochDay = 19_500,
+                proceedsKr = null,
+                targetLevel = null,
+                sourceRecordId = null,
+                closedAtEpochDay = 19_505,
+                boughtIsin = "SE0001466368",
+                closeReason = SwitchWatchCloseReason.KOPT,
             ),
         ),
         riskProfile = RiskProfile(
@@ -151,7 +191,7 @@ class BackupSerializerTest {
         assertEquals(
             setOf(
                 "formatVersion", "exportedAtEpochMillis", "funds", "transactions",
-                "suggestionRecords", "riskProfile", "accountType", "themeMode",
+                "suggestionRecords", "switchWatches", "riskProfile", "accountType", "themeMode",
                 "chosenBenchmarkIsin",
             ),
             root.keys,
@@ -173,9 +213,55 @@ class BackupSerializerTest {
             root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys,
         )
         assertEquals(
+            setOf(
+                "id", "sellIsin", "sellFundName", "soldAtEpochDay", "proceedsKr", "targetLevel",
+                "sourceRecordId", "closedAtEpochDay", "boughtIsin", "closeReason", "candidates",
+            ),
+            root.getValue("switchWatches").jsonArray.first().jsonObject.keys,
+        )
+        assertEquals(
+            setOf("id", "watchId", "isin", "name", "navAtStart", "navAtStartEpochDay", "source", "position"),
+            root.getValue("switchWatches").jsonArray.first().jsonObject
+                .getValue("candidates").jsonArray.first().jsonObject.keys,
+        )
+        assertEquals(
             setOf("targetAllocation", "answers", "targetRiskLevel"),
             root.getValue("riskProfile").jsonObject.keys,
         )
+    }
+
+    @Test
+    fun `ett pagaende byte overlever med nollpunkt, kalla och avslut`() {
+        // Nollpunkten (navAtStart) kan inte återskapas i efterhand: kandidaten ligger inte i
+        // kurscachen (ANA-11), så tappas den går utvecklingen sedan säljdagen aldrig att visa igen.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+
+        val open = restored.switchWatches.first { it.isOpen }
+        assertEquals(listOf(95.25, null), open.candidates.map { it.navAtStart })
+        assertEquals(listOf(19_900L, null), open.candidates.map { it.navAtStartEpochDay })
+        assertEquals(
+            listOf(SwitchWatchCandidateSource.AUTO, SwitchWatchCandidateSource.MANUELL),
+            open.candidates.map { it.source },
+        )
+        assertEquals(listOf(0, 1), open.candidates.map { it.position })
+        assertEquals(3L, open.sourceRecordId)
+
+        val closed = restored.switchWatches.first { !it.isOpen }
+        assertEquals("SE0001466368", closed.boughtIsin)
+        assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
+    }
+
+    @Test
+    fun `en fil utan switchWatches lases som inga pagaende byten`() {
+        // Filer skrivna före issue #114 saknar nyckeln helt. Fältet är tillagt med default, så
+        // FORMAT_VERSION höjs inte — en äldre fil ska läsas, inte avvisas.
+        val root = Json.parseToJsonElement(BackupSerializer.encode(fullPayload())).jsonObject
+        val utanBevakningar = JsonObject(root.filterKeys { it != "switchWatches" }).toString()
+
+        val restored = BackupSerializer.decode(utanBevakningar).getOrThrow()
+
+        assertTrue(restored.switchWatches.isEmpty())
+        assertEquals(3, restored.suggestionRecords.size)
     }
 
     @Test

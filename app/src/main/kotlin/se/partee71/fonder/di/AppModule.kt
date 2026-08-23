@@ -18,6 +18,7 @@ import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
+import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import javax.inject.Singleton
 
@@ -68,4 +69,7 @@ object AppModule {
 
     @Provides
     fun provideSuggestionRecordDao(db: AppDatabase): SuggestionRecordDao = db.suggestionRecordDao()
+
+    @Provides
+    fun provideSwitchWatchDao(db: AppDatabase): SwitchWatchDao = db.switchWatchDao()
 }
