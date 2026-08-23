@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.52.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.53.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -126,6 +126,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.53.0 | **Pågående byte** (ANA-12/ANA-13, #114): mellan att du sålt och att likviden är framme kan du nu bevaka ett par alternativa fonder att byta till. Bevakningen startas från ett kvitterat bytesförslag på Hem eller fondkortet, eller fristående från en säljrad i Sålda fonder. Appen fyller listan med köpkandidater på rätt risknivå — samma urval som bytesplanen använder — och du lägger till egna ur Fondsök, upp till fem. Skärmen visar säljfonden och alla alternativ i samma diagram, och per rad vad fonden gjort **sedan säljdagen** i kronor och procent. "Köpte den här" stänger bevakningen; appen genomför fortfarande aldrig ett byte. Hem visar ett kort för en pågående bevakning med den kandidat som gått bäst |
 | 0.52.0 | **Molnbackup till Google Drive** (TP-7 steg 2 / SET-7, #110): säkerhetskopieringskortet i Inställningar skriver nu hela innehållet till en dold mapp i din Drive — automatiskt en gång per dygn, och på begäran med en knapp. Kortet visar när den senaste kopian togs, och säger till när Drive behöver din tillåtelse. Det är den första återställningsvägen appen både kan sköta åt dig och själv verifiera; filexporten finns kvar och fungerar utan konto och utan nätverk. Återställning från Drive ersätter all data och ligger bakom samma bekräftelse som filåterställningen. De fem senaste kopiorna behålls |
 | 0.51.0 | **Google-inloggning** i Inställningar via Firebase Auth och Credential Manager (TP-6, #106): kortet visar inloggad adress och "Logga ut", eller "Inte inloggad" och en inloggningsknapp. Ett avbrutet kontoval visas aldrig som ett fel. Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Drive (TP-7 steg 2), vilket kortets text säger rakt ut. Auto Backup begränsas samtidigt till databasen och inställningarna; tidigare kopierades appens hela datakatalog, vilket nu även hade omfattat den sparade inloggningen (NFR-1) |
 
@@ -152,8 +153,10 @@ data/
 ├── repository/   TransactionRepository (Room) · FundPriceRepository (Handelsbanken + ISIN-källkedja) ·
 │                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet + persisterad
 │                 billigare-alternativ-jämförelse + kända risknivåer, #57/#61/#68) ·
-│                 BackupRepository/LocalBackupRepository (fil, SET-6) · DriveBackupRepository (moln, SET-7)
-└── room/         AppDatabase (v9) · entities (inkl. FxRateEntity, FundMetadataEntity) · daos (inkl. FxRateDao, FundMetadataDao)
+│                 BackupRepository/LocalBackupRepository (fil, SET-6) · DriveBackupRepository (moln, SET-7) ·
+│                 SwitchWatchRepository (pågående byte mellan sälj och köp, ANA-12/#114)
+└── room/         AppDatabase (v15) · entities (inkl. FxRateEntity, FundMetadataEntity, SwitchWatchEntity) ·
+                  daos (inkl. FxRateDao, FundMetadataDao, SwitchWatchDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
@@ -171,7 +174,8 @@ domain/
                   PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61) ·
                   PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66) ·
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
-                  PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68)
+                  PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
+                  SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114)
 ui/
 ├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
 │                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61,
@@ -187,13 +191,16 @@ ui/
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel (tema, kursuppdatering, riskprofil-ingång SET-3/#68 …)
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
+├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
+│                 sälj och köp, ANA-12/ANA-13, #114)
 ├── navigation/   AppNavigation · Screen
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
 │                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
 ├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
 └── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
-worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61)
+worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61 ·
+                  kandidatkurser för pågående byten, HEM-11/#114)
 ```
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
