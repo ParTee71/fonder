@@ -59,11 +59,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "715020161801-nmdf5qhp9i60p112gq0hn15o3t62ufbc.apps.googleusercontent.com",
+          "client_id": "715020161801-od6ivopkd7biso8iqljpnk8bqemdl36p.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "se.partee71.fonder",
-            "certificate_hash": "b69ec9b9e9c889ddade99f3412e8536920b333fb"
+            "certificate_hash": "66e6a60d6c7e4d7993fbe13e9b57585f15e9361a"
           }
         },
         {
