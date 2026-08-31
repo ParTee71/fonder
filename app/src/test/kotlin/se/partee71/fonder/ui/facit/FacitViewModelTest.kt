@@ -170,6 +170,16 @@ class FacitViewModelTest {
     }
 
     @Test
+    fun `refresh startar bytesplansskanningen (UI-11)`() = runTest(dispatcher) {
+        // Facit läser bara cachen — utan skanningen finns ingenting nytt att räkna om, så det
+        // är den dragningen ska starta, inte en kursuppdatering.
+        viewModel().refresh()
+
+        assertEquals(1, fakeScheduler.switchPlanScans)
+        assertEquals(0, fakeScheduler.manualRefreshes)
+    }
+
+    @Test
     fun `summeringskortet snurrar medan bytesplanen skannas`() = runTest(dispatcher) {
         // Det är skanningen som spelar in nya rader och fyller på utfallens NAV — alltså precis
         // den data kortet redovisar. En molnbackup gör det inte, och ska inte snurra kortet.

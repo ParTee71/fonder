@@ -292,11 +292,6 @@ class SettingsViewModel @Inject constructor(
         databaseCleared.update { false }
     }
 
-    /** Forcerar en kursuppdatering oavsett staleness-gate — den manuella "Uppdatera nu"-knappen (SET-2, issue #27). */
-    fun refreshPricesNow() {
-        fundPriceRefreshScheduler.triggerManualRefresh()
-    }
-
     /**
      * Exporterar hela backup-kontraktet och lämnar JSON:en till [write], som skriver den dit
      * användaren valt (SET-6). Filen och `Uri`:n hör hemma i skärmen — ViewModel:en känner bara

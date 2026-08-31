@@ -108,7 +108,6 @@ fun SettingsScreen(
         onOpenBenchmarkPicker = onOpenBenchmarkPicker,
         onClearBenchmark = viewModel::clearBenchmark,
         onAccountTypeSelected = viewModel::setAccountType,
-        onRefreshPricesNow = viewModel::refreshPricesNow,
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
         onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
         onBackupMessageDismissed = viewModel::onBackupMessageDismissed,
@@ -135,7 +134,6 @@ fun SettingsContent(
     onOpenBenchmarkPicker: () -> Unit = {},
     onClearBenchmark: () -> Unit = {},
     onAccountTypeSelected: (AccountType) -> Unit = {},
-    onRefreshPricesNow: () -> Unit = {},
     onExportBackup: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
     onBackupMessageDismissed: () -> Unit = {},
@@ -273,7 +271,10 @@ fun SettingsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
-                Button(onClick = onRefreshPricesNow) { Text(stringResource(R.string.settings_refresh_prices_button)) }
+                // Ingen "Uppdatera nu"-knapp längre (SET-2 struken): uppdatering sker med en
+                // dragning där datan faktiskt visas (UI-11), inte tre skärmar bort under en
+                // inställningsrubrik. Raden ovan står kvar — den svarar på "hur färsk är datan",
+                // vilket är en annan fråga än "uppdatera den".
             }
         }
 

@@ -246,15 +246,6 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `refreshPricesNow forcerar en manuell uppdatering via schedulern (SET-2)`() {
-        val vm = viewModel()
-
-        vm.refreshPricesNow()
-
-        assertEquals(1, fakeScheduler.manualRefreshes)
-    }
-
-    @Test
     fun `kurskortet snurrar under en kursuppdatering, backup-kortet gor det inte`() = runTest(dispatcher) {
         val vm = viewModel()
 

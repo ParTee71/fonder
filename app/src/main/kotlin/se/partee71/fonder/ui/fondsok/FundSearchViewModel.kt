@@ -38,6 +38,12 @@ data class FundSearchUiState(
      */
     val loadFailed: Boolean = false,
     /**
+     * Sant medan en **användarstyrd** omhämtning av katalogen pågår (UI-11). Skild från
+     * [loading]: den första laddningen har inget innehåll att visa och får sin egen
+     * förloppsindikator, medan en dragning sker ovanpå en lista som redan står där.
+     */
+    val refreshing: Boolean = false,
+    /**
      * Risknivå (1–7, TP-21) per fond i [results] (UI-10, issue #85). Nyckel: `Fund.fundId`.
      * Katalogens träffar saknar ISIN (`HandelsbankenHtmlParser.parseFundCatalog`), så nivån slås
      * upp på normaliserat fondnamn mot **cachad** metadata
@@ -71,6 +77,12 @@ class FundSearchViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val loading = MutableStateFlow(true)
     private val loadFailed = MutableStateFlow(false)
+
+    /** Se [FundSearchUiState.refreshing] — bara den användarstyrda omhämtningen, inte första laddningen. */
+    private val refreshing = MutableStateFlow(false)
+
+    /** Pågående katalogshämtning — se [refresh]. */
+    private var catalogJob: Job? = null
 
     /** Fonder tillagda i den här sessionen — slås ihop med de redan bevakade, se [uiState]. */
     private val addedThisSession = MutableStateFlow<Set<String>>(emptySet())
@@ -113,27 +125,48 @@ class FundSearchViewModel @Inject constructor(
             )
         }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
             state.copy(addedFundIds = added)
-        }.combine(loadFailed) { state, failed -> state.copy(loadFailed = failed) }
+        }.combine(combine(loadFailed, refreshing) { failed, isRefreshing -> failed to isRefreshing }) { state, (failed, isRefreshing) ->
+            state.copy(loadFailed = failed, refreshing = isRefreshing)
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = FundSearchUiState(),
             )
 
+    /**
+     * Hämtar fondkatalogen. Körs en gång när skärmen öppnas och sedan **på begäran** när
+     * användaren drar ned (UI-11) — samma kodväg, så en dragning ger exakt det skärmöppningen
+     * ger. Ett nätverksfel är den vanligaste anledningen att vilja dra: [loadFailed] visas som
+     * ett eget tillstånd (issue #78) och dragningen är vägen ur det.
+     *
+     * En pågående hämtning återanvänds i stället för att avbrytas — katalogen är ~125 kB, och
+     * två parallella hämtningar vore två svar på samma fråga.
+     */
+    fun refresh() {
+        if (catalogJob?.isActive == true) return
+        catalogJob = viewModelScope.launch {
+            refreshing.value = true
+            try {
+                // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
+                // krascha (samma degraderingsprincip som onCompanySelected nedan).
+                val catalog = fundPriceRepository.fetchFundCatalog()
+                allFunds.value = catalog?.funds.orEmpty()
+                visibleFunds.value = catalog?.funds.orEmpty()
+                companies.value = catalog?.companies.orEmpty()
+                loadFailed.value = catalog == null
+                loading.value = false
+                catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
+                    ?.let(::onCompanySelected)
+            } finally {
+                refreshing.value = false
+            }
+        }
+    }
+
     init {
         viewModelScope.launch { riskByNameKey.value = fundMetadataRepository.cachedRiskByFundName() }
-        viewModelScope.launch {
-            // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
-            // krascha (samma degraderingsprincip som onCompanySelected nedan).
-            val catalog = fundPriceRepository.fetchFundCatalog()
-            allFunds.value = catalog?.funds.orEmpty()
-            visibleFunds.value = catalog?.funds.orEmpty()
-            companies.value = catalog?.companies.orEmpty()
-            loadFailed.value = catalog == null
-            loading.value = false
-            catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
-                ?.let(::onCompanySelected)
-        }
+        refresh()
     }
 
     fun onQueryChange(newQuery: String) {

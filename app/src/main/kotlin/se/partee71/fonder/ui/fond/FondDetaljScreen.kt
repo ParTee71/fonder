@@ -38,6 +38,7 @@ import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.WorkingIndicator
@@ -80,6 +81,7 @@ fun FondDetaljScreen(
 
     FondDetaljContent(
         state = state,
+        onRefresh = viewModel::refresh,
         onIsinConfirmed = viewModel::onIsinConfirmed,
         onSuggestionExpanded = viewModel::onSuggestionExpanded,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
@@ -92,6 +94,7 @@ fun FondDetaljScreen(
 @Composable
 fun FondDetaljContent(
     state: FondDetaljUiState,
+    onRefresh: () -> Unit = {},
     onIsinConfirmed: (String) -> Unit = {},
     onSuggestionExpanded: (String) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
@@ -118,51 +121,59 @@ fun FondDetaljContent(
             // att vinna något på, och en icke-komponerad sektion hade gjort resten av kortet
             // onåbart för `performScrollTo` i instrumenttesterna. LazyColumn behålls för att vyn
             // ska vara skrollbar (UI-5).
-            LazyColumn(modifier = modifier.fillMaxSize()) {
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        FundHeader(state = state, modifier = Modifier.padding(top = 16.dp))
-                        if (state.analysis != null) {
-                            AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = 12.dp))
-                            AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = 8.dp))
-                        }
-                        SwitchDecisionSection(
-                            state = state,
-                            chartPoints = chartPoints,
-                            onSuggestionExpanded = onSuggestionExpanded,
-                            onSwitchFollowedChange = onSwitchFollowedChange,
-                            onStartSwitchWatch = onStartSwitchWatch,
-                            modifier = Modifier.padding(vertical = 16.dp),
-                        )
-                        HorizontalDivider()
-                        FundLineChart(
-                            points = chartPoints,
-                            purchaseEpochDays = state.purchaseEpochDays,
-                            working = state.chartWorking,
-                            modifier = Modifier.padding(top = 16.dp),
-                        )
-                        // Allt förklarande material ligger hopfällt (ANA-10): analysen och
-                        // ordlistan är referens man slår upp, inte det man öppnar kortet för.
-                        if (state.analysis != null) {
-                            ExpandableSection(
-                                title = stringResource(R.string.analys_section_title),
-                                modifier = Modifier.padding(top = 8.dp),
-                            ) {
-                                AnalysisSection(analysis = state.analysis!!)
+            // Dra ned hämtar om fondens kurs och historik (UI-11) — samma kodväg som
+            // skärmöppningen använder, se FondDetaljViewModel.refresh.
+            PullToRefreshContainer(
+                refreshing = state.priceRefreshing,
+                onRefresh = onRefresh,
+                modifier = modifier,
+            ) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            FundHeader(state = state, modifier = Modifier.padding(top = 16.dp))
+                            if (state.analysis != null) {
+                                AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = 12.dp))
+                                AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = 8.dp))
                             }
-                        }
-                        ExpandableSection(
-                            title = stringResource(R.string.analys_glossary_title),
-                            modifier = Modifier.padding(top = 8.dp),
-                        ) {
-                            AnalysisGlossary()
-                        }
-                        if (state.isin == null) {
-                            IsinInput(
-                                suggestedIsin = state.suggestedIsin,
-                                onConfirm = onIsinConfirmed,
+                            SwitchDecisionSection(
+                                state = state,
+                                chartPoints = chartPoints,
+                                onSuggestionExpanded = onSuggestionExpanded,
+                                onSwitchFollowedChange = onSwitchFollowedChange,
+                                onStartSwitchWatch = onStartSwitchWatch,
                                 modifier = Modifier.padding(vertical = 16.dp),
                             )
+                            HorizontalDivider()
+                            FundLineChart(
+                                points = chartPoints,
+                                purchaseEpochDays = state.purchaseEpochDays,
+                                working = state.chartWorking,
+                                modifier = Modifier.padding(top = 16.dp),
+                            )
+                            // Allt förklarande material ligger hopfällt (ANA-10): analysen och
+                            // ordlistan är referens man slår upp, inte det man öppnar kortet för.
+                            if (state.analysis != null) {
+                                ExpandableSection(
+                                    title = stringResource(R.string.analys_section_title),
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) {
+                                    AnalysisSection(analysis = state.analysis!!)
+                                }
+                            }
+                            ExpandableSection(
+                                title = stringResource(R.string.analys_glossary_title),
+                                modifier = Modifier.padding(top = 8.dp),
+                            ) {
+                                AnalysisGlossary()
+                            }
+                            if (state.isin == null) {
+                                IsinInput(
+                                    suggestedIsin = state.suggestedIsin,
+                                    onConfirm = onIsinConfirmed,
+                                    modifier = Modifier.padding(vertical = 16.dp),
+                                )
+                            }
                         }
                     }
                 }

@@ -226,6 +226,28 @@ class SwitchWatchViewModel @Inject constructor(
     }
 
     /**
+     * Dra ned för att uppdatera (UI-11) — hämtar om kandidaternas historik och säljfondens
+     * kurva. Kandidaterna ligger per definition inte i kurscachen (ANA-11), så det som visas är
+     * alltid hämtningen från skärmöppningen; utan den här vägen fanns ingen väg till färskare
+     * tal än att lämna skärmen och komma tillbaka.
+     *
+     * Nollställer hämtningsspärrarna i stället för att gå runt dem, så `ensureHistories` gör
+     * exakt vad den gör vid skärmöppning — en andra kodväg hade kunnat hämta ett annat fönster
+     * och därmed en annan nollpunkt. Kandidatlistan fylls **inte** på igen: appens förslag
+     * (ANA-13) hör till bevakningens start, och att byta ut alternativen mitt under en pågående
+     * jämförelse vore ett annat svar på en fråga användaren redan ställt.
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            val current = watch.first() ?: return@launch
+            requestedHistories.clear()
+            sellSeriesLoaded = false
+            ensureSellSeries(current)
+            ensureHistories(current)
+        }
+    }
+
+    /**
      * Senast kända kurs för kandidaten: den hämtade historikens sista punkt. Serien är hämtad i
      * det här ögonblicket och är därmed alltid minst lika färsk som cachen — och kandidaten
      * ligger per definition inte i kurscachen som ett innehav (ANA-11), så den vore ändå bara

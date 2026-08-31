@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.55.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.56.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -126,6 +126,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.56.0 | **Dra ned för att uppdatera** (UI-11, #119): Hem, Portfölj, Fonddetalj, Pågående byte, Facit och Fondsök uppdateras nu med en dragning — där datan faktiskt visas. Knappen "Uppdatera nu" i Inställningar är borttagen; vägen dit var lämna skärmen, skrolla till kortet, trycka och gå tillbaka, medan gesten alla andra appar har inte gjorde något. Varje skärm hämtar det just den visar: Hem och Portfölj forcerar en kursuppdatering, Fonddetalj fondens historik, Pågående byte kandidaternas kurvor, Facit bytesplansskanningen och Fondsök fondkatalogen. "Senast uppdaterad" står kvar i Inställningar. Snurran är samma signal som korten använder, så den slutar när datan faktiskt landat |
 | 0.55.0 | **Väntesnurra på korten** (NAV-6, #118): varje kort och varje diagram visar nu en liten snurra i rubriken medan just dess data hämtas eller räknas om — totalen och innehavsraderna när kurserna uppdateras, exponeringskartan och avgiftskortet när fondmetadatan slås upp, riskkortet när bytesplanen skannas, avkastningskurvan när referensfonden hämtas, backup-kortet när molnkopian körs. Tidigare fanns bara en indikator högst upp i appen, som sa att *något* pågick men inte vad; ett kort med nollor gick därför inte att skilja från ett kort där appen faktiskt inte vet. Snurran är bunden till just de jobb som skriver kortets data, så en molnbackup inte får fondkorten att snurra |
 | 0.54.0 | **Tidsviktad avkastningskurva** (HEM-9/HEM-10, #116): diagrammet på Hem mäter nu hur dina fonder faktiskt utvecklats, i stället för avkastningen på insatt kapital räknad om per dag. Insättningar, uttag och byten flyttar inte längre kurvan, så periodsiffrorna går att jämföra med varandra — tidigare kunde "5 år" visa någon enstaka procent samtidigt som 1 år och 3 år såg utmärkta ut, bara för att en stor påfyllning låg strax efter femårsfönstrets startdag. Kurvan slutar därför inte längre på samma procent som totalen överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick, och texten under diagrammet säger det. Indexjämförelsen mäts med samma mått som förut |
 | 0.53.0 | **Pågående byte** (ANA-12/ANA-13, #114): mellan att du sålt och att likviden är framme kan du nu bevaka ett par alternativa fonder att byta till. Bevakningen startas från ett kvitterat bytesförslag på Hem eller fondkortet, eller fristående från en säljrad i Sålda fonder. Appen fyller listan med köpkandidater på rätt risknivå — samma urval som bytesplanen använder — och du lägger till egna ur Fondsök, upp till fem. Skärmen visar säljfonden och alla alternativ i samma diagram, och per rad vad fonden gjort **sedan säljdagen** i kronor och procent. "Köpte den här" stänger bevakningen; appen genomför fortfarande aldrig ett byte. Hem visar ett kort för en pågående bevakning med den kandidat som gått bäst |

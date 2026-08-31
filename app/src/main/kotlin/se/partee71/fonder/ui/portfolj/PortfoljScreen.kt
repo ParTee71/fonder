@@ -31,6 +31,7 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.ProfitTakeBadge
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
@@ -52,7 +53,12 @@ fun PortfoljScreen(
     viewModel: PortfoljViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    PortfoljContent(state = state, onFundClick = onFundClick, modifier = modifier)
+    PortfoljContent(
+        state = state,
+        onFundClick = onFundClick,
+        onRefresh = viewModel::refresh,
+        modifier = modifier,
+    )
 }
 
 /** Tillståndsdriven, testbar del av [PortfoljScreen] — inget ViewModel/Hilt-beroende (issue #14). */
@@ -60,6 +66,7 @@ fun PortfoljScreen(
 fun PortfoljContent(
     state: PortfoljUiState,
     onFundClick: (String) -> Unit,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -76,18 +83,25 @@ fun PortfoljContent(
         // i tester — till skillnad från Hem har innehavsraderna här riktiga lazy `items()`,
         // inte allihop under en enda icke-lazy `Column`, så `onNodeWithText(...).performScrollTo()`
         // hittar aldrig en rad som ännu inte komponerats (issue #66).
-        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
-            item { TotalCard(state = state) }
-            item { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
-            items(state.holdings, key = { it.fund.fundId }) { holding ->
-                HoldingRow(
-                    holding = holding,
-                    performance = state.performance[holding.fund.fundId],
-                    analysis = state.analysis[holding.fund.fundId],
-                    riskLevel = state.riskLevels[holding.fund.fundId],
-                    working = state.holdingWorking(holding.fund.fundId),
-                    onClick = { onFundClick(holding.fund.fundId) },
-                )
+        // Dra ned uppdaterar (UI-11) — bara med innehav: utan dem finns ingen kurs att hämta.
+        else -> PullToRefreshContainer(
+            refreshing = state.pricesWorking || state.refreshingFundIds.isNotEmpty(),
+            onRefresh = onRefresh,
+            modifier = modifier,
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
+                item { TotalCard(state = state) }
+                item { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
+                items(state.holdings, key = { it.fund.fundId }) { holding ->
+                    HoldingRow(
+                        holding = holding,
+                        performance = state.performance[holding.fund.fundId],
+                        analysis = state.analysis[holding.fund.fundId],
+                        riskLevel = state.riskLevels[holding.fund.fundId],
+                        working = state.holdingWorking(holding.fund.fundId),
+                        onClick = { onFundClick(holding.fund.fundId) },
+                    )
+                }
             }
         }
     }

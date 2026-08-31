@@ -22,7 +22,8 @@ import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
  * Instrumenterat test av Inställningars tillståndsdrivna innehåll (issue #27) — fokuserar på
- * kursuppdateringskortet (SET-2): "Senast uppdaterad" och "Uppdatera nu".
+ * kursuppdateringskortet (SET-2): "Senast uppdaterad". Knappen "Uppdatera nu" är struken
+ * (UI-11), och ett test vaktar att den inte kommer tillbaka.
  */
 @RunWith(AndroidJUnit4::class)
 class SettingsScreenTest {
@@ -55,21 +56,15 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun uppdatera_nu_knappen_anropar_callback() {
-        var called = false
+    fun uppdatera_nu_knappen_finns_inte_langre() {
+        // SET-2:s knapp är struken (UI-11): uppdatering sker med en dragning där datan visas.
+        // Kortet finns kvar för "Senast uppdaterad", som svarar på en annan fråga.
         composeRule.setContent {
-            FonderTheme {
-                SettingsContent(state = SettingsUiState(), onRefreshPricesNow = { called = true })
-            }
+            FonderTheme { SettingsContent(state = SettingsUiState()) }
         }
 
-        // performScrollTo före varje knappklick i den här filen: Inställningar är en
-        // `verticalScroll`-kolumn som växer med varje nytt kort, och en knapp som hamnar under
-        // skärmkanten är fortfarande *komponerad* — assertExists passerar, performClick kastar
-        // inget, men klicket landar utanför noden och callbacken uteblir. Det har nu bitit två
-        // gånger (issue #78:s "Stäng", och den här när facit-kortet lades in ovanför, #80).
-        composeRule.onNodeWithText("Uppdatera nu").performScrollTo().performClick()
-        assertTrue(called)
+        composeRule.onNodeWithText("Kursuppdatering").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Uppdatera nu").assertDoesNotExist()
     }
 
     // --- Riskprofil-ingång (SET-3, issue #68) ---
