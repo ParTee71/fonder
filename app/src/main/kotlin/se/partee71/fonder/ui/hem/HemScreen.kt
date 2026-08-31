@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,6 +77,15 @@ fun HemScreen(
  * (analys-summeringskortets flaggade fonder, HEM-4, plus avgiftskortets rader, HEM-5) i
  * stället för att göra det nåbart (UI-5, issue #63).
  */
+/**
+ * Adresserar Hems lista för `performScrollToIndex` i tester (UI-5, issue #66) — samma skäl och
+ * samma mönster som Portfölj, Facit och Pågående byte redan använder. Korten ligger som var sitt
+ * `item {}` och komponeras alltså inte förrän listan skrollats dit; utan taggen kunde ett test
+ * bara nå de kort som råkade rymmas i testviewporten, och en kortrubrik som gjorde korten några
+ * dp högre slog ut testerna för det sista kortet (riskkortet).
+ */
+const val HEM_LIST_TEST_TAG = "hem_list"
+
 @Composable
 fun HemContent(
     state: HemUiState,
@@ -93,7 +103,7 @@ fun HemContent(
             modifier = modifier,
         )
 
-        else -> LazyColumn(modifier = modifier.fillMaxSize()) {
+        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
             item { TotalCard(state = state) }
             state.openSwitchWatch?.let { watch ->
                 item {

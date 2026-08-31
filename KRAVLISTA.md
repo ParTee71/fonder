@@ -187,8 +187,12 @@ fäller bygget så länge `app/google-services.json` saknas.
   annars hade en molnbackup snurrat fondkorten och snurran slutat betyda något. Två nya delade
   komponenter (`CardTitleRow`, `WorkingIndicator`) plus `working` i `FundLineChart`; två kort som
   saknade rubrik (Hems utvecklingskort, avgiftskortets total) fick en, eftersom snurran behöver en
-  rad att sitta i som inte är den där beloppet ligger (UI-6). Ingen ny persisterad data — allt
-  härleds ur pågående arbete.
+  rad att sitta i som inte är den där beloppet ligger (UI-6). Rubrikraderna gjorde också korten
+  några dp högre, vilket slog ut Hems riskkortstester: kortet är sista `item {}` i en `LazyColumn`
+  och komponerades inte längre inom testviewporten. Hem fick därför den `testTag` UI-5 föreskriver
+  för just det (`HEM_LIST_TEST_TAG`, samma mönster som Portfölj/Facit/Pågående byte) — testerna
+  vilade tidigare på att korten råkade rymmas. Ingen ny persisterad data — allt härleds ur
+  pågående arbete.
 
 - **Bytet slutade där rådet gavs (#114):** Nya rader **ANA-12** (skärmen Pågående byte),
   **ANA-13** (kandidaturvalet), **HEM-11** (kortet på Hem) och **SLD-5** (fristående start ur
