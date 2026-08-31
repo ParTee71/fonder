@@ -111,11 +111,11 @@ data class HemUiState(
         month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
     ),
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
-    /** Portföljens totala avkastning i procent per känd NAV-dag (HEM-9, issue #96). Tom = historiken räcker inte till en enda punkt. */
+    /** Portföljens tidsviktade avkastning i procent per NAV-dag (HEM-9, issue #96/#116). Tom = historiken räcker inte till en enda punkt. */
     val returnSeries: PortfolioReturnSeriesCalc.Result = PortfolioReturnSeriesCalc.Result.EMPTY,
     /** Indexjämförelsen som skuggportfölj (HEM-10), null tills referensens historik finns cachad. */
     val benchmarkSeries: BenchmarkSeries? = null,
-    /** Köpdagar (epoch-day) för samtliga innehav — markeras i avkastningsdiagrammet, eftersom en insättning flyttar kurvan utan att någon avkastning skett (HEM-9). */
+    /** Köpdagar (epoch-day) för samtliga innehav — markeras i avkastningsdiagrammet, eftersom de förklarar varför kurvan och totalkortet visar olika tal (HEM-9). */
     val purchaseEpochDays: List<Long> = emptyList(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,

@@ -186,12 +186,15 @@ private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerfo
 private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
 
 /**
- * Portföljens totala avkastning i procent över tid (HEM-9, issue #96) med indexjämförelsen som
- * skuggportfölj (HEM-10) — samma delade [FundLineChart] som Fonddetalj (regel 4), i procentläge
- * ([ChartValueAxis.PROCENT]) så y-axeln alltid visar nollinjen och serierna inte indexeras.
+ * Portföljens **tidsviktade** avkastning i procent över tid (HEM-9, issue #96/#116) med
+ * indexjämförelsen som skuggportfölj (HEM-10) — samma delade [FundLineChart] som Fonddetalj
+ * (regel 4), i procentläge ([ChartValueAxis.PROCENT]) så y-axeln alltid visar nollinjen och
+ * serierna inte indexeras.
  *
- * Köpdagarna markeras med flit: måttet är kassaflödesokänsligt, så en insättning flyttar kurvan
- * utan att någon avkastning skett — utan markörerna hade den rörelsen sett ut som ett resultat.
+ * Kurvan svarar på "hur gick fonderna", totalkortet på "hur mycket har jag tjänat på insatt
+ * kapital". De två talen är därför inte samma sedan issue #116, och texten under diagrammet säger
+ * det rakt ut i stället för att låta läsaren upptäcka det. Köpdagarna markeras fortfarande — de
+ * flyttar inte längre kurvan, men de är det som förklarar varför de två siffrorna skiljer sig.
  *
  * Tre olika "det går inte"-lägen hålls isär i stället för att bakas ihop till ett tomt diagram:
  * ingen kurva alls (för lite historik), en kurva utan jämförelse (referensfonden inte hämtad än)

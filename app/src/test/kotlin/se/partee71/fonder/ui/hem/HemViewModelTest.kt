@@ -944,7 +944,9 @@ class HemViewModelTest {
     }
 
     @Test
-    fun `avkastningskurvan slutar pa samma tal som totalkortet visar`() = runTest(dispatcher) {
+    fun `avkastningskurvan ar tidsviktad`() = runTest(dispatcher) {
+        // Kurvan mäter fondernas utveckling (HEM-9, issue #116) — kedjade dagsavkastningar, inte
+        // en ögonblicksbild av avkastningen på insatt kapital som totalkortet visar.
         setUpHoldingForReturnSeries()
 
         val vm = viewModel()
@@ -954,7 +956,9 @@ class HemViewModelTest {
 
             assertEquals(3, state.returnSeries.points.size)
             assertEquals(0.0, state.returnSeries.points.first().second, 1e-9)
-            assertEquals(state.totalGainLossFraction!!, state.returnSeries.points.last().second, 1e-12)
+            // 100 → 110 → 120: 1,10 × (120/110) − 1 = +20 %.
+            assertEquals(0.10, state.returnSeries.points[1].second, 1e-9)
+            assertEquals(0.20, state.returnSeries.points.last().second, 1e-9)
             assertFalse(state.returnSeries.partial)
             cancelAndIgnoreRemainingEvents()
         }

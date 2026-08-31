@@ -12,7 +12,7 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 
 /**
- * [PortfolioReturnSeriesCalc] — kurvan bakom totalkortets procentsiffra (HEM-9) och
+ * [PortfolioReturnSeriesCalc] — portföljens tidsviktade avkastningskurva (HEM-9) och
  * skuggportföljen den jämförs med (HEM-10).
  */
 class PortfolioReturnSeriesCalcTest {
@@ -33,8 +33,11 @@ class PortfolioReturnSeriesCalcTest {
     private fun enFond(history: List<FundPrice>) =
         listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = history))
 
+    /** Avrundar bort flyttalsbruset så en hel kurva kan jämföras som lista i stället för punkt för punkt. */
+    private fun Double.round9(): Double = kotlin.math.round(this * 1e9) / 1e9
+
     @Test
-    fun `avkastningen per dag ar vardet mot anskaffningsvardet`() {
+    fun `kurvan ar en kedja av dagsavkastningar`() {
         val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
         val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 110.0, 12L to 90.0))
 
@@ -48,27 +51,123 @@ class PortfolioReturnSeriesCalcTest {
     }
 
     @Test
-    fun `sista punkten ar samma tal som totalkortet visar`() {
-        // Regressionsvakt: kurvan och PortfolioCalc.totalGainLossFraction (totalkortets siffra)
-        // måste svara identiskt på samma fråga — glider de isär visar Hem två sanningar.
+    fun `kedjan ar multiplikativ inte additiv`() {
+        // Två dagar à +10 % är +21 %, inte +20 %. Det är skillnaden mellan att kedja
+        // dagsavkastningar och att lägga ihop dem.
+        val transaktioner = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+        val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 110.0, 12L to 121.0))
+
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
+
+        assertEquals(0.21, result.points.last().second, 1e-9)
+    }
+
+    @Test
+    fun `en insattning mitt i perioden flyttar inte kurvan`() {
+        // Kärnregressionen för issue #116: samma fonder och samma kursutveckling ska ge exakt
+        // samma kurva oavsett hur mycket nytt kapital som sköts in på vägen. Med det gamla
+        // måttet (värde mot anskaffningsvärde) späddes den upparbetade procenten ut av
+        // insättningen, vilket gjorde långa perioder systematiskt sämre än korta.
+        val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 110.0, 12L to 121.0))
+        val utanPafyllning = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+        val medPafyllning = utanPafyllning + kop("A", day = 11, shares = 100.0, price = 110.0)
+
+        val utan = PortfolioReturnSeriesCalc.compute(listOf(fondA), utanPafyllning, historik)
+        val med = PortfolioReturnSeriesCalc.compute(listOf(fondA), medPafyllning, historik)
+
+        assertEquals(listOf(0.0, 0.10, 0.21), utan.points.map { it.second.round9() })
+        assertEquals(
+            utan.points.map { (dag, avkastning) -> dag to avkastning.round9() },
+            med.points.map { (dag, avkastning) -> dag to avkastning.round9() },
+        )
+    }
+
+    @Test
+    fun `ett byte samma dag ger ingen hack i kurvan`() {
+        // Sälj A och köp B samma dag. Det gamla måttet strök A:s upparbetade vinst ur serien
+        // när positionen stängdes — i en app som handlar om byten sänktes kurvan vid varje byte
+        // utan att en krona gått förlorad.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            kop("B", day = 12, shares = 5.0, price = 200.0),
+            salj("A", day = 11, shares = 10.0, price = 110.0),
+            kop("B", day = 11, shares = 11.0, price = 100.0),
         )
         val historik = mapOf(
-            "A" to priser("A", 10L to 100.0, 14L to 130.0),
-            "B" to priser("B", 12L to 200.0, 14L to 190.0),
+            "A" to priser("A", 10L to 100.0, 11L to 110.0),
+            "B" to priser("B", 10L to 100.0, 11L to 100.0, 12L to 110.0),
         )
-        val funds = listOf(fondA, fondB)
 
-        val kurva = PortfolioReturnSeriesCalc.compute(funds, transaktioner, historik)
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
+
+        // Dag 11: A:s +10 % räknas — den ägdes under rörelsen. Dag 12: B:s +10 % ovanpå det.
+        assertEquals(listOf(0.0, 0.10, 0.21), result.points.map { it.second.round9() })
+    }
+
+    @Test
+    fun `en forsaljning med vinst sanker inte kurvan`() {
+        val transaktioner = listOf(
+            kop("A", day = 10, shares = 10.0, price = 100.0),
+            salj("A", day = 11, shares = 5.0, price = 150.0),
+        )
+        val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 150.0, 12L to 150.0))
+
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
+
+        assertEquals(0.50, result.points.first { it.first == 11L }.second, 1e-9)
+        assertEquals(0.50, result.points.first { it.first == 12L }.second, 1e-9)
+    }
+
+    @Test
+    fun `dagsavkastningen ar vardeviktad mellan innehaven`() {
+        // 1 000 kr i A (+10 %) och 100 kr i B (+100 %) → 1 300 kr mot 1 100 kr, dvs +18,2 %.
+        // Ett osviktat snitt hade gett +55 %.
+        val transaktioner = listOf(
+            kop("A", day = 10, shares = 10.0, price = 100.0),
+            kop("B", day = 10, shares = 10.0, price = 10.0),
+        )
+        val historik = mapOf(
+            "A" to priser("A", 10L to 100.0, 11L to 110.0),
+            "B" to priser("B", 10L to 10.0, 11L to 20.0),
+        )
+
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
+
+        assertEquals(200.0 / 1_100.0, result.points.last().second, 1e-9)
+    }
+
+    @Test
+    fun `kurvan skiljer sig medvetet fran totalkortet nar insattningar gjorts`() {
+        // Kurvan mäter fondernas utveckling, totalkortet avkastningen på insatt kapital. Efter en
+        // påfyllning är de två olika tal — det är avsiktligt (issue #116) och sägs ut i UI-texten.
+        // Vaktar att kopplingen är medvetet bruten och inte tyst tappad igen.
+        val transaktioner = listOf(
+            kop("A", day = 10, shares = 10.0, price = 100.0),
+            kop("A", day = 11, shares = 100.0, price = 110.0),
+        )
+        val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 110.0, 12L to 121.0))
         val holdings = PortfolioCalc.withCurrentValue(
-            PortfolioCalc.computeHoldings(funds, transaktioner),
-            mapOf("A" to FundPrice("A", 14L, 130.0), "B" to FundPrice("B", 14L, 190.0)),
+            PortfolioCalc.computeHoldings(listOf(fondA), transaktioner),
+            mapOf("A" to FundPrice("A", 12L, 121.0)),
         )
 
-        assertEquals(14L, kurva.points.last().first)
-        assertEquals(PortfolioCalc.totalGainLossFraction(holdings)!!, kurva.points.last().second, 1e-12)
+        val kurva = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
+
+        assertEquals(0.21, kurva.points.last().second, 1e-9)
+        // Totalkortet: 110 andelar à 121 kr mot 12 000 kr investerat ≈ +10,9 %.
+        assertEquals(1_310.0 / 12_000.0, PortfolioCalc.totalGainLossFraction(holdings)!!, 1e-9)
+    }
+
+    @Test
+    fun `ett kop pa en dag utan NAV far med rorelsen till nasta kursdag`() {
+        // Köpet gjordes en helg — utan transaktionsdagen i tidslinjen hade kedjan startat först
+        // dag 12 och rörelsen från köpkursen dit fallit bort.
+        val transaktioner = listOf(kop("A", day = 11, shares = 10.0, price = 100.0))
+        val historik = mapOf("A" to priser("A", 10L to 100.0, 12L to 110.0))
+
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
+
+        assertEquals(listOf(11L, 12L), result.points.map { it.first })
+        assertEquals(0.10, result.points.last().second, 1e-9)
     }
 
     @Test
@@ -118,9 +217,10 @@ class PortfolioReturnSeriesCalcTest {
     }
 
     @Test
-    fun `delforsaljning andrar anskaffningsvardet enligt FIFO`() {
-        // Två köp till olika kurs, sedan en sälj av den första lotten: kvarvarande andelar har
-        // det dyrare köpets anskaffningsvärde, och kurvan ska följa det — inte kassaflödet.
+    fun `en delforsaljning flyttar inte kurvan`() {
+        // Två köp till olika kurs, sedan en sälj av den första lotten. Anskaffningsvärdet
+        // (FIFO) styr totalkortet, men inte den tidsviktade kurvan: kedjan följer kursrörelsen
+        // på de andelar som faktiskt ägdes varje dag.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             kop("A", day = 11, shares = 10.0, price = 200.0),
@@ -130,10 +230,12 @@ class PortfolioReturnSeriesCalcTest {
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
 
-        // Dag 12: 10 kvarvarande andelar à 200 kr i värde, anskaffningsvärde 10 × 200 = 2 000 → 0 %.
-        assertEquals(0.0, result.points.first { it.first == 12L }.second, 1e-9)
-        // Dag 13: värde 2 200 mot anskaffningsvärde 2 000 → +10 %.
-        assertEquals(0.10, result.points.first { it.first == 13L }.second, 1e-9)
+        // Dag 11: kursen dubblas på de 10 andelar som ägdes dag 10 → +100 %.
+        assertEquals(1.0, result.points.first { it.first == 11L }.second, 1e-9)
+        // Dag 12: säljdagen rör inte kedjan, kursen står still → oförändrat +100 %.
+        assertEquals(1.0, result.points.first { it.first == 12L }.second, 1e-9)
+        // Dag 13: +10 % på de kvarvarande andelarna → 2,0 × 1,1 − 1 = +120 %.
+        assertEquals(1.20, result.points.first { it.first == 13L }.second, 1e-9)
     }
 
     @Test
@@ -145,17 +247,26 @@ class PortfolioReturnSeriesCalcTest {
     }
 
     @Test
-    fun `helt avsald portfolj ger inga punkter efter forsaljningen`() {
-        // netInvested = 0 → ingen kvot att visa. Aldrig ett påhittat 0 %.
+    fun `en helt avsald portfolj flatlinjerar i stallet for att brytas`() {
+        // Dagarna mellan ett sälj och nästa köp (ett pågående byte, ANA-12) finns inget att
+        // värdera. Kedjan pausar på sin nivå — den upparbetade avkastningen försvinner inte,
+        // och när pengarna är tillbaka i marknaden fortsätter den utan hopp.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             salj("A", day = 11, shares = 10.0, price = 150.0),
+            kop("B", day = 13, shares = 15.0, price = 100.0),
         )
-        val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 150.0, 12L to 160.0))
+        val historik = mapOf(
+            "A" to priser("A", 10L to 100.0, 11L to 150.0, 12L to 160.0),
+            "B" to priser("B", 13L to 100.0, 14L to 110.0),
+        )
 
-        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
+        val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
 
-        assertEquals(listOf(10L), result.points.map { it.first })
+        assertEquals(listOf(10L, 11L, 12L, 13L, 14L), result.points.map { it.first })
+        // Dag 11 gav +50 %. Dag 12–13 står kedjan still (inget ägs, A:s fortsatta uppgång är
+        // inte portföljens), dag 14 lägger B:s +10 % ovanpå: 1,5 × 1,1 − 1 = +65 %.
+        assertEquals(listOf(0.0, 0.50, 0.50, 0.50, 0.65), result.points.map { it.second.round9() })
     }
 
     @Test
@@ -302,9 +413,25 @@ class PortfolioReturnSeriesCalcTest {
             ),
         )!!
 
-        // Dag 11: aktiedelen av köp 1 (500 kr → 5 andelar à 100) är värd 1 000, räntedelen 500.
-        // Köp 2 lägger till 500 + 500 till dagens kurser. Värde 2 500 mot investerat 2 000 = +25 %.
-        assertEquals(0.25, result.points.first { it.first == 11L }.second, 1e-9)
+        // Dag 11 mäts på köp 1:s andelar: 5 st à 100 i aktier (nu 200) och 5 st à 100 i räntor.
+        // 1 500 mot 1 000 = +50 %. Dagens andra insättning räknas först från dag 12 — den späder
+        // inte ut kurvan (issue #116).
+        assertEquals(0.50, result.points.first { it.first == 11L }.second, 1e-9)
+    }
+
+    @Test
+    fun `skuggportfoljen ar oberoende av nar insattningarna gjordes`() {
+        // Samma referensfond och samma kursutveckling ska ge samma skuggkurva oavsett
+        // insättningsmönster — annars mäter jämförelsen fortfarande kassaflöden.
+        val referens = priser("IDX", 10L to 100.0, 11L to 110.0, 12L to 121.0)
+        val enInsattning = listOf(kop("A", day = 10, shares = 10.0, price = 100.0))
+        val tvaInsattningar = enInsattning + kop("A", day = 11, shares = 100.0, price = 100.0)
+
+        val en = PortfolioReturnSeriesCalc.benchmark(enInsattning, enFond(referens))!!
+        val tva = PortfolioReturnSeriesCalc.benchmark(tvaInsattningar, enFond(referens))!!
+
+        assertEquals(listOf(0.0, 0.10, 0.21), en.points.map { it.second.round9() })
+        assertEquals(en.points.map { it.second.round9() }, tva.points.map { it.second.round9() })
     }
 
     @Test

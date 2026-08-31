@@ -57,8 +57,10 @@ object ChartSeriesNormalizer {
      * perioden, inte 10 procentenheter — subtraktion hade svarat fel på just den fråga
      * nollställningen ställer.
      *
-     * Med "Allt" vald är basdagen första köpet, där avkastningen per definition är 0 %, så
-     * kurvan är oförändrad och slutpunkten fortfarande totalkortets procent (HEM-9).
+     * Med "Allt" vald är basdagen kedjans start, där avkastningen per definition är 0 %, så kurvan
+     * är oförändrad. Serierna är tidsviktade index (issue #116), och kvoten mellan två punkter i en
+     * sådan kedja *är* produkten av de mellanliggande dagsfaktorerna — det är därför varje period
+     * svarar på sin egen fråga i stället för att bero på var basdagen råkar hamna (HEM-9).
      *
      * Basdagen väljs som i [index]: första dag **alla** serier har data, och en serie som
      * börjar senare gör resultatet [Result.partial]. Går basen inte att dividera med
