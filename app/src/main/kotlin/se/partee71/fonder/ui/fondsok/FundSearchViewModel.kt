@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -75,11 +76,21 @@ class FundSearchViewModel @Inject constructor(
     private val companies = MutableStateFlow<List<FundCompany>>(emptyList())
     private val selectedCompany = MutableStateFlow<FundCompany?>(null)
     private val query = MutableStateFlow("")
-    private val loading = MutableStateFlow(true)
-    private val loadFailed = MutableStateFlow(false)
+    /**
+     * Katalogens hämtningstillstånd i **ett** värde, inte tre flöden: de tre flaggorna beskriver
+     * samma hämtning, och delade de på var sitt `MutableStateFlow` gick det att observera ett
+     * mellanläge som aldrig funnits — "klar, utan fel, utan träffar" mellan att felflaggan och
+     * `loading` skrevs, eftersom `combine` cachar varje gren för sig och emitterar så fort
+     * någon av dem ändras. Ett sådant mellanläge är exakt vad UI:t inte får rita.
+     */
+    private data class CatalogState(
+        val loading: Boolean = true,
+        val loadFailed: Boolean = false,
+        /** Bara den användarstyrda omhämtningen (UI-11), inte första laddningen. */
+        val refreshing: Boolean = false,
+    )
 
-    /** Se [FundSearchUiState.refreshing] — bara den användarstyrda omhämtningen, inte första laddningen. */
-    private val refreshing = MutableStateFlow(false)
+    private val catalogState = MutableStateFlow(CatalogState())
 
     /** Pågående katalogshämtning — se [refresh]. */
     private var catalogJob: Job? = null
@@ -103,14 +114,16 @@ class FundSearchViewModel @Inject constructor(
     private val riskByNameKey = MutableStateFlow<Map<String, Int>>(emptyMap())
 
     val uiState: StateFlow<FundSearchUiState> =
-        combine(visibleFunds, companies, selectedCompany, query, loading) { funds, companies, selected, query, loading ->
+        combine(visibleFunds, companies, selectedCompany, query, catalogState) { funds, companies, selected, query, catalog ->
             val filtered = if (query.isBlank()) {
                 funds
             } else {
                 funds.filter { it.name.contains(query, ignoreCase = true) }
             }
             FundSearchUiState(
-                loading = loading,
+                loading = catalog.loading,
+                loadFailed = catalog.loadFailed,
+                refreshing = catalog.refreshing,
                 query = query,
                 companies = companies,
                 selectedCompany = selected,
@@ -125,19 +138,16 @@ class FundSearchViewModel @Inject constructor(
             )
         }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
             state.copy(addedFundIds = added)
-        }.combine(combine(loadFailed, refreshing) { failed, isRefreshing -> failed to isRefreshing }) { state, (failed, isRefreshing) ->
-            state.copy(loadFailed = failed, refreshing = isRefreshing)
-        }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = FundSearchUiState(),
-            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = FundSearchUiState(),
+        )
 
     /**
      * Hämtar fondkatalogen. Körs en gång när skärmen öppnas och sedan **på begäran** när
      * användaren drar ned (UI-11) — samma kodväg, så en dragning ger exakt det skärmöppningen
-     * ger. Ett nätverksfel är den vanligaste anledningen att vilja dra: [loadFailed] visas som
+     * ger. Ett nätverksfel är den vanligaste anledningen att vilja dra: [FundSearchUiState.loadFailed] visas som
      * ett eget tillstånd (issue #78) och dragningen är vägen ur det.
      *
      * En pågående hämtning återanvänds i stället för att avbrytas — katalogen är ~125 kB, och
@@ -146,7 +156,7 @@ class FundSearchViewModel @Inject constructor(
     fun refresh() {
         if (catalogJob?.isActive == true) return
         catalogJob = viewModelScope.launch {
-            refreshing.value = true
+            catalogState.update { it.copy(refreshing = true) }
             try {
                 // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
                 // krascha (samma degraderingsprincip som onCompanySelected nedan).
@@ -154,12 +164,13 @@ class FundSearchViewModel @Inject constructor(
                 allFunds.value = catalog?.funds.orEmpty()
                 visibleFunds.value = catalog?.funds.orEmpty()
                 companies.value = catalog?.companies.orEmpty()
-                loadFailed.value = catalog == null
-                loading.value = false
+                // Ett enda skriv: "klar" och "gick det bra" hör ihop och får aldrig observeras
+                // var för sig, se CatalogState.
+                catalogState.update { it.copy(loading = false, loadFailed = catalog == null) }
                 catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
                     ?.let(::onCompanySelected)
             } finally {
-                refreshing.value = false
+                catalogState.update { it.copy(refreshing = false) }
             }
         }
     }
@@ -179,17 +190,17 @@ class FundSearchViewModel @Inject constructor(
         selectedCompany.value = company
         if (company == null) {
             visibleFunds.value = allFunds.value
-            loading.value = false
+            catalogState.update { it.copy(loading = false) }
             return
         }
         // Sätts synkront, före coroutinen: annars finns ett observerbart mellanläge med det
         // *nya* bolaget men det *gamla* bolagets fondlista — i UI:t en blink av fel lista.
-        loading.value = true
+        catalogState.update { it.copy(loading = true) }
         companyLoadJob = viewModelScope.launch {
             // Null = hämtningen misslyckades; behåll den lista som redan visas i stället för
             // att tömma vyn (samma degraderingsprincip som kurscachen, POR-3).
             fundPriceRepository.fetchFundsForCompany(company.id)?.let { visibleFunds.value = it }
-            loading.value = false
+            catalogState.update { it.copy(loading = false) }
         }
     }
 
