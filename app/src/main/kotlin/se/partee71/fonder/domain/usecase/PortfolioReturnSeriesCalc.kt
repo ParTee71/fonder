@@ -6,26 +6,48 @@ import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
 
 /**
- * Portföljens **totala avkastning i procent över tid** (HEM-9) — historiken bakom den siffra
- * totalkortet visar som ett enda tal. Måttet är exakt [PortfolioCalc.totalGainLossFraction],
- * fast räknat om för varje känd NAV-dag: `(värde − nettoinvesterat) / nettoinvesterat`, med
- * FIFO-anskaffningsvärde ur [RealizedGainCalculator] precis som resten av appen (TP-15). Serien
- * och totalkortet får aldrig kunna svara olika på samma fråga.
+ * Portföljens **tidsviktade avkastning över tid** (HEM-9) — hur de fonder man ägt har utvecklats,
+ * oberoende av när pengarna sattes in.
  *
- * Tidslinjen är **unionen av kända NAV-dagar**, inte kalenderdagar: en helg eller en röd dag är
- * inte en dag portföljen rörde sig, och en framräknad punkt där skulle vara en påhittad
- * mätpunkt. Punkter före första köpet finns inte — då fanns ingen portfölj att mäta.
+ * Måttet är en kedja av dagsavkastningar: för varje par av på varandra följande dagar i tidslinjen
+ * värderas **gårdagens andelar** till båda dagarnas NAV, och kvoten dem emellan blir dagens faktor.
+ * Faktorerna multipliceras ihop till ett index som startar på 1,0 (kurvan ritar `index − 1`, dvs.
+ * fortfarande en andel: 0,12 = +12 %). Eftersom varje dag mäts på andelar som ägdes **innan** dagens
+ * transaktioner faller kassaflödena ur formeln av sig själva: pengar som köps in i dag börjar räknas
+ * först i morgon, och en fond som säljs i dag får ändå med sin rörelse i dag.
  *
- * Måttet är, precis som [PortfolioPerformanceCalc], **kassaflödesokänsligt**: en insättning
- * flyttar kvoten (nytt kapital till dagens kurs späder ut en upparbetad procent) utan att någon
- * avkastning skett. Det är samma begränsning som HEM-1 redan lever med, och skälet till att
- * köpdagarna markeras i diagrammet — och till att [benchmark] finns: en skuggportfölj med
- * *samma* kassaflöden är det enda sättet att jämföra bort just den effekten.
+ * Det här ersätter (issue #116) det tidigare måttet `(värde − nettoinvesterat) / nettoinvesterat`
+ * räknat om per dag. Det var en ögonblicksbild av *avkastningen på insatt kapital*, och två saker
+ * sänkte det utan att någon fond gått ned: en insättning späder ut den upparbetade procenten, och ett
+ * sälj eller ett byte stryker den realiserade vinsten ur serien helt (positionen försvinner ur
+ * [PortfolioCalc.computeHoldings] tillsammans med sitt anskaffningsvärde). När periodväljaren sedan
+ * nollställde mot fönstrets första dag ([ChartSeriesNormalizer.rebaseReturns]) blev periodsiffran en
+ * funktion av *när* pengarna kom in: ett femårsfönster vars basdag låg strax före en stor påfyllning
+ * kunde visa någon enstaka procent samtidigt som ett-, tre- och treårsfönstren såg utmärkta ut. En
+ * kedjad serie har inte det problemet — ett fönster ur kedjan **är** produkten av periodens
+ * dagsfaktorer, så alla perioder är jämförbara med varandra och med ett fondfaktablad.
  *
- * Ett innehav utan känd NAV en viss dag utesluts ur **både** värde och nettoinvesterat den
- * dagen — samma princip som [PortfolioCalc.totalGainLossFraction], som annars hade låtit en
- * fond utan kurs se ut som en total förlust — och serien markeras då [Result.partial] i stället
- * för att tyst visa en portfölj som inte är hela portföljen (HEM-2).
+ * Priset för det är att slutpunkten inte längre är [PortfolioCalc.totalGainLossFraction]. De två
+ * svarar medvetet på olika frågor — totalkortet på "hur mycket har jag tjänat på insatt kapital",
+ * kurvan på "hur gick fonderna" — och skillnaden sägs rakt ut i texten under diagrammet i stället
+ * för att döljas.
+ *
+ * Tidslinjen är **kända NAV-dagar plus transaktionsdagar**, inte kalenderdagar: en helg är inte en
+ * dag portföljen rörde sig, men en dag man handlat är en dag portföljen ändrades (och kan värderas
+ * till senast kända NAV). Extra dagar kan aldrig förvanska en kedja — en dag utan ny kurs ger faktor
+ * 1,0 — men utan transaktionsdagen hade rörelsen mellan köpet och nästa NAV-dag fallit bort. Punkter
+ * före första köpet finns inte; då fanns ingen portfölj att mäta.
+ *
+ * Ett innehav utan känd NAV en viss dag utesluts ur dagens faktor — samma princip som
+ * [PortfolioCalc.totalGainLossFraction], som annars hade låtit en fond utan kurs se ut som en total
+ * förlust — och serien markeras då [Result.partial] i stället för att tyst visa en portfölj som inte
+ * är hela portföljen (HEM-2). Saknas kursen bara för en enstaka dag framåtfylls den i stället (se
+ * [navOnOrBefore]) och dagen ger faktor 1,0.
+ *
+ * **Kedjan minns fel.** Ett felaktigt NAV i källan (en spik, en ojusterad andelssplit) blir en
+ * permanent nivåförskjutning för allt efter den dagen, medan det gamla kvotmåttet självläkte nästa
+ * dag. Källorna är oofficiella (TP-9/TP-14) och det är en medveten avvägning: en kedja är det enda
+ * sättet att göra perioderna jämförbara.
  */
 object PortfolioReturnSeriesCalc {
 
@@ -67,17 +89,18 @@ object PortfolioReturnSeriesCalc {
         val firstTransactionDay = transactions.minOf { it.epochDay }
 
         val sortedHistory = historyByFundId.mapValues { (_, prices) -> prices.sortedBy { it.epochDay } }
-        val timeline = sortedHistory.values
-            .flatMap { prices -> prices.map { it.epochDay } }
+        val transactionDays = transactions.map { it.epochDay }.distinct().sorted()
+        // Transaktionsdagarna ingår i tidslinjen även om de inte är NAV-dagar: annars föll rörelsen
+        // mellan ett köp gjort på en helg och nästa kursdag bort ur kedjan.
+        val timeline = (sortedHistory.values.flatMap { prices -> prices.map { it.epochDay } } + transactionDays)
             .filter { it >= firstTransactionDay }
             .distinct()
             .sorted()
         if (timeline.isEmpty()) return Result.EMPTY
 
-        // Innehav och anskaffningsvärde ändras bara på transaktionsdagar, så FIFO körs en gång
-        // per segment i stället för en gång per dag — annars hade "Allt" för en flerårig portfölj
-        // räknat om hela transaktionshistoriken tusentals gånger vid varje omkomposition.
-        val transactionDays = transactions.map { it.epochDay }.distinct().sorted()
+        // Innehav ändras bara på transaktionsdagar, så FIFO körs en gång per segment i stället för en
+        // gång per dag — annars hade "Allt" för en flerårig portfölj räknat om hela
+        // transaktionshistoriken tusentals gånger vid varje omkomposition.
         var nextTransactionIndex = 0
         var holdings = emptyList<Holding>()
         var holdingsComputed = false
@@ -89,6 +112,13 @@ object PortfolioReturnSeriesCalc {
         val points = mutableListOf<Pair<Long, Double>>()
         var partial = false
 
+        // Kedjans tillstånd: gårdagens innehav och gårdagens kurser. Dagens avkastning mäts på dem,
+        // inte på dagens — det är precis det som gör måttet oberoende av dagens in- och utflöden.
+        var index = 1.0
+        var started = false
+        var previousHoldings = emptyList<Holding>()
+        var previousNav = emptyMap<String, Double?>()
+
         for (day in timeline) {
             var segmentChanged = !holdingsComputed
             while (nextTransactionIndex < transactionDays.size && transactionDays[nextTransactionIndex] <= day) {
@@ -99,21 +129,49 @@ object PortfolioReturnSeriesCalc {
                 holdings = PortfolioCalc.computeHoldings(funds, transactions.filter { it.epochDay <= day })
                 holdingsComputed = true
             }
-            if (holdings.isEmpty()) continue
 
-            var value = 0.0
-            var invested = 0.0
-            for (holding in holdings) {
-                val nav = navOnOrBefore(holding.fund.fundId, day, sortedHistory, priceCursor)
-                if (nav == null) {
-                    partial = true
-                    continue
+            val navToday = (previousHoldings + holdings)
+                .map { it.fund.fundId }
+                .distinct()
+                .associateWith { fundId -> navOnOrBefore(fundId, day, sortedHistory, priceCursor) }
+
+            if (started) {
+                var valueYesterday = 0.0
+                var valueToday = 0.0
+                for (holding in previousHoldings) {
+                    val before = previousNav[holding.fund.fundId]
+                    val now = navToday[holding.fund.fundId]
+                    if (before == null || now == null) {
+                        partial = true
+                        continue
+                    }
+                    valueYesterday += holding.netShares * before
+                    valueToday += holding.netShares * now
                 }
-                value += holding.netShares * nav
-                invested += holding.netInvested
+                // Ingen värderbar portfölj i går (t.ex. dagarna mellan ett sälj och nästa köp under
+                // ett fondbyte) → faktor 1,0. Kedjan pausar på sin nivå i stället för att brytas.
+                if (valueYesterday > 0.0) index *= valueToday / valueYesterday
+                points += day to (index - 1.0)
+            } else {
+                var value = 0.0
+                for (holding in holdings) {
+                    val now = navToday[holding.fund.fundId]
+                    if (now == null) {
+                        partial = true
+                        continue
+                    }
+                    value += holding.netShares * now
+                }
+                // Kedjan startar först den dag portföljen går att värdera — dessförinnan finns inget
+                // att mäta, och en 0 %-punkt där hade påstått att en omätbar dag var en oförändrad dag.
+                if (value > 0.0) {
+                    started = true
+                    points += day to 0.0
+                }
             }
-            if (invested <= 0.0) continue
-            points += day to (value - invested) / invested
+
+            previousHoldings = holdings
+            previousNav = navToday
         }
 
         return Result(points = points, partial = partial)
@@ -123,17 +181,21 @@ object PortfolioReturnSeriesCalc {
      * Skuggportföljen (HEM-10): **samma** insättningar och uttag, samma dagar och samma
      * kronbelopp, lagda i referensen i stället. Varje insättning delas efter [components]
      * vikter, och varje del köper andelar till respektive fonds NAV den dagen (`belopp / NAV`).
-     * Serien räknas sedan med exakt samma maskineri som [compute] — det är hela poängen: två
-     * kurvor med samma mått och samma kassaflöden, där skillnaden dem emellan är
-     * alternativkostnaden för de egna fondvalen, inte en artefakt av när pengarna sattes in.
+     * Serien räknas sedan med exakt samma maskineri som [compute] — två kurvor med samma mått,
+     * samma fonder över tid och samma historikkrav, där skillnaden dem emellan är
+     * alternativkostnaden för de egna fondvalen.
+     *
+     * Sedan issue #116 är båda kurvorna tidsviktade, så jämförelsen är kassaflödesfri på båda sidor.
+     * Skuggportföljen behövs ändå: det är den som håller referensens vikter i takt med de egna
+     * köpen och som spärrar en jämförelse vars historik inte räcker (se nedan).
      *
      * Blandningen speglar portföljens aktieandel (issue #101), så skillnaden inte bara mäter
      * att portföljen råkar ha en annan tillgångsfördelning än referensen — se
      * [IndexBenchmarkSelector].
      *
      * Null om någon komponents historik inte når tillbaka till **varje** transaktionsdag: en
-     * skuggportfölj som saknar sitt första köp är inte samma kassaflöden, och en jämförelse som
-     * tyst hoppar över en insättning är sämre än ingen jämförelse alls (samma
+     * skuggportfölj som saknar sitt första köp har inte samma vikter, och en jämförelse som tyst
+     * hoppar över en insättning är sämre än ingen jämförelse alls (samma
      * hellre-markerat-än-gissat-princip som HEM-2).
      *
      * Avgifter (courtage) tas inte med i skuggportföljen: de påverkar inte anskaffningsvärdet

@@ -679,6 +679,16 @@ class HemScreenTest {
     }
 
     @Test
+    fun avkastningsdiagrammet_forklarar_varfor_det_skiljer_sig_fran_totalkortet() {
+        // Kurvan är tidsviktad och slutar därför inte på totalkortets procent (issue #116). Två
+        // olika tal på samma skärm måste förklaras, annars läses det ena som ett fel i det andra.
+        composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
+
+        composeRule.onNodeWithText("flyttar inte kurvan", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("hur fonderna gick", substring = true).assertIsDisplayed()
+    }
+
+    @Test
     fun avkastningsdiagrammet_ar_tredje_kortet_och_natt_via_skroll() {
         // UI-5: kortet ligger under totalen och periodraden, alltså utanför skärmen på en
         // telefon — det ska gå att skrolla till, inte bara finnas i semantikträdet (issue #63).

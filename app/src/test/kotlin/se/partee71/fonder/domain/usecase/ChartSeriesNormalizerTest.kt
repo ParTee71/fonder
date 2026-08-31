@@ -184,7 +184,7 @@ class ChartSeriesNormalizerTest {
     }
 
     @Test
-    fun `en ensam kurva fran forsta kopet ar oforandrad, sa Allt slutar pa totalens procent`() {
+    fun `en ensam kurva fran forsta kopet ar oforandrad, sa Allt startar pa noll`() {
         // HEM-9: med Allt vald är basdagen första köpet, där avkastningen är 0 % per definition.
         val portfolj = listOf(100L to 0.0, 110L to 0.20, 120L to 0.35)
 
@@ -192,6 +192,29 @@ class ChartSeriesNormalizerTest {
 
         assertPoints(listOf(100L to 0.0, 110L to 0.20, 120L to 0.35), result.series[0])
         assertFalse(result.partial)
+    }
+
+    @Test
+    fun `ett fonster ur en tidsviktad kedja ar produkten av periodens dagsfaktorer`() {
+        // Poängen med issue #116: serien från PortfolioReturnSeriesCalc är ett kedjat index, så
+        // nollställningen mot fönstrets första dag ger exakt den periodens egen avkastning —
+        // varje period svarar på sin egen fråga i stället för att bero på var basdagen råkar
+        // hamna. Punkterna ligger 30 dagar isär, faktorerna är +10 %, +10 %, −20 %, +25 %.
+        var index = 1.0
+        val kedja = mutableListOf(100L to 0.0)
+        listOf(1.10, 1.10, 0.80, 1.25).forEachIndexed { steg, faktor ->
+            index *= faktor
+            kedja += (130L + steg * 30L) to (index - 1.0)
+        }
+
+        fun periodensAvkastning(period: ChartPeriodFilter.Period): Double =
+            ChartSeriesNormalizer.rebaseReturns(listOf(ChartPeriodFilter.apply(kedja, period)))
+                .series[0].last().second
+
+        // Sista månaden = sista faktorn, sista kvartalet = de tre sista, Allt = hela kedjan.
+        assertEquals(0.25, periodensAvkastning(ChartPeriodFilter.Period.EN_MANAD), 1e-9)
+        assertEquals(0.10, periodensAvkastning(ChartPeriodFilter.Period.TRE_MANADER), 1e-9)
+        assertEquals(0.21, periodensAvkastning(ChartPeriodFilter.Period.ALLT), 1e-9)
     }
 
     @Test

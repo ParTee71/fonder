@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.53.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.54.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -126,6 +126,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.54.0 | **Tidsviktad avkastningskurva** (HEM-9/HEM-10, #116): diagrammet på Hem mäter nu hur dina fonder faktiskt utvecklats, i stället för avkastningen på insatt kapital räknad om per dag. Insättningar, uttag och byten flyttar inte längre kurvan, så periodsiffrorna går att jämföra med varandra — tidigare kunde "5 år" visa någon enstaka procent samtidigt som 1 år och 3 år såg utmärkta ut, bara för att en stor påfyllning låg strax efter femårsfönstrets startdag. Kurvan slutar därför inte längre på samma procent som totalen överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick, och texten under diagrammet säger det. Indexjämförelsen mäts med samma mått som förut |
 | 0.53.0 | **Pågående byte** (ANA-12/ANA-13, #114): mellan att du sålt och att likviden är framme kan du nu bevaka ett par alternativa fonder att byta till. Bevakningen startas från ett kvitterat bytesförslag på Hem eller fondkortet, eller fristående från en säljrad i Sålda fonder. Appen fyller listan med köpkandidater på rätt risknivå — samma urval som bytesplanen använder — och du lägger till egna ur Fondsök, upp till fem. Skärmen visar säljfonden och alla alternativ i samma diagram, och per rad vad fonden gjort **sedan säljdagen** i kronor och procent. "Köpte den här" stänger bevakningen; appen genomför fortfarande aldrig ett byte. Hem visar ett kort för en pågående bevakning med den kandidat som gått bäst |
 | 0.52.0 | **Molnbackup till Google Drive** (TP-7 steg 2 / SET-7, #110): säkerhetskopieringskortet i Inställningar skriver nu hela innehållet till en dold mapp i din Drive — automatiskt en gång per dygn, och på begäran med en knapp. Kortet visar när den senaste kopian togs, och säger till när Drive behöver din tillåtelse. Det är den första återställningsvägen appen både kan sköta åt dig och själv verifiera; filexporten finns kvar och fungerar utan konto och utan nätverk. Återställning från Drive ersätter all data och ligger bakom samma bekräftelse som filåterställningen. De fem senaste kopiorna behålls |
 | 0.51.0 | **Google-inloggning** i Inställningar via Firebase Auth och Credential Manager (TP-6, #106): kortet visar inloggad adress och "Logga ut", eller "Inte inloggad" och en inloggningsknapp. Ett avbrutet kontoval visas aldrig som ett fel. Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Drive (TP-7 steg 2), vilket kortets text säger rakt ut. Auto Backup begränsas samtidigt till databasen och inställningarna; tidigare kopierades appens hela datakatalog, vilket nu även hade omfattat den sparade inloggningen (NFR-1) |
