@@ -114,6 +114,31 @@ class FundSearchViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun `refresh hamtar om katalogen och tar sig ur ett natverksfel (UI-11)`() = runTest(dispatcher) {
+        // Ett nätverksfel är den vanligaste anledningen att dra — och innan UI-11 fanns ingen
+        // väg ur det utan att lämna skärmen och komma tillbaka.
+        var fail = true
+        val flakyRepo = object : FakePriceRepo() {
+            override suspend fun fetchFundCatalog(): FundCatalog? = if (fail) null else catalog
+        }
+        val vm = FundSearchViewModel(flakyRepo, fakeTransactionRepo, fakeMetadataRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertTrue(state.loadFailed)
+
+            fail = false
+            vm.refresh()
+            while (state.loadFailed) state = awaitItem()
+
+            assertFalse(state.loadFailed)
+            assertTrue(state.results.isNotEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `Handelsbanken ar forvalt bolag och listan kommer fran kallans bolagsfilter`() = runTest(dispatcher) {
         val vm = FundSearchViewModel(fakePriceRepo, fakeTransactionRepo, fakeMetadataRepo)
         vm.uiState.test {

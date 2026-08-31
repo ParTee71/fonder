@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
@@ -25,6 +27,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
 
@@ -40,6 +43,7 @@ fun FundSearchScreen(
         onQueryChange = viewModel::onQueryChange,
         onCompanySelected = viewModel::onCompanySelected,
         onAddFund = viewModel::addFund,
+        onRefresh = viewModel::refresh,
         onPickFund = onPickFund,
         modifier = modifier,
     )
@@ -63,6 +67,7 @@ fun FundSearchContent(
      * lägg till i bevakningen.
      */
     onPickFund: ((Fund) -> Unit)? = null,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val allaFondbolag = stringResource(R.string.fondsok_company_all)
@@ -86,32 +91,45 @@ fun FundSearchContent(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
-        when {
-            state.loading -> LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            )
+        // Dra ned hämtar om katalogen (UI-11). Gesten omsluter även fel- och tomlägena, och
+        // inte bara träfflistan: ett nätverksfel är den vanligaste anledningen att vilja dra,
+        // och det läget har ingen lista att dra i. `verticalScroll` ger dem något att gripa tag
+        // i — utan en skrollbar yta har svepet inget att koppla sig till.
+        PullToRefreshContainer(
+            refreshing = state.refreshing,
+            onRefresh = onRefresh,
+        ) {
+            when {
+                state.loading -> LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                )
 
-            // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
-            // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).
-            state.loadFailed -> EmptyState(
-                title = stringResource(R.string.fondsok_load_failed_title),
-                body = stringResource(R.string.fondsok_load_failed_body),
-            )
-
-            state.results.isEmpty() -> EmptyState(
-                title = stringResource(R.string.fondsok_empty_title),
-                body = stringResource(R.string.fondsok_empty_body),
-            )
-
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.results, key = { it.fundId }) { fund ->
-                    FundResultRow(
-                        fund = fund,
-                        added = onPickFund == null && fund.fundId in state.addedFundIds,
-                        riskLevel = state.riskLevels[fund.fundId],
-                        actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
-                        onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) },
+                // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
+                // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).
+                state.loadFailed -> PullableMessage {
+                    EmptyState(
+                        title = stringResource(R.string.fondsok_load_failed_title),
+                        body = stringResource(R.string.fondsok_load_failed_body),
                     )
+                }
+
+                state.results.isEmpty() -> PullableMessage {
+                    EmptyState(
+                        title = stringResource(R.string.fondsok_empty_title),
+                        body = stringResource(R.string.fondsok_empty_body),
+                    )
+                }
+
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(state.results, key = { it.fundId }) { fund ->
+                        FundResultRow(
+                            fund = fund,
+                            added = onPickFund == null && fund.fundId in state.addedFundIds,
+                            riskLevel = state.riskLevels[fund.fundId],
+                            actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
+                            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) },
+                        )
+                    }
                 }
             }
         }
@@ -144,4 +162,16 @@ private fun FundResultRow(
             }
         },
     )
+}
+
+/**
+ * Gör ett tomt-/feltillstånd svepbart (UI-11): `PullToRefreshBox` kopplar sig via nested scroll
+ * och behöver därför en skrollbar yta. Utan den skulle gesten fungera överallt **utom** i just
+ * det läge där man mest vill använda den — efter ett nätverksfel.
+ */
+@Composable
+private fun PullableMessage(content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        content()
+    }
 }

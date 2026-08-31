@@ -85,7 +85,7 @@ class FacitViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val historyAndFunds: Flow<Pair<List<SuggestionRecord>, List<Fund>>> =
@@ -155,6 +155,16 @@ class FacitViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = FacitUiState(),
         )
+
+    /**
+     * Dra ned för att uppdatera (UI-11) — startar bytesplansskanningen, den körning som spelar
+     * in nya rader och fyller på utfallens NAV. Facit läser bara cachen; utan skanningen finns
+     * det ingenting nytt att räkna om. Eget unikt arbetsnamn med `KEEP`, så upprepade
+     * dragningar aldrig ger två parallella (dyra) skanningar.
+     */
+    fun refresh() {
+        fundPriceRefreshScheduler.triggerSwitchPlanScan()
+    }
 
     /** Markerar ett förslag som genomfört eller ej (HEM-8/SET-5) — flödet ovan speglar ändringen. */
     fun setFollowed(recordId: Long, followed: Boolean) {

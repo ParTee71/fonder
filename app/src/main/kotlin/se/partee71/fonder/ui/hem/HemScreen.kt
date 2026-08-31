@@ -32,6 +32,7 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
@@ -61,6 +62,7 @@ fun HemScreen(
 
     HemContent(
         state = state,
+        onRefresh = viewModel::refresh,
         onFundClick = onFundClick,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
@@ -89,6 +91,7 @@ const val HEM_LIST_TEST_TAG = "hem_list"
 @Composable
 fun HemContent(
     state: HemUiState,
+    onRefresh: () -> Unit = {},
     onFundClick: (String) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onRecomputeSwitchPlan: () -> Unit = {},
@@ -103,48 +106,56 @@ fun HemContent(
             modifier = modifier,
         )
 
-        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
-            item { TotalCard(state = state) }
-            state.openSwitchWatch?.let { watch ->
+        // Dra ned uppdaterar (UI-11) — bara här, inte i tomt-tillståndet ovan: utan innehav
+        // finns ingen kurs att hämta, och en gest som inte gör något är värre än ingen gest.
+        else -> PullToRefreshContainer(
+            refreshing = state.pricesWorking,
+            onRefresh = onRefresh,
+            modifier = modifier,
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
+                item { TotalCard(state = state) }
+                state.openSwitchWatch?.let { watch ->
+                    item {
+                        SwitchWatchCard(
+                            watch = watch,
+                            working = state.switchWatchWorking,
+                            onOpen = onOpenSwitchWatch,
+                        )
+                    }
+                }
+                item { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
+                item { ReturnChartCard(state = state) }
                 item {
-                    SwitchWatchCard(
-                        watch = watch,
-                        working = state.switchWatchWorking,
-                        onOpen = onOpenSwitchWatch,
+                    AnalysisSummaryCard(
+                        summary = state.analysisSummary,
+                        working = state.analysisWorking,
+                        onFundClick = onFundClick,
                     )
                 }
-            }
-            item { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
-            item { ReturnChartCard(state = state) }
-            item {
-                AnalysisSummaryCard(
-                    summary = state.analysisSummary,
-                    working = state.analysisWorking,
-                    onFundClick = onFundClick,
-                )
-            }
-            item {
-                FeeCard(
-                    summary = state.feeSummary,
-                    working = state.feeWorking,
-                    onFundClick = onFundClick,
-                )
-            }
-            state.riskProfile?.let { riskProfile ->
                 item {
-                    RiskCard(
-                        riskProfile = riskProfile,
-                        portfolioRisk = state.portfolioRisk,
-                        levelDeviations = state.riskLevelDeviations,
-                        switchPlan = state.switchPlan,
-                        canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
-                        recomputeRunning = state.backgroundWorkRunning,
-                        working = state.riskWorking,
-                        watchedSellIsins = state.watchedSellIsins,
-                        onSwitchFollowedChange = onSwitchFollowedChange,
-                        onRecomputeSwitchPlan = onRecomputeSwitchPlan,
-                        onStartSwitchWatch = onStartSwitchWatch,
+                    FeeCard(
+                        summary = state.feeSummary,
+                        working = state.feeWorking,
+                        onFundClick = onFundClick,
                     )
+                }
+                state.riskProfile?.let { riskProfile ->
+                    item {
+                        RiskCard(
+                            riskProfile = riskProfile,
+                            portfolioRisk = state.portfolioRisk,
+                            levelDeviations = state.riskLevelDeviations,
+                            switchPlan = state.switchPlan,
+                            canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
+                            recomputeRunning = state.backgroundWorkRunning,
+                            working = state.riskWorking,
+                            watchedSellIsins = state.watchedSellIsins,
+                            onSwitchFollowedChange = onSwitchFollowedChange,
+                            onRecomputeSwitchPlan = onRecomputeSwitchPlan,
+                            onStartSwitchWatch = onStartSwitchWatch,
+                        )
+                    }
                 }
             }
         }

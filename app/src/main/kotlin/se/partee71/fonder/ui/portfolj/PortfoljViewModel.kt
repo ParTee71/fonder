@@ -97,7 +97,7 @@ class PortfoljViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -253,6 +253,15 @@ class PortfoljViewModel @Inject constructor(
             ) ?: return@mapNotNull null
             holding.fund.fundId to analysis
         }.toMap()
+    }
+
+    /**
+     * Dra ned för att uppdatera (UI-11) — samma forcerade kursuppdatering som Hem begär, och
+     * samma unika arbetsnamn, så en dragning på den ena skärmen och en på den andra aldrig blir
+     * två körningar.
+     */
+    fun refresh() {
+        fundPriceRefreshScheduler.triggerManualRefresh()
     }
 
     // Engångsuppdatering per fond utan cachad kurs, eller vars cachade kurs är inaktuell

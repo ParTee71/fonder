@@ -979,6 +979,17 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `refresh ber schemalaggaren om en forcerad kursuppdatering (UI-11)`() = runTest(dispatcher) {
+        // Dragningen startar exakt den körning Inställningars borttagna knapp startade (SET-2),
+        // och gör det via WorkManager — inte med en egen hämtning vid sidan av.
+        val vm = viewModel()
+
+        vm.refresh()
+
+        assertEquals(1, fakeScheduler.manualRefreshes)
+    }
+
+    @Test
     fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
         val vm = viewModel()
 

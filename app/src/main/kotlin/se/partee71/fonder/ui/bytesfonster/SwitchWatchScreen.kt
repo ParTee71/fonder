@@ -29,6 +29,7 @@ import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
@@ -67,6 +68,7 @@ fun SwitchWatchScreen(
 
     SwitchWatchContent(
         state = state,
+        onRefresh = viewModel::refresh,
         onBought = viewModel::onBought,
         onRemoveCandidate = viewModel::onRemoveCandidate,
         onAddCandidate = onAddCandidate,
@@ -80,6 +82,7 @@ fun SwitchWatchScreen(
 @Composable
 fun SwitchWatchContent(
     state: SwitchWatchUiState,
+    onRefresh: () -> Unit = {},
     onBought: (String) -> Unit = {},
     onRemoveCandidate: (Long) -> Unit = {},
     onAddCandidate: () -> Unit = {},
@@ -96,75 +99,84 @@ fun SwitchWatchContent(
         return
     }
 
-    LazyColumn(modifier = modifier.fillMaxSize().testTag(SWITCH_WATCH_LIST_TEST_TAG)) {
-        item { HeaderCard(state) }
-        item { ComparisonChart(state) }
+    // Dra ned hämtar om kandidaternas kurvor och säljfondens historik (UI-11). Kandidaterna
+    // ligger inte i kurscachen (ANA-11), så det är den enda vägen till färskare tal än de som
+    // hämtades när skärmen öppnades.
+    PullToRefreshContainer(
+        refreshing = state.chartWorking,
+        onRefresh = onRefresh,
+        modifier = modifier,
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize().testTag(SWITCH_WATCH_LIST_TEST_TAG)) {
+            item { HeaderCard(state) }
+            item { ComparisonChart(state) }
 
-        if (state.rows.isEmpty()) {
-            item {
-                // Ingen `EmptyState` här: den fyller skärmen och hade tryckt bort kortet med
-                // säljfond, belopp och dag — den informationen gäller även utan alternativ.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    val text = stringResource(
-                        if (state.fillingCandidates) R.string.switch_watch_filling else R.string.switch_watch_empty_body,
-                    )
-                    // Snurran bara medan förslagen faktiskt hämtas (ANA-13) — "inga alternativ
-                    // ännu" är ett färdigt svar, inte ett som är på väg.
-                    WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
-                    Text(
-                        text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            if (state.rows.isEmpty()) {
+                item {
+                    // Ingen `EmptyState` här: den fyller skärmen och hade tryckt bort kortet med
+                    // säljfond, belopp och dag — den informationen gäller även utan alternativ.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        val text = stringResource(
+                            if (state.fillingCandidates) R.string.switch_watch_filling else R.string.switch_watch_empty_body,
+                        )
+                        // Snurran bara medan förslagen faktiskt hämtas (ANA-13) — "inga alternativ
+                        // ännu" är ett färdigt svar, inte ett som är på väg.
+                        WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
+                        Text(
+                            text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-        }
 
-        items(state.rows, key = { it.candidateId }) { row ->
-            CandidateCard(
-                row = row,
-                closed = state.closed,
-                onBought = onBought,
-                onRemoveCandidate = onRemoveCandidate,
-            )
-        }
-
-        item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                if (state.canAddCandidate) {
-                    TextButton(onClick = onAddCandidate, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(stringResource(R.string.switch_watch_add_candidate))
-                    }
-                }
-                state.message?.let { message ->
-                    Text(
-                        text = when (message) {
-                            SwitchWatchMessage.IsinUnavailable -> stringResource(R.string.switch_watch_isin_unavailable)
-                            SwitchWatchMessage.CandidateLimitReached ->
-                                stringResource(R.string.format_switch_watch_limit, SwitchWatchCalc.MAX_CANDIDATES)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    // Meddelandet är en kvittens på en åtgärd, inte ett tillstånd — det kvitteras
-                    // när det visats så nästa tillägg inte möts av föregående försöks felmeddelande.
-                    LaunchedEffect(message) { onMessageShown() }
-                }
-                if (!state.closed) {
-                    TextButton(onClick = onCancel) {
-                        Text(stringResource(R.string.switch_watch_cancel))
-                    }
-                }
-                Text(
-                    stringResource(R.string.switch_watch_disclaimer),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
+            items(state.rows, key = { it.candidateId }) { row ->
+                CandidateCard(
+                    row = row,
+                    closed = state.closed,
+                    onBought = onBought,
+                    onRemoveCandidate = onRemoveCandidate,
                 )
+            }
+
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    if (state.canAddCandidate) {
+                        TextButton(onClick = onAddCandidate, modifier = Modifier.padding(top = 4.dp)) {
+                            Text(stringResource(R.string.switch_watch_add_candidate))
+                        }
+                    }
+                    state.message?.let { message ->
+                        Text(
+                            text = when (message) {
+                                SwitchWatchMessage.IsinUnavailable -> stringResource(R.string.switch_watch_isin_unavailable)
+                                SwitchWatchMessage.CandidateLimitReached ->
+                                    stringResource(R.string.format_switch_watch_limit, SwitchWatchCalc.MAX_CANDIDATES)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        // Meddelandet är en kvittens på en åtgärd, inte ett tillstånd — det kvitteras
+                        // när det visats så nästa tillägg inte möts av föregående försöks felmeddelande.
+                        LaunchedEffect(message) { onMessageShown() }
+                    }
+                    if (!state.closed) {
+                        TextButton(onClick = onCancel) {
+                            Text(stringResource(R.string.switch_watch_cancel))
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.switch_watch_disclaimer),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         }
     }

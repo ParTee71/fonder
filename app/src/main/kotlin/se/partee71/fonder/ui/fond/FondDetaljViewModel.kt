@@ -424,8 +424,21 @@ class FondDetaljViewModel @Inject constructor(
     // tidigare gaten "bara om cachen är helt tom" är utbytt mot den delade staleness-regeln
     // (isPriceStale, TP-17, regel 4) — en fond med inaktuell men befintlig kurs uppdateras nu
     // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
-    init {
-        viewModelScope.launch {
+    /** Pågående kurshämtning — se [refresh]. */
+    private var priceRefreshJob: Job? = null
+
+    /**
+     * Hämtar fondens kurs och historik. Körs en gång när skärmen öppnas och sedan **på begäran**
+     * när användaren drar ned (UI-11) — samma kodväg, så en manuell uppdatering hämtar exakt det
+     * skärmöppningen hämtar och inte en approximation av det.
+     *
+     * En pågående hämtning återanvänds i stället för att avbrytas: dragningen ska inte kunna
+     * kasta bort en backfill som redan är halvvägs, och två parallella hämtningar av samma fond
+     * vore två anrop mot en odokumenterad källa (TP-14) för ett svar.
+     */
+    fun refresh() {
+        if (priceRefreshJob?.isActive == true) return
+        priceRefreshJob = viewModelScope.launch {
             // `finally`, inte en rad efter hämtningen: en fond vars källa svarar med fel skulle
             // annars bli stående med en snurra som aldrig slutar (NAV-6).
             priceRefreshing.value = true
@@ -446,6 +459,10 @@ class FondDetaljViewModel @Inject constructor(
                 priceRefreshing.value = false
             }
         }
+    }
+
+    init {
+        refresh()
 
         // Billigare-alternativ-jämförelsen (ANA-9) är också en engångsuppdatering — den kan
         // kosta flera nätverksanrop (budgeterad köpbarhetsverifiering) och ska inte köras om

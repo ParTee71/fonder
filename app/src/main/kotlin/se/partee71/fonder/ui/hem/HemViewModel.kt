@@ -573,6 +573,16 @@ class HemViewModel @Inject constructor(
     }
 
     /**
+     * Dra ned för att uppdatera (UI-11) — forcerar en kursuppdatering, exakt den körning
+     * Inställningars borttagna "Uppdatera nu" startade (SET-2). Kör inte själv: hämtningen hör
+     * hemma i WorkManager med nätverksvillkor, och `REPLACE` under det unika arbetsnamnet gör
+     * att upprepade dragningar aldrig ger två parallella körningar.
+     */
+    fun refresh() {
+        fundPriceRefreshScheduler.triggerManualRefresh()
+    }
+
+    /**
      * Ber om en omräkning av bytesplanen (HEM-8, issue #88) — knappen på riskkortet. Kör inte
      * själv: skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per
      * underviktad nivå och hör därför hemma i WorkManager, med nätverksvillkor och

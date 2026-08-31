@@ -404,6 +404,17 @@ class PortfoljViewModelTest {
     }
 
     @Test
+    fun `refresh ber schemalaggaren om en forcerad kursuppdatering (UI-11)`() = runTest(dispatcher) {
+        // Samma körning och samma unika arbetsnamn som Hems dragning, så en dragning på var
+        // sin skärm aldrig blir två parallella uppdateringar.
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+
+        vm.refresh()
+
+        assertEquals(1, fakeScheduler.manualRefreshes)
+    }
+
+    @Test
     fun `exponeringskortet snurrar medan metadata-uppslaget pagar`() = runTest(dispatcher) {
         // Motstycket till testet ovan: att vyn ritas direkt är rätt, men en tom exponeringskarta
         // ska inte se ut som en portfölj källan inte kan klassificera. Snurran (NAV-6) är det som

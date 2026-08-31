@@ -39,6 +39,7 @@ import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.components.PullToRefreshContainer
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -55,7 +56,12 @@ fun FacitScreen(
     viewModel: FacitViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    FacitContent(state = state, onFollowedChange = viewModel::setFollowed, modifier = modifier)
+    FacitContent(
+        state = state,
+        onFollowedChange = viewModel::setFollowed,
+        onRefresh = viewModel::refresh,
+        modifier = modifier,
+    )
 }
 
 /** Tillståndsdriven, testbar del av [FacitScreen] — inget ViewModel/Hilt-beroende (issue #21-mönstret). */
@@ -63,6 +69,7 @@ fun FacitScreen(
 fun FacitContent(
     state: FacitUiState,
     onFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (state.isEmpty) {
@@ -75,18 +82,27 @@ fun FacitContent(
         // Summeringskortet ligger som `item {}` i samma lista som raderna, inte i en fast
         // Column ovanför — annars äter det permanent skärmhöjd och kan klippa bort förslag på
         // en liten skärm, exakt buggklassen UI-5 beskriver.
-        LazyColumn(modifier = modifier.fillMaxSize().testTag(FACIT_LIST_TEST_TAG)) {
-            item { SummaryCard(state = state) }
-            items(state.rows, key = { it.recordId }) { row ->
-                FacitRadCard(row = row, onFollowedChange = onFollowedChange)
-            }
-            item {
-                Text(
-                    stringResource(R.string.facit_disclaimer),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                )
+        // Dra ned startar bytesplansskanningen (UI-11) — den körning som spelar in nya rader
+        // och fyller på utfallens NAV. Utan inspelade förslag (tomt-tillståndet ovan) finns
+        // ingenting att mäta, och då erbjuds ingen gest.
+        PullToRefreshContainer(
+            refreshing = state.switchPlanWorking,
+            onRefresh = onRefresh,
+            modifier = modifier,
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize().testTag(FACIT_LIST_TEST_TAG)) {
+                item { SummaryCard(state = state) }
+                items(state.rows, key = { it.recordId }) { row ->
+                    FacitRadCard(row = row, onFollowedChange = onFollowedChange)
+                }
+                item {
+                    Text(
+                        stringResource(R.string.facit_disclaimer),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    )
+                }
             }
         }
     }
