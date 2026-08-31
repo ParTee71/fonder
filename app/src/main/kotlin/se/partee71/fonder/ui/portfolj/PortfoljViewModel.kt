@@ -135,6 +135,14 @@ class PortfoljViewModel @Inject constructor(
         metadataIsins = isins
         val requestId = ++metadataRequestId
         metadataJob?.cancel()
+        // Utan ISIN finns inget svar på väg — då ska kortet inte snurra. En snurra som tänds och
+        // släcks utan att något hämtas lär användaren att inte se den, och tillståndet emitterar
+        // två gånger i onödan.
+        if (isins.isEmpty()) {
+            metadataLoading.value = false
+            metadata.value = emptyMap()
+            return
+        }
         metadataLoading.value = true
         metadataJob = viewModelScope.launch {
             try {

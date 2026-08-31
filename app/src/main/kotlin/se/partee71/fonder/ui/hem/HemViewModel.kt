@@ -312,6 +312,12 @@ class HemViewModel @Inject constructor(
         metadataIsins = distinct
         val requestId = ++metadataRequestId
         metadataJob?.cancel()
+        // Se PortfoljViewModel: utan ISIN finns inget svar på väg, och då ska korten inte snurra.
+        if (distinct.isEmpty()) {
+            metadataLoading.value = false
+            metadata.value = emptyMap()
+            return
+        }
         metadataLoading.value = true
         metadataJob = viewModelScope.launch {
             try {

@@ -178,7 +178,11 @@ class PortfoljViewModelTest {
 
             latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = 5, nav = 200.0))
 
-            val updated = awaitItem()
+            // Vänta på den emission som faktiskt bär kursen, inte på "nästa": tillståndet
+            // emitterar också när kortens körstatus ändras (NAV-6), och `awaitItem()` ensamt
+            // hade då läst av en emission som råkade komma före kursen.
+            var updated = awaitItem()
+            while (updated.holdings.first().currentValue == null) updated = awaitItem()
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
             assertEquals(5L, updated.navEpochDay) // POR-7, issue #27
