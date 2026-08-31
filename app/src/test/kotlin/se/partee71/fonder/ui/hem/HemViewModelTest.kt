@@ -382,7 +382,10 @@ class HemViewModelTest {
             assertEquals(1, state.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
         }
-        assertEquals(emptyList<String>(), metadataForCall) // inget ISIN att slå upp
+        // Inget ISIN att slå upp — uppslaget görs inte **alls** (null), inte med en tom lista.
+        // Ett anrop med tom lista tände dessutom avgifts- och riskkortets väntesnurra utan att
+        // något var på väg (NAV-6), vilket är precis vad snurran inte ska betyda.
+        assertNull(metadataForCall)
     }
 
     @Test
