@@ -40,6 +40,7 @@ import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
+import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import java.time.LocalDate
@@ -137,6 +138,7 @@ fun FondDetaljContent(
                         FundLineChart(
                             points = chartPoints,
                             purchaseEpochDays = state.purchaseEpochDays,
+                            working = state.chartWorking,
                             modifier = Modifier.padding(top = 16.dp),
                         )
                         // Allt förklarande material ligger hopfällt (ANA-10): analysen och
@@ -184,6 +186,13 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
             )
             state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
             RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = 8.dp))
+            // Rubrikens väntesnurra (NAV-6): fondens kurs och historik hämtas när skärmen
+            // öppnas, och nyckeltalen under rubriken räknas på det som hunnit landa.
+            WorkingIndicator(
+                working = state.chartWorking,
+                contentDescription = stringResource(R.string.format_card_working, state.fundName ?: ""),
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
         val firstPurchaseEpochDay = state.firstPurchaseEpochDay
         val netInvested = state.netInvested
@@ -264,7 +273,7 @@ private fun SwitchDecisionSection(
         }
         when (val feeComparison = state.feeComparison) {
             null -> Unit
-            FeeComparisonUiState.Loading -> SwitchMessage(stringResource(R.string.fee_comparison_loading))
+            FeeComparisonUiState.Loading -> SwitchWorkingMessage(stringResource(R.string.fee_comparison_loading))
             FeeComparisonUiState.Unavailable -> SwitchMessage(stringResource(R.string.fee_comparison_unavailable))
             FeeComparisonUiState.NoCheaperAlternative -> SwitchMessage(stringResource(R.string.fee_comparison_none_cheaper))
             is FeeComparisonUiState.Found -> feeComparison.alternatives.forEach { alternative ->
@@ -304,6 +313,26 @@ private fun SwitchGroupLabel(text: String) {
         style = MaterialTheme.typography.labelMedium,
         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
     )
+}
+
+/**
+ * Som [SwitchMessage], men för ett svar som är **på väg** i stället för ett som är givet:
+ * texten sa redan "letar …", medan det som saknades var kvittot att något faktiskt kör (NAV-6).
+ * En hämtning mot en odokumenterad källa (TP-14) kan ta flera sekunder, och en stillastående
+ * text går inte att skilja från en som fastnat.
+ */
+@Composable
+private fun SwitchWorkingMessage(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Samma toppmarginal som texten, så snurran ligger i linje med raden i stället för att
+        // dras ned av `SwitchMessage`s egen padding.
+        WorkingIndicator(
+            working = true,
+            contentDescription = text,
+            modifier = Modifier.padding(top = 8.dp, end = 8.dp),
+        )
+        SwitchMessage(text)
+    }
 }
 
 @Composable
@@ -461,11 +490,7 @@ private fun ComparisonChart(
 ) {
     when (comparison) {
         null -> Unit
-        ComparisonUiState.Loading -> Text(
-            stringResource(R.string.switch_comparison_loading),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ComparisonUiState.Loading -> SwitchWorkingMessage(stringResource(R.string.switch_comparison_loading))
 
         ComparisonUiState.Unavailable -> Text(
             stringResource(R.string.switch_comparison_unavailable),

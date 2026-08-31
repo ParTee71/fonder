@@ -30,6 +30,7 @@ import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
@@ -97,7 +98,18 @@ data class SettingsUiState(
     val lastDriveBackupEpochMillis: Long? = null,
     /** Sant när Drive-scopet saknas — kortet erbjuder då knappen som löser det (SET-7). */
     val driveBackupNeedsAuth: Boolean = false,
-)
+    /** En kursuppdatering kör just nu ([BackgroundWork.PRICE_REFRESH]) — kurskortets väntesnurra (NAV-6). */
+    val priceRefreshWorking: Boolean = false,
+    /** Molnbackupen kör just nu ([BackgroundWork.DRIVE_BACKUP]) — bara backup-kortet berörs. */
+    val driveBackupWorking: Boolean = false,
+) {
+    /**
+     * Backup-kortet snurrar både för en knapptryckning här (export/återställ, [backupInProgress])
+     * och för den dygnsvisa molnkörningen (SET-7) — kortet redovisar båda, och användaren ska
+     * inte behöva veta vilken av dem som startade arbetet.
+     */
+    val backupWorking: Boolean get() = backupInProgress || driveBackupWorking
+}
 
 /** Referensvalets del av tillståndet — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
 private data class BenchmarkState(val chosenName: String? = null, val pickFailed: Boolean = false)
@@ -190,6 +202,13 @@ class SettingsViewModel @Inject constructor(
                 googleUser = account.user,
                 signInInProgress = account.signInInProgress,
                 signInError = account.signInError,
+            )
+        }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+            // Eget led i kedjan av samma skäl som grenarna ovan: körstatusen kommer från
+            // WorkManager och ska inte kunna räkna om tema, kontotyp eller backup-tillstånd.
+            state.copy(
+                priceRefreshWorking = BackgroundWork.PRICE_REFRESH in running,
+                driveBackupWorking = BackgroundWork.DRIVE_BACKUP in running,
             )
         }.stateIn(
             scope = viewModelScope,

@@ -84,8 +84,17 @@ data class FondDetaljUiState(
     val watchedSellIsins: Set<String> = emptySet(),
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [FondDetaljViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null,
+    /**
+     * Sant medan skärmens engångsuppdatering av fondens kurs pågår (se [FondDetaljViewModel]s
+     * `init`) — rubrikens och diagrammets väntesnurra (NAV-6). En backfillad historik tar
+     * sekunder, och utan snurran ser en halvfylld kurva ut som hela sanningen.
+     */
+    val priceRefreshing: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
+
+    /** Rubriken och kurshistoriken vilar båda på samma hämtning — härlett här, inte i skärmen. */
+    val chartWorking: Boolean get() = loading || priceRefreshing
 }
 
 /** Ett inspelat avgiftsbyte (issue #91) — nyckeln facit skrivs mot när kvitteringen används. */
@@ -187,6 +196,9 @@ class FondDetaljViewModel @Inject constructor(
     private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
     private val suggestedIsin = MutableStateFlow<String?>(null)
     private val feeComparisonState = MutableStateFlow<FeeComparisonUiState?>(null)
+
+    /** Se [FondDetaljUiState.priceRefreshing] — skärmens egen engångsuppdatering, inte WorkManager. */
+    private val priceRefreshing = MutableStateFlow(false)
 
     /**
      * Fondmetadata i ett eget flöde, inte hämtad inne i tillståndets `map` — samma skäl som i
@@ -297,6 +309,10 @@ class FondDetaljViewModel @Inject constructor(
             watchedSellIsins = watchedSellIsins,
             startedSwitchWatchId = startedWatchId,
         )
+    }.combine(priceRefreshing) { state, refreshing ->
+        // Eget led i kedjan i stället för en sjätte gren i combinen ovan: `combine` tar som mest
+        // fem flöden med olika typer, och körstatusen ska ändå inte kunna räkna om fondens data.
+        state.copy(priceRefreshing = refreshing)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -410,17 +426,24 @@ class FondDetaljViewModel @Inject constructor(
     // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
     init {
         viewModelScope.launch {
-            val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
-            val since = earliestPurchase.first()
+            // `finally`, inte en rad efter hämtningen: en fond vars källa svarar med fel skulle
+            // annars bli stående med en snurra som aldrig slutar (NAV-6).
+            priceRefreshing.value = true
+            try {
+                val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
+                val since = earliestPurchase.first()
 
-            if (fund?.isin != null && since != null) {
-                fundPriceRepository.refreshSince(fundId, fund.isin, since)
-            } else if (fundPriceRepository.isPriceStale(fundId)) {
-                fundPriceRepository.refresh(fundId, since)
-            }
+                if (fund?.isin != null && since != null) {
+                    fundPriceRepository.refreshSince(fundId, fund.isin, since)
+                } else if (fundPriceRepository.isPriceStale(fundId)) {
+                    fundPriceRepository.refresh(fundId, since)
+                }
 
-            if (fund != null && fund.isin == null) {
-                suggestedIsin.value = fundPriceRepository.suggestIsin(fund.name)
+                if (fund != null && fund.isin == null) {
+                    suggestedIsin.value = fundPriceRepository.suggestIsin(fund.name)
+                }
+            } finally {
+                priceRefreshing.value = false
             }
         }
 

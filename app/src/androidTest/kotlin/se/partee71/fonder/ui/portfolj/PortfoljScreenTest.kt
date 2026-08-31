@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
@@ -38,6 +39,46 @@ class PortfoljScreenTest {
         }
 
         composeRule.onNodeWithText("Inga innehav ännu").assertExists()
+    }
+
+    @Test
+    fun innehavsrad_visar_vantesnurra_medan_dess_kurs_hamtas() {
+        // NAV-6, per fond: en nyss tillagd fond står på 0 kr tills kursen landat, och utan
+        // snurran ser det ut som ett värde i stället för som ett svar på väg. `refreshingFundIds`
+        // gäller just den fonden — resten av listan ska stå stilla.
+        val annanFond = Fund(fundId = "SHB0000443", name = "Fond B")
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(
+                Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0),
+                Holding(fund = annanFond, netShares = 5.0, netInvested = 500.0, currentValue = 520.0),
+            ),
+            refreshingFundIds = setOf(fond.fundId),
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        // useUnmergedTree: innehavsraden är en klickbar Card och slår ihop sina barns semantik.
+        composeRule.onNodeWithContentDescription("Uppdaterar Fond A", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithContentDescription("Uppdaterar Fond B", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun alla_innehavsrader_snurrar_under_en_kursuppdatering() {
+        val state = PortfoljUiState(
+            loading = false,
+            holdings = listOf(Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)),
+            pricesWorking = true,
+        )
+
+        composeRule.setContent {
+            FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Uppdaterar Fond A", useUnmergedTree = true).assertExists()
     }
 
     @Test

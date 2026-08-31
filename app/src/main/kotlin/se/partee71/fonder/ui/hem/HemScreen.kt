@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -26,6 +27,7 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.FollowedToggleRow
@@ -75,6 +77,15 @@ fun HemScreen(
  * (analys-summeringskortets flaggade fonder, HEM-4, plus avgiftskortets rader, HEM-5) i
  * stället för att göra det nåbart (UI-5, issue #63).
  */
+/**
+ * Adresserar Hems lista för `performScrollToIndex` i tester (UI-5, issue #66) — samma skäl och
+ * samma mönster som Portfölj, Facit och Pågående byte redan använder. Korten ligger som var sitt
+ * `item {}` och komponeras alltså inte förrän listan skrollats dit; utan taggen kunde ett test
+ * bara nå de kort som råkade rymmas i testviewporten, och en kortrubrik som gjorde korten några
+ * dp högre slog ut testerna för det sista kortet (riskkortet).
+ */
+const val HEM_LIST_TEST_TAG = "hem_list"
+
 @Composable
 fun HemContent(
     state: HemUiState,
@@ -92,15 +103,33 @@ fun HemContent(
             modifier = modifier,
         )
 
-        else -> LazyColumn(modifier = modifier.fillMaxSize()) {
+        else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
             item { TotalCard(state = state) }
             state.openSwitchWatch?.let { watch ->
-                item { SwitchWatchCard(watch = watch, onOpen = onOpenSwitchWatch) }
+                item {
+                    SwitchWatchCard(
+                        watch = watch,
+                        working = state.switchWatchWorking,
+                        onOpen = onOpenSwitchWatch,
+                    )
+                }
             }
-            item { PerformanceCard(performance = state.performance) }
+            item { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
             item { ReturnChartCard(state = state) }
-            item { AnalysisSummaryCard(summary = state.analysisSummary, onFundClick = onFundClick) }
-            item { FeeCard(summary = state.feeSummary, onFundClick = onFundClick) }
+            item {
+                AnalysisSummaryCard(
+                    summary = state.analysisSummary,
+                    working = state.analysisWorking,
+                    onFundClick = onFundClick,
+                )
+            }
+            item {
+                FeeCard(
+                    summary = state.feeSummary,
+                    working = state.feeWorking,
+                    onFundClick = onFundClick,
+                )
+            }
             state.riskProfile?.let { riskProfile ->
                 item {
                     RiskCard(
@@ -110,6 +139,7 @@ fun HemContent(
                         switchPlan = state.switchPlan,
                         canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
                         recomputeRunning = state.backgroundWorkRunning,
+                        working = state.riskWorking,
                         watchedSellIsins = state.watchedSellIsins,
                         onSwitchFollowedChange = onSwitchFollowedChange,
                         onRecomputeSwitchPlan = onRecomputeSwitchPlan,
@@ -125,7 +155,10 @@ fun HemContent(
 private fun TotalCard(state: HemUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.portfolj_total_value), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(
+                title = stringResource(R.string.portfolj_total_value),
+                working = state.totalWorking,
+            )
             val fraction = state.totalGainLossFraction
             if (fraction != null) {
                 Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
@@ -147,10 +180,24 @@ private fun TotalCard(state: HemUiState) {
     }
 }
 
+/**
+ * Dag/vecka/månad. Kortet saknade rubrik så länge det var självförklarande, men en snurra
+ * behöver en rad att sitta i — och den raden får inte vara en av periodraderna, där beloppet
+ * ligger längst till höger (UI-6). Rubriken är alltså en följd av väntesnurran (NAV-6), inte
+ * dekoration.
+ */
 @Composable
-private fun PerformanceCard(performance: PortfolioPerformanceCalc.PortfolioPerformance) {
+private fun PerformanceCard(
+    performance: PortfolioPerformanceCalc.PortfolioPerformance,
+    working: Boolean,
+) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
+            CardTitleRow(
+                title = stringResource(R.string.hem_performance_title),
+                working = working,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
             val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_day),
@@ -204,7 +251,10 @@ private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
 private fun ReturnChartCard(state: HemUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.hem_return_chart_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(
+                title = stringResource(R.string.hem_return_chart_title),
+                working = state.returnChartWorking,
+            )
             if (state.returnSeries.isEmpty) {
                 Text(
                     stringResource(R.string.hem_return_chart_insufficient),
@@ -277,10 +327,10 @@ private fun PortfolioPerformanceCalc.PortfolioPeriodResult.toRowArgs(): PeriodRo
 
 /** Summeringskort över gul-/rödflaggade fonder (issue #16, HEM-4). */
 @Composable
-private fun AnalysisSummaryCard(summary: AnalysisSummary, onFundClick: (String) -> Unit) {
+private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFundClick: (String) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.hem_analysis_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(title = stringResource(R.string.hem_analysis_title), working = working)
             if (summary.flagged.isEmpty()) {
                 Text(
                     stringResource(R.string.hem_analysis_empty),
@@ -310,11 +360,15 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, onFundClick: (String) 
  * "inget billigare hittades".
  */
 @Composable
-private fun FeeCard(summary: PortfolioFeeCalc.Result, onFundClick: (String) -> Unit) {
+private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundClick: (String) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Snurran sitter i en egen rubrikrad ovanför totalen, inte i `PeriodRow`n: där ligger
+            // beloppet längst till höger, och en snurra i den änden hade trängt undan just det
+            // talet kortet finns till för (UI-6).
+            CardTitleRow(title = stringResource(R.string.hem_fee_title), working = working)
             PeriodRow(
-                label = stringResource(R.string.hem_fee_title),
+                label = stringResource(R.string.hem_fee_total_label),
                 amount = null,
                 fraction = null,
                 valueText = MoneyFormat.kr(summary.totalAnnualFeeKr),
@@ -441,6 +495,7 @@ private fun RiskCard(
     switchPlan: List<SwitchSuggestionUi>,
     canRecomputeSwitchPlan: Boolean,
     recomputeRunning: Boolean,
+    working: Boolean,
     watchedSellIsins: Set<String>,
     onSwitchFollowedChange: (Long, Boolean) -> Unit,
     onRecomputeSwitchPlan: () -> Unit,
@@ -448,7 +503,7 @@ private fun RiskCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.hem_risk_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
             PeriodRow(
                 label = stringResource(R.string.hem_risk_target_label),
                 amount = null,
@@ -613,10 +668,10 @@ private fun SwitchSuggestionRow(
  * kurser: kortet ska rendera direkt, den dyra hämtningen hör hemma på bevakningens egen skärm.
  */
 @Composable
-private fun SwitchWatchCard(watch: OpenSwitchWatchUi, onOpen: (Long) -> Unit) {
+private fun SwitchWatchCard(watch: OpenSwitchWatchUi, working: Boolean, onOpen: (Long) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.hem_switch_watch_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(title = stringResource(R.string.hem_switch_watch_title), working = working)
             Text(
                 stringResource(
                     R.string.format_hem_switch_watch,

@@ -33,12 +33,17 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortfoljViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
+
+    /** Driver kortens väntesnurror (NAV-6) — se [FakeFundPriceRefreshScheduler.runningWork]. */
+    private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
@@ -106,7 +111,7 @@ class PortfoljViewModelTest {
 
     @Test
     fun `tomt tillstand nar inga transaktioner finns`() = runTest(dispatcher) {
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             // Initialt: laddar
             assertTrue(awaitItem().loading)
@@ -126,7 +131,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -148,7 +153,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -165,7 +170,7 @@ class PortfoljViewModelTest {
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -173,7 +178,11 @@ class PortfoljViewModelTest {
 
             latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = 5, nav = 200.0))
 
-            val updated = awaitItem()
+            // Vänta på den emission som faktiskt bär kursen, inte på "nästa": tillståndet
+            // emitterar också när kortens körstatus ändras (NAV-6), och `awaitItem()` ensamt
+            // hade då läst av en emission som råkade komma före kursen.
+            var updated = awaitItem()
+            while (updated.holdings.first().currentValue == null) updated = awaitItem()
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
             assertEquals(5L, updated.navEpochDay) // POR-7, issue #27
@@ -197,7 +206,7 @@ class PortfoljViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -230,7 +239,7 @@ class PortfoljViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -254,7 +263,7 @@ class PortfoljViewModelTest {
         priceHistoryByFundId = mapOf(fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)))
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -278,7 +287,7 @@ class PortfoljViewModelTest {
         )
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -297,7 +306,7 @@ class PortfoljViewModelTest {
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -319,7 +328,7 @@ class PortfoljViewModelTest {
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(10).toEpochDay(), nav = 110.0))
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         advanceUntilIdle()
 
         assertEquals(1, refreshedFundIds.size)
@@ -346,7 +355,7 @@ class PortfoljViewModelTest {
             ),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -381,7 +390,7 @@ class PortfoljViewModelTest {
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataForBlocks = true
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -390,6 +399,73 @@ class PortfoljViewModelTest {
             assertEquals(1, state.holdings.size)
             assertEquals(1200.0, state.totalValue, 1e-9)
             assertTrue(state.exposure.byType.buckets.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `exponeringskortet snurrar medan metadata-uppslaget pagar`() = runTest(dispatcher) {
+        // Motstycket till testet ovan: att vyn ritas direkt är rätt, men en tom exponeringskarta
+        // ska inte se ut som en portfölj källan inte kan klassificera. Snurran (NAV-6) är det som
+        // skiljer "vet inte än" från "vet inte" (ANA-4-principen).
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        metadataForBlocks = true
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.metadataWorking) state = awaitItem()
+            assertTrue(state.exposureWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en kursuppdatering snurrar totalkortet och varje innehavsrad`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.pricesWorking) state = awaitItem()
+            assertTrue(state.totalWorking)
+            assertTrue(state.holdingWorking(fond.fundId))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en molnbackup snurrar inga kort i portfoljen`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+        )
+        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
+
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.metadataWorking) state = awaitItem()
+            assertFalse(state.pricesWorking)
+            assertFalse(state.totalWorking)
+            assertFalse(state.exposureWorking)
+            assertFalse(state.holdingWorking(fond.fundId))
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -404,7 +480,7 @@ class PortfoljViewModelTest {
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
@@ -438,7 +514,7 @@ class PortfoljViewModelTest {
             ),
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo)
+        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading || state.riskLevels.isEmpty()) state = awaitItem()

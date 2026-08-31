@@ -53,6 +53,12 @@ data class CandidateRow(
     val partial: Boolean = false,
     /** Historiken gick inte att hämta — raden visas utan kurva och utan utveckling, aldrig som 0. */
     val historyUnavailable: Boolean = false,
+    /**
+     * Historiken hämtas just nu — radens väntesnurra (NAV-6). Skild från [historyUnavailable]:
+     * "vi vet inte än" och "det gick inte" är olika besked, och utan snurran ser det första ut
+     * som det andra under de sekunder källan svarar (ANA-4-principen).
+     */
+    val historyLoading: Boolean = false,
     /** Handplockad kandidat (ANA-13) — bara de går att ta bort; de automatiska hör till förslaget. */
     val manual: Boolean = false,
 )
@@ -90,6 +96,15 @@ data class SwitchWatchUiState(
 ) {
     val canAddCandidate: Boolean get() = !closed && rows.size < SwitchWatchCalc.MAX_CANDIDATES
     val hasChart: Boolean get() = sellSeries.isNotEmpty() || candidateSeries.isNotEmpty()
+
+    /** Rubrikkortets väntesnurra (NAV-6) — bevakningen läses och alternativen fylls på. */
+    val headerWorking: Boolean get() = loading || fillingCandidates
+
+    /**
+     * Diagrammets väntesnurra: en kurva som ännu saknar en av kandidaterna är inte fel, men den
+     * är inte heller hela jämförelsen — och skillnaden syns inte i bilden.
+     */
+    val chartWorking: Boolean get() = loading || fillingCandidates || rows.any { it.historyLoading }
 }
 
 /**
@@ -163,6 +178,9 @@ class SwitchWatchViewModel @Inject constructor(
                 changeKr = outcome.changeKr,
                 partial = outcome.partial,
                 historyUnavailable = historyByIsin[candidate.isin] is CandidateHistory.Unavailable,
+                // Också "ännu inte efterfrågad" (null) räknas som pågående: hämtningen köas i
+                // samma svep som raden dyker upp, se ensureHistories.
+                historyLoading = historyByIsin[candidate.isin].let { it == null || it is CandidateHistory.Loading },
                 manual = candidate.source == SwitchWatchCandidateSource.MANUELL,
             )
         }

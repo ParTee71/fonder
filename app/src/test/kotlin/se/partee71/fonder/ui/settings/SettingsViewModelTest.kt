@@ -52,7 +52,8 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -63,8 +64,6 @@ class SettingsViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private var clearAllCalled = false
-    private var manualRefreshCalled = false
-    private var switchPlanScans = 0
     private lateinit var dataStore: DataStore<Preferences>
 
     private val fakeTransactionRepo = object : TransactionRepository {
@@ -79,25 +78,8 @@ class SettingsViewModelTest {
         }
     }
 
-    /** Räknar begärda referensfondsskanningar (HEM-10, issue #102). */
-    private var benchmarkScans = 0
-
-    private val fakeScheduler = object : FundPriceRefreshScheduler {
-        override fun scheduleOnLaunch() {}
-        override fun scheduleBackstop() {}
-        override fun triggerManualRefresh() {
-            manualRefreshCalled = true
-        }
-        override fun triggerSwitchPlanScan() {
-            switchPlanScans++
-        }
-        override fun triggerBenchmarkScan() {
-            benchmarkScans++
-        }
-        override fun scheduleDriveBackup() {}
-        override fun triggerDriveBackupNow() {}
-        override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
-    }
+    /** Räknar bl.a. manuella uppdateringar (SET-2) och referensfondsskanningar (HEM-10, issue #102). */
+    private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
     private var exportResult: Result<String> = Result.success("{}")
     private var restoreResult: Result<RestoreSummary> = Result.success(RestoreSummary(0, 0, 0))
@@ -269,7 +251,36 @@ class SettingsViewModelTest {
 
         vm.refreshPricesNow()
 
-        assertTrue(manualRefreshCalled)
+        assertEquals(1, fakeScheduler.manualRefreshes)
+    }
+
+    @Test
+    fun `kurskortet snurrar under en kursuppdatering, backup-kortet gor det inte`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
+            while (!state.priceRefreshWorking) state = awaitItem()
+            assertFalse(state.driveBackupWorking)
+            assertFalse(state.backupWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `backup-kortet snurrar under molnbackupen (SET-7)`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
+            while (!state.driveBackupWorking) state = awaitItem()
+            assertTrue(state.backupWorking)
+            // Molnbackupen rör inga kurser — kurskortet ska stå stilla.
+            assertFalse(state.priceRefreshWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // --- Kontotyp (SET-4, issue #70) ---
@@ -432,7 +443,7 @@ class SettingsViewModelTest {
         vm.setAccountType(AccountType.ISK_KF)
         advanceUntilIdle()
 
-        assertEquals(1, switchPlanScans)
+        assertEquals(1, fakeScheduler.switchPlanScans)
     }
 
     @Test
@@ -446,7 +457,7 @@ class SettingsViewModelTest {
         vm.setAccountType(AccountType.ISK_KF)
         advanceUntilIdle()
 
-        assertEquals(1, switchPlanScans)
+        assertEquals(1, fakeScheduler.switchPlanScans)
     }
 
     @Test
@@ -457,7 +468,7 @@ class SettingsViewModelTest {
         vm.setAccountType(AccountType.DEPA_AF)
         advanceUntilIdle()
 
-        assertEquals(0, switchPlanScans)
+        assertEquals(0, fakeScheduler.switchPlanScans)
     }
 
     // --- Val av jämförelsefond (HEM-10, issue #102) ---
@@ -473,7 +484,7 @@ class SettingsViewModelTest {
 
         assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
         // Utan skanningen hade den valda fondens historik dröjt till nästa backstop (issue #88).
-        assertEquals(1, benchmarkScans)
+        assertEquals(1, fakeScheduler.benchmarkScans)
     }
 
     @Test
@@ -505,7 +516,7 @@ class SettingsViewModelTest {
 
             assertTrue(state.benchmarkPickFailed)
             assertNull(preferences.chosenBenchmarkIsin.first())
-            assertEquals(0, benchmarkScans)
+            assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }

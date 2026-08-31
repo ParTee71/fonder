@@ -36,6 +36,7 @@ import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import java.time.Instant
 import java.time.LocalDate
@@ -255,7 +256,11 @@ fun SettingsContent(
 
         Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_price_update_section), style = MaterialTheme.typography.titleSmall)
+                CardTitleRow(
+                    title = stringResource(R.string.settings_price_update_section),
+                    working = state.priceRefreshWorking,
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Text(
                     stringResource(R.string.settings_price_update_body),
                     style = MaterialTheme.typography.bodySmall,
@@ -277,7 +282,11 @@ fun SettingsContent(
         // inte förväxlas med "säkerhetskopierad".
         Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_account_section), style = MaterialTheme.typography.titleSmall)
+                CardTitleRow(
+                    title = stringResource(R.string.settings_account_section),
+                    working = state.signInInProgress,
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Text(
                     state.googleUser?.let { user ->
                         stringResource(
@@ -350,7 +359,11 @@ fun SettingsContent(
 
         Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_backup_section), style = MaterialTheme.typography.titleSmall)
+                CardTitleRow(
+                    title = stringResource(R.string.settings_backup_section),
+                    working = state.backupWorking,
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Text(
                     stringResource(R.string.settings_backup_body),
                     style = MaterialTheme.typography.bodySmall,
@@ -387,8 +400,9 @@ fun SettingsContent(
                 // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
                 // antytt två sorters säkerhetskopia.
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Text(
-                    stringResource(R.string.settings_drive_backup_title),
+                CardTitleRow(
+                    title = stringResource(R.string.settings_drive_backup_title),
+                    working = state.driveBackupWorking,
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(

@@ -42,6 +42,7 @@ import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 import javax.inject.Inject
@@ -137,6 +138,14 @@ data class HemUiState(
     val canRecomputeSwitchPlan: Boolean = false,
     /** Sant medan en bakgrundskörning pågår — knappen är då släckt, samma signal som bakgrundsindikatorn (NAV-6). */
     val backgroundWorkRunning: Boolean = false,
+    /** Kurserna hämtas just nu ([BackgroundWork.PRICE_REFRESH]) — kurskortens väntesnurra (NAV-6). */
+    val pricesWorking: Boolean = false,
+    /** Referensfonden väljs/hämtas just nu ([BackgroundWork.BENCHMARK_SCAN]) — bara avkastningskortet berörs. */
+    val benchmarkWorking: Boolean = false,
+    /** Bytesplanen skannas just nu ([BackgroundWork.SWITCH_PLAN_SCAN]) — bara riskkortet berörs. */
+    val switchPlanWorking: Boolean = false,
+    /** Fondmetadatan slås upp just nu (nätverk per okänd ISIN) — avgifts- och riskkortet vilar på den. */
+    val metadataWorking: Boolean = false,
     /** Öppen bevakning av ett pågående byte (HEM-11, issue #114), null när ingen pågår. */
     val openSwitchWatch: OpenSwitchWatchUi? = null,
     /**
@@ -148,6 +157,19 @@ data class HemUiState(
     val startedSwitchWatchId: Long? = null,
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
+
+    // Per kort, inte ett gemensamt "något kör" (NAV-6): korten visar olika data, och en snurra
+    // på avkastningskortet medan bytesplanen skannas hade sagt att kurvan är osäker när den
+    // inte är det. Härlett här i stället för i skärmen, så kopplingen kort → jobb är
+    // enhetstestbar utan Compose. Den första laddningen räknas alltid som pågående: då är
+    // varje siffra på skärmen en nolla som ännu inte fyllts i.
+    val totalWorking: Boolean get() = loading || pricesWorking
+    val performanceWorking: Boolean get() = loading || pricesWorking
+    val returnChartWorking: Boolean get() = loading || pricesWorking || benchmarkWorking
+    val analysisWorking: Boolean get() = loading || pricesWorking
+    val feeWorking: Boolean get() = loading || pricesWorking || metadataWorking
+    val riskWorking: Boolean get() = loading || metadataWorking || switchPlanWorking
+    val switchWatchWorking: Boolean get() = loading || pricesWorking
 }
 
 /** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #16) om inget köp finns (bör inte hända för ett verkligt innehav, men skyddar mot en tom historik-hämtning). */
@@ -267,6 +289,20 @@ class HemViewModel @Inject constructor(
     private var metadataJob: Job? = null
     private var metadataIsins: List<String>? = null
 
+    /**
+     * Sant medan uppslaget ovan pågår — avgifts- och riskkortets väntesnurra (NAV-6). Utan den
+     * står de två korten med tomma avgifter och okänd risknivå utan att något säger att svaret
+     * är på väg; det ser ut som ANA-4:s "vet inte", som är ett helt annat besked.
+     */
+    private val metadataLoading = MutableStateFlow(false)
+
+    /**
+     * Löpnummer per begäran, så bara den **senaste** hämtningen får släcka snurran. En avbruten
+     * hämtnings `finally` kör efter att nästa redan tänt den, och utan numret hade snurran
+     * slocknat mitt under det pågående uppslaget.
+     */
+    private var metadataRequestId = 0
+
     /** Se [requestBenchmarkIfMissing] — flödet emitterar om vid varje kursändring, begäran ska ändå bara gå en gång. */
     private var benchmarkScanRequested = false
 
@@ -274,8 +310,22 @@ class HemViewModel @Inject constructor(
         val distinct = isins.distinct().sorted()
         if (distinct == metadataIsins) return
         metadataIsins = distinct
+        val requestId = ++metadataRequestId
         metadataJob?.cancel()
-        metadataJob = viewModelScope.launch { metadata.value = fundMetadataRepository.metadataFor(distinct) }
+        // Se PortfoljViewModel: utan ISIN finns inget svar på väg, och då ska korten inte snurra.
+        if (distinct.isEmpty()) {
+            metadataLoading.value = false
+            metadata.value = emptyMap()
+            return
+        }
+        metadataLoading.value = true
+        metadataJob = viewModelScope.launch {
+            try {
+                metadata.value = fundMetadataRepository.metadataFor(distinct)
+            } finally {
+                if (requestId == metadataRequestId) metadataLoading.value = false
+            }
+        }
     }
 
     val uiState: StateFlow<HemUiState> =
@@ -353,11 +403,21 @@ class HemViewModel @Inject constructor(
             state.copy(openSwitchWatch = watches.open, watchedSellIsins = watches.watchedSellIsins)
         }.combine(startedSwitchWatchId) { state, startedId ->
             state.copy(startedSwitchWatchId = startedId)
-        }.combine(fundPriceRefreshScheduler.observeIsRunning()) { state, running ->
+        }.combine(
+            combine(fundPriceRefreshScheduler.observeRunningWork(), metadataLoading) { running, metadataPending ->
+                running to metadataPending
+            },
+        ) { state, (running, metadataPending) ->
             // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
             // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
             // den ska inte kunna räkna om portföljen bara för att ett jobb startade.
-            state.copy(backgroundWorkRunning = running)
+            state.copy(
+                backgroundWorkRunning = running.isNotEmpty(),
+                pricesWorking = BackgroundWork.PRICE_REFRESH in running,
+                benchmarkWorking = BackgroundWork.BENCHMARK_SCAN in running,
+                switchPlanWorking = BackgroundWork.SWITCH_PLAN_SCAN in running,
+                metadataWorking = metadataPending,
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

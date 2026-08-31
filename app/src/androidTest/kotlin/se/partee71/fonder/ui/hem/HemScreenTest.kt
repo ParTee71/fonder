@@ -39,6 +39,18 @@ class HemScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    /**
+     * Riskkortet är sista `item {}` i Hems `LazyColumn` och komponeras inte förrän listan
+     * skrollats dit — `onNodeWithText(...)` hittar då ingen nod alls, oavsett `performScrollTo()`,
+     * som kräver att noden **redan** är komponerad (UI-5, issue #66). Testerna klarade sig
+     * tidigare bara på att korten råkade rymmas i testviewporten: rubrikraderna med väntesnurra
+     * (NAV-6) gjorde varje kort några dp högre och slog ut dem. Samma `testTag`-mönster som
+     * Portfölj, Facit och Pågående byte redan använder.
+     */
+    private fun scrollToRiskCard() {
+        composeRule.onNodeWithTag(HEM_LIST_TEST_TAG).performScrollToIndex(RISK_CARD_INDEX)
+    }
+
     @Test
     fun tomt_tillstand_visas_utan_innehav() {
         composeRule.setContent {
@@ -46,6 +58,50 @@ class HemScreenTest {
         }
 
         composeRule.onNodeWithText("Ingen portfölj ännu").assertExists()
+    }
+
+    @Test
+    fun kurskorten_visar_vantesnurra_medan_kurserna_hamtas() {
+        // NAV-6: chromets indikator säger bara att *något* kör. Snurran på kortet säger vilket
+        // korts siffror som håller på att bli till.
+        val state = HemUiState(loading = false, hasHoldings = true, pricesWorking = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertExists()
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertExists()
+    }
+
+    @Test
+    fun kurskorten_star_stilla_i_vila() {
+        val state = HemUiState(loading = false, hasHoldings = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertDoesNotExist()
+    }
+
+    @Test
+    fun bara_avkastningskortet_snurrar_for_en_referensfondsskanning() {
+        // Referensfonden (HEM-10) rör bara avkastningskurvan. Snurrar totalkortet med, slutar
+        // snurran betyda något — den skulle då bara säga "appen jobbar", vilket chromet redan
+        // säger (NAV-6).
+        val state = HemUiState(loading = false, hasHoldings = true, benchmarkWorking = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertExists()
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertDoesNotExist()
     }
 
     @Test
@@ -425,6 +481,8 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Riskprofil").assertExists()
         composeRule.onNodeWithText("5,00").assertExists()
         composeRule.onNodeWithText("3,50").assertExists()
@@ -447,6 +505,8 @@ class HemScreenTest {
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
         }
+
+        scrollToRiskCard()
 
         composeRule.onNodeWithText("Mål mot faktisk fördelning").assertExists()
         composeRule.onNodeWithText("Nivå 3").assertExists()
@@ -480,6 +540,8 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Bytesplan").assertExists()
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
         // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75). Belopp
@@ -512,6 +574,8 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("2. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
     }
 
@@ -534,6 +598,8 @@ class HemScreenTest {
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
         }
+
+        scrollToRiskCard()
 
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
         composeRule.onNodeWithText("Belopp:", substring = true).assertDoesNotExist()
@@ -564,6 +630,8 @@ class HemScreenTest {
             }
         }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
 
         assertEquals(42L to true, callback)
@@ -582,6 +650,8 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Bytesplan").assertDoesNotExist()
     }
 
@@ -597,6 +667,8 @@ class HemScreenTest {
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
         }
+
+        scrollToRiskCard()
 
         // 3 kommer från PerformanceCard-kortets dag/vecka/månad (ingen performance-data satt i
         // testtillståndet), den fjärde är riskradens "otillräcklig data".
@@ -622,6 +694,8 @@ class HemScreenTest {
     fun riskkortet_visar_omraknningsknappen_nar_en_plan_kan_ges() {
         composeRule.setContent { FonderTheme { HemContent(state = riskState()) } }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().assertExists()
     }
 
@@ -630,12 +704,16 @@ class HemScreenTest {
         // Depå/AF eller ingen profil — knappen ska inte lova något SET-4-gaten vägrar infria.
         composeRule.setContent { FonderTheme { HemContent(state = riskState(canRecomputeSwitchPlan = false)) } }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Räkna om bytesplanen").assertDoesNotExist()
     }
 
     @Test
     fun omraknningsknappen_ar_slackt_medan_en_korning_pagar() {
         composeRule.setContent { FonderTheme { HemContent(state = riskState(backgroundWorkRunning = true)) } }
+
+        scrollToRiskCard()
 
         composeRule.onNodeWithText("Räknar om …").performScrollTo().assertIsNotEnabled()
     }
@@ -646,6 +724,8 @@ class HemScreenTest {
         composeRule.setContent {
             FonderTheme { HemContent(state = riskState(), onRecomputeSwitchPlan = { clicks++ }) }
         }
+
+        scrollToRiskCard()
 
         composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().performClick()
 
@@ -891,6 +971,8 @@ class HemScreenTest {
         // den dagar då pengarna fortfarande låg kvar.
         composeRule.setContent { FonderTheme { HemContent(state = switchPlanState(followed = false)) } }
 
+        scrollToRiskCard()
+
         composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
     }
 
@@ -900,6 +982,8 @@ class HemScreenTest {
         composeRule.setContent {
             FonderTheme { HemContent(state = switchPlanState(followed = true, watchedSellIsins = setOf("SE_SALJ"))) }
         }
+
+        scrollToRiskCard()
 
         composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
     }
@@ -916,8 +1000,18 @@ class HemScreenTest {
                 )
             }
         }
+
+        scrollToRiskCard()
         composeRule.onNodeWithText("Bevaka alternativ").performScrollTo().performClick()
 
         assertEquals(1L, started?.recordId)
     }
 }
+
+/**
+ * Riskkortets plats i Hems lista: total, utveckling, avkastning, analys, avgifter, risk — utan
+ * ett pågående byte, som testerna nedan inte har. Ett index och inte en sökning på rubriken:
+ * rubriken finns inte i semantikträdet förrän kortet komponerats, vilket är just det som ska
+ * åstadkommas.
+ */
+private const val RISK_CARD_INDEX = 5

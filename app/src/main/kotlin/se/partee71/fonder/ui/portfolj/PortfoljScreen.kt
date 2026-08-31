@@ -26,6 +26,7 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
@@ -33,6 +34,7 @@ import se.partee71.fonder.ui.components.ProfitTakeBadge
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
+import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import java.time.LocalDate
@@ -76,13 +78,14 @@ fun PortfoljContent(
         // hittar aldrig en rad som ännu inte komponerats (issue #66).
         else -> LazyColumn(modifier = modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
             item { TotalCard(state = state) }
-            item { ExposureCard(exposure = state.exposure) }
+            item { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
             items(state.holdings, key = { it.fund.fundId }) { holding ->
                 HoldingRow(
                     holding = holding,
                     performance = state.performance[holding.fund.fundId],
                     analysis = state.analysis[holding.fund.fundId],
                     riskLevel = state.riskLevels[holding.fund.fundId],
+                    working = state.holdingWorking(holding.fund.fundId),
                     onClick = { onFundClick(holding.fund.fundId) },
                 )
             }
@@ -94,7 +97,10 @@ fun PortfoljContent(
 private fun TotalCard(state: PortfoljUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.portfolj_total_value), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(
+                title = stringResource(R.string.portfolj_total_value),
+                working = state.totalWorking,
+            )
             val fraction = state.totalGainLossFraction
             if (fraction != null) {
                 Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
@@ -125,10 +131,10 @@ private fun TotalCard(state: PortfoljUiState) {
  * (`outline`) som skiljer dem visuellt från de riktiga kategorierna (regel 4, [ExposureBar]).
  */
 @Composable
-private fun ExposureCard(exposure: PortfolioExposureCalc.Result) {
+private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolean) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.portfolj_exposure_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(title = stringResource(R.string.portfolj_exposure_title), working = working)
 
             ExposureDimensionSection(
                 title = stringResource(R.string.portfolj_exposure_type_title),
@@ -193,6 +199,7 @@ private fun HoldingRow(
     performance: PortfolioPerformanceCalc.HoldingPerformance?,
     analysis: FundAnalysisCalc.Analysis?,
     riskLevel: Int?,
+    working: Boolean,
     onClick: () -> Unit,
 ) {
     Card(
@@ -212,6 +219,14 @@ private fun HoldingRow(
                 // Risknivån (UI-10, issue #85) bredvid signalen — samma delade RiskBadge som
                 // Fonddetalj och fondsök (regel 4), så en fonds risk ser likadan ut överallt.
                 RiskBadge(level = riskLevel, modifier = Modifier.padding(start = 8.dp))
+                // Väntesnurra för just den här fonden (NAV-6): en nyss tillagd fond visar 0 kr
+                // tills kursen landat, och utan snurran ser det ut som ett värde i stället för
+                // som ett svar på väg.
+                WorkingIndicator(
+                    working = working,
+                    contentDescription = stringResource(R.string.format_card_working, holding.fund.name),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             // Vinstsignalen (S4, ANA-8) är ingen risk och visas därför separat från StatusDot
             // ovan, inte som en del av samma rad/trafikljus (issue #26).

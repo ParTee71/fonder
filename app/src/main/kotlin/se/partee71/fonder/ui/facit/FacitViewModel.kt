@@ -20,6 +20,8 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
 /**
@@ -54,8 +56,16 @@ data class FacitUiState(
     val feeFollowedSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
     /** Snitt per plats i planen (SET-5) — underlaget för om `MAX_SWITCHES_PER_PLAN` kan höjas. Bara bytesplanens rader. */
     val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> = emptyList(),
+    /**
+     * Bytesplanen skannas just nu ([BackgroundWork.SWITCH_PLAN_SCAN]) — det är den körningen som
+     * spelar in nya rader och fyller på utfallens NAV, alltså precis den data kortet redovisar.
+     */
+    val switchPlanWorking: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !loading && rows.isEmpty()
+
+    /** Summeringskortets väntesnurra (NAV-6) — härlett här, så kopplingen är enhetstestbar. */
+    val summaryWorking: Boolean get() = loading || switchPlanWorking
 }
 
 /**
@@ -75,6 +85,7 @@ class FacitViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val historyAndFunds: Flow<Pair<List<SuggestionRecord>, List<Fund>>> =
@@ -134,6 +145,11 @@ class FacitViewModel @Inject constructor(
                     byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome }),
                 )
             }
+        }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+            // Eget led, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
+            // ska inte kunna räkna om facit bara för att ett jobb startade (samma gräns som
+            // HemViewModel drar).
+            state.copy(switchPlanWorking = BackgroundWork.SWITCH_PLAN_SCAN in running)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

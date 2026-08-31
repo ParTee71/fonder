@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -27,6 +28,8 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -51,8 +54,29 @@ data class PortfoljUiState(
      * Läses ur samma [metadata]-flöde som exponeringskartan, alltså utan extra nätverksanrop.
      */
     val riskLevels: Map<String, Int> = emptyMap(),
+    /** Kurserna hämtas just nu i bakgrunden ([BackgroundWork.PRICE_REFRESH]) — kortens väntesnurra (NAV-6). */
+    val pricesWorking: Boolean = false,
+    /** Fondmetadatan slås upp just nu (nätverk per okänd ISIN) — exponeringskartan vilar på den. */
+    val metadataWorking: Boolean = false,
+    /**
+     * Fonder vars engångsuppdatering av kursen pågår just nu (se [PortfoljViewModel]s `init`).
+     * Per fond, inte ett gemensamt "något hämtas": en nyss tillagd fond uppdateras medan resten
+     * av listan står färdig, och då ska bara **den** raden snurra (NAV-6).
+     */
+    val refreshingFundIds: Set<String> = emptySet(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
+
+    // Per kort/rad, härlett här i stället för i skärmen så kopplingen är enhetstestbar utan
+    // Compose (samma uppdelning som HemUiState). Den första laddningen räknas alltid som
+    // pågående: då är varje siffra på skärmen en nolla som ännu inte fyllts i.
+    val totalWorking: Boolean get() = loading || pricesWorking || refreshingFundIds.isNotEmpty()
+
+    /** Exponeringskartan (POR-9) hänger på metadatan, inte på kurserna. */
+    val exposureWorking: Boolean get() = loading || metadataWorking
+
+    /** En innehavsrad snurrar när just dess kurs hämtas, eller när alla kurser uppdateras. */
+    fun holdingWorking(fundId: String): Boolean = pricesWorking || fundId in refreshingFundIds
 }
 
 private val EMPTY_DIMENSION = PortfolioExposureCalc.Dimension(buckets = emptyList(), unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0)
@@ -73,6 +97,7 @@ class PortfoljViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -92,12 +117,57 @@ class PortfoljViewModel @Inject constructor(
     private var metadataJob: Job? = null
     private var metadataIsins: List<String>? = null
 
+    /**
+     * Sant medan uppslaget ovan pågår — exponeringskortets väntesnurra (NAV-6). Utan den ser en
+     * ännu ofylld exponeringskarta likadan ut som en portfölj källan inte kan klassificera, och
+     * de två betyder helt olika saker (ANA-4-principen).
+     */
+    private val metadataLoading = MutableStateFlow(false)
+
+    /** Se [se.partee71.fonder.ui.hem.HemViewModel]s motsvarighet: bara den senaste begäran får släcka snurran. */
+    private var metadataRequestId = 0
+
+    /** Fonder vars engångsuppdatering pågår — driver radernas snurra, se [PortfoljUiState.refreshingFundIds]. */
+    private val refreshingFundIds = MutableStateFlow<Set<String>>(emptySet())
+
     private fun refreshMetadata(isins: List<String>) {
         if (isins == metadataIsins) return
         metadataIsins = isins
+        val requestId = ++metadataRequestId
         metadataJob?.cancel()
-        metadataJob = viewModelScope.launch { metadata.value = fundMetadataRepository.metadataFor(isins) }
+        // Utan ISIN finns inget svar på väg — då ska kortet inte snurra. En snurra som tänds och
+        // släcks utan att något hämtas lär användaren att inte se den, och tillståndet emitterar
+        // två gånger i onödan.
+        if (isins.isEmpty()) {
+            metadataLoading.value = false
+            metadata.value = emptyMap()
+            return
+        }
+        metadataLoading.value = true
+        metadataJob = viewModelScope.launch {
+            try {
+                metadata.value = fundMetadataRepository.metadataFor(isins)
+            } finally {
+                if (requestId == metadataRequestId) metadataLoading.value = false
+            }
+        }
     }
+
+    /** Körstatusen samlad, så `uiState`-combinen växer med ett led i stället för tre. */
+    private data class WorkState(
+        val running: Set<BackgroundWork>,
+        val metadataPending: Boolean,
+        val refreshingFundIds: Set<String>,
+    )
+
+    private val workState: Flow<WorkState> =
+        combine(
+            fundPriceRefreshScheduler.observeRunningWork(),
+            metadataLoading,
+            refreshingFundIds,
+        ) { running, metadataPending, refreshing ->
+            WorkState(running, metadataPending, refreshing)
+        }
 
     val uiState: StateFlow<PortfoljUiState> =
         baseHoldings.flatMapLatest { (holdings, transactions) ->
@@ -131,6 +201,15 @@ class PortfoljViewModel @Inject constructor(
                     }.toMap(),
                 )
             }
+        }.combine(workState) { state, work ->
+            // Eget flöde, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
+            // från ViewModel:ens egna jobb — den ska inte kunna räkna om portföljen bara för att
+            // ett jobb startade (samma gräns som HemViewModel drar).
+            state.copy(
+                pricesWorking = BackgroundWork.PRICE_REFRESH in work.running,
+                metadataWorking = work.metadataPending,
+                refreshingFundIds = work.refreshingFundIds,
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -187,15 +266,23 @@ class PortfoljViewModel @Inject constructor(
             transactionRepository.observeFunds().collect { funds ->
                 funds.forEach { fund ->
                     if (refreshedFundIds.add(fund.fundId) && fundPriceRepository.isPriceStale(fund.fundId)) {
-                        // Utan köphistorik finns ingen historikhorisont att hämta mot — då
-                        // räcker repositoryts korta färska fönster (TP-18), se worker-varianten.
-                        val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
-                            .minOfOrNull { it.epochDay }
-                            ?.let(LocalDate::ofEpochDay)
-                        if (since != null) {
-                            fundPriceRepository.refreshFund(fund, since)
-                        } else {
-                            fundPriceRepository.refresh(fund.fundId)
+                        // Raden märks som pågående medan hämtningen kör (NAV-6) — `finally`, så
+                        // en fond vars källa svarar med fel inte blir stående med en snurra som
+                        // aldrig slutar.
+                        refreshingFundIds.update { it + fund.fundId }
+                        try {
+                            // Utan köphistorik finns ingen historikhorisont att hämta mot — då
+                            // räcker repositoryts korta färska fönster (TP-18), se worker-varianten.
+                            val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
+                                .minOfOrNull { it.epochDay }
+                                ?.let(LocalDate::ofEpochDay)
+                            if (since != null) {
+                                fundPriceRepository.refreshFund(fund, since)
+                            } else {
+                                fundPriceRepository.refresh(fund.fundId)
+                            }
+                        } finally {
+                            refreshingFundIds.update { it - fund.fundId }
                         }
                     }
                 }
