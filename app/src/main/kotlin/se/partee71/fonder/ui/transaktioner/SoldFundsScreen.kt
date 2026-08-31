@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
@@ -95,7 +96,10 @@ fun SoldFundsContent(
 private fun SoldFundsTotalCard(state: SoldFundsUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.sold_funds_total_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(
+                title = stringResource(R.string.sold_funds_total_title),
+                working = state.loading,
+            )
             Text(
                 "${MoneyFormat.kr(state.totalRealizedGain)}" +
                     (state.totalRealizedGainFraction?.let { " · ${MoneyFormat.percentSigned(it)}" } ?: ""),

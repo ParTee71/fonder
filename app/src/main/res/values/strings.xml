@@ -12,6 +12,12 @@
     <string name="add">Lägg till</string>
     <!-- Bakgrundsindikator för pågående kursuppdatering (NAV-6, issue #27) -->
     <string name="worker_status_running">Uppdaterar kurser i bakgrunden</string>
+    <!-- Kortens egen väntesnurra (NAV-6) — %1$s är kortets rubrik, så flera samtidiga snurror går att skilja åt -->
+    <string name="format_card_working">Uppdaterar %1$s</string>
+    <!-- Rubrik för kort som tidigare saknade en, men som behövde en rad att bära snurran i (NAV-6) -->
+    <string name="hem_performance_title">Utveckling</string>
+    <!-- Diagrammets egen väntesnurra (NAV-6) — diagrammet ligger inte alltid i ett kort med rubrik -->
+    <string name="chart_working">Uppdaterar diagrammet</string>
     <string name="ok">OK</string>
     <string name="settings">Inställningar</string>
     <string name="sign_in_with_google">Logga in med Google</string>
@@ -45,6 +51,7 @@
 
     <!-- Hem — fondavgift (HEM-5, issue #60) -->
     <string name="hem_fee_title">Fondavgifter per år</string>
+    <string name="hem_fee_total_label">Totalt per år</string>
     <string name="hem_fee_explain">Redan avdraget löpande ur fondernas kurs — ingen separat kostnad att hitta på kontot.</string>
     <string name="format_hem_fee_unknown">%1$d fond(er) saknar känd avgift och räknas inte in i totalen.</string>
     <!-- Samlad besparingspotential (HEM-6, issue #61) -->

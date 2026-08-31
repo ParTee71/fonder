@@ -33,6 +33,8 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 /** Facit-vyn (SET-5, issue #80) — se [FacitViewModel]. */
@@ -107,7 +109,10 @@ class FacitViewModelTest {
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
-    private fun viewModel() = FacitViewModel(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo)
+    /** Driver summeringskortets väntesnurra (NAV-6) — se [FakeFundPriceRefreshScheduler.runningWork]. */
+    private val fakeScheduler = FakeFundPriceRefreshScheduler()
+
+    private fun viewModel() = FacitViewModel(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo, fakeScheduler)
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -160,6 +165,37 @@ class FacitViewModelTest {
             val loaded = awaitItem()
             assertFalse(loaded.loading)
             assertTrue(loaded.isEmpty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `summeringskortet snurrar medan bytesplanen skannas`() = runTest(dispatcher) {
+        // Det är skanningen som spelar in nya rader och fyller på utfallens NAV — alltså precis
+        // den data kortet redovisar. En molnbackup gör det inte, och ska inte snurra kortet.
+        setUpPrices()
+        records.value = listOf(record(id = 1))
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.SWITCH_PLAN_SCAN)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.switchPlanWorking) state = awaitItem()
+            assertTrue(state.summaryWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `summeringskortet star stilla under en molnbackup`() = runTest(dispatcher) {
+        setUpPrices()
+        records.value = listOf(record(id = 1))
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertFalse(state.switchPlanWorking)
+            assertFalse(state.summaryWorking)
             cancelAndIgnoreRemainingEvents()
         }
     }

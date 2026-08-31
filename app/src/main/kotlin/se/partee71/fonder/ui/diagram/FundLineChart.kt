@@ -69,6 +69,7 @@ import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
+import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.ChartSeriesColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -141,6 +142,7 @@ fun FundLineChart(
     primaryLabel: String? = null,
     comparisonSeries: List<ChartSeries> = emptyList(),
     valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
+    working: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
@@ -234,6 +236,19 @@ fun FundLineChart(
 
     val seriesColors = seriesColors()
     Column(modifier = modifier) {
+        // Diagrammets egen väntesnurra (NAV-6), här i den delade komponenten i stället för en
+        // per anropsplats (regel 4): ett diagram ligger inte alltid i ett kort med rubrikrad —
+        // Fonddetaljs kurshistorik och bytesskärmens jämförelse ligger fritt i sina skärmar.
+        // Ligger diagrammet däremot i ett kort som redan snurrar (Hems avkastningskurva) lämnas
+        // [working] falskt, så samma besked inte ges två gånger i samma kort.
+        if (working) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                WorkingIndicator(working = true, contentDescription = stringResource(R.string.chart_working))
+            }
+        }
         val purchaseMarker = rememberPurchaseMarker()
         val lineProvider = rememberSeriesLineProvider(seriesColors)
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya

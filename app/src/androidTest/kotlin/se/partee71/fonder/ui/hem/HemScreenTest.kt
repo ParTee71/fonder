@@ -49,6 +49,50 @@ class HemScreenTest {
     }
 
     @Test
+    fun kurskorten_visar_vantesnurra_medan_kurserna_hamtas() {
+        // NAV-6: chromets indikator säger bara att *något* kör. Snurran på kortet säger vilket
+        // korts siffror som håller på att bli till.
+        val state = HemUiState(loading = false, hasHoldings = true, pricesWorking = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertExists()
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertExists()
+    }
+
+    @Test
+    fun kurskorten_star_stilla_i_vila() {
+        val state = HemUiState(loading = false, hasHoldings = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertDoesNotExist()
+    }
+
+    @Test
+    fun bara_avkastningskortet_snurrar_for_en_referensfondsskanning() {
+        // Referensfonden (HEM-10) rör bara avkastningskurvan. Snurrar totalkortet med, slutar
+        // snurran betyda något — den skulle då bara säga "appen jobbar", vilket chromet redan
+        // säger (NAV-6).
+        val state = HemUiState(loading = false, hasHoldings = true, benchmarkWorking = true)
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state) }
+        }
+
+        composeRule.onNodeWithContentDescription("Uppdaterar Avkastning över tid").assertExists()
+        composeRule.onNodeWithContentDescription("Uppdaterar Totalt värde").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Uppdaterar Utveckling").assertDoesNotExist()
+    }
+
+    @Test
     fun totalkort_visar_varde_vinst_och_period_forandring() {
         // Undviker tresiffriga belopp — tusentalsavgränsaren kan vara vanligt eller hårt
         // blanksteg beroende på JVM/lokal (samma försiktighet som MoneyFormatTest).

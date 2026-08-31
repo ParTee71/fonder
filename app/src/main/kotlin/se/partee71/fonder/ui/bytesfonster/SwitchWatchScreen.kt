@@ -26,9 +26,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.RiskBadge
+import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import java.time.LocalDate
@@ -102,14 +104,23 @@ fun SwitchWatchContent(
             item {
                 // Ingen `EmptyState` här: den fyller skärmen och hade tryckt bort kortet med
                 // säljfond, belopp och dag — den informationen gäller även utan alternativ.
-                Text(
-                    stringResource(
-                        if (state.fillingCandidates) R.string.switch_watch_filling else R.string.switch_watch_empty_body,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                ) {
+                    val text = stringResource(
+                        if (state.fillingCandidates) R.string.switch_watch_filling else R.string.switch_watch_empty_body,
+                    )
+                    // Snurran bara medan förslagen faktiskt hämtas (ANA-13) — "inga alternativ
+                    // ännu" är ett färdigt svar, inte ett som är på väg.
+                    WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 
@@ -164,12 +175,13 @@ fun SwitchWatchContent(
 private fun HeaderCard(state: SwitchWatchUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                stringResource(
+            CardTitleRow(
+                title = stringResource(
                     R.string.format_switch_watch_sold,
                     state.sellFundName,
                     LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter),
                 ),
+                working = state.headerWorking,
                 style = MaterialTheme.typography.titleSmall,
             )
             state.proceedsKr?.let { amount ->
@@ -220,6 +232,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
         points = state.sellSeries,
         primaryLabel = state.sellFundName,
         comparisonSeries = state.candidateSeries.map { (label, points) -> ChartSeries(label = label, points = points) },
+        working = state.chartWorking,
         modifier = Modifier.padding(horizontal = 16.dp),
     )
 }
@@ -247,6 +260,13 @@ private fun CandidateCard(
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
                 )
                 RiskBadge(level = row.riskLevel)
+                // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet
+                // beslutet hänger på, och den kan inte visas förrän kandidatens historik landat.
+                WorkingIndicator(
+                    working = row.historyLoading,
+                    contentDescription = stringResource(R.string.format_card_working, row.name),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             PeriodRow(
                 label = stringResource(R.string.switch_watch_change_label),

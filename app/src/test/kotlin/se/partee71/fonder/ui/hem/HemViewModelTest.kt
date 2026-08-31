@@ -55,7 +55,8 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.fonder.worker.BackgroundWork
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -149,27 +150,12 @@ class HemViewModelTest {
 
     private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
 
-    /** Räknar begärda omräkningar av bytesplanen (HEM-8, issue #88) och driver knappens släckta läge. */
-    private var switchPlanScans = 0
-
-    /** Räknar begärda referensfondsskanningar (HEM-10) — ska gå exakt en gång, inte per emission. */
-    private var benchmarkScans = 0
-    private val workRunning = MutableStateFlow(false)
-
-    private val fakeScheduler = object : FundPriceRefreshScheduler {
-        override fun scheduleOnLaunch() {}
-        override fun scheduleBackstop() {}
-        override fun triggerManualRefresh() {}
-        override fun triggerSwitchPlanScan() {
-            switchPlanScans++
-        }
-        override fun triggerBenchmarkScan() {
-            benchmarkScans++
-        }
-        override fun scheduleDriveBackup() {}
-        override fun triggerDriveBackupNow() {}
-        override fun observeIsRunning(): Flow<Boolean> = workRunning
-    }
+    /**
+     * Delad fake (se [FakeFundPriceRefreshScheduler]) — räknar begärda omräkningar av
+     * bytesplanen (HEM-8, issue #88) och referensfondsskanningar (HEM-10), och driver kortens
+     * väntesnurror (NAV-6) via `runningWork`.
+     */
+    private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
 
@@ -904,7 +890,7 @@ class HemViewModelTest {
     @Test
     fun `backgroundWorkRunning speglar schemalaggarens korstatus`() = runTest(dispatcher) {
         setUpHoldingWithMetadataForSwitchPlan()
-        workRunning.value = true
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
 
         val vm = viewModel()
         vm.uiState.test {
@@ -916,12 +902,86 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `en kursuppdatering snurrar kurskorten men inte riskkortet`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.pricesWorking) state = awaitItem()
+            assertTrue(state.totalWorking)
+            assertTrue(state.performanceWorking)
+            assertTrue(state.returnChartWorking)
+            assertTrue(state.analysisWorking)
+            // Riskkortet vilar på bytesplanen och metadatan, inte på kurserna — det ska stå
+            // stilla medan bara kurserna hämtas, annars säger snurran ingenting.
+            assertFalse(state.switchPlanWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en referensfondsskanning snurrar bara avkastningskortet`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.BENCHMARK_SCAN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.benchmarkWorking) state = awaitItem()
+            assertTrue(state.returnChartWorking)
+            assertFalse(state.pricesWorking)
+            assertFalse(state.switchPlanWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en bytesplansskanning snurrar riskkortet`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.SWITCH_PLAN_SCAN)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.switchPlanWorking) state = awaitItem()
+            assertTrue(state.riskWorking)
+            assertFalse(state.pricesWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en molnbackup snurrar inga kort pa Hem`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        // SET-7 rör varken kurser, bytesplan eller referensfond. Kortens snurror ska därför
+        // stå stilla — bara chromets indikator (NAV-6) visar att något alls kör.
+        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            // Också metadatauppslaget måste ha landat innan riskkortet får bedömas: det är en
+            // egen (och legitim) anledning att snurra, och testet mäter molnbackupen.
+            while (state.loading || !state.backgroundWorkRunning || state.metadataWorking) state = awaitItem()
+            assertTrue(state.backgroundWorkRunning)
+            assertFalse(state.pricesWorking)
+            assertFalse(state.benchmarkWorking)
+            assertFalse(state.switchPlanWorking)
+            assertFalse(state.totalWorking)
+            assertFalse(state.riskWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
         val vm = viewModel()
 
         vm.recomputeSwitchPlan()
 
-        assertEquals(1, switchPlanScans)
+        assertEquals(1, fakeScheduler.switchPlanScans)
     }
 
     // --- Avkastningskurvan och indexjämförelsen (HEM-9/HEM-10, issue #96) ---
@@ -1106,7 +1166,7 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
-            assertEquals(1, benchmarkScans)
+            assertEquals(1, fakeScheduler.benchmarkScans)
 
             // Ny emission (kursändring) ska inte ge en till skanning.
             latestPrices.value = mapOf(
@@ -1114,7 +1174,7 @@ class HemViewModelTest {
             )
             awaitItem()
 
-            assertEquals(1, benchmarkScans)
+            assertEquals(1, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1129,7 +1189,7 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
 
-            assertEquals(0, benchmarkScans)
+            assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1142,7 +1202,7 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(0, benchmarkScans)
+            assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1206,7 +1266,7 @@ class HemViewModelTest {
             while (state.loading || state.benchmarkSeries == null) state = awaitItem()
 
             assertEquals("Global Index", state.benchmarkSeries!!.fundName)
-            assertEquals(0, benchmarkScans)
+            assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
     }

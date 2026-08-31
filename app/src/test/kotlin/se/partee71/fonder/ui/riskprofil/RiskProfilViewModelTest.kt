@@ -38,7 +38,7 @@ import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiskProfilViewModelTest {
@@ -51,21 +51,8 @@ class RiskProfilViewModelTest {
     private lateinit var preferencesRepository: PreferencesRepository
     private var knownLevels: List<Int> = listOf(1, 2, 3, 4, 5, 6)
 
-    /** Räknar begärda omräkningar av bytesplanen (HEM-8, issue #88). */
-    private var switchPlanScans = 0
-
-    private val fakeScheduler = object : FundPriceRefreshScheduler {
-        override fun scheduleOnLaunch() {}
-        override fun scheduleBackstop() {}
-        override fun triggerManualRefresh() {}
-        override fun triggerSwitchPlanScan() {
-            switchPlanScans++
-        }
-        override fun triggerBenchmarkScan() {}
-        override fun scheduleDriveBackup() {}
-        override fun triggerDriveBackupNow() {}
-        override fun observeIsRunning(): Flow<Boolean> = MutableStateFlow(false)
-    }
+    /** Räknar bl.a. begärda omräkningar av bytesplanen (HEM-8, issue #88). */
+    private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
     private val fakeFundMetadataRepo = object : FundMetadataRepository {
         override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
@@ -296,7 +283,7 @@ class RiskProfilViewModelTest {
         vm.save()
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, switchPlanScans)
+        assertEquals(1, fakeScheduler.switchPlanScans)
     }
 
     @Test
@@ -315,6 +302,6 @@ class RiskProfilViewModelTest {
         vm.save()
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(0, switchPlanScans)
+        assertEquals(0, fakeScheduler.switchPlanScans)
     }
 }

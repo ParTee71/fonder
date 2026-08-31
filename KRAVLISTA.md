@@ -79,7 +79,7 @@
 | NAV-3 | Från Portfölj kan man via en flytande knapp öppna **fondsök** och lägga till en fond i bevakningen, med **fondbolags-filter** (dropdown, förvalt Handelsbanken, "Alla fondbolag" som alternativ). Listan täcker **hela plattformens katalog** (~1500 fonder, inte bara Handelsbankens ~470) och bolagsfiltret hämtas från källan (TP-11/TP-18) — ett bolagsbyte kostar ett nätverksanrop, och en misslyckad hämtning behåller föregående lista i stället för att tömma vyn. En tillagd fond får sitt **ISIN** direkt från källan (TP-18), utan att först behöva bekräfta ett namnbaserat förslag i Fonddetalj (jfr NAV-2/TP-14). |
 | NAV-4 | Från Transaktioner kan man via en flytande knapp öppna **transaktionsformuläret** (fond, köp/sälj, datum, antal andelar, kurs/andel) — endast bland redan bevakade fonder. Utan bevakade fonder visas ett tomt-tillstånd som pekar till fondsök. |
 | NAV-5 | En egen flik **Sålda** i toppnavigeringen öppnar vyn över sålda fonder (se avsnitt 6, SLD-1). |
-| NAV-6 | Navigeringschromets `TopAppBar` visar en liten **bakgrundsindikator** (`WorkerStatusIcon`, `ui/components/`, regel 4) när en kursuppdatering pågår i bakgrunden (TP-5/TP-17, issue #27) — aldrig blockerande, döljs helt i vila. |
+| NAV-6 | Navigeringschromets `TopAppBar` visar en liten **bakgrundsindikator** (`WorkerStatusIcon`, `ui/components/`, regel 4) när en kursuppdatering pågår i bakgrunden (TP-5/TP-17, issue #27) — aldrig blockerande, döljs helt i vila. Chromets indikator svarar bara på *kör appen något just nu*; sedan #118 svarar **varje kort och varje diagram** också på *är min data på väg?* med en egen liten väntesnurra på rubrikraden (delade `CardTitleRow`/`WorkingIndicator` i `ui/components/`, och `working` i den delade `FundLineChart` för diagram som inte ligger i ett kort med rubrik — regel 4, en snurra i hela appen). Snurran är **per kort, inte per app**: körstatusen är mängdbaserad (`FundPriceRefreshScheduler.observeRunningWork`, `BackgroundWork`), och varje kort binds till exakt de jobb som skriver dess data — kursuppdatering (kurskort, innehavsrader, avkastningskurvan), bytesplansskanning (riskkortet, facit), referensfondsval (avkastningskurvan) och molnbackup (backup-kortet i Inställningar). En molnbackup får alltså inte snurra ett fondkort: en snurra som alltid syns när något kör säger inte mer än chromet redan gör. Skärmarnas **egna** hämtningar räknas på samma sätt — metadatauppslaget (exponeringskartan, avgifts- och riskkortet), engångsuppdateringen av en enskild fonds kurs (den fondens rad, fondkortets rubrik och kurshistorik) och bevakningens kandidathämtning (ANA-12). Under den första laddningen snurrar korten alltid: varje siffra på skärmen är då en nolla som ännu inte fyllts i. Snurran ersätter aldrig innehållet och reserverar ingen yta i vila — den läggs i rubrikraden, inte som ett hörnöverlägg, så den aldrig tränger undan beloppet (UI-6), och dess `contentDescription` namnger kortet ("Uppdaterar Fondavgifter per år") eftersom flera kort kan vänta samtidigt (jfr UI-3). Skillnaden mot ANA-4 är hela poängen: "vet inte än" och "vet inte" ser annars likadana ut. |
 | POR-1 | Portföljen visar innehav per fond och **totalt nettoinvesterat belopp** — nettoinvesterat är det kvarvarande (ej sålda) anskaffningsvärdet enligt FIFO (TP-15), inte kassaflödet. En fond vars nettoandelar är noll (**helt avsåld**) är inte längre ett innehav och visas inte — dess realiserade resultat finns i stället i "Sålda fonder" (SLD-1). |
 | POR-2 | Tom portfölj visar ett tomt-tillstånd som uppmanar att lägga till en transaktion. |
 | POR-3 | Har en fond känd kurs visas **nuvarande värde och vinst/förlust** (kr + %, semantisk färg) per innehav och totalt, i stället för nettoinvesterat. Saknas kurs visas nettoinvesterat + texten "Kurs saknas ännu" — aldrig ett felaktigt eller krashande värde (issue #6). |
@@ -179,6 +179,16 @@ deklarerade i versionskatalogen men avsiktligt inte inkopplade, eftersom `google
 fäller bygget så länge `app/google-services.json` saknas.
 
 ## Historik
+
+- **Korten sa inte att de väntade (#118):** **NAV-6** utökad från chromets ensamma
+  bakgrundsindikator till en väntesnurra per kort och per diagram, bunden till just de jobb som
+  skriver kortets data. Körstatusen är därför mängdbaserad (`BackgroundWork`,
+  `FundPriceRefreshScheduler.observeRunningWork`) i stället för ett enda booleskt "något kör" —
+  annars hade en molnbackup snurrat fondkorten och snurran slutat betyda något. Två nya delade
+  komponenter (`CardTitleRow`, `WorkingIndicator`) plus `working` i `FundLineChart`; två kort som
+  saknade rubrik (Hems utvecklingskort, avgiftskortets total) fick en, eftersom snurran behöver en
+  rad att sitta i som inte är den där beloppet ligger (UI-6). Ingen ny persisterad data — allt
+  härleds ur pågående arbete.
 
 - **Bytet slutade där rådet gavs (#114):** Nya rader **ANA-12** (skärmen Pågående byte),
   **ANA-13** (kandidaturvalet), **HEM-11** (kortet på Hem) och **SLD-5** (fristående start ur

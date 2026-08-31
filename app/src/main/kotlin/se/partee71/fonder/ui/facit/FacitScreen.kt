@@ -35,6 +35,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
+import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
@@ -105,7 +106,10 @@ fun FacitContent(
 private fun SummaryCard(state: FacitUiState) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.facit_summary_title), style = MaterialTheme.typography.labelMedium)
+            CardTitleRow(
+                title = stringResource(R.string.facit_summary_title),
+                working = state.summaryWorking,
+            )
 
             // Varje sektion visas bara när dess sort faktiskt har inspelade rader — en rubrik
             // med tomma streck hade sett ut som ett mätfel i stället för som "inget att mäta

@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,8 +34,10 @@ import javax.inject.Singleton
  * - [triggerSwitchPlanScan] — bytesplanen på begäran (HEM-8, issue #88), när dess indata just
  *   ändrats eller användaren bett om det.
  *
- * [observeIsRunning] driver bakgrundsindikatorn (`WorkerStatusIcon`, NAV-6) — sant om något av
- * de unika arbetsflödena faktiskt kör just nu.
+ * [observeRunningWork] driver bakgrundsindikatorerna (NAV-6): chromets `WorkerStatusIcon` via
+ * [observeIsRunning], och korten via varje skärms egna flaggor. Den är **sorterad per sorts
+ * jobb**, inte ett enda booleskt "något kör": ett kort ska snurra när just dess data bearbetas,
+ * och en molnbackup rör varken kurser, bytesplan eller referensfond.
  */
 interface FundPriceRefreshScheduler {
     fun scheduleOnLaunch()
@@ -81,7 +84,38 @@ interface FundPriceRefreshScheduler {
     /** Kör molnbackupen nu (knappen i Inställningar, SET-7). Koalescerar med den periodiska. */
     fun triggerDriveBackupNow()
 
-    fun observeIsRunning(): Flow<Boolean>
+    /**
+     * Vilka sorters bakgrundsjobb som kör **just nu**. Tom mängd i vila.
+     *
+     * Backstopen (`PERIODIC_WORK_NAME`) bär tre saker samtidigt — kursuppdatering,
+     * bytesplansskanning och referensfondsval (se [scheduleBackstop]s `KEY_SCAN_*`) — och
+     * rapporteras därför som alla tre. Ett kort som väntar på bytesplanen ska snurra även när
+     * planen räknas om inuti backstopen, inte bara när knappen på riskkortet startat en egen
+     * skanning.
+     */
+    fun observeRunningWork(): Flow<Set<BackgroundWork>>
+
+    /** Sant om något jobb alls kör — chromets bakgrundsindikator (NAV-6). */
+    fun observeIsRunning(): Flow<Boolean> = observeRunningWork().map { it.isNotEmpty() }
+}
+
+/**
+ * De sorters bakgrundsarbete ett kort kan vänta på (NAV-6). Enum, inte fritt strängnamn: varje
+ * kort binder sin snurra till exakt de sorter som skriver dess data, och den kopplingen ska
+ * gå att läsa i typen.
+ */
+enum class BackgroundWork {
+    /** Kursuppdatering — NAV, historik och det som räknas ur dem (TP-17). */
+    PRICE_REFRESH,
+
+    /** Bytesplansskanningen (HEM-8) — kandidater, köpbarhet och facit-inspelningen. */
+    SWITCH_PLAN_SCAN,
+
+    /** Val och hämtning av Hems referensfond (HEM-10). */
+    BENCHMARK_SCAN,
+
+    /** Molnbackupen till Drive (SET-7) — rör ingen fonddata, bara Inställningars backup-kort. */
+    DRIVE_BACKUP,
 }
 
 @Singleton
@@ -188,7 +222,7 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         workManager.enqueueUniqueWork(DRIVE_BACKUP_NOW_WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
-    override fun observeIsRunning(): Flow<Boolean> =
+    override fun observeRunningWork(): Flow<Set<BackgroundWork>> =
         combine(
             workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
@@ -196,9 +230,29 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
             workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(DRIVE_BACKUP_NOW_WORK_NAME),
         ) { oneTime, periodic, switchPlan, benchmark, driveBackup ->
-            (oneTime + periodic + switchPlan + benchmark + driveBackup)
-                .any { it.state == WorkInfo.State.RUNNING }
+            buildSet {
+                if (oneTime.isRunning()) add(BackgroundWork.PRICE_REFRESH)
+                // Backstopen bär alla tre skanningarna, se observeRunningWork i gränssnittet.
+                if (periodic.isRunning()) {
+                    add(BackgroundWork.PRICE_REFRESH)
+                    add(BackgroundWork.SWITCH_PLAN_SCAN)
+                    add(BackgroundWork.BENCHMARK_SCAN)
+                }
+                // Skanningarna kör kursuppdateringens worker med KEY_FORCE, alltså uppdateras
+                // kurserna på riktigt även här — kurskorten ska snurra med.
+                if (switchPlan.isRunning()) {
+                    add(BackgroundWork.SWITCH_PLAN_SCAN)
+                    add(BackgroundWork.PRICE_REFRESH)
+                }
+                if (benchmark.isRunning()) {
+                    add(BackgroundWork.BENCHMARK_SCAN)
+                    add(BackgroundWork.PRICE_REFRESH)
+                }
+                if (driveBackup.isRunning()) add(BackgroundWork.DRIVE_BACKUP)
+            }
         }
+
+    private fun List<WorkInfo>.isRunning(): Boolean = any { it.state == WorkInfo.State.RUNNING }
 
     companion object {
         internal const val ONE_TIME_WORK_NAME = "fonder_price_refresh"
