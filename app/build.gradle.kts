@@ -5,7 +5,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
@@ -28,7 +27,7 @@ private val localProps = Properties().apply {
 
 android {
     namespace = "se.partee71.fonder"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "se.partee71.fonder"
@@ -83,16 +82,6 @@ android {
         }
     }
 
-    applicationVariants.all {
-        val variant = this
-        variant.outputs
-            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
-            .forEach { output ->
-                output.outputFileName =
-                    "fonder-${variant.versionName}-${buildTimestamp}.apk"
-            }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -124,7 +113,17 @@ android {
     }
 
     sourceSets {
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.directories += "$projectDir/schemas"
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            (output as com.android.build.api.variant.impl.VariantOutputImpl).outputFileName.set(
+                output.versionName.map { "fonder-$it-$buildTimestamp.apk" }
+            )
+        }
     }
 }
 

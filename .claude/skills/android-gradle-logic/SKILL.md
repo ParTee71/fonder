@@ -62,7 +62,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             pluginManager.apply("com.android.application")
-            pluginManager.apply("org.jetbrains.kotlin.android")
+            // AGP 9: Kotlin är inbyggt – inget org.jetbrains.kotlin.android
 
             extensions.configure<ApplicationExtension> {
                 compileSdk = 35
@@ -110,7 +110,6 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }  #
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
@@ -128,7 +127,6 @@ This is a **single-module** app — no convention plugins yet. Current setup:
 ```kotlin
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
@@ -141,7 +139,7 @@ Only worth adding if the project grows to 3+ modules. For a single-module app, k
 
 ## AGP Compatibility
 
-Current project uses AGP 8.13.2. Key rules:
+Current project uses AGP 9.4.1 (built-in Kotlin, new DSL: `androidComponents.onVariants`, no `applicationVariants`) and Kotlin 2.4.21. Key rules:
 - `jvmToolchain(21)` — target Java 21
 - Use `kotlin.plugin.compose` (separate plugin from Kotlin 2.0+) — do NOT use `buildFeatures.compose = true` alone without the compose compiler plugin
 - KSP for annotation processing (Hilt, Room) — KAPT is deprecated
