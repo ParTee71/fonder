@@ -150,8 +150,12 @@ class WorkManagerFundPriceRefreshSchedulerTest {
     @Test
     fun cancelRetiredWork_avregistrerar_den_gamla_dygnsvisa_molnbackupen() {
         // En uppgraderad installation har kvar det periodiska jobbet från före HEM-12. Workern
-        // spelar ingen roll för avregistreringen — det är det unika namnet som avgör.
-        val legacy = androidx.work.PeriodicWorkRequestBuilder<FundPriceUpdateWorker>(24, java.util.concurrent.TimeUnit.HOURS).build()
+        // spelar ingen roll för avregistreringen — det är det unika namnet som avgör. Initial
+        // fördröjning: utan den kör SynchronousExecutor jobbet direkt vid enqueue, och ett jobb
+        // som redan körts klart (eller fallerat) blir aldrig CANCELLED.
+        val legacy = androidx.work.PeriodicWorkRequestBuilder<FundPriceUpdateWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+            .setInitialDelay(1, java.util.concurrent.TimeUnit.DAYS)
+            .build()
         workManager.enqueueUniquePeriodicWork(
             WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME,
             androidx.work.ExistingPeriodicWorkPolicy.KEEP,

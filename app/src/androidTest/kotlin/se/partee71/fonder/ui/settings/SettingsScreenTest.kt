@@ -435,7 +435,7 @@ class SettingsScreenTest {
         }
 
         composeRule.onNodeWithText("Senaste säkerhetskopia:", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Google Drive", substring = true).assertExists()
+        composeRule.onNodeWithText("Senaste säkerhetskopia: 2024-03-15, Google Drive").assertExists()
         composeRule.onNodeWithText("Ingen säkerhetskopia har gjorts än.").assertDoesNotExist()
     }
 
