@@ -3,36 +3,30 @@ package se.partee71.fonder.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,8 +39,13 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppCard
+import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
+import se.partee71.fonder.ui.components.ConfirmDialog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -198,376 +197,361 @@ fun SettingsContent(
             onSelect = onThemeSelected,
         )
 
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_riskprofile_section), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.settings_riskprofile_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                Button(onClick = onOpenRiskProfile) { Text(stringResource(R.string.settings_riskprofile_button)) }
-            }
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
+            Text(stringResource(R.string.settings_riskprofile_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.settings_riskprofile_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            AppButton(text = stringResource(R.string.settings_riskprofile_button), onClick = onOpenRiskProfile)
         }
 
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_account_type_section), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.settings_account_type_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                ChoiceChipRow(
-                    options = AccountType.entries,
-                    selected = state.accountType,
-                    optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
-                    onSelect = onAccountTypeSelected,
-                )
-            }
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(stringResource(R.string.settings_account_type_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.settings_account_type_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            ChoiceChipRow(
+                options = AccountType.entries,
+                selected = state.accountType,
+                optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
+                onSelect = onAccountTypeSelected,
+            )
         }
 
         // Jämförelsereferensen (HEM-10, issue #102) — appens val är ett förslag, användarens
         // val vinner. Raden säger alltid vilket av de två som gäller just nu.
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_benchmark_section), style = MaterialTheme.typography.titleSmall)
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(stringResource(R.string.settings_benchmark_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                state.chosenBenchmarkName
+                    ?.let { stringResource(R.string.format_settings_benchmark_chosen, it) }
+                    ?: stringResource(R.string.settings_benchmark_automatic),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.settings_benchmark_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            if (state.benchmarkPickFailed) {
                 Text(
-                    state.chosenBenchmarkName
-                        ?.let { stringResource(R.string.format_settings_benchmark_chosen, it) }
-                        ?: stringResource(R.string.settings_benchmark_automatic),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Text(
-                    stringResource(R.string.settings_benchmark_body),
+                    stringResource(R.string.settings_benchmark_pick_failed),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                if (state.benchmarkPickFailed) {
-                    Text(
-                        stringResource(R.string.settings_benchmark_pick_failed),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onOpenBenchmarkPicker) {
-                        Text(stringResource(R.string.settings_benchmark_button))
-                    }
-                    if (state.chosenBenchmarkName != null) {
-                        TextButton(onClick = onClearBenchmark) {
-                            Text(stringResource(R.string.settings_benchmark_clear))
-                        }
-                    }
-                }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_facit_section), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.settings_facit_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                Button(onClick = onOpenFacit) { Text(stringResource(R.string.settings_facit_button)) }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardTitleRow(
-                    title = stringResource(R.string.settings_price_update_section),
-                    working = state.priceRefreshWorking,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    stringResource(R.string.settings_price_update_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                Text(
-                    lastPriceSyncText(state.lastPriceSyncEpochMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
-                // Ingen "Uppdatera nu"-knapp längre (SET-2 struken): uppdatering sker med en
-                // dragning där datan faktiskt visas (UI-11), inte tre skärmar bort under en
-                // inställningsrubrik. Raden ovan står kvar — den svarar på "hur färsk är datan",
-                // vilket är en annan fråga än "uppdatera den".
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppButton(text = stringResource(R.string.settings_benchmark_button), onClick = onOpenBenchmarkPicker)
+                if (state.chosenBenchmarkName != null) {
+                    AppButton(
+                        text = stringResource(R.string.settings_benchmark_clear),
+                        onClick = onClearBenchmark,
+                        variant = AppButtonVariant.Text,
+                    )
+                }
+            }
+        }
+
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(stringResource(R.string.settings_facit_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.settings_facit_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            AppButton(text = stringResource(R.string.settings_facit_button), onClick = onOpenFacit)
+        }
+
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            CardTitleRow(
+                title = stringResource(R.string.settings_price_update_section),
+                working = state.priceRefreshWorking,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                stringResource(R.string.settings_price_update_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            Text(
+                lastPriceSyncText(state.lastPriceSyncEpochMillis),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            // Ingen "Uppdatera nu"-knapp längre (SET-2 struken): uppdatering sker med en
+            // dragning där datan faktiskt visas (UI-11), inte tre skärmar bort under en
+            // inställningsrubrik. Raden ovan står kvar — den svarar på "hur färsk är datan",
+            // vilket är en annan fråga än "uppdatera den".
         }
 
         // Google-konto (TP-6). Inloggningen flyttar ingen data i sig — den är förutsättningen
         // för molnbackupen (TP-7 steg 2), vilket kortets text säger rakt ut så att "inloggad"
         // inte förväxlas med "säkerhetskopierad".
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardTitleRow(
-                    title = stringResource(R.string.settings_account_section),
-                    working = state.signInInProgress,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    state.googleUser?.let { user ->
-                        stringResource(
-                            R.string.format_settings_account_signed_in,
-                            user.email ?: user.displayName ?: stringResource(R.string.settings_account_unknown_user),
-                        )
-                    } ?: stringResource(R.string.settings_account_signed_out),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Text(
-                    stringResource(R.string.settings_account_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                // Ett avbrutet kontoval är inget fel och når aldrig hit — se
-                // SettingsViewModel.signIn. Kvitteras bort som övriga engångshändelser (#78).
-                state.signInError?.let { reason ->
-                    Text(
-                        signInErrorText(reason),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(bottom = 4.dp),
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            CardTitleRow(
+                title = stringResource(R.string.settings_account_section),
+                working = state.signInInProgress,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                state.googleUser?.let { user ->
+                    stringResource(
+                        R.string.format_settings_account_signed_in,
+                        user.email ?: user.displayName ?: stringResource(R.string.settings_account_unknown_user),
                     )
-                    TextButton(
-                        onClick = onSignInErrorDismissed,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    ) { Text(stringResource(R.string.close)) }
-                }
-                if (state.googleUser == null) {
-                    Button(
-                        onClick = onSignIn,
-                        enabled = !state.signInInProgress,
-                    ) { Text(stringResource(R.string.settings_account_sign_in_button)) }
-                } else {
-                    TextButton(
-                        onClick = onSignOut,
-                        enabled = !state.signInInProgress,
-                    ) { Text(stringResource(R.string.settings_account_sign_out_button)) }
-                }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_import_section), style = MaterialTheme.typography.titleSmall)
+                } ?: stringResource(R.string.settings_account_signed_out),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.settings_account_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            // Ett avbrutet kontoval är inget fel och når aldrig hit — se
+            // SettingsViewModel.signIn. Kvitteras bort som övriga engångshändelser (#78).
+            state.signInError?.let { reason ->
                 Text(
-                    stringResource(R.string.settings_import_body),
+                    signInErrorText(reason),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
-                Button(onClick = onImportHoldings) { Text(stringResource(R.string.settings_import_button)) }
+                AppButton(
+                    text = stringResource(R.string.close),
+                    onClick = onSignInErrorDismissed,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    variant = AppButtonVariant.Text,
+                )
+            }
+            if (state.googleUser == null) {
+                AppButton(
+                    text = stringResource(R.string.settings_account_sign_in_button),
+                    onClick = onSignIn,
+                    enabled = !state.signInInProgress,
+                )
+            } else {
+                AppButton(
+                    text = stringResource(R.string.settings_account_sign_out_button),
+                    onClick = onSignOut,
+                    enabled = !state.signInInProgress,
+                    variant = AppButtonVariant.Text,
+                )
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_import_orders_section), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.settings_import_orders_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                )
-                Button(onClick = onImportOrders) { Text(stringResource(R.string.settings_import_orders_button)) }
-            }
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(stringResource(R.string.settings_import_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.settings_import_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            AppButton(text = stringResource(R.string.settings_import_button), onClick = onImportHoldings)
         }
 
-        Card(
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(stringResource(R.string.settings_import_orders_section), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.settings_import_orders_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            AppButton(text = stringResource(R.string.settings_import_orders_button), onClick = onImportOrders)
+        }
+
+        AppCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
                 .bringIntoViewRequester(backupBringIntoView)
                 .testTag(SETTINGS_BACKUP_CARD_TEST_TAG),
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardTitleRow(
-                    title = stringResource(R.string.settings_backup_section),
-                    working = state.backupInProgress,
-                    style = MaterialTheme.typography.titleSmall,
-                )
+            CardTitleRow(
+                title = stringResource(R.string.settings_backup_section),
+                working = state.backupInProgress,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                stringResource(R.string.settings_backup_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+            // En rad för båda transporterna: det är samma kopia, och det är den Hems
+            // påminnelse (HEM-12) räknar från.
+            Text(
+                lastBackupText(state.lastBackup),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en, av samma
+            // skäl som "databasen tömd" nedan: en engångshändelse lagrad som bestående
+            // tillstånd spelas upp igen vid varje rotation och återbesök (issue #78).
+            state.backupMessage?.let { message ->
                 Text(
-                    stringResource(R.string.settings_backup_body),
+                    backupMessageText(message),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
-                // En rad för båda transporterna: det är samma kopia, och det är den Hems
-                // påminnelse (HEM-12) räknar från.
+                AppButton(
+                    text = stringResource(R.string.close),
+                    onClick = onBackupMessageDismissed,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    variant = AppButtonVariant.Text,
+                )
+            }
+            Row {
+                AppButton(
+                    text = stringResource(R.string.settings_backup_export_button),
+                    onClick = onExportBackup,
+                    enabled = !state.backupInProgress,
+                )
+                AppButton(
+                    text = stringResource(R.string.settings_backup_restore_button),
+                    onClick = { showRestoreConfirm = true },
+                    enabled = !state.backupInProgress,
+                    modifier = Modifier.padding(start = 8.dp),
+                    variant = AppButtonVariant.Text,
+                )
+            }
+
+            // Molnbackupen (SET-7) ligger i samma kort som filbackupen, inte i ett eget:
+            // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
+            // antytt två sorters säkerhetskopia.
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            Text(
+                stringResource(R.string.settings_drive_backup_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                stringResource(R.string.settings_drive_backup_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            if (state.driveBackupNeedsAuth) {
                 Text(
-                    lastBackupText(state.lastBackup),
+                    stringResource(R.string.settings_drive_backup_needs_auth),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
-                // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en, av samma
-                // skäl som "databasen tömd" nedan: en engångshändelse lagrad som bestående
-                // tillstånd spelas upp igen vid varje rotation och återbesök (issue #78).
-                state.backupMessage?.let { message ->
-                    Text(
-                        backupMessageText(message),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                    TextButton(
-                        onClick = onBackupMessageDismissed,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    ) { Text(stringResource(R.string.close)) }
-                }
-                Row {
-                    Button(
-                        onClick = onExportBackup,
-                        enabled = !state.backupInProgress,
-                    ) { Text(stringResource(R.string.settings_backup_export_button)) }
-                    TextButton(
-                        onClick = { showRestoreConfirm = true },
-                        enabled = !state.backupInProgress,
-                        modifier = Modifier.padding(start = 8.dp),
-                    ) { Text(stringResource(R.string.settings_backup_restore_button)) }
-                }
-
-                // Molnbackupen (SET-7) ligger i samma kort som filbackupen, inte i ett eget:
-                // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
-                // antytt två sorters säkerhetskopia.
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Text(
-                    stringResource(R.string.settings_drive_backup_title),
-                    style = MaterialTheme.typography.titleSmall,
+            }
+            Row {
+                AppButton(
+                    text = stringResource(R.string.settings_drive_backup_button),
+                    onClick = onBackupToDrive,
+                    enabled = !state.backupInProgress,
                 )
-                Text(
-                    stringResource(R.string.settings_drive_backup_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                AppButton(
+                    text = stringResource(R.string.settings_drive_restore_button),
+                    onClick = { showDriveRestoreConfirm = true },
+                    enabled = !state.backupInProgress,
+                    modifier = Modifier.padding(start = 8.dp),
+                    variant = AppButtonVariant.Text,
                 )
-                if (state.driveBackupNeedsAuth) {
-                    Text(
-                        stringResource(R.string.settings_drive_backup_needs_auth),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
-                Row {
-                    Button(
-                        onClick = onBackupToDrive,
-                        enabled = !state.backupInProgress,
-                    ) { Text(stringResource(R.string.settings_drive_backup_button)) }
-                    TextButton(
-                        onClick = { showDriveRestoreConfirm = true },
-                        enabled = !state.backupInProgress,
-                        modifier = Modifier.padding(start = 8.dp),
-                    ) { Text(stringResource(R.string.settings_drive_restore_button)) }
-                }
             }
         }
 
-        Card(
+        AppCard(
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            variant = AppCardVariant.Error,
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                stringResource(R.string.settings_danger_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                stringResource(R.string.settings_danger_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en — ingen
+            // lokal spegling via LaunchedEffect, som fick engångshändelsen att spelas upp
+            // igen vid varje rotation och återbesök (issue #78). Kvitteringen är också
+            // meddelandets enda väg ut; tidigare fanns ingen.
+            if (state.databaseCleared) {
                 Text(
-                    stringResource(R.string.settings_danger_section),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-                Text(
-                    stringResource(R.string.settings_danger_body),
+                    stringResource(R.string.settings_clear_database_success),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
-                // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en — ingen
-                // lokal spegling via LaunchedEffect, som fick engångshändelsen att spelas upp
-                // igen vid varje rotation och återbesök (issue #78). Kvitteringen är också
-                // meddelandets enda väg ut; tidigare fanns ingen.
-                if (state.databaseCleared) {
-                    Text(
-                        stringResource(R.string.settings_clear_database_success),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                    TextButton(
-                        onClick = onClearedMessageDismissed,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    ) { Text(stringResource(R.string.close)) }
-                }
-                Button(
-                    onClick = { showClearConfirm = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.settings_clear_database_button)) }
+                AppButton(
+                    text = stringResource(R.string.close),
+                    onClick = onClearedMessageDismissed,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    variant = AppButtonVariant.Text,
+                )
             }
+            AppButton(
+                text = stringResource(R.string.settings_clear_database_button),
+                onClick = { showClearConfirm = true },
+                variant = AppButtonVariant.Danger,
+            )
         }
     }
 
     if (showClearConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirm = false },
-            title = { Text(stringResource(R.string.clear_database_confirm_title)) },
-            text = { Text(stringResource(R.string.clear_database_confirm_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onClearDatabase()
-                    showClearConfirm = false
-                }) { Text(stringResource(R.string.settings_clear_database_button)) }
+        ConfirmDialog(
+            title = stringResource(R.string.clear_database_confirm_title),
+            body = stringResource(R.string.clear_database_confirm_body),
+            confirmLabel = stringResource(R.string.settings_clear_database_button),
+            onConfirm = {
+                onClearDatabase()
+                showClearConfirm = false
             },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text(stringResource(R.string.cancel)) }
-            },
+            onDismiss = { showClearConfirm = false },
+            destructive = true,
         )
     }
 
     // Samma bekräftelse som filåterställningen, och med flit samma text: det är samma
     // ersättning av samma data, bara från en annan plats.
     if (showDriveRestoreConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDriveRestoreConfirm = false },
-            title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
-            text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDriveRestoreConfirm = false
-                    onRestoreFromDrive()
-                }) { Text(stringResource(R.string.backup_restore_confirm_button)) }
+        ConfirmDialog(
+            title = stringResource(R.string.backup_restore_confirm_title),
+            body = stringResource(R.string.backup_restore_confirm_body),
+            confirmLabel = stringResource(R.string.backup_restore_confirm_button),
+            onConfirm = {
+                showDriveRestoreConfirm = false
+                onRestoreFromDrive()
             },
-            dismissButton = {
-                TextButton(onClick = { showDriveRestoreConfirm = false }) { Text(stringResource(R.string.cancel)) }
-            },
+            onDismiss = { showDriveRestoreConfirm = false },
         )
     }
 
     // Bekräftelsen kommer före filväljaren, inte efter: en återställning ersätter all data, och
     // frågan ska ställas innan användaren är mitt i ett val (samma ordning som farozonen).
     if (showRestoreConfirm) {
-        AlertDialog(
-            onDismissRequest = { showRestoreConfirm = false },
-            title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
-            text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRestoreConfirm = false
-                    onRestoreBackup()
-                }) { Text(stringResource(R.string.backup_restore_confirm_button)) }
+        ConfirmDialog(
+            title = stringResource(R.string.backup_restore_confirm_title),
+            body = stringResource(R.string.backup_restore_confirm_body),
+            confirmLabel = stringResource(R.string.backup_restore_confirm_button),
+            onConfirm = {
+                showRestoreConfirm = false
+                onRestoreBackup()
             },
-            dismissButton = {
-                TextButton(onClick = { showRestoreConfirm = false }) { Text(stringResource(R.string.cancel)) }
-            },
+            onDismiss = { showRestoreConfirm = false },
         )
     }
 }

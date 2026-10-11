@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.facit
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,17 +29,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
-import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
+import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -120,88 +121,86 @@ fun FacitContent(
  */
 @Composable
 private fun SummaryCard(state: FacitUiState) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(R.string.facit_summary_title),
-                working = state.summaryWorking,
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(
+            title = stringResource(R.string.facit_summary_title),
+            working = state.summaryWorking,
+        )
+
+        // Varje sektion visas bara när dess sort faktiskt har inspelade rader — en rubrik
+        // med tomma streck hade sett ut som ett mätfel i stället för som "inget att mäta
+        // än". Kortet i sig ritas bara när listan är icke-tom, så minst en sektion syns.
+        if (state.planAllSummary.totalCount > 0) {
+            Text(
+                stringResource(R.string.facit_summary_plan_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
             )
+            SummaryRow(
+                label = stringResource(R.string.facit_summary_all_label),
+                summary = state.planAllSummary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            SummaryRow(
+                label = stringResource(R.string.facit_summary_followed_label),
+                summary = state.planFollowedSummary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                stringResource(
+                    R.string.format_facit_evaluated_count,
+                    state.planAllSummary.evaluatedCount,
+                    state.planAllSummary.totalCount,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
 
-            // Varje sektion visas bara när dess sort faktiskt har inspelade rader — en rubrik
-            // med tomma streck hade sett ut som ett mätfel i stället för som "inget att mäta
-            // än". Kortet i sig ritas bara när listan är icke-tom, så minst en sektion syns.
-            if (state.planAllSummary.totalCount > 0) {
-                Text(
-                    stringResource(R.string.facit_summary_plan_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+        if (state.feeAllSummary.totalCount > 0) {
+            Text(
+                stringResource(R.string.facit_summary_fee_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            SummaryRow(
+                label = stringResource(R.string.facit_summary_all_label),
+                summary = state.feeAllSummary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            SummaryRow(
+                label = stringResource(R.string.facit_summary_followed_label),
+                summary = state.feeFollowedSummary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                stringResource(R.string.facit_summary_fee_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
+        if (state.byPlanIndex.isNotEmpty()) {
+            Text(
+                stringResource(R.string.facit_by_plan_index_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            state.byPlanIndex.forEach { entry ->
                 SummaryRow(
-                    label = stringResource(R.string.facit_summary_all_label),
-                    summary = state.planAllSummary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                SummaryRow(
-                    label = stringResource(R.string.facit_summary_followed_label),
-                    summary = state.planFollowedSummary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Text(
-                    stringResource(
-                        R.string.format_facit_evaluated_count,
-                        state.planAllSummary.evaluatedCount,
-                        state.planAllSummary.totalCount,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = stringResource(R.string.format_facit_plan_index_label, entry.planIndex + 1),
+                    summary = entry.summary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-
-            if (state.feeAllSummary.totalCount > 0) {
-                Text(
-                    stringResource(R.string.facit_summary_fee_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                SummaryRow(
-                    label = stringResource(R.string.facit_summary_all_label),
-                    summary = state.feeAllSummary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                SummaryRow(
-                    label = stringResource(R.string.facit_summary_followed_label),
-                    summary = state.feeFollowedSummary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Text(
-                    stringResource(R.string.facit_summary_fee_explain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-
-            if (state.byPlanIndex.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.facit_by_plan_index_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                state.byPlanIndex.forEach { entry ->
-                    SummaryRow(
-                        label = stringResource(R.string.format_facit_plan_index_label, entry.planIndex + 1),
-                        summary = entry.summary,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-                Text(
-                    stringResource(R.string.facit_by_plan_index_explain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+            Text(
+                stringResource(R.string.facit_by_plan_index_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
@@ -236,7 +235,11 @@ private fun SummaryRow(label: String, summary: SwitchOutcomeCalc.Summary, modifi
 @Composable
 private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    AppCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        // Hela kortet fäller ut: klickytan går ända ut i kanten och marginalen ligger innanför den.
+        contentPadding = PaddingValues(0.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

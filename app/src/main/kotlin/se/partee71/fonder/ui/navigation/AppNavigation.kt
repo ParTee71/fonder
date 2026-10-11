@@ -7,7 +7,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -31,6 +30,7 @@ import androidx.navigation.navArgument
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchViewModel
+import se.partee71.fonder.ui.components.AppIconButton
 import se.partee71.fonder.ui.components.WorkerStatusIcon
 import se.partee71.fonder.ui.facit.FacitScreen
 import se.partee71.fonder.ui.fond.FondDetaljScreen
@@ -85,12 +85,11 @@ fun AppNavigation() {
                     title = { Text(stringResource(title)) },
                     navigationIcon = {
                         if (topLevelTitle == null) {
-                            IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.back),
-                                )
-                            }
+                            AppIconButton(
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                                onClick = { navController.popBackStack() },
+                            )
                         }
                     },
                     actions = { WorkerStatusIcon(isRunning = isRunning) },

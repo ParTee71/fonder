@@ -11,11 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -26,7 +22,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ItemRow
+import se.partee71.fonder.ui.components.ProgressBar
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
@@ -83,11 +84,10 @@ fun FundSearchContent(
             clearOptionLabel = allaFondbolag,
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            label = { Text(stringResource(R.string.fondsok_label)) },
-            singleLine = true,
+            label = stringResource(R.string.fondsok_label),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
@@ -100,9 +100,7 @@ fun FundSearchContent(
             onRefresh = onRefresh,
         ) {
             when {
-                state.loading -> LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                )
+                state.loading -> ProgressBar(modifier = Modifier.padding(top = 16.dp))
 
                 // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
                 // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).
@@ -149,16 +147,14 @@ private fun FundResultRow(
     actionLabelRes: Int,
     onAction: () -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(fund.name) },
-        supportingContent = { RiskBadge(level = riskLevel) },
-        trailingContent = {
+    ItemRow(
+        headline = fund.name,
+        supporting = { RiskBadge(level = riskLevel) },
+        trailing = {
             if (added) {
                 Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.fondsok_added))
             } else {
-                TextButton(onClick = onAction) {
-                    Text(stringResource(actionLabelRes))
-                }
+                AppButton(text = stringResource(actionLabelRes), onClick = onAction, variant = AppButtonVariant.Text)
             }
         },
     )

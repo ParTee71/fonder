@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +26,8 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
 
 @Composable
@@ -158,11 +158,12 @@ fun RiskProfilContent(
             }
         }
 
-        Button(
+        AppButton(
+            text = stringResource(R.string.riskprofile_save_button),
             onClick = onSave,
             enabled = state.canSave,
             modifier = Modifier.padding(top = 24.dp),
-        ) { Text(stringResource(R.string.riskprofile_save_button)) }
+        )
     }
 }
 
@@ -183,11 +184,10 @@ private fun AllocationRow(level: Int, percentText: String, onPercentChange: (Str
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        OutlinedTextField(
+        AppTextField(
             value = percentText,
             onValueChange = onPercentChange,
-            suffix = { Text("%") },
-            singleLine = true,
+            suffix = "%",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.width(100.dp).testTag(allocationFieldTestTag(level)),
         )

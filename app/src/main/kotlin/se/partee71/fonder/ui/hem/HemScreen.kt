@@ -1,16 +1,14 @@
 package se.partee71.fonder.ui.hem
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +28,10 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppCard
+import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
@@ -178,29 +180,27 @@ fun HemContent(
 
 @Composable
 private fun TotalCard(state: HemUiState) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(R.string.portfolj_total_value),
-                working = state.totalWorking,
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(
+            title = stringResource(R.string.portfolj_total_value),
+            working = state.totalWorking,
+        )
+        val fraction = state.totalGainLossFraction
+        if (fraction != null) {
+            Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+            Text(
+                "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
+                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                color = ReturnColors.forAmount(state.totalGainLoss),
             )
-            val fraction = state.totalGainLossFraction
-            if (fraction != null) {
-                Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-                Text(
-                    "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
-                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                    color = ReturnColors.forAmount(state.totalGainLoss),
-                )
-                ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
-            } else {
-                Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-                Text(
-                    stringResource(R.string.portfolj_price_missing),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
+        } else {
+            Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+            Text(
+                stringResource(R.string.portfolj_price_missing),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -216,38 +216,36 @@ private fun PerformanceCard(
     performance: PortfolioPerformanceCalc.PortfolioPerformance,
     working: Boolean,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(R.string.hem_performance_title),
-                working = working,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
-            PeriodRow(
-                label = stringResource(R.string.period_day),
-                amount = dayAmount,
-                fraction = dayFraction,
-                partial = dayPartial,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-            val (weekAmount, weekFraction, weekPartial) = performance.week.toRowArgs()
-            PeriodRow(
-                label = stringResource(R.string.period_week),
-                amount = weekAmount,
-                fraction = weekFraction,
-                partial = weekPartial,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-            val (monthAmount, monthFraction, monthPartial) = performance.month.toRowArgs()
-            PeriodRow(
-                label = stringResource(R.string.period_month),
-                amount = monthAmount,
-                fraction = monthFraction,
-                partial = monthPartial,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-        }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        CardTitleRow(
+            title = stringResource(R.string.hem_performance_title),
+            working = working,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
+        PeriodRow(
+            label = stringResource(R.string.period_day),
+            amount = dayAmount,
+            fraction = dayFraction,
+            partial = dayPartial,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        val (weekAmount, weekFraction, weekPartial) = performance.week.toRowArgs()
+        PeriodRow(
+            label = stringResource(R.string.period_week),
+            amount = weekAmount,
+            fraction = weekFraction,
+            partial = weekPartial,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        val (monthAmount, monthFraction, monthPartial) = performance.month.toRowArgs()
+        PeriodRow(
+            label = stringResource(R.string.period_month),
+            amount = monthAmount,
+            fraction = monthFraction,
+            partial = monthPartial,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
     }
 }
 
@@ -274,68 +272,66 @@ private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
  */
 @Composable
 private fun ReturnChartCard(state: HemUiState) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(R.string.hem_return_chart_title),
-                working = state.returnChartWorking,
-            )
-            if (state.returnSeries.isEmpty) {
-                Text(
-                    stringResource(R.string.hem_return_chart_insufficient),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                return@Column
-            }
-            val benchmark = state.benchmarkSeries
-            FundLineChart(
-                points = state.returnSeries.points,
-                purchaseEpochDays = state.purchaseEpochDays,
-                primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
-                comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
-                valueAxis = ChartValueAxis.PROCENT,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(
+            title = stringResource(R.string.hem_return_chart_title),
+            working = state.returnChartWorking,
+        )
+        if (state.returnSeries.isEmpty) {
             Text(
-                stringResource(R.string.hem_return_chart_explain),
+                stringResource(R.string.hem_return_chart_insufficient),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            return@AppCard
+        }
+        val benchmark = state.benchmarkSeries
+        FundLineChart(
+            points = state.returnSeries.points,
+            purchaseEpochDays = state.purchaseEpochDays,
+            primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
+            comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
+            valueAxis = ChartValueAxis.PROCENT,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            stringResource(R.string.hem_return_chart_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            if (benchmark != null) {
+                stringResource(R.string.format_hem_return_chart_benchmark_explain, benchmark.fundName)
+            } else {
+                stringResource(R.string.hem_return_chart_benchmark_missing)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
+        // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
+        // (HEM-10) — inte döljas bakom en exakt procentsats i teckenförklaringen.
+        if (benchmark != null && benchmark.unclassifiedFraction >= UNCLASSIFIED_NOTICE_THRESHOLD) {
             Text(
-                if (benchmark != null) {
-                    stringResource(R.string.format_hem_return_chart_benchmark_explain, benchmark.fundName)
-                } else {
-                    stringResource(R.string.hem_return_chart_benchmark_missing)
-                },
+                stringResource(
+                    R.string.format_hem_return_chart_benchmark_unclassified,
+                    MoneyFormat.percent(benchmark.unclassifiedFraction),
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-            // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
-            // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
-            // (HEM-10) — inte döljas bakom en exakt procentsats i teckenförklaringen.
-            if (benchmark != null && benchmark.unclassifiedFraction >= UNCLASSIFIED_NOTICE_THRESHOLD) {
-                Text(
-                    stringResource(
-                        R.string.format_hem_return_chart_benchmark_unclassified,
-                        MoneyFormat.percent(benchmark.unclassifiedFraction),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (state.returnSeries.partial) {
-                Text(
-                    stringResource(R.string.hem_return_chart_partial),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+        }
+        if (state.returnSeries.partial) {
+            Text(
+                stringResource(R.string.hem_return_chart_partial),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
@@ -353,21 +349,19 @@ private fun PortfolioPerformanceCalc.PortfolioPeriodResult.toRowArgs(): PeriodRo
 /** Summeringskort över gul-/rödflaggade fonder (issue #16, HEM-4). */
 @Composable
 private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFundClick: (String) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(title = stringResource(R.string.hem_analysis_title), working = working)
-            if (summary.flagged.isEmpty()) {
-                Text(
-                    stringResource(R.string.hem_analysis_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            } else {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    summary.flagged.forEach { flagged ->
-                        FlaggedFundRow(flagged = flagged, onClick = { onFundClick(flagged.fund.fundId) })
-                    }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(title = stringResource(R.string.hem_analysis_title), working = working)
+        if (summary.flagged.isEmpty()) {
+            Text(
+                stringResource(R.string.hem_analysis_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        } else {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                summary.flagged.forEach { flagged ->
+                    FlaggedFundRow(flagged = flagged, onClick = { onFundClick(flagged.fund.fundId) })
                 }
             }
         }
@@ -386,102 +380,100 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFu
  */
 @Composable
 private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundClick: (String) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Snurran sitter i en egen rubrikrad ovanför totalen, inte i `PeriodRow`n: där ligger
-            // beloppet längst till höger, och en snurra i den änden hade trängt undan just det
-            // talet kortet finns till för (UI-6).
-            CardTitleRow(title = stringResource(R.string.hem_fee_title), working = working)
-            PeriodRow(
-                label = stringResource(R.string.hem_fee_total_label),
-                amount = null,
-                fraction = null,
-                valueText = MoneyFormat.kr(summary.totalAnnualFeeKr),
-            )
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        // Snurran sitter i en egen rubrikrad ovanför totalen, inte i `PeriodRow`n: där ligger
+        // beloppet längst till höger, och en snurra i den änden hade trängt undan just det
+        // talet kortet finns till för (UI-6).
+        CardTitleRow(title = stringResource(R.string.hem_fee_title), working = working)
+        PeriodRow(
+            label = stringResource(R.string.hem_fee_total_label),
+            amount = null,
+            fraction = null,
+            valueText = MoneyFormat.kr(summary.totalAnnualFeeKr),
+        )
+        Text(
+            stringResource(R.string.hem_fee_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (summary.unknownFeeCount > 0) {
             Text(
-                stringResource(R.string.hem_fee_explain),
+                stringResource(R.string.format_hem_fee_unknown, summary.unknownFeeCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-            if (summary.unknownFeeCount > 0) {
-                Text(
-                    stringResource(R.string.format_hem_fee_unknown, summary.unknownFeeCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (summary.comparableCount > 0) {
-                Text(
-                    stringResource(
-                        R.string.format_hem_fee_savings,
-                        MoneyFormat.kr(summary.totalAnnualSavingsKr),
-                        summary.comparedCount,
-                        summary.comparableCount,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (summary.byHolding.isNotEmpty()) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    summary.byHolding.forEach { holdingFee ->
-                        FeeHoldingRow(holdingFee = holdingFee, onClick = { onFundClick(holdingFee.fund.fundId) })
-                    }
+        }
+        if (summary.comparableCount > 0) {
+            Text(
+                stringResource(
+                    R.string.format_hem_fee_savings,
+                    MoneyFormat.kr(summary.totalAnnualSavingsKr),
+                    summary.comparedCount,
+                    summary.comparableCount,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (summary.byHolding.isNotEmpty()) {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                summary.byHolding.forEach { holdingFee ->
+                    FeeHoldingRow(holdingFee = holdingFee, onClick = { onFundClick(holdingFee.fund.fundId) })
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -> Unit) {
-    Card(
+    AppCard(
         onClick = onClick,
+        variant = AppCardVariant.Filled,
+        contentPadding = PaddingValues(12.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            PeriodRow(
-                label = holdingFee.fund.name,
-                amount = null,
-                fraction = null,
-                valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+        PeriodRow(
+            label = holdingFee.fund.name,
+            amount = null,
+            fraction = null,
+            valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+        )
+        // Aldrig jämfört (ingen text) och jämfört-utan-träff ("Redan bland de billigaste",
+        // samma text som ANA-9:s eget kort i Fonddetalj — regel 4) är skilda tillstånd,
+        // både i data (PortfolioFeeCalc.HoldingFee.wasCompared) och här i UI:t. Annars ser
+        // ett outforskat innehav ut som redan optimalt.
+        val savings = holdingFee.annualSavingsKr
+        when {
+            savings != null && savings > 0 -> Text(
+                stringResource(R.string.format_hem_fee_holding_savings, MoneyFormat.kr(savings)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
-            // Aldrig jämfört (ingen text) och jämfört-utan-träff ("Redan bland de billigaste",
-            // samma text som ANA-9:s eget kort i Fonddetalj — regel 4) är skilda tillstånd,
-            // både i data (PortfolioFeeCalc.HoldingFee.wasCompared) och här i UI:t. Annars ser
-            // ett outforskat innehav ut som redan optimalt.
-            val savings = holdingFee.annualSavingsKr
-            when {
-                savings != null && savings > 0 -> Text(
-                    stringResource(R.string.format_hem_fee_holding_savings, MoneyFormat.kr(savings)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-                holdingFee.wasCompared -> Text(
-                    stringResource(R.string.fee_comparison_none_cheaper),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
+            holdingFee.wasCompared -> Text(
+                stringResource(R.string.fee_comparison_none_cheaper),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
-    Card(
+    AppCard(
         onClick = onClick,
+        variant = AppCardVariant.Filled,
+        contentPadding = PaddingValues(12.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             StatusDot(level = flagged.analysis.status!!, modifier = Modifier.padding(end = 12.dp))
@@ -526,99 +518,95 @@ private fun RiskCard(
     onRecomputeSwitchPlan: () -> Unit,
     onStartSwitchWatch: (SwitchSuggestionUi) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
-            PeriodRow(
-                label = stringResource(R.string.hem_risk_target_label),
-                amount = null,
-                fraction = null,
-                valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            PeriodRow(
-                label = stringResource(R.string.hem_risk_actual_label),
-                amount = null,
-                fraction = null,
-                valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
-                modifier = Modifier.padding(top = 4.dp),
-            )
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
+        PeriodRow(
+            label = stringResource(R.string.hem_risk_target_label),
+            amount = null,
+            fraction = null,
+            valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        PeriodRow(
+            label = stringResource(R.string.hem_risk_actual_label),
+            amount = null,
+            fraction = null,
+            valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
+            stringResource(R.string.hem_risk_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (portfolioRisk.excludedCount > 0) {
             Text(
-                stringResource(R.string.hem_risk_explain),
+                stringResource(R.string.format_hem_risk_excluded, portfolioRisk.excludedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-            if (portfolioRisk.excludedCount > 0) {
+        }
+        if (levelDeviations.isNotEmpty()) {
+            Text(
+                stringResource(R.string.hem_risk_distribution_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            levelDeviations.sortedBy { it.level }.forEach { deviation ->
                 Text(
-                    stringResource(R.string.format_hem_risk_excluded, portfolioRisk.excludedCount),
+                    stringResource(R.string.format_hem_risk_level, deviation.level),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (levelDeviations.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.hem_risk_distribution_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                levelDeviations.sortedBy { it.level }.forEach { deviation ->
-                    Text(
-                        stringResource(R.string.format_hem_risk_level, deviation.level),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
-                    ExposureBar(
-                        label = stringResource(R.string.hem_risk_actual_bar_label),
-                        fraction = deviation.actualFraction,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-            }
-            if (switchPlan.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.hem_switch_plan_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                switchPlan.forEach { switch ->
-                    SwitchSuggestionRow(
-                        switch = switch,
-                        watched = switch.sellIsin in watchedSellIsins,
-                        onFollowedChange = onSwitchFollowedChange,
-                        onStartSwitchWatch = onStartSwitchWatch,
-                    )
-                }
-                Text(
-                    stringResource(R.string.hem_switch_plan_disclaimer),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-            }
-            // Omräkning på begäran (issue #88) — visas bara när en plan alls kan ges (ISK/KF +
-            // satt profil, SET-3/SET-4), annars vore knappen ett löfte SET-4-gaten vägrar
-            // infria. Släckt medan något jobb kör, samma signal som bakgrundsindikatorn (NAV-6).
-            if (canRecomputeSwitchPlan) {
-                TextButton(
-                    onClick = onRecomputeSwitchPlan,
-                    enabled = !recomputeRunning,
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    Text(
-                        stringResource(
-                            if (recomputeRunning) R.string.hem_switch_plan_recompute_running else R.string.hem_switch_plan_recompute,
-                        ),
-                    )
-                }
-                Text(
-                    stringResource(R.string.hem_switch_plan_recompute_explain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
+                ExposureBar(
+                    label = stringResource(R.string.hem_risk_actual_bar_label),
+                    fraction = deviation.actualFraction,
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
+        }
+        if (switchPlan.isNotEmpty()) {
+            Text(
+                stringResource(R.string.hem_switch_plan_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            switchPlan.forEach { switch ->
+                SwitchSuggestionRow(
+                    switch = switch,
+                    watched = switch.sellIsin in watchedSellIsins,
+                    onFollowedChange = onSwitchFollowedChange,
+                    onStartSwitchWatch = onStartSwitchWatch,
+                )
+            }
+            Text(
+                stringResource(R.string.hem_switch_plan_disclaimer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        // Omräkning på begäran (issue #88) — visas bara när en plan alls kan ges (ISK/KF +
+        // satt profil, SET-3/SET-4), annars vore knappen ett löfte SET-4-gaten vägrar
+        // infria. Släckt medan något jobb kör, samma signal som bakgrundsindikatorn (NAV-6).
+        if (canRecomputeSwitchPlan) {
+            AppButton(
+                text = stringResource(
+                    if (recomputeRunning) R.string.hem_switch_plan_recompute_running else R.string.hem_switch_plan_recompute,
+                ),
+                onClick = onRecomputeSwitchPlan,
+                enabled = !recomputeRunning,
+                modifier = Modifier.padding(top = 8.dp),
+                variant = AppButtonVariant.Text,
+            )
+            Text(
+                stringResource(R.string.hem_switch_plan_recompute_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -680,9 +668,11 @@ private fun SwitchSuggestionRow(
         // Finns redan en öppen bevakning för säljfonden erbjuds ingen ny — annars hade varje
         // tryck startat ytterligare en bevakning av samma byte.
         if (switch.followed && !watched) {
-            TextButton(onClick = { onStartSwitchWatch(switch) }) {
-                Text(stringResource(R.string.switch_watch_start))
-            }
+            AppButton(
+                text = stringResource(R.string.switch_watch_start),
+                onClick = { onStartSwitchWatch(switch) },
+                variant = AppButtonVariant.Text,
+            )
         }
     }
 }
@@ -694,36 +684,36 @@ private fun SwitchSuggestionRow(
  */
 @Composable
 private fun SwitchWatchCard(watch: OpenSwitchWatchUi, working: Boolean, onOpen: (Long) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(title = stringResource(R.string.hem_switch_watch_title), working = working)
-            Text(
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        CardTitleRow(title = stringResource(R.string.hem_switch_watch_title), working = working)
+        Text(
+            stringResource(
+                R.string.format_hem_switch_watch,
+                watch.sellFundName,
+                watch.daysWaiting,
+                watch.candidateCount,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            text = if (watch.leaderName != null && watch.leaderChangeFraction != null) {
                 stringResource(
-                    R.string.format_hem_switch_watch,
-                    watch.sellFundName,
-                    watch.daysWaiting,
-                    watch.candidateCount,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Text(
-                text = if (watch.leaderName != null && watch.leaderChangeFraction != null) {
-                    stringResource(
-                        R.string.format_hem_switch_watch_leader,
-                        watch.leaderName,
-                        MoneyFormat.percentSigned(watch.leaderChangeFraction),
-                    )
-                } else {
-                    stringResource(R.string.hem_switch_watch_no_leader)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = { onOpen(watch.watchId) }) {
-                Text(stringResource(R.string.hem_switch_watch_open))
-            }
-        }
+                    R.string.format_hem_switch_watch_leader,
+                    watch.leaderName,
+                    MoneyFormat.percentSigned(watch.leaderChangeFraction),
+                )
+            } else {
+                stringResource(R.string.hem_switch_watch_no_leader)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        AppButton(
+            text = stringResource(R.string.hem_switch_watch_open),
+            onClick = { onOpen(watch.watchId) },
+            variant = AppButtonVariant.Text,
+        )
     }
 }
 

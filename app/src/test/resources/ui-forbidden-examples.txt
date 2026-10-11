@@ -41,7 +41,18 @@ Icon(Icons.Default.Refresh, contentDescription = null)
 Modifier.padding(16.dp)
 Spacer(Modifier.width(8.dp))
 LazyColumn(modifier = Modifier.testTag("hem")) { }
-Button(onClick = {}) { Text("Spara") }
+AppCard(modifier = Modifier.fillMaxWidth()) { }
+AppCard(onClick = {}, variant = AppCardVariant.Filled) { }
+AppButton(text = "Spara", onClick = {})
+AppButton(text = "Avbryt", onClick = {}, variant = AppButtonVariant.Text)
+AppIconButton(icon = Icons.Filled.Close, contentDescription = "Ta bort", onClick = {})
+AppTextField(value = text, onValueChange = {}, label = "Belopp")
+ConfirmDialog(title = "Ta bort?", body = "", confirmLabel = "Ta bort", onConfirm = {}, onDismiss = {})
+AppDialog(title = "Klart", body = "", onDismissRequest = {}, confirmLabel = "Stäng", onConfirm = {})
+LoadingDialog(title = "Importerar", body = "")
+CheckRow(checked = true, onCheckedChange = {}, label = "Ta med")
+ProgressBar()
+ItemRow(headline = "Global Indexfond A")
 import androidx.compose.material3.Card
 // Card(modifier) i en kommentar
  * Card(modifier) i en KDoc
@@ -64,6 +75,15 @@ OutlinedCard { }
 Surface(color = x) { }
 ListItem(headlineContent = {})
 AlertDialog(onDismissRequest = {})
+BasicAlertDialog(onDismissRequest = {}) { }
+Dialog(onDismissRequest = {}) { }
+Button(onClick = {}) { Text("Spara") }
+TextButton(onClick = {}) { Text("Avbryt") }
+OutlinedButton(onClick = {}) { }
+FilledTonalButton(onClick = {}) { }
+IconButton(onClick = {}) { }
+OutlinedTextField(value = text, onValueChange = {})
+TextField(value = text, onValueChange = {})
 DatePickerDialog(onDismissRequest = {})
 DropdownMenu(expanded = true, onDismissRequest = {})
 DropdownMenuItem(text = {}, onClick = {})
@@ -88,6 +108,8 @@ ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }
 shape = RoundedCornerShape(50)
 Modifier.height(48.dp)
 CircularProgressIndicator(strokeWidth = 2.dp)
+Button(onClick = onClick, shapes = shapes) { label() }
+OutlinedTextField(value = value, onValueChange = onValueChange)
 
 [komponent-stopp]
 PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }

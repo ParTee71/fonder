@@ -11,7 +11,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +22,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.AnalysisGuidance
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.theme.StatusColors
 
 /**
@@ -92,10 +92,9 @@ fun StatusDot(level: FundAnalysisCalc.SignalLevel, modifier: Modifier = Modifier
 fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifier = Modifier) {
     val level = analysis?.status
     if (analysis == null || level == null) {
-        OutlinedCard(modifier = modifier.fillMaxWidth()) {
+        AppCard(modifier = modifier.fillMaxWidth()) {
             Text(
                 stringResource(R.string.analys_status_insufficient),
-                modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -133,16 +132,14 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
 fun AnalysisGuidanceCard(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
     val messages = guidanceMessages(analysis)
     if (messages.isEmpty()) return
-    OutlinedCard(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            messages.forEachIndexed { index, message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = if (index == 0) Modifier else Modifier.padding(top = 8.dp),
-                )
-            }
+    AppCard(modifier = modifier.fillMaxWidth()) {
+        messages.forEachIndexed { index, message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = if (index == 0) Modifier else Modifier.padding(top = 8.dp),
+            )
         }
     }
 }

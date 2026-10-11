@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.transaktioner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +14,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +31,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.theme.MonoAmountStyle
@@ -94,19 +96,17 @@ fun SoldFundsContent(
 /** Summeringskort över allt realiserat resultat (SLD-3, issue #21). */
 @Composable
 private fun SoldFundsTotalCard(state: SoldFundsUiState) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(R.string.sold_funds_total_title),
-                working = state.loading,
-            )
-            Text(
-                "${MoneyFormat.kr(state.totalRealizedGain)}" +
-                    (state.totalRealizedGainFraction?.let { " · ${MoneyFormat.percentSigned(it)}" } ?: ""),
-                style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium),
-                color = ReturnColors.forAmount(state.totalRealizedGain),
-            )
-        }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(
+            title = stringResource(R.string.sold_funds_total_title),
+            working = state.loading,
+        )
+        Text(
+            "${MoneyFormat.kr(state.totalRealizedGain)}" +
+                (state.totalRealizedGainFraction?.let { " · ${MoneyFormat.percentSigned(it)}" } ?: ""),
+            style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium),
+            color = ReturnColors.forAmount(state.totalRealizedGain),
+        )
     }
 }
 
@@ -123,7 +123,11 @@ private fun SoldFundsTotalCard(state: SoldFundsUiState) {
 private fun SoldFundRow(row: SoldFundRad, onStartSwitchWatch: (SoldFundRad) -> Unit) {
     val sale = row.sale
     var expanded by rememberSaveable { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    AppCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        // Hela kortet fäller ut: klickytan går ända ut i kanten och marginalen ligger innanför den.
+        contentPadding = PaddingValues(0.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -182,9 +186,11 @@ private fun SoldFundRow(row: SoldFundRad, onStartSwitchWatch: (SoldFundRad) -> U
                     // utfällda delen: raden i hopfällt läge är avsiktligt bara namn och
                     // resultat (SLD-4), och en knapp där hade brutit den regeln för alla rader.
                     if (row.canStartSwitchWatch) {
-                        TextButton(onClick = { onStartSwitchWatch(row) }) {
-                            Text(stringResource(R.string.switch_watch_start))
-                        }
+                        AppButton(
+                            text = stringResource(R.string.switch_watch_start),
+                            onClick = { onStartSwitchWatch(row) },
+                            variant = AppButtonVariant.Text,
+                        )
                     }
                 }
             }

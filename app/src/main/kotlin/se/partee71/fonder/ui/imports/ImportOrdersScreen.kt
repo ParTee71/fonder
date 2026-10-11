@@ -6,19 +6,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,20 +23,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppCard
+import se.partee71.fonder.ui.components.AppTextField
+import se.partee71.fonder.ui.components.CheckRow
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
+import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.transaktioner.labelRes
 
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
 @Composable
@@ -76,10 +73,11 @@ fun ImportOrdersScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(stringResource(R.string.import_orders_pick_files_body), style = MaterialTheme.typography.bodyMedium)
-            Button(
+            AppButton(
+                text = stringResource(R.string.import_orders_pick_files_button),
                 onClick = { filePicker.launch(arrayOf("application/pdf")) },
                 modifier = Modifier.padding(top = 16.dp),
-            ) { Text(stringResource(R.string.import_orders_pick_files_button)) }
+            )
         }
 
         state.error != null -> EmptyState(
@@ -117,20 +115,22 @@ fun ImportOrdersScreen(
                     )
                 }
             }
-            Button(
+            AppButton(
+                text = stringResource(R.string.import_orders_commit_button, state.rows.count { it.readyToImport }),
                 onClick = viewModel::import,
                 enabled = state.canImport,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-            ) {
-                Text(stringResource(R.string.import_orders_commit_button, state.rows.count { it.readyToImport }))
-            }
+            )
         }
     }
 
     // Läsning/tolkning av flera PDF-filer kan ta en stund — overlay-modal precis som
     // Excel-importet (IMP-4), ingen tom eller ointeraktiv vy under tiden.
     if (state.loading) {
-        ImportOrdersLoadingDialog()
+        LoadingDialog(
+            title = stringResource(R.string.import_orders_loading_title),
+            body = stringResource(R.string.import_orders_loading_body),
+        )
     }
 }
 
@@ -144,33 +144,6 @@ private fun readFile(context: android.content.Context, uri: Uri): Pair<String, B
 }
 
 @Composable
-private fun ImportOrdersLoadingDialog() {
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-    ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                CircularProgressIndicator()
-                Text(
-                    stringResource(R.string.import_orders_loading_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                Text(
-                    stringResource(R.string.import_orders_loading_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ImportOrderRowCard(
     rowState: ImportOrderRowUiState,
     catalogFunds: List<Fund>,
@@ -181,71 +154,63 @@ private fun ImportOrderRowCard(
     onPriceTextChange: (String) -> Unit,
 ) {
     val tx = rowState.transaction
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = rowState.included, onCheckedChange = onIncludedChange)
-                Column {
-                    Text(tx.fundName, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.format_import_order_isin, tx.isin, tx.sourceFileName),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        CheckRow(
+            checked = rowState.included,
+            onCheckedChange = onIncludedChange,
+            label = tx.fundName,
+            supportingText = stringResource(R.string.format_import_order_isin, tx.isin, tx.sourceFileName),
+            labelStyle = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            stringResource(tx.type.labelRes()),
+            style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SelectField(
+            label = stringResource(R.string.import_match_label),
+            options = catalogFunds,
+            selected = rowState.matchedFund,
+            optionLabel = { it.name },
+            onSelect = onFundOverride,
+            placeholder = stringResource(R.string.import_match_none),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
             Text(
-                stringResource(if (tx.type == TransactionType.KOP) R.string.transaktion_kop else R.string.transaktion_salj),
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                modifier = Modifier.padding(top = 8.dp),
-            )
-
-            SelectField(
-                label = stringResource(R.string.import_match_label),
-                options = catalogFunds,
-                selected = rowState.matchedFund,
-                optionLabel = { it.name },
-                onSelect = onFundOverride,
-                placeholder = stringResource(R.string.import_match_none),
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
-                Text(
-                    stringResource(R.string.import_match_uncertain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (rowState.priceFetchFailed) {
-                Text(
-                    stringResource(R.string.import_price_fetch_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            DateField(
-                label = stringResource(R.string.import_date_label),
-                date = rowState.date,
-                onDateChange = onDateChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            OutlinedTextField(
-                value = rowState.sharesText,
-                onValueChange = onSharesTextChange,
-                label = { Text(stringResource(R.string.import_order_shares_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
-            OutlinedTextField(
-                value = rowState.priceText,
-                onValueChange = onPriceTextChange,
-                label = { Text(stringResource(R.string.import_order_price_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                stringResource(R.string.import_match_uncertain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
         }
+        if (rowState.priceFetchFailed) {
+            Text(
+                stringResource(R.string.import_price_fetch_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        DateField(
+            label = stringResource(R.string.import_date_label),
+            date = rowState.date,
+            onDateChange = onDateChange,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        AppTextField(
+            value = rowState.sharesText,
+            onValueChange = onSharesTextChange,
+            label = stringResource(R.string.import_order_shares_label),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        AppTextField(
+            value = rowState.priceText,
+            onValueChange = onPriceTextChange,
+            label = stringResource(R.string.import_order_price_label),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
     }
 }

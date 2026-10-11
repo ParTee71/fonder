@@ -1,18 +1,12 @@
 package se.partee71.fonder.ui.transaktioner
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,9 +18,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppTextField
+import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.fonder.ui.transaktioner.labelRes
 
 @Composable
 fun TransactionFormScreen(
@@ -63,21 +61,13 @@ fun TransactionFormScreen(
             onSelect = { fund -> fund?.let(viewModel::onFundSelected) },
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = state.type == TransactionType.KOP,
-                onClick = { viewModel.onTypeChange(TransactionType.KOP) },
-                label = { Text(stringResource(R.string.transaktion_kop)) },
-            )
-            FilterChip(
-                selected = state.type == TransactionType.SALJ,
-                onClick = { viewModel.onTypeChange(TransactionType.SALJ) },
-                label = { Text(stringResource(R.string.transaktion_salj)) },
-            )
-        }
+        ChoiceChipRow(
+            options = TransactionType.entries,
+            selected = state.type,
+            optionLabel = { type -> stringResource(type.labelRes()) },
+            onSelect = viewModel::onTypeChange,
+            modifier = Modifier.padding(top = 8.dp),
+        )
 
         DateField(
             label = stringResource(R.string.transaktionsform_date_label),
@@ -86,39 +76,35 @@ fun TransactionFormScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = state.sharesText,
             onValueChange = viewModel::onSharesTextChange,
-            label = { Text(stringResource(R.string.transaktionsform_shares_label)) },
-            singleLine = true,
+            label = stringResource(R.string.transaktionsform_shares_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = state.priceText,
             onValueChange = viewModel::onPriceTextChange,
-            label = { Text(stringResource(R.string.transaktionsform_price_label)) },
-            singleLine = true,
+            label = stringResource(R.string.transaktionsform_price_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = state.feeText,
             onValueChange = viewModel::onFeeTextChange,
-            label = { Text(stringResource(R.string.transaktionsform_fee_label)) },
-            singleLine = true,
+            label = stringResource(R.string.transaktionsform_fee_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
-        Button(
+        AppButton(
+            text = stringResource(R.string.save),
             onClick = viewModel::save,
             enabled = state.valid,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-        ) {
-            Text(stringResource(R.string.save))
-        }
+        )
     }
 }

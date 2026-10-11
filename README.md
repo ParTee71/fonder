@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.58.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.59.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -128,6 +128,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.59.0 | **Samma knappar, kort, fält och dialoger överallt** (UI-13): alla skärmar använder appens delade komponenter i stället för egna – knappar som byter form när de trycks ned, kort med svag kontur, konturerade fält med 12 dp hörn och dialoger där en radering bekräftas med en knapp i felfärgen. Köp/Sälj väljs i samma knappgrupp som övriga val, kryssraderna i importen är klickbara på hela raden, och importens väntan visas i en gemensam dialog med den formskiftande laddningsindikatorn. |
 | 0.58.0 | **Nytt utseende: Nordisk blå och koppar i Material 3 Expressive** (UI-1, UI-12): ny fast palett i blått med kopparaccent i ljust och mörkt läge, mjukare former (kort 18 dp, dialoger 28 dp, fält 12 dp), valrader som sammanhängande knappgrupper, en formskiftande laddningsindikator i stället för snurran, tjockare exponeringsstaplar och en tonad yta under kurskurvan. Påminnelseraden om säkerhetskopian är nu neutralt tonad. Vinst- och förlustfärgerna är oförändrade. |
 | 0.57.0 | **Säkerhetskopia med påminnelse** (HEM-12, SET-7): den automatiska dygnsvisa molnbackupen är borttagen — du säkerhetskopierar till Google Drive eller fil när du vill, och Hem visar överst en rad när något ändrats sedan senaste kopian ("3 nya transaktioner · senast …"), med en knapp som leder rakt till säkerhetskopieringen. Inställningar visar när och vart den senaste kopian togs. Det gamla bakgrundsjobbet avregistreras vid uppgradering. |
 | 0.56.0 | **Dra ned för att uppdatera** (UI-11, #119): Hem, Portfölj, Fonddetalj, Pågående byte, Facit och Fondsök uppdateras nu med en dragning — där datan faktiskt visas. Knappen "Uppdatera nu" i Inställningar är borttagen; vägen dit var lämna skärmen, skrolla till kortet, trycka och gå tillbaka, medan gesten alla andra appar har inte gjorde något. Varje skärm hämtar det just den visar: Hem och Portfölj forcerar en kursuppdatering, Fonddetalj fondens historik, Pågående byte kandidaternas kurvor, Facit bytesplansskanningen och Fondsök fondkatalogen. "Senast uppdaterad" står kvar i Inställningar. Snurran är samma signal som korten använder, så den slutar när datan faktiskt landat |
