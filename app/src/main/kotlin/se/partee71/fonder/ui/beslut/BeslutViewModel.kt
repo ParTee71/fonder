@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
@@ -16,6 +15,7 @@ import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -33,6 +33,12 @@ data class BeslutUiState(
     val decisions: PendingDecisions = PendingDecisions(),
     /** Förslag användaren markerat som genomförda, över hela facit-historiken (SET-5) — "Hur gick det?"-raden. */
     val followedCount: Int = 0,
+    /**
+     * Meravkastningen i kronor för de genomförda förslagen — [se.partee71.fonder.domain.usecase.FacitSnapshot.followedExcessKr], samma
+     * tal som Facits två "Genomförda"-rader tillsammans. Null utan mätbart utfall; raden visar då
+     * bara antalet.
+     */
+    val followedExcessKr: Double? = null,
     /** Sant medan en bakgrundskörning pågår — omräkningsknappen är då släckt, samma signal som chromets indikator (NAV-6). */
     val backgroundWorkRunning: Boolean = false,
     /** Kurserna hämtas — de pågående bytenas ledare räknas ur kurscachen (NAV-6). */
@@ -60,7 +66,8 @@ data class BeslutUiState(
 /**
  * Fliken **Beslut** (NAV-9) — det som väntar på användaren: pågående byten (ANA-12), bytesplanen
  * (HEM-8) och de billigare alternativen (ANA-9) med Följ och Avstå (HEM-14), mot riskprofilen och
- * kontotypen, plus vägen till Facit (SET-5).
+ * kontotypen, plus vägen till Facit (SET-5) med de följda rådens resultat ur [FacitSummary] — samma
+ * källa som Facit-skärmen, så facit räknas på ett ställe.
  *
  * Förslagen och bevakningarna kommer ur [PendingDecisionsSource], samma källa som Översiktens
  * "Att besluta"-rad och flikradens märke läser — antalet räknas därför på ett ställe. Läser bara
@@ -69,6 +76,7 @@ data class BeslutUiState(
 @HiltViewModel
 class BeslutViewModel @Inject constructor(
     pendingDecisionsSource: PendingDecisionsSource,
+    facitSummary: FacitSummary,
     preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val switchWatchRepository: SwitchWatchRepository,
@@ -83,15 +91,16 @@ class BeslutViewModel @Inject constructor(
         pendingDecisionsSource.observe(),
         preferencesRepository.riskProfile,
         preferencesRepository.accountType,
-        suggestionRecordRepository.observeHistory().map { history -> history.count { it.followed == true } },
+        facitSummary.observe(),
         startedSwitchWatchId,
-    ) { decisions, riskProfile, accountType, followedCount, startedId ->
+    ) { decisions, riskProfile, accountType, facit, startedId ->
         BeslutUiState(
             loading = false,
             riskProfile = riskProfile,
             accountType = accountType,
             decisions = decisions,
-            followedCount = followedCount,
+            followedCount = facit.followedCount,
+            followedExcessKr = facit.followedExcessKr,
             startedSwitchWatchId = startedId,
         )
     }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->

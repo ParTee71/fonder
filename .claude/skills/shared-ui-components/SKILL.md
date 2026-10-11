@@ -99,7 +99,7 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 |---|---|
 | Portföljberäkningar, avgifter, risk, avkastningsserier | `PortfolioCalc`, `PortfolioFeeCalc`, `PortfolioRiskCalc`, `PortfolioPerformanceCalc`, `PortfolioReturnSeriesCalc`, `PortfolioExposureCalc` i `domain/usecase/` |
 | Analys och säljsignaler | `FundAnalysisCalc`, `AnalysisGuidance` |
-| Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc`; `SwitchWatchRepository.startFromSuggestion` (bevakning ur ett kvitterat förslag – Beslut och Fonddetalj) |
+| Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc`; facit ur cachen: `FacitSummary` → `FacitSnapshot` (Facit och Beslut-flikens "Hur gick det?", SET-5/NAV-9); `SwitchWatchRepository.startFromSuggestion` (bevakning ur ett kvitterat förslag – Beslut och Fonddetalj) |
 | Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan och billigare alternativ utan avstådda förslag + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa; de inspelade avgiftsbytena som förslag: `CheaperAlternatives` (ANA-9, även Fonddetaljs kvittering); vilka förslag ett avstående döljer och hur länge: `SuggestionDismissals` (HEM-14, även Fonddetalj) |
 | Diagrammets data | `ChartPeriodFilter`, `ChartSeriesNormalizer`, `PurchaseMarkerFilter`, `IndexBenchmarkSelector` |
 | Belopp och tal i text | `MoneyFormat`, `SwedishNumberFormat` |

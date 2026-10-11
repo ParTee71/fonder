@@ -15,6 +15,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.usecase.FacitRad
+import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -68,20 +70,9 @@ class FacitScreenTest {
         ),
     )
 
-    /** Speglar [FacitViewModel]s uppdelning per sort (issue #91) så skärmen testas mot ett äkta tillstånd. */
-    private fun state(vararg rows: FacitRad): FacitUiState {
-        val planRows = rows.filter { it.kind == SuggestionKind.RISK_PLAN }
-        val feeRows = rows.filter { it.kind == SuggestionKind.FEE }
-        return FacitUiState(
-            loading = false,
-            rows = rows.toList(),
-            planAllSummary = SwitchOutcomeCalc.summarize(planRows.map { it.outcome }),
-            planFollowedSummary = SwitchOutcomeCalc.summarize(planRows.filter { it.followed }.map { it.outcome }),
-            feeAllSummary = SwitchOutcomeCalc.summarize(feeRows.map { it.outcome }),
-            feeFollowedSummary = SwitchOutcomeCalc.summarize(feeRows.filter { it.followed }.map { it.outcome }),
-            byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome }),
-        )
-    }
+    /** Samma uppdelning per sort (issue #91) som [FacitViewModel] får ur [FacitSummary], så skärmen testas mot ett äkta tillstånd. */
+    private fun state(vararg rows: FacitRad): FacitUiState =
+        FacitUiState(loading = false, facit = FacitSummary.summarize(rows.toList()))
 
     @Test
     fun tomt_tillstand_visas_utan_inspelade_forslag() {
