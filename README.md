@@ -51,8 +51,10 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Säkerhetskopiering till fil — export/återställning av all användardata via SAF (SET-6, #82)
 - [x] Google-inloggning — Firebase Auth + Credential Manager, kontokort i Inställningar
       (TP-6, #106)
-- [x] Google Drive-backup — dygnsvis molnbackup av hela backup-kontraktet till `appDataFolder`
+- [x] Google Drive-backup — hela backup-kontraktet till `appDataFolder` på begäran
       (TP-7 steg 2 / SET-7, #110)
+- [x] Påminnelse på Hem när data ändrats sedan senaste säkerhetskopian — ingen automatisk kopia
+      (HEM-12)
 
 ---
 
@@ -126,6 +128,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.57.0 | **Säkerhetskopia med påminnelse** (HEM-12, SET-7): den automatiska dygnsvisa molnbackupen är borttagen — du säkerhetskopierar till Google Drive eller fil när du vill, och Hem visar överst en rad när något ändrats sedan senaste kopian ("3 nya transaktioner · senast …"), med en knapp som leder rakt till säkerhetskopieringen. Inställningar visar när och vart den senaste kopian togs. Det gamla bakgrundsjobbet avregistreras vid uppgradering. |
 | 0.56.0 | **Dra ned för att uppdatera** (UI-11, #119): Hem, Portfölj, Fonddetalj, Pågående byte, Facit och Fondsök uppdateras nu med en dragning — där datan faktiskt visas. Knappen "Uppdatera nu" i Inställningar är borttagen; vägen dit var lämna skärmen, skrolla till kortet, trycka och gå tillbaka, medan gesten alla andra appar har inte gjorde något. Varje skärm hämtar det just den visar: Hem och Portfölj forcerar en kursuppdatering, Fonddetalj fondens historik, Pågående byte kandidaternas kurvor, Facit bytesplansskanningen och Fondsök fondkatalogen. "Senast uppdaterad" står kvar i Inställningar. Snurran är samma signal som korten använder, så den slutar när datan faktiskt landat |
 | 0.55.0 | **Väntesnurra på korten** (NAV-6, #118): varje kort och varje diagram visar nu en liten snurra i rubriken medan just dess data hämtas eller räknas om — totalen och innehavsraderna när kurserna uppdateras, exponeringskartan och avgiftskortet när fondmetadatan slås upp, riskkortet när bytesplanen skannas, avkastningskurvan när referensfonden hämtas, backup-kortet när molnkopian körs. Tidigare fanns bara en indikator högst upp i appen, som sa att *något* pågick men inte vad; ett kort med nollor gick därför inte att skilja från ett kort där appen faktiskt inte vet. Snurran är bunden till just de jobb som skriver kortets data, så en molnbackup inte får fondkorten att snurra |
 | 0.54.0 | **Tidsviktad avkastningskurva** (HEM-9/HEM-10, #116): diagrammet på Hem mäter nu hur dina fonder faktiskt utvecklats, i stället för avkastningen på insatt kapital räknad om per dag. Insättningar, uttag och byten flyttar inte längre kurvan, så periodsiffrorna går att jämföra med varandra — tidigare kunde "5 år" visa någon enstaka procent samtidigt som 1 år och 3 år såg utmärkta ut, bara för att en stor påfyllning låg strax efter femårsfönstrets startdag. Kurvan slutar därför inte längre på samma procent som totalen överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick, och texten under diagrammet säger det. Indexjämförelsen mäts med samma mått som förut |

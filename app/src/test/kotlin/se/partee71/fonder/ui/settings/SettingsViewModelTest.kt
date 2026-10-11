@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import app.cash.turbine.test
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +36,11 @@ import se.partee71.fonder.data.auth.AuthUser
 import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupFormatException
-import se.partee71.fonder.data.repository.BackupRepository
+import se.partee71.fonder.data.repository.BackupFingerprint
+import se.partee71.fonder.data.repository.BackupPayload
+import se.partee71.fonder.data.repository.BackupSerializer
+import se.partee71.fonder.data.repository.BackupStatusRepository
+import se.partee71.fonder.data.repository.FakeBackupRepository
 import se.partee71.fonder.data.repository.DriveBackupRepository
 import se.partee71.fonder.data.repository.DriveResult
 import se.partee71.fonder.data.repository.FundMetadataRepository
@@ -42,6 +48,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -49,6 +56,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
@@ -81,17 +89,7 @@ class SettingsViewModelTest {
     /** Räknar bl.a. manuella uppdateringar (SET-2) och referensfondsskanningar (HEM-10, issue #102). */
     private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
-    private var exportResult: Result<String> = Result.success("{}")
-    private var restoreResult: Result<RestoreSummary> = Result.success(RestoreSummary(0, 0, 0))
-    private var restoredJson: String? = null
-
-    private val fakeBackupRepo = object : BackupRepository {
-        override suspend fun export(): Result<String> = exportResult
-        override suspend fun restore(json: String): Result<RestoreSummary> {
-            restoredJson = json
-            return restoreResult
-        }
-    }
+    private val fakeBackupRepo = FakeBackupRepository()
 
     @Before
     fun setUp() {
@@ -180,7 +178,8 @@ class SettingsViewModelTest {
     /** Uppsamlade auktoriseringsintent — UI:t startar dem, testet räknar dem. */
     private val authorizationRequests = mutableListOf<PendingIntent>()
 
-    private fun viewModel() = SettingsViewModel(PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+    private fun viewModel(preferences: PreferencesRepository = PreferencesRepository(dataStore)) =
+        SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo, BackupStatusRepository(fakeBackupRepo, preferences))
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -232,7 +231,7 @@ class SettingsViewModelTest {
     @Test
     fun `lastPriceSyncEpochMillis speglar preferences efter en uppdatering (SET-2)`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.uiState.test {
             awaitItem()
@@ -253,23 +252,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
             while (!state.priceRefreshWorking) state = awaitItem()
-            assertFalse(state.driveBackupWorking)
-            assertFalse(state.backupWorking)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `backup-kortet snurrar under molnbackupen (SET-7)`() = runTest(dispatcher) {
-        val vm = viewModel()
-
-        vm.uiState.test {
-            var state = awaitItem()
-            fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
-            while (!state.driveBackupWorking) state = awaitItem()
-            assertTrue(state.backupWorking)
-            // Molnbackupen rör inga kurser — kurskortet ska stå stilla.
-            assertFalse(state.priceRefreshWorking)
+            assertFalse(state.backupInProgress)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -305,7 +288,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `export lamnar serialiserad json till skrivaren och kvitterar`() = runTest(dispatcher) {
-        exportResult = Result.success("""{"formatVersion":1}""")
+        fakeBackupRepo.exportResult = Result.success("""{"formatVersion":1}""")
         var written: String? = null
         val vm = viewModel()
 
@@ -339,7 +322,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `restore skickar filens innehall till repositoryt och redovisar vad som skrevs`() = runTest(dispatcher) {
-        restoreResult = Result.success(RestoreSummary(funds = 2, transactions = 5, suggestionRecords = 3))
+        fakeBackupRepo.restoreResult = Result.success(RestoreSummary(funds = 2, transactions = 5, suggestionRecords = 3))
         val vm = viewModel()
 
         vm.uiState.test {
@@ -348,7 +331,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals("""{"formatVersion":1}""", restoredJson)
+            assertEquals("""{"formatVersion":1}""", fakeBackupRepo.restoredJson)
             assertEquals(BackupMessage.Restored(RestoreSummary(2, 5, 3)), state.backupMessage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -364,7 +347,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals(null, restoredJson)
+            assertEquals(null, fakeBackupRepo.restoredJson)
             assertEquals(BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE), state.backupMessage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -374,7 +357,7 @@ class SettingsViewModelTest {
     fun `en fil fran en nyare app redovisas som versionsfel, inte som trasig`() = runTest(dispatcher) {
         // Skillnaden är hela poängen: "trasig fil" och "nyare app" leder till olika åtgärd för
         // användaren, så felet får inte plattas till på vägen upp till UI:t.
-        restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNSUPPORTED_VERSION, fileVersion = 99))
+        fakeBackupRepo.restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNSUPPORTED_VERSION, fileVersion = 99))
         val vm = viewModel()
 
         vm.uiState.test {
@@ -468,7 +451,7 @@ class SettingsViewModelTest {
     fun `valt referens-ISIN sparas och startar en skanning`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613"))
         advanceUntilIdle()
@@ -483,7 +466,7 @@ class SettingsViewModelTest {
         // Katalogens träffar saknar ISIN — hela jämförelsekedjan är ISIN-nycklad.
         val preferences = PreferencesRepository(dataStore)
         isinByFundId = mapOf("SHB1" to "SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null))
         advanceUntilIdle()
@@ -496,7 +479,7 @@ class SettingsViewModelTest {
         // Ett sparat fond-id som inget annat lager kan använda hade gett ett val som såg gjort
         // ut men aldrig gav en kurva.
         val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.uiState.test {
             awaitItem()
@@ -516,7 +499,7 @@ class SettingsViewModelTest {
     fun `rensat val faller tillbaka pa appens referens`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.clearBenchmark()
         advanceUntilIdle()
@@ -529,7 +512,7 @@ class SettingsViewModelTest {
         val preferences = PreferencesRepository(dataStore)
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.uiState.test {
             var state = awaitItem()
@@ -544,7 +527,7 @@ class SettingsViewModelTest {
     fun `ett val vars namn inte finns i cachen visas som ISIN, aldrig tomt`() = runTest(dispatcher) {
         val preferences = PreferencesRepository(dataStore)
         preferences.setChosenBenchmarkIsin("SE0011527613")
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
+        val vm = viewModel(preferences)
 
         vm.uiState.test {
             var state = awaitItem()
@@ -695,6 +678,7 @@ class SettingsViewModelTest {
         val vm = SettingsViewModel(
             PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler,
             fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo, fakeDriveRepo,
+            BackupStatusRepository(fakeBackupRepo, PreferencesRepository(dataStore)),
         )
 
         vm.uiState.test {
@@ -714,7 +698,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `backupToDrive laddar upp den exporterade strangen`() = runTest(dispatcher) {
-        exportResult = Result.success("""{"formatVersion":1}""")
+        fakeBackupRepo.exportResult = Result.success("""{"formatVersion":1}""")
         val vm = viewModel()
 
         vm.uiState.test {
@@ -733,7 +717,7 @@ class SettingsViewModelTest {
     fun `en misslyckad export laddar aldrig upp nagot`() = runTest(dispatcher) {
         // Går kontraktet inte att serialisera är felet i formatet, inte i transporten — och då
         // ska ingenting skrivas till Drive.
-        exportResult = Result.failure(IllegalStateException("trasigt"))
+        fakeBackupRepo.exportResult = Result.failure(IllegalStateException("trasigt"))
         val vm = viewModel()
 
         vm.uiState.test {
@@ -804,7 +788,7 @@ class SettingsViewModelTest {
     @Test
     fun `restoreFromDrive lamnar den hamtade strangen till backup-kontraktet`() = runTest(dispatcher) {
         driveDownloadResult = DriveResult.Success("""{"formatVersion":1,"funds":[]}""")
-        restoreResult = Result.success(RestoreSummary(2, 3, 4))
+        fakeBackupRepo.restoreResult = Result.success(RestoreSummary(2, 3, 4))
         val vm = viewModel()
 
         vm.uiState.test {
@@ -813,7 +797,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals("""{"formatVersion":1,"funds":[]}""", restoredJson)
+            assertEquals("""{"formatVersion":1,"funds":[]}""", fakeBackupRepo.restoredJson)
             assertEquals(BackupMessage.Restored(RestoreSummary(2, 3, 4)), state.backupMessage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -830,7 +814,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertNull(restoredJson)
+            assertNull(fakeBackupRepo.restoredJson)
             assertEquals(BackupMessage.DriveEmpty, state.backupMessage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -839,7 +823,7 @@ class SettingsViewModelTest {
     @Test
     fun `en trasig kopia i Drive ger samma fel som en trasig fil`() = runTest(dispatcher) {
         driveDownloadResult = DriveResult.Success("inte json")
-        restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNREADABLE))
+        fakeBackupRepo.restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNREADABLE))
         val vm = viewModel()
 
         vm.uiState.test {
@@ -869,9 +853,11 @@ class SettingsViewModelTest {
             override suspend fun downloadLatest(): DriveResult<String> = DriveResult.NoBackupFound
             override suspend fun list(): DriveResult<List<DriveBackupFile>> = DriveResult.Success(emptyList())
         }
+        val preferences = PreferencesRepository(dataStore)
         val vm = SettingsViewModel(
-            PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler, fakeBackupRepo,
+            preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo,
             fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, countingDrive,
+            BackupStatusRepository(fakeBackupRepo, preferences),
         )
 
         vm.uiState.test {
@@ -885,21 +871,156 @@ class SettingsViewModelTest {
         }
     }
 
+    // --- Senaste säkerhetskopia (SET-7, HEM-12) ---
+
+    /** Väntar tills en säkerhetskopia är antecknad och knapparna släppts. */
+    private suspend fun app.cash.turbine.ReceiveTurbine<SettingsUiState>.awaitLastBackup(): SettingsUiState {
+        var state = awaitItem()
+        while (state.lastBackup == null || state.backupInProgress) state = awaitItem()
+        return state
+    }
+
     @Test
-    fun `senaste molnbackup speglar preferences`() = runTest(dispatcher) {
-        val preferences = PreferencesRepository(dataStore)
-        val vm = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo)
-
-        vm.uiState.test {
-            assertNull(awaitItem().lastDriveBackupEpochMillis)
-            preferences.setLastDriveBackupEpochMillis(1_700_000_000_000L)
-            var state = awaitItem()
-            while (state.lastDriveBackupEpochMillis == null) state = awaitItem()
-
-            assertEquals(1_700_000_000_000L, state.lastDriveBackupEpochMillis)
+    fun `ingen sakerhetskopia visas innan nagon gjorts`() = runTest(dispatcher) {
+        viewModel().uiState.test {
+            assertNull(awaitItem().lastBackup)
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `en lyckad Drive-kopia antecknas med datum, mal och fingeravtryck`() = runTest(dispatcher) {
+        fakeBackupRepo.payload.value = payloadWithTransactions(3)
+        fakeBackupRepo.exportResult = Result.success(BackupSerializer.encode(payloadWithTransactions(3)))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            val record = awaitLastBackup().lastBackup!!
+
+            assertEquals(BackupTarget.DRIVE, record.target)
+            assertEquals(3, record.transactionCount)
+            assertEquals(BackupFingerprint.of(fakeBackupRepo.payload.value), record.fingerprint)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en lyckad filexport antecknas som fil`() = runTest(dispatcher) {
+        fakeBackupRepo.exportResult = Result.success(BackupSerializer.encode(payloadWithTransactions(1)))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.export { }
+            assertEquals(BackupTarget.FILE, awaitLastBackup().lastBackup?.target)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kopian antecknas ur den uppladdade strangen, inte ur en senare lasning`() = runTest(dispatcher) {
+        // Granskningsfynd: en ändring mellan exporten och anteckningen fanns inte i kopian.
+        fakeBackupRepo.exportResult = Result.success(BackupSerializer.encode(payloadWithTransactions(2)))
+        fakeBackupRepo.payload.value = payloadWithTransactions(3)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            val record = awaitLastBackup().lastBackup!!
+
+            assertEquals(BackupFingerprint.of(payloadWithTransactions(2)), record.fingerprint)
+            assertEquals(2, record.transactionCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en misslyckad kopia lamnar senaste sakerhetskopia orord`() = runTest(dispatcher) {
+        driveUploadResult = DriveResult.Error("Drive 503")
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.backupToDrive(collectAuth())
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertNull(state.lastBackup)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en lyckad aterstallning fran fil antecknas, sa Hem inte paminner om den`() = runTest(dispatcher) {
+        fakeBackupRepo.payload.value = payloadWithTransactions(2)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restore { BackupSerializer.encode(payloadWithTransactions(2)) }
+            val record = awaitLastBackup().lastBackup!!
+
+            assertEquals(BackupTarget.FILE, record.target)
+            assertEquals(BackupFingerprint.of(fakeBackupRepo.payload.value), record.fingerprint)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en lyckad aterstallning fran Drive antecknas som Drive`() = runTest(dispatcher) {
+        driveDownloadResult = DriveResult.Success(BackupSerializer.encode(payloadWithTransactions(1)))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restoreFromDrive(collectAuth())
+            assertEquals(BackupTarget.DRIVE, awaitLastBackup().lastBackup?.target)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en misslyckad aterstallning antecknas inte`() = runTest(dispatcher) {
+        fakeBackupRepo.restoreResult = Result.failure(BackupFormatException(BackupFormatException.Reason.UNREADABLE))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            vm.restore { "trasig" }
+            var state = awaitItem()
+            while (state.backupMessage == null) state = awaitItem()
+
+            assertNull(state.lastBackup)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `den gamla molnbackupens tidsstampel visas som en Drive-kopia`() = runTest(dispatcher) {
+        // Före HEM-12 sparades bara den dygnsvisa körningens tidsstämpel. Den ska inte tappas
+        // vid uppgraderingen — men den har inget fingeravtryck, så Hem påminner ändå.
+        dataStore.edit { it[longPreferencesKey("last_drive_backup_epoch_millis")] = 1_700_000_000_000L }
+        val vm = viewModel()
+
+        vm.uiState.test {
+            val record = awaitLastBackup().lastBackup!!
+            assertEquals(1_700_000_000_000L, record.epochMillis)
+            assertEquals(BackupTarget.DRIVE, record.target)
+            assertNull(record.fingerprint)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun payloadWithTransactions(count: Int) = BackupPayload(
+        exportedAtEpochMillis = 0,
+        funds = listOf(Fund(fundId = "SHB1", name = "Fond A")),
+        transactions = (1..count).map { i ->
+            Transaction(id = i.toLong(), fundId = "SHB1", type = TransactionType.KOP, epochDay = 19_000L + i, shares = 1.0, pricePerShare = 100.0)
+        },
+    )
 
     private fun benchmarkMetadata() = FundMetadata(
         isin = "SE0011527613", name = "Global Index", orderbookId = "1", totalFee = 0.2, managementFee = 0.2,

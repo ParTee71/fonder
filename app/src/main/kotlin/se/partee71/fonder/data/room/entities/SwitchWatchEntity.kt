@@ -15,7 +15,7 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
  * Ett pågående byte (ANA-12, issue #114) — se [SwitchWatch] för varför det här är genuin,
  * backup-bärande användardata och inte cache.
  */
-@Entity(tableName = "switch_watches")
+@Entity(tableName = SwitchWatchEntity.TABLE_NAME)
 data class SwitchWatchEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val sellIsin: String,
@@ -33,14 +33,19 @@ data class SwitchWatchEntity(
      * [SwitchWatchCloseReason.AVBRUTEN]: en fil från en nyare version ska degradera, inte krascha.
      */
     val closeReason: String?,
-)
+) {
+    companion object {
+        /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
+        const val TABLE_NAME = "switch_watches"
+    }
+}
 
 /**
  * En bevakad kandidat (ANA-13). Kaskadraderas med sin bevakning — en kandidat utan bevakning är
  * inte "data som blev kvar", den är en rad ingen läsare kan tolka.
  */
 @Entity(
-    tableName = "switch_watch_candidates",
+    tableName = SwitchWatchCandidateEntity.TABLE_NAME,
     foreignKeys = [
         ForeignKey(
             entity = SwitchWatchEntity::class,
@@ -75,6 +80,9 @@ data class SwitchWatchCandidateEntity(
     )
 
     companion object {
+        /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
+        const val TABLE_NAME = "switch_watch_candidates"
+
         fun fromDomain(candidate: SwitchWatchCandidate, watchId: Long = candidate.watchId) =
             SwitchWatchCandidateEntity(
                 id = candidate.id,

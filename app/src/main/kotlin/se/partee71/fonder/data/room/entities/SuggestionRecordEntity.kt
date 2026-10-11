@@ -9,7 +9,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
  * Facit-inspelningen för bytesplanen (HEM-8, issue #70) — se [SuggestionRecord] för varför
  * det här är genuin, backup-bärande användardata till skillnad från `fund_metadata`.
  */
-@Entity(tableName = "suggestion_records")
+@Entity(tableName = SuggestionRecordEntity.TABLE_NAME)
 data class SuggestionRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val suggestedAtEpochDay: Long,
@@ -46,6 +46,9 @@ data class SuggestionRecordEntity(
     )
 
     companion object {
+        /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
+        const val TABLE_NAME = "suggestion_records"
+
         fun fromDomain(record: SuggestionRecord) = SuggestionRecordEntity(
             id = record.id,
             suggestedAtEpochDay = record.suggestedAtEpochDay,

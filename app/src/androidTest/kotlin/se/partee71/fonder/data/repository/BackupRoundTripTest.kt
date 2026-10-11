@@ -252,6 +252,26 @@ class BackupRoundTripTest {
     }
 
     @Test
+    fun en_antecknad_aterstallning_ger_ingen_paminnelse_men_en_ny_transaktion_gor_det() = runTest {
+        // HEM-12 mot riktig Room och DataStore: fingeravtrycket tas ur databasen efter
+        // återställningen, och en skrivning i en av kontraktets tabeller räknas om.
+        seed()
+        val json = backup.export().getOrThrow()
+        transactions.clearAll()
+        backup.restore(json).getOrThrow()
+        val status = BackupStatusRepository(backup, preferences)
+        status.recordBackup(json, se.partee71.fonder.domain.model.BackupTarget.FILE)
+
+        assertNull(status.reminder.first())
+
+        db.transactionDao().insert(
+            TransactionEntity(id = 99, fundId = "SHB0000442", type = "KOP", epochDay = 19_600, shares = 1.0, pricePerShare = 190.0, fee = 0.0),
+        )
+
+        assertEquals(1, status.reminder.first()?.newTransactions)
+    }
+
+    @Test
     fun restore_ersatter_befintlig_data_i_stallet_for_att_slas_ihop() = runTest {
         seed()
         val json = backup.export().getOrThrow()

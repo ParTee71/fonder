@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
@@ -58,6 +59,45 @@ class HemScreenTest {
         }
 
         composeRule.onNodeWithText("Ingen portfölj ännu").assertExists()
+    }
+
+    // --- Påminnelse om säkerhetskopia (HEM-12) ---
+
+    @Test
+    fun paminnelsen_visar_antal_och_leder_till_installningar() {
+        var opened = 0
+        val state = HemUiState(
+            loading = false,
+            hasHoldings = true,
+            backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L),
+        )
+
+        composeRule.setContent {
+            FonderTheme { HemContent(state = state, onOpenBackup = { opened++ }) }
+        }
+
+        composeRule.onNodeWithText("Ändringar sedan senaste säkerhetskopian").assertIsDisplayed()
+        composeRule.onNodeWithText("3 nya transaktioner · senast", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Säkerhetskopiera").performClick()
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun paminnelsen_utan_kopia_sager_det() {
+        val state = HemUiState(loading = false, hasHoldings = true, backupReminder = BackupReminder(0, null))
+
+        composeRule.setContent { FonderTheme { HemContent(state = state) } }
+
+        composeRule.onNodeWithText("Ingen säkerhetskopia än").assertIsDisplayed()
+    }
+
+    @Test
+    fun ingen_paminnelse_nar_innehallet_finns_i_en_kopia() {
+        composeRule.setContent {
+            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true)) }
+        }
+
+        composeRule.onNodeWithText("Ändringar sedan senaste säkerhetskopian").assertDoesNotExist()
     }
 
     @Test

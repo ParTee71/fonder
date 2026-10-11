@@ -18,6 +18,8 @@ import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupRecord
+import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.ui.theme.FonderTheme
 
 /**
@@ -409,27 +411,40 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Inget Google-konto", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    // --- Molnbackup till Drive (SET-7) ---
+    // --- Säkerhetskopiering: Drive och fil (SET-6, SET-7, HEM-12) ---
 
     @Test
-    fun visar_att_ingen_molnbackup_gjorts_an() {
+    fun visar_att_ingen_sakerhetskopia_gjorts_an() {
         composeRule.setContent {
-            FonderTheme { SettingsContent(state = SettingsUiState(lastDriveBackupEpochMillis = null)) }
+            FonderTheme { SettingsContent(state = SettingsUiState(lastBackup = null)) }
         }
 
-        composeRule.onNodeWithText("Ingen molnbackup har gjorts än.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Ingen säkerhetskopia har gjorts än.").performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun visar_tidsstampel_for_senaste_molnbackup() {
+    fun visar_datum_och_mal_for_senaste_sakerhetskopia() {
         composeRule.setContent {
             FonderTheme {
-                SettingsContent(state = SettingsUiState(lastDriveBackupEpochMillis = 1710504000000L))
+                SettingsContent(
+                    state = SettingsUiState(
+                        lastBackup = BackupRecord(1710504000000L, BackupTarget.DRIVE, fingerprint = "x", transactionCount = 1),
+                    ),
+                )
             }
         }
 
-        composeRule.onNodeWithText("Senaste molnbackup:", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Ingen molnbackup har gjorts än.").assertDoesNotExist()
+        composeRule.onNodeWithText("Senaste säkerhetskopia:", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Google Drive", substring = true).assertExists()
+        composeRule.onNodeWithText("Ingen säkerhetskopia har gjorts än.").assertDoesNotExist()
+    }
+
+    @Test
+    fun kortet_lovar_ingen_automatisk_kopia() {
+        composeRule.setContent { FonderTheme { SettingsContent(state = SettingsUiState()) } }
+
+        composeRule.onNodeWithText("Inget sparas automatiskt", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("en gång per dygn", substring = true).assertDoesNotExist()
     }
 
     @Test

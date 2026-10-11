@@ -17,12 +17,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.BackupReminder
+import se.partee71.fonder.domain.usecase.BackupReminderCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
@@ -33,6 +36,7 @@ import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
+import se.partee71.fonder.ui.components.ReminderRow
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
@@ -47,6 +51,7 @@ fun HemScreen(
     onFundClick: (String) -> Unit,
     onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenBackup: () -> Unit = {},
     viewModel: HemViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -68,6 +73,7 @@ fun HemScreen(
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
         onStartSwitchWatch = viewModel::startSwitchWatch,
         onOpenSwitchWatch = onOpenSwitchWatch,
+        onOpenBackup = onOpenBackup,
         modifier = modifier,
     )
 }
@@ -97,14 +103,19 @@ fun HemContent(
     onRecomputeSwitchPlan: () -> Unit = {},
     onStartSwitchWatch: (SwitchSuggestionUi) -> Unit = {},
     onOpenSwitchWatch: (Long) -> Unit = {},
+    onOpenBackup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
-        state.isEmpty -> EmptyState(
-            title = stringResource(R.string.hem_empty_title),
-            body = stringResource(R.string.hem_empty_body),
-            modifier = modifier,
-        )
+        // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
+        // fortfarande transaktioner att förlora.
+        state.isEmpty -> Column(modifier = modifier) {
+            state.backupReminder?.let { BackupReminderRow(it, onOpenBackup) }
+            EmptyState(
+                title = stringResource(R.string.hem_empty_title),
+                body = stringResource(R.string.hem_empty_body),
+            )
+        }
 
         // Dra ned uppdaterar (UI-11) — bara här, inte i tomt-tillståndet ovan: utan innehav
         // finns ingen kurs att hämta, och en gest som inte gör något är värre än ingen gest.
@@ -114,6 +125,9 @@ fun HemContent(
             modifier = modifier,
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
+                state.backupReminder?.let { reminder ->
+                    item { BackupReminderRow(reminder, onOpenBackup) }
+                }
                 item { TotalCard(state = state) }
                 state.openSwitchWatch?.let { watch ->
                     item {
@@ -711,4 +725,34 @@ private fun SwitchWatchCard(watch: OpenSwitchWatchUi, working: Boolean, onOpen: 
             }
         }
     }
+}
+
+/**
+ * Påminnelsen om att säkerhetskopiera (HEM-12) — undertexten säger hur många transaktioner som
+ * tillkommit och när senaste kopian togs, eller att ingen finns. Knappen leder till
+ * Inställningars säkerhetskopiering; själva kopian tas där (SET-6, SET-7).
+ */
+@Composable
+private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit) {
+    val body = when {
+        reminder.lastBackupEpochMillis == null -> stringResource(R.string.hem_backup_reminder_never)
+        reminder.newTransactions > 0 -> pluralStringResource(
+            R.plurals.format_hem_backup_reminder_new_transactions,
+            reminder.newTransactions,
+            reminder.newTransactions,
+            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis),
+        )
+        else -> stringResource(
+            R.string.format_hem_backup_reminder_last,
+            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis),
+        )
+    }
+    ReminderRow(
+        title = stringResource(R.string.hem_backup_reminder_title),
+        body = body,
+        actionLabel = stringResource(R.string.hem_backup_reminder_action),
+        onAction = onOpenBackup,
+        // Samma ytterkant som korten under; kortets egen toppmarginal ger mellanrummet.
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+    )
 }

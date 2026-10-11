@@ -28,6 +28,12 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.repository.BackupPayload
+import se.partee71.fonder.data.repository.BackupSerializer
+import se.partee71.fonder.data.repository.BackupStatusRepository
+import se.partee71.fonder.data.repository.FakeBackupRepository
+import se.partee71.fonder.domain.model.BackupTarget
+import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -167,7 +173,12 @@ class HemViewModelTest {
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
         fakeScheduler,
+        backupStatus,
     )
+
+    /** Backup-kontraktets innehåll (HEM-12) — tomt som standard, så påminnelsen syns bara i sina egna tester. */
+    private val fakeBackupRepo = FakeBackupRepository()
+    private val backupStatus by lazy { BackupStatusRepository(fakeBackupRepo, preferencesRepository) }
 
     @Before
     fun setUp() {
@@ -956,29 +967,6 @@ class HemViewModelTest {
     }
 
     @Test
-    fun `en molnbackup snurrar inga kort pa Hem`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        // SET-7 rör varken kurser, bytesplan eller referensfond. Kortens snurror ska därför
-        // stå stilla — bara chromets indikator (NAV-6) visar att något alls kör.
-        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            // Också metadatauppslaget måste ha landat innan riskkortet får bedömas: det är en
-            // egen (och legitim) anledning att snurra, och testet mäter molnbackupen.
-            while (state.loading || !state.backgroundWorkRunning || state.metadataWorking) state = awaitItem()
-            assertTrue(state.backgroundWorkRunning)
-            assertFalse(state.pricesWorking)
-            assertFalse(state.benchmarkWorking)
-            assertFalse(state.switchPlanWorking)
-            assertFalse(state.totalWorking)
-            assertFalse(state.riskWorking)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
     fun `refresh ber schemalaggaren om en forcerad kursuppdatering (UI-11)`() = runTest(dispatcher) {
         // Dragningen startar exakt den körning Inställningars borttagna knapp startade (SET-2),
         // och gör det via WorkManager — inte med en egen hämtning vid sidan av.
@@ -1420,6 +1408,75 @@ class HemViewModelTest {
         // Målnivån är den nivå bytet skulle fylla — annars föreslås alternativ på fel risk.
         assertEquals(4, watch.targetLevel)
         assertEquals(42L, watch.sourceRecordId)
+    }
+
+    // --- Påminnelse om säkerhetskopia (HEM-12) ---
+
+    private fun backupPayload(transactionCount: Int) = BackupPayload(
+        exportedAtEpochMillis = 0,
+        funds = listOf(Fund(fundId = "SHB1", name = "Fond A")),
+        transactions = (1..transactionCount).map { i ->
+            Transaction(id = i.toLong(), fundId = "SHB1", type = TransactionType.KOP, epochDay = 19_000L + i, shares = 1.0, pricePerShare = 100.0)
+        },
+    )
+
+    @Test
+    fun `ingen paminnelse utan data`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertFalse(vm.uiState.value.loading)
+            assertNull(vm.uiState.value.backupReminder)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `paminner nar data finns men ingen sakerhetskopia gjorts`() = runTest(dispatcher) {
+        fakeBackupRepo.payload.value = backupPayload(transactionCount = 2)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.backupReminder == null) state = awaitItem()
+            assertEquals(BackupReminder(newTransactions = 0, lastBackupEpochMillis = null), state.backupReminder)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `paminnelsen forsvinner efter en sakerhetskopia och kommer tillbaka med antal nya transaktioner`() = runTest(dispatcher) {
+        fakeBackupRepo.payload.value = backupPayload(transactionCount = 2)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.backupReminder == null) state = awaitItem()
+
+            backupStatus.recordBackup(BackupSerializer.encode(fakeBackupRepo.payload.value), BackupTarget.DRIVE, nowEpochMillis = 1_700_000_000_000L)
+            while (state.backupReminder != null) state = awaitItem()
+
+            fakeBackupRepo.payload.value = backupPayload(transactionCount = 5)
+            while (state.backupReminder == null) state = awaitItem()
+            assertEquals(BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_700_000_000_000L), state.backupReminder)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en andring som tas tillbaka ger ingen paminnelse`() = runTest(dispatcher) {
+        fakeBackupRepo.payload.value = backupPayload(transactionCount = 2)
+        backupStatus.recordBackup(BackupSerializer.encode(fakeBackupRepo.payload.value), BackupTarget.FILE, nowEpochMillis = 1_700_000_000_000L)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            awaitItem()
+            fakeBackupRepo.payload.value = backupPayload(transactionCount = 3)
+            fakeBackupRepo.payload.value = backupPayload(transactionCount = 2)
+            advanceUntilIdle()
+            assertNull(vm.uiState.value.backupReminder)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = FundMetadata(

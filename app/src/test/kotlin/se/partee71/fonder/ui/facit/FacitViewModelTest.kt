@@ -196,21 +196,6 @@ class FacitViewModelTest {
     }
 
     @Test
-    fun `summeringskortet star stilla under en molnbackup`() = runTest(dispatcher) {
-        setUpPrices()
-        records.value = listOf(record(id = 1))
-        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
-
-        viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertFalse(state.switchPlanWorking)
-            assertFalse(state.summaryWorking)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
     fun `visar rad med uppslagna fondnamn och berakat utfall`() = runTest(dispatcher) {
         setUpPrices()
         records.value = listOf(record(id = 1))
