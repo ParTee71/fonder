@@ -5,6 +5,7 @@ import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
@@ -43,6 +44,13 @@ data class BackupPayload(
      * i efterhand — kandidaterna ligger per definition inte i kurscachen (ANA-11).
      */
     val switchWatches: List<SwitchWatch> = emptyList(),
+    /**
+     * Bytesförslag användaren avstått från på Beslut (HEM-14), per fondpar och sort. Ett val som
+     * inte går att räkna fram i efterhand — tappas det dyker varje avstått förslag upp igen efter
+     * en återställning. Default tom lista, så en fil skriven före 0.63.0 läses som "inga
+     * avståenden" utan att [FORMAT_VERSION] höjs.
+     */
+    val suggestionDismissals: List<SuggestionDismissal> = emptyList(),
     val riskProfile: RiskProfile? = null,
     val accountType: AccountType? = null,
     val themeMode: ThemeMode = ThemeMode.AUTO,

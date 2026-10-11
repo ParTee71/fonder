@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
@@ -36,7 +37,9 @@ class RoomTransactionRepositoryTest {
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java,
         ).build()
-        repository = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao())
+        repository = RoomTransactionRepository(
+            db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(),
+        )
     }
 
     @After
@@ -84,6 +87,11 @@ class RoomTransactionRepositoryTest {
             ),
         )
 
+        // Avståenden (HEM-14) gäller en portfölj som inte längre finns efter tömningen.
+        db.suggestionDismissalDao().upsert(
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0001466368", kind = "RISK_PLAN", dismissedAtEpochDay = 100),
+        )
+
         repository.clearAll()
 
         assertTrue(repository.observeFunds().first().isEmpty())
@@ -91,6 +99,7 @@ class RoomTransactionRepositoryTest {
         assertTrue(db.fundPriceDao().getRange("SHB0000442", 0, 200).isEmpty())
         assertTrue(db.suggestionRecordDao().getAll().isEmpty())
         assertTrue(db.switchWatchDao().getAll().isEmpty())
+        assertTrue(db.suggestionDismissalDao().getAll().isEmpty())
     }
 
     @Test

@@ -55,8 +55,8 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   är borta sedan den tekniska uppgraderingen (Kotlin 2.4), men en höjning är ett eget steg med
   egen skärmdumpsdiff. Läs Vico 2.0.3-API:t i den befintliga filen – gissa inte efter nyare
   dokumentation.
-- **Färger bara ur temat:** `ChartSeriesColors.holding`/`candidate`, koppar (`secondary`) för
-  köpmarkörer. Paletten har bara två färger och cyklar (`colors[index % colors.size]`, Vicos
+- **Färger bara ur temat:** `ChartSeriesColors.holding` (blå, heldragen) och `candidate` (koppar,
+  streckad – jämförelser och referens), koppar (`secondary`) även för de lodräta köpmarkörerna. Paletten har bara två färger och cyklar (`colors[index % colors.size]`, Vicos
   `LineProvider.series`): i `SwitchWatchScreen` med två eller fler alternativ får den tredje kurvan
   samma färg som säljfonden. En utökad seriepalett hör hemma i `ChartSeriesColors` (skill `ui-style`).
 - **Serier namnges** i teckenförklaringen och i beskrivningen – aldrig bara färg (UI-3).

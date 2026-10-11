@@ -11,17 +11,16 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 15`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_14_15` ligger i `companion object` och samlas i `MIGRATIONS`.
-  Senaste: `MIGRATION_14_15` skapar `switch_watches` (bytesfönstret, NFR-1 issue #114).
-- Migreringstester: `Migration12Test … Migration1415Test` (ett per steg) i
+- `data/room/AppDatabase.kt` — `version = 16`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_15_16` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_15_16` skapar `suggestion_dismissals` (avstådda bytesförslag, HEM-14).
+- Migreringstester: `Migration12Test … Migration1516Test` (ett per steg) i
   `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
   jobbet `instrumented-tests` i `android.yml`, alltså bara i PR som rör `app/src/main`,
   `app/src/androidTest` eller byggfilerna (skill `ci-budget`).
 - `room.schemaLocation = $projectDir/schemas` är satt och `androidTest` mountar katalogen
-  som assets — men **schema-JSON:erna är inte incheckade** (`app/schemas/` finns inte i repot).
-  De genereras vid bygget. Det går därför inte att diffa schemat mellan versioner i en PR;
-  SQL:en i migreringen och testet är det enda som bevisar ändringen.
+  som assets. Schema-JSON:erna checkas in från och med version 15 (#125): `15.json`, `16.json`
+  … — en ny version committas med sin JSON, så schemat kan diffas i PR:en.
 
 ## Migreringstester byggs för hand här
 
@@ -37,7 +36,12 @@ Det betyder två saker:
 - **Ett test som glömmer en tabell missar inget.** Testet skapar bara de tabeller
   migreringen rör. Det är avsiktligt och gör testerna läsbara.
 
-Följ mönstret i det senaste `MigrationXYTest` när du skriver nästa.
+Följ mönstret i det senaste `MigrationXYTest` när du skriver nästa. Från och med
+`Migration1516Test` läses det gamla schemats `CREATE`-satser ur den incheckade, frysta
+`schemas/…/<version>.json` (androidTest-asset) och körs med rå `execSQL` — fortfarande inte
+`MigrationTestHelper` och aldrig den nuvarande entiteten. Skälet är `cpdCheck`: version 15 har åtta
+tabeller som alla måste finnas för Rooms schemaverifiering, och en tredje handskriven kopia av
+dem vore ny dubbelkod. Raderna med data skrivs fortfarande för hand.
 
 ## Procedur
 

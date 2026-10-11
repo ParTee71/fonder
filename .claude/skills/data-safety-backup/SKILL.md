@@ -43,7 +43,8 @@ ett `File` eller ett Drive-anrop i `BackupRepository` — den I/O:n ligger i sk�
 
 **Ingår** (fälten i `BackupPayload`, `formatVersion = 1`): fonder, transaktioner, samtliga
 inspelade förslag (`SuggestionRecord`, inkl. `followed`, `switchValueKr`, `batchEpochMillis`,
-`kind`), pågående och avslutade byten (`switchWatches`, ANA-12, #114), riskprofil (SET-3, inkl.
+`kind`), pågående och avslutade byten (`switchWatches`, ANA-12, #114), avstådda bytesförslag
+(`suggestionDismissals`, HEM-14), riskprofil (SET-3, inkl.
 legacy-fältet `targetRiskLevel`), kontotyp (SET-4), temaval och den egenvalda referensfonden
 (`chosenBenchmarkIsin`, HEM-10).
 

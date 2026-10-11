@@ -6,6 +6,8 @@ import org.junit.Test
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.SuggestionDismissal
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
@@ -78,6 +80,23 @@ class BackupFingerprintTest {
     fun `en kvittering av ett forslag ger ett annat fingeravtryck`() {
         val changed = payload.copy(suggestionRecords = listOf(record.copy(followed = false)))
         assertNotEquals(BackupFingerprint.of(payload), BackupFingerprint.of(changed))
+    }
+
+    @Test
+    fun `ett avstaende ar anvandarens val och ger ett annat fingeravtryck`() {
+        // HEM-14: att avstå är något användaren gjort — det ska påminna om en ny kopia.
+        val changed = payload.copy(suggestionDismissals = listOf(SuggestionDismissal("SE0000000001", "SE0000000002", dismissedAtEpochDay = 19_021)))
+        assertNotEquals(BackupFingerprint.of(payload), BackupFingerprint.of(changed))
+    }
+
+    @Test
+    fun `avstaendenas ordning fran databasen paverkar inte`() {
+        val a = SuggestionDismissal("SE0000000001", "SE0000000002", dismissedAtEpochDay = 19_021)
+        val b = SuggestionDismissal("SE0000000001", "SE0000000002", SuggestionKind.FEE, dismissedAtEpochDay = 19_022)
+        assertEquals(
+            BackupFingerprint.of(payload.copy(suggestionDismissals = listOf(a, b))),
+            BackupFingerprint.of(payload.copy(suggestionDismissals = listOf(b, a))),
+        )
     }
 
     @Test

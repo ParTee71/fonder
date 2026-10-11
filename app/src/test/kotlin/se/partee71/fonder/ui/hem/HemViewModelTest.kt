@@ -36,6 +36,7 @@ import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
@@ -124,7 +125,7 @@ class HemViewModelTest {
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
-        PendingDecisionsSource(preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo),
+        PendingDecisionsSource(preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo, FakeSuggestionDismissalRepository()),
         fakeScheduler,
         backupStatus,
     )

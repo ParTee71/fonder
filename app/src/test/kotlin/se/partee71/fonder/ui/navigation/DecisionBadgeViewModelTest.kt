@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.domain.model.SwitchWatch
@@ -45,6 +46,7 @@ class DecisionBadgeViewModelTest {
             switchWatchRepo,
             FakeCachedPriceRepository(),
             FakeFundMetadataRepository(),
+            FakeSuggestionDismissalRepository(),
         )
         val vm = DecisionBadgeViewModel(source)
 
