@@ -9,8 +9,8 @@
 # Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
 # padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
 # kontrolleras därför inte (skill shared-ui-components → Förbjudet).
-# Toppraden, Scaffold, plusknappen och navigeringsraden (AppNavigation) byggs om i M3 Expressive-steg 3
-# och står därför inte här än.
+# Scaffold är fortfarande tillåten i AppNavigation (skalet runt NavHost); topprad, flikrad och plusknapp
+# har sina delade komponenter sedan M3 Expressive-steg 3a.
 # Importrader och kommentarer kontrolleras inte.
 # Regexarna ska fungera både i JavaScript och Kotlin (ingen lookbehind).
 
@@ -37,6 +37,10 @@
 \b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton
 \b(Outlined|Basic)?TextField\s*[({]	AppTextField
 \bDialog\s*[({]	AppDialog / ConfirmDialog / LoadingDialog
+\b(Short|Flexible)?NavigationBar(Item)?\s*[({]	AppFloatingToolbar
+\b(Horizontal|Vertical)FloatingToolbar\s*[({]	AppFloatingToolbar
+\b[A-Za-z]*FloatingActionButton(Menu|MenuItem)?\s*[({]	AppFabMenu
+\b(CenterAligned|Medium|Large)?(Flexible)?TopAppBar\s*[({]	AppTopBar / AppTabHeading
 
 [component-only]
 \bPullToRefreshBox\b	PullToRefreshContainer

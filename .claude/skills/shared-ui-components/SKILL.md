@@ -27,7 +27,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Elementtyp | Komponent | Används i · det som gör den speciell |
 |---|---|---|
 | Kort | `AppCard` | Varje kort på varje skärm. `AppCardVariant.Outlined` (yta + svag kontur, standard), `Filled` (tonad, för rader inne i ett kort – Hems avgifts- och analysrader), `Error` (farozonen). 16 dp inre marginal (`contentPadding`; 0 för ett utfällbart kort vars klickyta går ut i kanten, Facit och Sålda). Med `onClick` en klickbar nod (UI-13). |
-| Knapp | `AppButton`, `AppIconButton` | Varje knapp. `AppButtonVariant.Primary`/`Tonal`/`Outlined`/`Text`/`Danger`; M3E-formmorf (`ButtonDefaults.shapes()`). Ikonknappen kräver `contentDescription` (UI-3, UI-13). |
+| Knapp | `AppButton`, `AppIconButton` | Varje knapp. `AppButtonVariant.Primary`/`Tonal`/`Outlined`/`Text`/`Danger`; M3E-formmorf (`ButtonDefaults.shapes()`). Ikonknappen kräver `contentDescription` (UI-3, UI-13); `AppIconButtonVariant.Tonal` = rund platta i ytvariant, Översiktens Inställningar. |
 | Textfält | `AppTextField` | Transaktionsformuläret, importerna, fondsök, ISIN-fältet, riskprofilens andelar. Konturerat, `shapes.extraSmall`; `label`, `keyboardOptions`, `suffix`, `supportingText`, `isError` (UI-13). |
 | Dialog | `AppDialog`, `ConfirmDialog`, `LoadingDialog` | `ConfirmDialog` före varje åtgärd som raderar eller ersätter data (Transaktioner, Inställningar) – `destructive` ger bekräftelseknappen i felfärgen; `AppDialog` för en enda åtgärd (`ImportCompleteDialog`); `LoadingDialog` för importernas blockerande väntan. 28 dp (UI-13). |
 | Kryssrad | `CheckRow` | Importernas rader, och via `FollowedToggleRow` "Genomförd". `toggleable` på hela raden, en nod med rollen kryssruta, ≥ 48 dp; `supportingText`, `labelStyle` (UI-3, UI-13). |
@@ -35,7 +35,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Förloppsstapel | `ProgressBar` | Fondsökens katalogladdning. M3E:s vågiga stapel, obestämd utan `progress` (UI-13). |
 | Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
 | Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Sålda, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
-| Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i toppradens `actions` (`AppNavigation`) och renderar ingenting i vila. |
+| Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i flikrubrikens och topprads åtgärder (`AppNavigation`) och renderar ingenting i vila. |
 | Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). Indikatorn är `PullToRefreshDefaults.LoadingIndicator`. |
 | Ett val bland några (knappgrupp) | `ChoiceChipRow`, `ConnectedChoiceButton` | Tema, kontotyp (Inställningar), riskenkäten; `ConnectedChoiceButton` även i `FundLineChart`s periodrad. Sammanhängande M3E-knappgrupp (`ToggleButton` med `ButtonGroupDefaults`-former), läses som radioval (UI-12). `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
 | Dropdown | `SelectField` | Fondsök, transaktionsformuläret, importerna. `clearOptionLabel` ger ett "alla/inget"-val överst. |
@@ -51,6 +51,9 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
 | Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Tonad i ytvariant (`surfaceVariant`, kortens rundning), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
 | Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar `AppDialog`, inte en fullskärmsvy. |
+| Flikrad | `AppFloatingToolbar` (+ `AppToolbarTab`) | `AppNavigation`. M3E `HorizontalFloatingToolbar`, yta med svag kontur och full rundning; vald flik = primärbehållare med ikon + namn, ovalda bara ikon; valfritt kopparmärke (`badgeCount`). `Role.Tab` + valt-läge, ≥ 48 dp (NAV-7, UI-14). |
+| Plusknapp med meny | `AppFabMenu` (+ `AppFabMenuItem`, `AppFabMenuDefaults`) | `AppNavigation`. M3E `FloatingActionButtonMenu` + `ToggleFloatingActionButton`, primär, "+" fyrkantigt rundad → "×" rund; val som pills i primärbehållaren; bakåt stänger (NAV-8, UI-14). |
+| Topprad / flikrubrik | `AppTopBar`, `AppTabHeading` | `AppNavigation`. `AppTopBar` = bakåtpil + rubrik på skärmar djupare i stacken (UI-8); `AppTabHeading` = flikens stora rubrik med åtgärder, läses som rubrik (NAV-7). |
 
 ## Diagram (`ui/diagram/`)
 
@@ -119,8 +122,8 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 - **Feature-kod** (ui-paket utom `ui/components`, `ui/diagram`, `ui/theme`): nya råa
   Material 3-komponenter som har en delad motsvarighet ovan (`Card`/`Surface`, `ListItem`,
   `AlertDialog`/`Dialog`, knappar och ikonknappar, textfält, datumväljare, `DropdownMenu`, chips,
-  progressindikatorer, `Badge`, `Checkbox`). Kvar till M3 Expressive steg 3: `TopAppBar`, `Scaffold`,
-  `FloatingActionButton` och `NavigationBar` i `AppNavigation`, samt `HorizontalDivider`;
+  progressindikatorer, `Badge`, `Checkbox`, `NavigationBar`, flytande verktygsrad, `FloatingActionButton`,
+  `TopAppBar`). Kvar: `Scaffold` i `AppNavigation` och `HorizontalDivider`;
   hårdkodade `Color(…)`, `RoundedCornerShape(…)`, `fontSize`/`lineHeight`/`letterSpacing`,
   `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.
 - **All kod utom `ui/diagram/`:** Vico.

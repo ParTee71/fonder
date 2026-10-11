@@ -1,45 +1,58 @@
 package se.partee71.fonder.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material.icons.outlined.Sell
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.ui.graphics.vector.ImageVector
+import se.partee71.fonder.R
 
-/** Toppnivåskärmar som visas i navigeringsraden. */
+/**
+ * Flikarna i den flytande flikraden (NAV-1, NAV-7), i ordning. Rutterna är desamma som före
+ * flikbytet – Beslut är tills vidare Facit-skärmen och bär därför [Routes.FACIT] (steg 3b bygger
+ * den riktiga Beslut-skärmen).
+ */
 enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
-    Hem("hem", Icons.Outlined.Home, se.partee71.fonder.R.string.nav_hem),
-    Portfolj("portfolj", Icons.Outlined.PieChart, se.partee71.fonder.R.string.nav_portfolj),
-    Transaktioner("transaktioner", Icons.Outlined.SwapVert, se.partee71.fonder.R.string.nav_transaktioner),
-    Salda("salda", Icons.Outlined.Sell, se.partee71.fonder.R.string.nav_salda),
-    Settings("settings", Icons.Outlined.Settings, se.partee71.fonder.R.string.nav_settings);
+    Oversikt("hem", Icons.Outlined.Home, R.string.nav_oversikt),
+    Innehav("portfolj", Icons.Outlined.PieChart, R.string.nav_innehav),
+    Beslut(Routes.FACIT, Icons.Outlined.TaskAlt, R.string.nav_beslut),
+    Handelser("transaktioner", Icons.AutoMirrored.Outlined.List, R.string.nav_handelser);
 
     companion object {
-        val START = Hem
+        val START = Oversikt
+
+        /** Fliken för en rutt, eller null för en skärm djupare i stacken. */
+        fun forRoute(route: String?): Screen? = entries.firstOrNull { it.route == route }
     }
 }
 
 /**
- * Rubrik för en icke-toppnivårutt (toppnivåernas titlar bor i [Screen.labelRes]). Null för en
- * okänd rutt — då visas ingen `TopAppBar` alls, i stället för en tom.
+ * Rubrik för en skärm djupare i stacken (flikarnas rubriker bor i [Screen.labelRes]). Null för en
+ * okänd rutt — då visas ingen topprad alls, i stället för en tom.
  */
 fun titleResFor(route: String?): Int? = when (route) {
-    Routes.FOND -> se.partee71.fonder.R.string.fond_title
-    Routes.FUND_SEARCH -> se.partee71.fonder.R.string.fondsok_title
-    Routes.TRANSACTION_FORM -> se.partee71.fonder.R.string.transaktionsform_title
-    Routes.IMPORT_HOLDINGS -> se.partee71.fonder.R.string.import_title
-    Routes.IMPORT_ORDERS -> se.partee71.fonder.R.string.import_orders_title
-    Routes.RISK_PROFILE -> se.partee71.fonder.R.string.riskprofil_title
-    Routes.FACIT -> se.partee71.fonder.R.string.facit_title
-    Routes.BENCHMARK_PICKER -> se.partee71.fonder.R.string.settings_benchmark_section
-    Routes.SWITCH_WATCH -> se.partee71.fonder.R.string.switch_watch_title
-    Routes.SWITCH_WATCH_PICKER -> se.partee71.fonder.R.string.switch_watch_add_candidate
+    Routes.SETTINGS -> R.string.nav_settings
+    Routes.SOLD -> R.string.sold_funds_title
+    Routes.FOND -> R.string.fond_title
+    Routes.FUND_SEARCH -> R.string.fondsok_title
+    Routes.TRANSACTION_FORM -> R.string.transaktionsform_title
+    Routes.IMPORT_HOLDINGS -> R.string.import_title
+    Routes.IMPORT_ORDERS -> R.string.import_orders_title
+    Routes.RISK_PROFILE -> R.string.riskprofil_title
+    Routes.BENCHMARK_PICKER -> R.string.settings_benchmark_section
+    Routes.SWITCH_WATCH -> R.string.switch_watch_title
+    Routes.SWITCH_WATCH_PICKER -> R.string.switch_watch_add_candidate
     else -> null
 }
 
 object Routes {
+    /** Inställningar — sedan NAV-7 en skärm bakom ikonen på Översikt, inte en flik. */
+    const val SETTINGS = "settings"
+
+    /** Sålda fonder (SLD-1) — sedan NAV-7 en länk från Händelser, inte en flik (steg 3c slår ihop listorna). */
+    const val SOLD = "salda"
+
     /** Fonddetalj för ett givet fundId (Handelsbankens fondlista-id, se issue #2/#3). */
     const val FOND = "fond/{fundId}"
     fun fond(fundId: String) = "fond/$fundId"
@@ -59,8 +72,10 @@ object Routes {
     /** Riskprofil — engångsenkät + målrisknivå, nås från Inställningar (SET-3, issue #68). */
     const val RISK_PROFILE = "risk-profile"
 
-    /** Facit — utfallet av bytesplanens inspelade förslag, nås från Inställningar (SET-5, issue #80). */
+    /** Fondsök i valläge för jämförelsefonden (HEM-10). */
     const val BENCHMARK_PICKER = "benchmark_picker"
+
+    /** Facit — utfallet av bytesplanens inspelade förslag (SET-5, issue #80); tills vidare fliken Beslut (NAV-7). */
     const val FACIT = "facit"
 
     /** Pågående byte — perioden mellan sälj och köp med de bevakade alternativen (ANA-12, issue #114). */

@@ -4,6 +4,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -81,6 +82,15 @@ fun AppButton(
     }
 }
 
+/** Ikonknappens tyngd. Standard är den genomskinliga; [Tonal] är den fristående ikonknappen i en rubrikrad. */
+enum class AppIconButtonVariant {
+    /** Genomskinlig: ikonen ensam, i radens egen färg (stäng, ta bort, bakåt). */
+    Standard,
+
+    /** Tonad: rund platta i ytvariant med ikonen i primärfärgen — Översiktens Inställningar (NAV-7). */
+    Tonal,
+}
+
 /**
  * Ikonknapp med samma formmorf som [AppButton] (UI-13). [contentDescription] är obligatorisk: en
  * knapp som bara är en ikon säger annars ingenting till skärmläsaren (UI-3). Tryckytan är M3:s
@@ -94,8 +104,22 @@ fun AppIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    variant: AppIconButtonVariant = AppIconButtonVariant.Standard,
 ) {
-    IconButton(onClick = onClick, shapes = IconButtonDefaults.shapes(), modifier = modifier, enabled = enabled) {
-        Icon(icon, contentDescription = contentDescription)
+    val content: @Composable () -> Unit = { Icon(icon, contentDescription = contentDescription) }
+    when (variant) {
+        AppIconButtonVariant.Standard ->
+            IconButton(onClick = onClick, shapes = IconButtonDefaults.shapes(), modifier = modifier, enabled = enabled, content = content)
+        AppIconButtonVariant.Tonal -> FilledTonalIconButton(
+            onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = modifier,
+            enabled = enabled,
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ),
+            content = content,
+        )
     }
 }

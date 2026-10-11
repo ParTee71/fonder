@@ -24,10 +24,19 @@
     <string name="sign_out">Logga ut</string>
 
     <!-- Navigation / skärmar -->
-    <string name="nav_hem">Hem</string>
-    <string name="nav_portfolj">Portfölj</string>
-    <string name="nav_transaktioner">Transaktioner</string>
-    <string name="nav_salda">Sålda</string>
+    <!-- Flikarna (NAV-1, NAV-7) och plusmenyn (NAV-8) -->
+    <string name="nav_oversikt">Översikt</string>
+    <string name="nav_innehav">Innehav</string>
+    <string name="nav_beslut">Beslut</string>
+    <string name="nav_handelser">Händelser</string>
+    <string name="format_toolbar_tab_badge">%1$s, %2$d nya</string>
+    <string name="fab_menu_open">Lägg till</string>
+    <string name="fab_menu_close">Stäng meny</string>
+    <string name="fab_menu_expanded">Utfälld</string>
+    <string name="fab_menu_collapsed">Ihopfälld</string>
+    <string name="fab_import_orders">Importera avräkningsnota</string>
+    <string name="fab_import_holdings">Importera innehav</string>
+    <string name="fab_watch_fund">Bevaka ny fond</string>
     <string name="nav_fond">Fond</string>
     <string name="nav_settings">Inställningar</string>
 
@@ -120,6 +129,7 @@
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
 
     <!-- Sålda fonder — realiserat resultat (issue #10) -->
+    <string name="sold_funds_title">Sålda fonder</string>
     <string name="sold_funds_empty_title">Inga sälj ännu</string>
     <string name="sold_funds_empty_body">Realiserat resultat visas här när du säljer andelar i en fond.</string>
     <string name="sold_funds_total_title">Totalt realiserat resultat</string>
@@ -256,7 +266,6 @@
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
     <string name="fondsok_pick">Välj</string>
     <string name="fondsok_added">Tillagd</string>
-    <string name="fondsok_fab">Lägg till fond</string>
     <string name="fondsok_company_label">Fondbolag</string>
     <string name="fondsok_company_all">Alla fondbolag</string>
 
