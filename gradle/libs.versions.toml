@@ -29,9 +29,9 @@ googleAuthPlayServices  = "21.3.0"
 googleApiClientAndroid  = "2.7.0"
 googleApiServicesDrive  = "v3-rev20241206-2.0.0"
 # UI-beroenden för kommande features (aktiveras i respektive issue)
-# Vico 2.0.3 valdes mot det tidigare Kotlin 2.1.0. Med Kotlin 2.4 går nyare Vico att läsa,
-# men en höjning tas i ett eget steg med skärmdumpsdiff (skill diagram).
-vico                    = "2.0.3"
+# Vico 2.5.2 = senaste 2.x. Vico 3 ändrar y-axelns steg/etiketter (synlig skärmdumpsdiff) –
+# höjning till 3 är ett eget steg med mockup och nya skärmdumpar (skill diagram).
+vico                    = "2.5.2"
 shimmer                 = "1.3.2"
 material3Adaptive       = "1.0.0"
 junit                   = "4.13.2"
@@ -43,17 +43,15 @@ roomTesting             = "2.8.5"
 okhttp                  = "4.12.0"
 jsoup                   = "1.17.2"
 pdfboxAndroid           = "2.0.27.0"
-# Kontroller och JVM-UI-tester (verkstads-PR:en, regel 2 och 4). Versionerna valdes mot det
-# tidigare Kotlin 2.1.0; med Kotlin 2.4 kan de höjas i ett eget steg.
-# - Robolectric är ren Java (inget Kotlin-metadata); 4.16.1 kör SDK 34 på JDK 17
-#   (SDK 35+ kräver Java 21 i Robolectric – se robolectric.properties).
-# - Roborazzi 1.60.0 (Kotlin-metadata 2.0).
-# - Konsist 0.17.3 har metadata 1.8 och tolkar källkoden med kotlin-compiler-embeddable
-#   2.0.21 (bara testets körklassväg); 0.18 drar in kotlin-stdlib 2.4.
+# Kontroller och JVM-UI-tester (regel 2 och 4).
+# - Robolectric är ren Java (inget Kotlin-metadata); sdk=34 i robolectric.properties eftersom
+#   SDK 35+ kräver Java 21 i Robolectric och CI kör JDK 17.
+# - Konsist tolkar källkoden med kotlin-compiler-embeddable i samma version som projektets
+#   Kotlin (bara testets körklassväg) – höj Konsist i takt med Kotlin.
 # - PMD (CPD i cpdCheck) är ren Java och körs via sin CLI i en egen konfiguration.
-robolectric             = "4.16.1"
-roborazzi               = "1.60.0"
-konsist                 = "0.17.3"
+robolectric             = "4.17"
+roborazzi               = "1.76.0"
+konsist                 = "0.18.1"
 pmd                     = "7.28.0"
 
 [libraries]
