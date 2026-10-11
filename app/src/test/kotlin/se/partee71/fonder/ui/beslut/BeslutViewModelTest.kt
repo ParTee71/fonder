@@ -20,6 +20,7 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.domain.model.AccountType
@@ -29,11 +30,14 @@ import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.DownturnReaction
+import se.partee71.fonder.domain.model.SuggestionDismissal
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
@@ -61,12 +65,14 @@ class BeslutViewModelTest {
     private val priceRepo = FakeCachedPriceRepository()
     private val metadataRepo = FakeFundMetadataRepository()
     private val scheduler = FakeFundPriceRefreshScheduler()
+    private val dismissalRepo = FakeSuggestionDismissalRepository()
 
     private fun viewModel() = BeslutViewModel(
-        PendingDecisionsSource(preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo),
+        PendingDecisionsSource(preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo, dismissalRepo),
         preferencesRepository,
         suggestionRepo,
         switchWatchRepo,
+        dismissalRepo,
         scheduler,
     )
 
@@ -318,6 +324,91 @@ class BeslutViewModelTest {
             assertTrue(state.decisions.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Avstå (HEM-14) ---
+
+    @Test
+    fun `avsta doljer forslaget och tar det ur antalet - angra visar det igen`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.switchPlan.isEmpty()) state = awaitItem()
+            val suggestion = state.decisions.switchPlan.single()
+            assertEquals(1, state.decisions.count)
+
+            vm.dismissSuggestion(suggestion)
+
+            while (state.decisions.switchPlan.isNotEmpty()) state = awaitItem()
+            assertEquals(listOf(42L), state.decisions.dismissedSuggestions.map { it.recordId })
+            // Märket, "Att besluta" och fliken läser samma antal (NAV-9, HEM-13).
+            assertEquals(0, state.decisions.count)
+            // Utan plan och pågående byte är fliken tom — avståendet ligger kvar i sin egen rad.
+            assertTrue(state.isEmpty)
+            // Förslaget självt rörs inte: det är fortfarande ett givet råd i facit (SET-5).
+            assertNull(suggestionRepo.records.value.single().followed)
+            assertEquals(
+                listOf(SuggestionDismissal("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now().toEpochDay())),
+                dismissalRepo.dismissals.value,
+            )
+
+            vm.undoDismissal(suggestion)
+
+            while (state.decisions.switchPlan.isEmpty()) state = awaitItem()
+            assertTrue(state.decisions.dismissedSuggestions.isEmpty())
+            assertEquals(1, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett avstaende overlever att planen spelas in pa nytt nasta dag`() = runTest(dispatcher) {
+        // Planen spelas in på nytt varje dygn med en ny rad (nytt id) för samma par — ett
+        // avstående knutet till raden hade släppt igenom förslaget i morgon.
+        setUpSwitchPlan()
+        val yesterday = LocalDate.now().minusDays(1)
+        suggestionRepo.records.value = listOf(planRecord(id = 1, epochDay = yesterday.toEpochDay()))
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, yesterday)
+        suggestionRepo.records.value += planRecord(id = 2, batch = 5_000)
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.dismissedSuggestions.isEmpty()) state = awaitItem()
+            assertTrue(state.decisions.switchPlan.isEmpty())
+            assertEquals(2L, state.decisions.dismissedSuggestions.single().recordId)
+            assertEquals(0, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett utganget avstaende visar forslaget igen`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now().minusDays(SuggestionDismissals.TTL_DAYS + 1))
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val state = loadedPlan(viewModel())
+        assertEquals(42L, state.decisions.switchPlan.single().recordId)
+        assertTrue(state.decisions.dismissedSuggestions.isEmpty())
+        assertEquals(1, state.decisions.count)
+    }
+
+    @Test
+    fun `folj markerar forslaget som genomfort`() = runTest(dispatcher) {
+        // "Följ" är samma kvittering som "Genomförd" (SET-5) — den skriver mot inspelningen.
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        val vm = viewModel()
+        loadedPlan(vm)
+        vm.setSwitchFollowed(42, true)
+        advanceUntilIdle()
+
+        assertEquals(true, suggestionRepo.records.value.single().followed)
     }
 
     // --- Omräkning av bytesplanen på begäran (HEM-8, issue #88) ---

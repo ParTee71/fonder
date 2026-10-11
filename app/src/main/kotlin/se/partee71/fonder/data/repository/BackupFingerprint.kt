@@ -29,6 +29,8 @@ import java.security.MessageDigest
  * - En bevakning som **gått ut** (`UTGANGEN`) stängs av bakgrundskörningen och räknas som öppen;
  *   användarens egna stängningar (köpt, avbruten) räknas.
  *
+ * Avståendena (HEM-14) är användarens val och räknas oförändrade.
+ *
  * Listorna sorteras, eftersom Room inte lovar någon ordning utan `ORDER BY`.
  */
 object BackupFingerprint {
@@ -40,6 +42,7 @@ object BackupFingerprint {
             transactions = payload.transactions.sortedBy { it.id },
             suggestionRecords = payload.suggestionRecords.filter { it.followed != null }.sortedBy { it.id },
             switchWatches = payload.switchWatches.map(::userPart).sortedBy { it.id },
+            suggestionDismissals = payload.suggestionDismissals.sortedWith(compareBy({ it.sellIsin }, { it.buyIsin }, { it.kind })),
         )
         val digest = MessageDigest.getInstance("SHA-256").digest(BackupSerializer.encode(normalized).toByteArray())
         return digest.joinToString("") { "%02x".format(it) }

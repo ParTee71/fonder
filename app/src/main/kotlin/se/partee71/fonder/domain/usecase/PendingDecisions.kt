@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.mapLatest
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.FundPrice
@@ -36,13 +37,21 @@ data class OpenSwitchWatch(
 )
 
 /**
- * Det som väntar på ett beslut (NAV-9, HEM-13): bytesplanen (HEM-8) och de öppna pågående bytena
- * (ANA-12). En källa för fliken Beslut, Översiktens "Att besluta"-rad och flikradens kopparmärke,
+ * Det som väntar på ett beslut (NAV-9, HEM-13): bytesplanen (HEM-8) utan avstådda byten (HEM-14)
+ * och de öppna pågående bytena (ANA-12). En källa för fliken Beslut, Översiktens "Att besluta"-rad och flikradens kopparmärke,
  * så de tre aldrig kan visa olika antal.
  */
 data class PendingDecisions(
-    /** Den senast inspelade planen, resolvad med [SwitchPlanResolver] — tom utan ISK/KF eller med en för gammal plan. */
+    /**
+     * Den senast inspelade planen, resolvad med [SwitchPlanResolver] — tom utan ISK/KF eller med en
+     * för gammal plan — **utan** de byten användaren avstått från (HEM-14).
+     */
     val switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
+    /**
+     * Planens byten som användaren avstått från och som fortfarande gäller ([SuggestionDismissals]).
+     * Räknas inte i [count]; Beslut listar dem längst ned så ett avstående kan ångras.
+     */
+    val dismissedSuggestions: List<SwitchPlanResolver.Suggestion> = emptyList(),
     /** Öppna bevakningar som inte passerat [SwitchWatchCalc.WATCH_TTL_DAYS], i repositoriets ordning. */
     val openWatches: List<OpenSwitchWatch> = emptyList(),
     /**
@@ -52,13 +61,16 @@ data class PendingDecisions(
      */
     val watchedSellIsins: Set<String> = emptySet(),
 ) {
-    /** Förslag användaren ännu inte markerat som genomförda (SET-5) — ett kvitterat byte är redan beslutat. */
+    /**
+     * Förslag användaren ännu inte markerat som genomförda (SET-5) — ett kvitterat byte är redan
+     * beslutat, och ett avstått (HEM-14) ligger inte i [switchPlan].
+     */
     val openSuggestionCount: Int get() = switchPlan.count { !it.followed }
 
     /** Antalet på Beslut-flikens märke och i "Att besluta": öppna förslag plus pågående byten. */
     val count: Int get() = openSuggestionCount + openWatches.size
 
-    /** Ingenting att visa på Beslut — varken en plan eller ett pågående byte. */
+    /** Ingenting att besluta på Beslut — varken ett förslag som inte avståtts eller ett pågående byte. */
     val isEmpty: Boolean get() = switchPlan.isEmpty() && openWatches.isEmpty()
 }
 
@@ -78,11 +90,18 @@ class PendingDecisionsSource @Inject constructor(
     private val switchWatchRepository: SwitchWatchRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
+    private val suggestionDismissalRepository: SuggestionDismissalRepository,
 ) {
 
     fun observe(): Flow<PendingDecisions> =
-        combine(switchPlan(), switchWatches()) { plan, (open, watchedSellIsins) ->
-            PendingDecisions(switchPlan = plan, openWatches = open, watchedSellIsins = watchedSellIsins)
+        combine(switchPlan(), suggestionDismissalRepository.observeAll(), switchWatches()) { plan, dismissals, (open, watchedSellIsins) ->
+            val (visible, dismissed) = SuggestionDismissals.partition(plan, dismissals, LocalDate.now())
+            PendingDecisions(
+                switchPlan = visible,
+                dismissedSuggestions = dismissed,
+                openWatches = open,
+                watchedSellIsins = watchedSellIsins,
+            )
         }
 
     private fun switchPlan(): Flow<List<SwitchPlanResolver.Suggestion>> =

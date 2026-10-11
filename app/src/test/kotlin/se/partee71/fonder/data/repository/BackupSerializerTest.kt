@@ -1,6 +1,7 @@
 package se.partee71.fonder.data.repository
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -15,6 +16,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
@@ -102,6 +104,10 @@ class BackupSerializerTest {
                 boughtIsin = "SE0001466368",
                 closeReason = SwitchWatchCloseReason.KOPT,
             ),
+        ),
+        suggestionDismissals = listOf(
+            SuggestionDismissal(sellIsin = "SE0000582033", buyIsin = "SE0001466368", dismissedAtEpochDay = 19_810),
+            SuggestionDismissal(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE, dismissedAtEpochDay = 19_420),
         ),
         riskProfile = RiskProfile(
             targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
@@ -191,10 +197,14 @@ class BackupSerializerTest {
         assertEquals(
             setOf(
                 "formatVersion", "exportedAtEpochMillis", "funds", "transactions",
-                "suggestionRecords", "switchWatches", "riskProfile", "accountType", "themeMode",
-                "chosenBenchmarkIsin",
+                "suggestionRecords", "switchWatches", "suggestionDismissals", "riskProfile", "accountType",
+                "themeMode", "chosenBenchmarkIsin",
             ),
             root.keys,
+        )
+        assertEquals(
+            setOf("sellIsin", "buyIsin", "kind", "dismissedAtEpochDay"),
+            root.getValue("suggestionDismissals").jsonArray.first().jsonObject.keys,
         )
         assertEquals(
             setOf("fundId", "name", "currency", "isin", "fondlistaFundId"),
@@ -262,6 +272,49 @@ class BackupSerializerTest {
 
         assertTrue(restored.switchWatches.isEmpty())
         assertEquals(3, restored.suggestionRecords.size)
+    }
+
+    @Test
+    fun `avstaenden overlever med par, sort och datum`() {
+        // HEM-14: ett val som inte går att räkna fram — tappas det kommer varje avstått förslag
+        // tillbaka efter en återställning.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+
+        assertEquals(
+            listOf(
+                SuggestionDismissal("SE0000582033", "SE0001466368", SuggestionKind.RISK_PLAN, 19_810),
+                SuggestionDismissal("SE0000582033", "SE0005991445", SuggestionKind.FEE, 19_420),
+            ),
+            restored.suggestionDismissals,
+        )
+    }
+
+    @Test
+    fun `en fil utan suggestionDismissals lases som inga avstaenden`() {
+        // Filer skrivna före 0.63.0 saknar nyckeln. Tillagt fält med default — FORMAT_VERSION
+        // höjs inte, och filen ska läsas, inte avvisas.
+        val root = Json.parseToJsonElement(BackupSerializer.encode(fullPayload())).jsonObject
+        val utanAvstaenden = JsonObject(root.filterKeys { it != "suggestionDismissals" }).toString()
+
+        val restored = BackupSerializer.decode(utanAvstaenden).getOrThrow()
+
+        assertTrue(restored.suggestionDismissals.isEmpty())
+        assertEquals(3, restored.suggestionRecords.size)
+        assertEquals(2, restored.switchWatches.size)
+    }
+
+    @Test
+    fun `ett avstaende utan kind lases som bytesplansbyte`() {
+        // Tolerant mot ett saknat fält inne i listan: defaulten är bytesplanen, som Beslut visar.
+        val root = Json.parseToJsonElement(BackupSerializer.encode(fullPayload())).jsonObject
+        val dismissals = root.getValue("suggestionDismissals").jsonArray
+            .map { JsonObject(it.jsonObject.filterKeys { key -> key != "kind" }) }
+        val utanKind = JsonObject(root + ("suggestionDismissals" to JsonArray(dismissals))).toString()
+
+        val restored = BackupSerializer.decode(utanKind).getOrThrow()
+
+        assertEquals(2, restored.suggestionDismissals.size)
+        assertTrue(restored.suggestionDismissals.all { it.kind == SuggestionKind.RISK_PLAN })
     }
 
     @Test

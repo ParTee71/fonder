@@ -57,7 +57,7 @@ Testernas paketstruktur **speglar** `main`: en ViewModel i `ui/settings/` testas
 
 | Hjälpare | Var | Ersätter |
 |---|---|---|
-| `FakeFundMetadataRepository`, `FakeSwitchWatchRepository`, `FakeSuggestionRecordRepository`, `FakeCachedPriceRepository` | `app/src/test/…/data/repository/` | egna fakes per test |
+| `FakeFundMetadataRepository`, `FakeSwitchWatchRepository`, `FakeSuggestionRecordRepository`, `FakeSuggestionDismissalRepository`, `FakeCachedPriceRepository` | `app/src/test/…/data/repository/` | egna fakes per test |
 | `testPreferencesRepository` | `app/src/test/…/testing/TestPreferences.kt` | egen DataStore-uppställning per test (på testets dispatcher) |
 | `FakeFundPriceRefreshScheduler` | `app/src/test/…/worker/` | egen schemaläggare i ViewModel-tester |
 | `captureLightAndDark` (extension på compose-regeln; `animated` för oändliga animationer, `screen` för dialoger, `ready = { isDrawn() }` för diagram) | `app/src/test/…/testing/Screenshots.kt` | egna Roborazzi-anrop och egen temaväxling. Anropa aldrig `captureRoboImage(path) { … }` bredvid en `createComposeRule` – det startar ett andra fönster och bilden blir tom |

@@ -17,6 +17,7 @@ import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
+import se.partee71.fonder.data.room.daos.SuggestionDismissalDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
@@ -72,4 +73,7 @@ object AppModule {
 
     @Provides
     fun provideSwitchWatchDao(db: AppDatabase): SwitchWatchDao = db.switchWatchDao()
+
+    @Provides
+    fun provideSuggestionDismissalDao(db: AppDatabase): SuggestionDismissalDao = db.suggestionDismissalDao()
 }

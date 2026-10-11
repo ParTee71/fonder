@@ -8,6 +8,7 @@ import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundMetadataDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
+import se.partee71.fonder.data.room.daos.SuggestionDismissalDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
@@ -15,6 +16,7 @@ import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
+import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
@@ -30,8 +32,9 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SuggestionRecordEntity::class,
         SwitchWatchEntity::class,
         SwitchWatchCandidateEntity::class,
+        SuggestionDismissalEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fundMetadataDao(): FundMetadataDao
     abstract fun suggestionRecordDao(): SuggestionRecordDao
     abstract fun switchWatchDao(): SwitchWatchDao
+    abstract fun suggestionDismissalDao(): SuggestionDismissalDao
 
     companion object {
         const val NAME = "fonder.db"
@@ -379,6 +383,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 15 → 16 (HEM-14): `suggestion_dismissals` — bytesförslag användaren **avstått**
+         * från på Beslut, nycklade på fondparet och sorten.
+         *
+         * En egen tabell och inte en kolumn på `suggestion_records`: planen spelas in på nytt
+         * varje dygn med en ny rad för samma sälj → köp, så en flagga på raden hade försvunnit
+         * nästa dag och förslaget kommit tillbaka. Helt ny tabell, inga befintliga rader rörs.
+         * Genuin användardata (ett val, NFR-1) och därför med i backup-kontraktet.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `suggestion_dismissals` (
+                        `sellIsin` TEXT NOT NULL,
+                        `buyIsin` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `dismissedAtEpochDay` INTEGER NOT NULL,
+                        PRIMARY KEY(`sellIsin`, `buyIsin`, `kind`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -394,6 +423,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
+            MIGRATION_15_16,
         )
     }
 }

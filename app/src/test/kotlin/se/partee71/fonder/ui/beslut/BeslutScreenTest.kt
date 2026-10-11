@@ -1,6 +1,8 @@
 package se.partee71.fonder.ui.beslut
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -40,7 +42,7 @@ class BeslutScreenTest {
         answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
     )
 
-    /** Mockupens läge: ett pågående byte, två förslag (ett kvitterat) och sju följda i facit. */
+    /** Mockupens läge: ett pågående byte, två förslag (ett med Följ/Avstå, ett kvitterat) och sju följda i facit. */
     private val full = BeslutUiState(
         loading = false,
         riskProfile = balanced,
@@ -66,6 +68,11 @@ class BeslutScreenTest {
                 ),
             ),
         ),
+    )
+
+    /** Allt i planen avstått (HEM-14): inget att besluta, men raden för att ångra finns kvar. */
+    private val withDismissed = full.copy(
+        decisions = PendingDecisions(dismissedSuggestions = listOf(full.decisions.switchPlan.first())),
     )
 
     @Test
@@ -115,8 +122,76 @@ class BeslutScreenTest {
     }
 
     @Test
+    fun `folj och avsta visas pa ett okvitterat forslag och anropar sina callbacks`() {
+        // HEM-14: "Följ" är kvitteringen (SET-5), "Avstå" döljer paret.
+        var followed: Pair<Long, Boolean>? = null
+        var dismissed: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = full,
+                    onSwitchFollowedChange = { id, value -> followed = id to value },
+                    onDismissSuggestion = { dismissed = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Avstå"))
+        // Bara det okvitterade förslaget har knapparna; det kvitterade visar "Genomförd".
+        composeRule.onAllNodesWithText("Följ").assertCountEquals(1)
+        composeRule.onNodeWithText("Avstå").performClick()
+        composeRule.onNodeWithText("Följ").performClick()
+
+        assertEquals(11L, dismissed?.recordId)
+        assertEquals(11L to true, followed)
+    }
+
+    @Test
+    fun `ett kvitterat forslag visar Genomford i stallet for Folj och Avsta`() {
+        var followed: Pair<Long, Boolean>? = null
+        composeRule.setContent {
+            FonderTheme { BeslutContent(state = full, onSwitchFollowedChange = { id, value -> followed = id to value }) }
+        }
+
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Genomförd"))
+        composeRule.onNodeWithText("Genomförd").performClick()
+
+        // Kvitteringen ångras på samma sätt som i Facit och Fonddetalj.
+        assertEquals(12L to false, followed)
+    }
+
+    @Test
+    fun `avstadda forslag ligger sist och kan angras`() {
+        var undone: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme { BeslutContent(state = withDismissed, onUndoDismissal = { undone = it }) }
+        }
+
+        composeRule.onNodeWithText("Inget att besluta just nu").assertIsDisplayed()
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Avstådda (1)"))
+        composeRule.onNodeWithText("Avstådda (1)").performClick()
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Ångra"))
+        composeRule.onNodeWithText("1. Sälj Tillväxtmarknad Bred (nivå 6) → Köp Global Indexfond A (nivå 4)").assertIsDisplayed()
+        composeRule.onNodeWithText("Ångra").performClick()
+
+        assertEquals(11L, undone?.recordId)
+    }
+
+    @Test
+    fun `utan avstadda forslag visas ingen avstadda-rad`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
+
+        composeRule.onNodeWithText("Avstådda", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `skärmdump med byte förslag och facit`() = composeRule.captureLightAndDark("BeslutScreen_full") {
         BeslutContent(state = full)
+    }
+
+    @Test
+    fun `skärmdump med ett avstått förslag`() = composeRule.captureLightAndDark("BeslutScreen_dismissed") {
+        BeslutContent(state = withDismissed)
     }
 
     @Test

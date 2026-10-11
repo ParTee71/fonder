@@ -11,10 +11,12 @@ import kotlinx.coroutines.flow.merge
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
+import se.partee71.fonder.data.room.daos.SuggestionDismissalDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
+import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
@@ -74,6 +76,7 @@ class LocalBackupRepository @Inject constructor(
     private val transactionDao: TransactionDao,
     private val suggestionRecordDao: SuggestionRecordDao,
     private val switchWatchDao: SwitchWatchDao,
+    private val suggestionDismissalDao: SuggestionDismissalDao,
     private val preferences: PreferencesRepository,
 ) : BackupRepository {
 
@@ -85,6 +88,7 @@ class LocalBackupRepository @Inject constructor(
         transactions = transactionDao.getAll().map(TransactionEntity::toDomain),
         suggestionRecords = suggestionRecordDao.getAll().map(SuggestionRecordEntity::toDomain),
         switchWatches = switchWatchDao.getAll().map(SwitchWatchWithCandidates::toDomain),
+        suggestionDismissals = suggestionDismissalDao.getAll().map(SuggestionDismissalEntity::toDomain),
         riskProfile = preferences.riskProfile.first(),
         accountType = preferences.accountType.first(),
         themeMode = preferences.themeMode.first(),
@@ -131,6 +135,7 @@ class LocalBackupRepository @Inject constructor(
             database.withTransaction {
                 transactionDao.deleteAll()
                 suggestionRecordDao.deleteAll()
+                suggestionDismissalDao.deleteAll()
                 // Kandidaterna följer med sin bevakning via ON DELETE CASCADE (Room 14→15) —
                 // en egen tömning här hade varit en andra sanning om samma relation.
                 switchWatchDao.deleteAll()
@@ -148,6 +153,7 @@ class LocalBackupRepository @Inject constructor(
                     val candidates = row.candidates.map { it.copy(id = 0, watchId = watchId) }
                     if (candidates.isNotEmpty()) switchWatchDao.insertCandidates(candidates)
                 }
+                payload.suggestionDismissals.forEach { suggestionDismissalDao.upsert(SuggestionDismissalEntity.fromDomain(it)) }
             }
 
             payload.riskProfile?.let { preferences.setRiskProfile(it) }
@@ -176,4 +182,5 @@ private val CONTRACT_TABLES = arrayOf(
     SuggestionRecordEntity.TABLE_NAME,
     SwitchWatchEntity.TABLE_NAME,
     SwitchWatchCandidateEntity.TABLE_NAME,
+    SuggestionDismissalEntity.TABLE_NAME,
 )

@@ -1,0 +1,572 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 16,
+    "identityHash": "07bab6577ce50fa66c6b449e6b38b400",
+    "entities": [
+      {
+        "tableName": "funds",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, `currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+        "fields": [
+          {
+            "fieldPath": "fundId",
+            "columnName": "fundId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isin",
+            "columnName": "isin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fondlistaFundId",
+            "columnName": "fondlistaFundId",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "fundId"
+          ]
+        }
+      },
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, `shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fundId",
+            "columnName": "fundId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epochDay",
+            "columnName": "epochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shares",
+            "columnName": "shares",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pricePerShare",
+            "columnName": "pricePerShare",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee",
+            "columnName": "fee",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_fundId",
+            "unique": false,
+            "columnNames": [
+              "fundId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_fundId` ON `${TABLE_NAME}` (`fundId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fund_prices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, `nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+        "fields": [
+          {
+            "fieldPath": "fundId",
+            "columnName": "fundId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epochDay",
+            "columnName": "epochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nav",
+            "columnName": "nav",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "fundId",
+            "epochDay"
+          ]
+        }
+      },
+      {
+        "tableName": "fx_rates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, `rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+        "fields": [
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epochDay",
+            "columnName": "epochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rate",
+            "columnName": "rate",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "currency",
+            "epochDay"
+          ]
+        }
+      },
+      {
+        "tableName": "fund_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`isin` TEXT NOT NULL, `name` TEXT NOT NULL, `orderbookId` TEXT NOT NULL, `totalFee` REAL, `managementFee` REAL, `category` TEXT, `fundType` TEXT, `companyName` TEXT, `risk` INTEGER, `indexFund` INTEGER NOT NULL, `startDateEpochDay` INTEGER, `minimumBuy` REAL, `tagsJson` TEXT NOT NULL, `availableAtHandelsbanken` INTEGER, `availabilityResolvedAtEpochDay` INTEGER, `fetchedAtEpochDay` INTEGER NOT NULL, `cheapestAlternativeIsin` TEXT, `cheapestAlternativeFee` REAL, `shownAlternativeIsinsJson` TEXT NOT NULL, `comparisonResolvedAtEpochDay` INTEGER, `developmentOneYear` REAL, PRIMARY KEY(`isin`))",
+        "fields": [
+          {
+            "fieldPath": "isin",
+            "columnName": "isin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderbookId",
+            "columnName": "orderbookId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalFee",
+            "columnName": "totalFee",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "managementFee",
+            "columnName": "managementFee",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fundType",
+            "columnName": "fundType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "companyName",
+            "columnName": "companyName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "risk",
+            "columnName": "risk",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "indexFund",
+            "columnName": "indexFund",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDateEpochDay",
+            "columnName": "startDateEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "minimumBuy",
+            "columnName": "minimumBuy",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "tagsJson",
+            "columnName": "tagsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "availableAtHandelsbanken",
+            "columnName": "availableAtHandelsbanken",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "availabilityResolvedAtEpochDay",
+            "columnName": "availabilityResolvedAtEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fetchedAtEpochDay",
+            "columnName": "fetchedAtEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cheapestAlternativeIsin",
+            "columnName": "cheapestAlternativeIsin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cheapestAlternativeFee",
+            "columnName": "cheapestAlternativeFee",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "shownAlternativeIsinsJson",
+            "columnName": "shownAlternativeIsinsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "comparisonResolvedAtEpochDay",
+            "columnName": "comparisonResolvedAtEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "developmentOneYear",
+            "columnName": "developmentOneYear",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "isin"
+          ]
+        }
+      },
+      {
+        "tableName": "suggestion_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `suggestedAtEpochDay` INTEGER NOT NULL, `planIndex` INTEGER NOT NULL, `sellIsin` TEXT NOT NULL, `buyIsin` TEXT NOT NULL, `sellNavAtSuggestion` REAL NOT NULL, `buyNavAtSuggestion` REAL NOT NULL, `switchValueKr` REAL, `followed` INTEGER, `batchEpochMillis` INTEGER NOT NULL, `kind` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "suggestedAtEpochDay",
+            "columnName": "suggestedAtEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planIndex",
+            "columnName": "planIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellIsin",
+            "columnName": "sellIsin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyIsin",
+            "columnName": "buyIsin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellNavAtSuggestion",
+            "columnName": "sellNavAtSuggestion",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyNavAtSuggestion",
+            "columnName": "buyNavAtSuggestion",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "switchValueKr",
+            "columnName": "switchValueKr",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "followed",
+            "columnName": "followed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "batchEpochMillis",
+            "columnName": "batchEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "switch_watches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sellIsin` TEXT NOT NULL, `sellFundName` TEXT NOT NULL, `soldAtEpochDay` INTEGER NOT NULL, `proceedsKr` REAL, `targetLevel` INTEGER, `sourceRecordId` INTEGER, `closedAtEpochDay` INTEGER, `boughtIsin` TEXT, `closeReason` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellIsin",
+            "columnName": "sellIsin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellFundName",
+            "columnName": "sellFundName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "soldAtEpochDay",
+            "columnName": "soldAtEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "proceedsKr",
+            "columnName": "proceedsKr",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "targetLevel",
+            "columnName": "targetLevel",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sourceRecordId",
+            "columnName": "sourceRecordId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "closedAtEpochDay",
+            "columnName": "closedAtEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "boughtIsin",
+            "columnName": "boughtIsin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "closeReason",
+            "columnName": "closeReason",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "switch_watch_candidates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `watchId` INTEGER NOT NULL, `isin` TEXT NOT NULL, `name` TEXT NOT NULL, `navAtStart` REAL, `navAtStartEpochDay` INTEGER, `source` TEXT NOT NULL, `position` INTEGER NOT NULL, FOREIGN KEY(`watchId`) REFERENCES `switch_watches`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchId",
+            "columnName": "watchId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isin",
+            "columnName": "isin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "navAtStart",
+            "columnName": "navAtStart",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "navAtStartEpochDay",
+            "columnName": "navAtStartEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_switch_watch_candidates_watchId",
+            "unique": false,
+            "columnNames": [
+              "watchId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_switch_watch_candidates_watchId` ON `${TABLE_NAME}` (`watchId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "switch_watches",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "watchId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "suggestion_dismissals",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sellIsin` TEXT NOT NULL, `buyIsin` TEXT NOT NULL, `kind` TEXT NOT NULL, `dismissedAtEpochDay` INTEGER NOT NULL, PRIMARY KEY(`sellIsin`, `buyIsin`, `kind`))",
+        "fields": [
+          {
+            "fieldPath": "sellIsin",
+            "columnName": "sellIsin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyIsin",
+            "columnName": "buyIsin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dismissedAtEpochDay",
+            "columnName": "dismissedAtEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sellIsin",
+            "buyIsin",
+            "kind"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '07bab6577ce50fa66c6b449e6b38b400')"
+    ]
+  }
+}

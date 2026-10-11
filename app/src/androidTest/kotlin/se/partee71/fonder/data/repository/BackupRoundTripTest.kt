@@ -26,6 +26,7 @@ import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
@@ -69,8 +70,12 @@ class BackupRoundTripTest {
             produceFile = { tempFolder.newFile("backup_roundtrip.preferences_pb") },
         )
         preferences = PreferencesRepository(dataStore)
-        backup = LocalBackupRepository(db, db.fundDao(), db.transactionDao(), db.suggestionRecordDao(), db.switchWatchDao(), preferences)
-        transactions = RoomTransactionRepository(db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao())
+        backup = LocalBackupRepository(
+            db, db.fundDao(), db.transactionDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(), preferences,
+        )
+        transactions = RoomTransactionRepository(
+            db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(),
+        )
     }
 
     @After
@@ -144,6 +149,14 @@ class BackupRoundTripTest {
                 closeReason = SwitchWatchCloseReason.KOPT.name,
             ),
         )
+        // Avstådda förslag (HEM-14) — ett val per fondpar och sort som inte går att räkna fram;
+        // tappas det dyker varje avstått förslag upp igen efter återställningen.
+        db.suggestionDismissalDao().upsert(
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0004617590", kind = SuggestionKind.RISK_PLAN.name, dismissedAtEpochDay = 19_801),
+        )
+        db.suggestionDismissalDao().upsert(
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE.name, dismissedAtEpochDay = 19_401),
+        )
         preferences.setRiskProfile(
             RiskProfile(
                 targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
@@ -169,6 +182,7 @@ class BackupRoundTripTest {
         assertTrue(db.transactionDao().getAll().isEmpty())
         assertTrue(db.suggestionRecordDao().getAll().isEmpty())
         assertTrue(db.switchWatchDao().getAll().isEmpty())
+        assertTrue(db.suggestionDismissalDao().getAll().isEmpty())
 
         val summary = backup.restore(json).getOrThrow()
 
@@ -202,6 +216,12 @@ class BackupRoundTripTest {
         assertEquals(listOf(0, 1, 0), records.map { it.planIndex })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
         assertEquals(95.25, records[0].buyNavAtSuggestion, 1e-9)
+
+        val dismissals = db.suggestionDismissalDao().getAll().map { it.toDomain() }
+        assertEquals(listOf("SE0004617590", "SE0005991445"), dismissals.map { it.buyIsin })
+        assertEquals(listOf(SuggestionKind.RISK_PLAN, SuggestionKind.FEE), dismissals.map { it.kind })
+        assertEquals(listOf(19_801L, 19_401L), dismissals.map { it.dismissedAtEpochDay })
+        assertTrue(dismissals.all { it.sellIsin == "SE0000582033" })
 
         val watches = db.switchWatchDao().getAll().map { it.toDomain() }.sortedBy { it.id }
         assertEquals(listOf("SE0000582033", "SE0005991445"), watches.map { it.sellIsin })
@@ -283,6 +303,7 @@ class BackupRoundTripTest {
         assertEquals(2, db.fundDao().getAll().size)
         assertEquals(2, db.transactionDao().getAll().size)
         assertEquals(3, db.suggestionRecordDao().getAll().size)
+        assertEquals(2, db.suggestionDismissalDao().getAll().size)
     }
 
     @Test

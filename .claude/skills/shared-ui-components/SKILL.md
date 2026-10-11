@@ -45,7 +45,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
 | Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
-| "Genomförd"-kvittering | `FollowedToggleRow` | Beslut, Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
+| "Genomförd"-kvittering | `FollowedToggleRow` | Beslut (efter "Följ", HEM-14), Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). Rundad rektangel (`shapes.small`), som `ProfitTakeBadge`. |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
@@ -100,7 +100,7 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 | Portföljberäkningar, avgifter, risk, avkastningsserier | `PortfolioCalc`, `PortfolioFeeCalc`, `PortfolioRiskCalc`, `PortfolioPerformanceCalc`, `PortfolioReturnSeriesCalc`, `PortfolioExposureCalc` i `domain/usecase/` |
 | Analys och säljsignaler | `FundAnalysisCalc`, `AnalysisGuidance` |
 | Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc`; `SwitchWatchRepository.startFromSuggestion` (bevakning ur ett kvitterat förslag – Beslut och Fonddetalj) |
-| Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa |
+| Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan utan avstådda byten + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa; vilka förslag ett avstående döljer och hur länge: `SuggestionDismissals` (HEM-14) |
 | Diagrammets data | `ChartPeriodFilter`, `ChartSeriesNormalizer`, `PurchaseMarkerFilter`, `IndexBenchmarkSelector` |
 | Belopp och tal i text | `MoneyFormat`, `SwedishNumberFormat` |
 | Fondnamn och matchning | `FundNameKey`, `FundNameMatcher`, `FundCompanyMatcher`, `ImportFundMatcher` |

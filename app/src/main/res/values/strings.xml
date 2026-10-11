@@ -505,6 +505,11 @@
     <string name="beslut_change_risk_profile">Ändra</string>
     <string name="beslut_suggestions_title">Förslag</string>
     <string name="beslut_outcome_title">Hur gick det?</string>
+    <string name="beslut_follow">Följ</string>
+    <string name="beslut_dismiss">Avstå</string>
+    <string name="format_beslut_dismissed_title">Avstådda (%1$d)</string>
+    <string name="format_beslut_dismissed_explain">Ett avstått förslag döljs i %1$d dagar och räknas inte som ett beslut. Ångra visar det igen.</string>
+    <string name="beslut_undo_dismissal">Ångra</string>
     <plurals name="format_beslut_facit_row">
         <item quantity="one">Facit · %1$d följt förslag</item>
         <item quantity="other">Facit · %1$d följda förslag</item>

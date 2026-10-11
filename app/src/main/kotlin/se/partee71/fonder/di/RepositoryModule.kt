@@ -23,12 +23,14 @@ import se.partee71.fonder.data.repository.BackupRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.HandelsbankenFundPriceRepository
+import se.partee71.fonder.data.repository.RoomSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.RoomSuggestionRecordRepository
 import se.partee71.fonder.data.repository.RoomSwitchWatchRepository
 import se.partee71.fonder.data.repository.RoomTransactionRepository
 import se.partee71.fonder.data.repository.DriveBackupRepository
 import se.partee71.fonder.data.repository.GoogleDriveBackupRepository
 import se.partee71.fonder.data.repository.LocalBackupRepository
+import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -54,6 +56,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindSwitchWatchRepository(impl: RoomSwitchWatchRepository): SwitchWatchRepository
+
+    @Binds
+    abstract fun bindSuggestionDismissalRepository(impl: RoomSuggestionDismissalRepository): SuggestionDismissalRepository
 
     @Binds
     abstract fun bindFondlistaHtmlSource(impl: HandelsbankenFondlistaClient): FondlistaHtmlSource

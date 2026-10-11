@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.61.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.63.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -57,6 +57,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (HEM-12)
 - [x] Fliken Beslut — pågående byten, bytesplanen och vägen till Facit på ett ställe, med antal
       på flikens kopparmärke och i Översiktens "Att besluta" (NAV-9, HEM-13)
+- [x] Följ och Avstå på bytesförslagen — ett avstått fondpar döljs i 30 dagar och kan ångras
+      (HEM-14)
 
 ---
 
@@ -130,6 +132,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.63.0 | **Följ och Avstå på förslagen** (HEM-14, HEM-8, NAV-9, HEM-13): varje bytesförslag på Beslut har knapparna Följ och Avstå. Följ markerar förslaget som genomfört, som "Genomförd" förut, och erbjuder sedan "Bevaka alternativ". Avstå döljer förslaget och tar det ur antalet på flikens märke och i "Att besluta" – även när planen räknas om nästa dag – i 30 dagar. Längst ned på Beslut finns raden "Avstådda (N)" där ett avstående kan ångras. Avståendena följer med i säkerhetskopian. |
 | 0.62.0 | **Händelser som en lista** (TRX-1, TRX-3, TRX-4, SLD-1–SLD-5, NAV-5): Sålda fonder är ingen egen skärm längre. Händelser visar alla köp och sälj i en lista med filtret Alla · Köp · Sälj och ett kort med årets realiserade resultat; ett sälj visar sin vinst eller förlust direkt i raden (osäkert markerat i text), och ett tryck fäller ut andelar, belopp, avgift, anskaffningsvärde och "Bevaka alternativ". Totalen sedan start står i säljfiltret. |
 | 0.61.0 | **Fliken Beslut** (NAV-9, HEM-13): det som väntar på dig samlas på en egen flik – pågående byten med det alternativ som gått bäst sedan säljdagen, bytesplanens förslag mot din riskprofil med "Genomförd" och "Bevaka alternativ" som förut, knappen "Räkna om bytesplanen" och raden "Hur gick det?" till Facit, som nu öppnas som en egen skärm med bakåtpil. Raden överst visar vilken riskprofil och kontotyp förslagen räknas mot, med en genväg till riskprofilen. Fliken bär ett kopparmärke med antalet öppna förslag och pågående byten, och Översikten visar samma antal i raden "Att besluta" under värdet. Översikten visar därefter jämförelsen mot index och påminnelsen om säkerhetskopia; bytesplanen och kortet för pågående byte har flyttat till Beslut. |
 | 0.60.0 | **Ny navigering: fyra flikar och en plusmeny** (NAV-1, NAV-7, NAV-8, UI-14): flikarna heter nu Översikt, Innehav, Beslut och Händelser och ligger i en flytande flikrad längs nederkanten, där den valda fliken visar sitt namn. Plusknappen bredvid fäller ut Ny transaktion, Importera avräkningsnota, Importera innehav och Bevaka ny fond – samma knapp på alla flikar i stället för en egen på Portfölj och Transaktioner. Inställningar öppnas med kugghjulet på Översikt och Sålda fonder med länken på Händelser. Beslut visar tills vidare Facit. Bakåt från en flik går till Översikt. |
@@ -167,9 +170,10 @@ data/
 │                 FundMetadataRepository (fondmetadata + Handelsbanken-köpbarhet + persisterad
 │                 billigare-alternativ-jämförelse + kända risknivåer, #57/#61/#68) ·
 │                 BackupRepository/LocalBackupRepository (fil, SET-6) · DriveBackupRepository (moln, SET-7) ·
-│                 SwitchWatchRepository (pågående byte mellan sälj och köp, ANA-12/#114)
-└── room/         AppDatabase (v15) · entities (inkl. FxRateEntity, FundMetadataEntity, SwitchWatchEntity) ·
-                  daos (inkl. FxRateDao, FundMetadataDao, SwitchWatchDao)
+│                 SwitchWatchRepository (pågående byte mellan sälj och köp, ANA-12/#114) ·
+│                 SuggestionDismissalRepository (avstådda bytesförslag per fondpar, HEM-14)
+└── room/         AppDatabase (v16) · entities (inkl. FxRateEntity, FundMetadataEntity, SwitchWatchEntity,
+                  SuggestionDismissalEntity) · daos (inkl. FxRateDao, FundMetadataDao, SwitchWatchDao, SuggestionDismissalDao)
 di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
@@ -190,12 +194,13 @@ domain/
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
                   SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
                   PendingDecisionsSource (bytesplan + pågående byten och deras antal, en källa för Beslut,
-                  Översikten och flikmärket, NAV-9/HEM-13)
+                  Översikten och flikmärket, NAV-9/HEM-13) ·
+                  SuggestionDismissals (vilka förslag ett avstående döljer och hur länge, HEM-14)
 ui/
 ├── hem/          HemScreen + ViewModel (Översikt: värde, "Att besluta" HEM-13, avkastning mot index,
 │                 dag/vecka/månadsresultat, analys-summeringskort #16, fondavgiftskort HEM-5/HEM-6,
 │                 riskkort mot riskprofilens målfördelning HEM-7)
-├── beslut/       BeslutScreen + ViewModel (fliken Beslut: pågående byten, bytesplanen, vägen till Facit, NAV-9)
+├── beslut/       BeslutScreen + ViewModel (fliken Beslut: pågående byten, bytesplanen med Följ/Avstå, vägen till Facit, NAV-9/HEM-14)
 ├── facit/        FacitScreen + ViewModel (utfallet av inspelade förslag, skärm i stacken under Beslut, SET-5)
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel (fliken Händelser: filter Alla/Köp/Sälj, årets realiserade
@@ -270,10 +275,10 @@ staleness-gaten (`isPriceStale`) falskt negativ.
   (`Migration12Test`, `Migration23Test`, `Migration34Test`) samt `RoomTransactionRepositoryTest`
   (`clearAll` töms atomiskt över alla tre tabeller, SET-1).
 
-> Formell `MigrationTestHelper`-baserad migreringstest saknas (ingen schema-snapshot i
-> `app/schemas/` finns i repot ännu) — migreringstesterna bygger i stället schemat för
-> hand och öppnar via den riktiga `AppDatabase`, vilket ändå fångar en felaktig migrering
-> via Rooms identity-hash-validering. Framtida schemaändringar bör helst testas med
-> `MigrationTestHelper` mot committade `app/schemas/*.json`.
+> Formell `MigrationTestHelper`-baserad migreringstest saknas — migreringstesterna bygger
+> i stället det gamla schemat med rå SQL och öppnar via den riktiga `AppDatabase`, vilket ändå
+> fångar en felaktig migrering via Rooms schemaverifiering. Schema-JSON:erna checkas in från
+> version 15 (`app/schemas/`); sedan `Migration1516Test` läses det gamla schemats satser ur
+> den frysta JSON:en i stället för att skrivas av (skill `room-migrations`).
 
 Kör i **GitHub Actions** (`.github/workflows/android.yml`) vid PR/push mot `master` – enhets- och instrumenttester bara när koden de testar ändrats; lint och release-bygget (R8) veckovis i `quality.yml` och vid release (NFR-2, NFR-4, skill `ci-budget`).

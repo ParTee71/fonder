@@ -85,8 +85,8 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun genomford_markeringen_i_bytesplanen_anropar_callbacken() {
-        // SET-5 (issue #80): markeringen utför inget byte, den registrerar att användaren gjorde det.
+    fun folj_i_bytesplanen_markerar_forslaget_som_genomfort() {
+        // SET-5 (issue #80) och HEM-14: "Följ" utför inget byte, den registrerar att användaren gjorde det.
         var callback: Pair<Long, Boolean>? = null
         composeRule.setContent {
             FonderTheme {
@@ -97,9 +97,64 @@ class BeslutScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
+        composeRule.onNodeWithText("Följ").performScrollTo().performClick()
 
         assertEquals(42L to true, callback)
+    }
+
+    @Test
+    fun genomford_pa_ett_kvitterat_forslag_kan_angras() {
+        var callback: Pair<Long, Boolean>? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = stateWith(plan = listOf(dyrTillBillig(recordId = 42, followed = true))),
+                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Följ").assertDoesNotExist()
+        composeRule.onNodeWithText("Avstå").assertDoesNotExist()
+        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+
+        assertEquals(42L to false, callback)
+    }
+
+    @Test
+    fun avsta_anropar_callbacken_med_forslaget() {
+        var dismissed: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = stateWith(plan = listOf(dyrTillBillig(recordId = 42))),
+                    onDismissSuggestion = { dismissed = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Avstå").performScrollTo().performClick()
+
+        assertEquals(42L, dismissed?.recordId)
+    }
+
+    @Test
+    fun avstadda_forslag_listas_sist_och_kan_angras() {
+        var undone: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = stateWith().let { it.copy(decisions = it.decisions.copy(dismissedSuggestions = listOf(dyrTillBillig(recordId = 42)))) },
+                    onUndoDismissal = { undone = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Avstådda (1)").performScrollTo().performClick()
+        composeRule.onNodeWithText("Ångra").performScrollTo().performClick()
+
+        assertEquals(42L, undone?.recordId)
     }
 
     @Test

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
 import se.partee71.fonder.data.room.daos.FundPriceDao
+import se.partee71.fonder.data.room.daos.SuggestionDismissalDao
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
@@ -36,7 +37,7 @@ interface TransactionRepository {
 
     /**
      * Tömmer all bevakad data (fonder, transaktioner, cachade kurser och inspelade
-     * bytesförslag) — irreversibelt, se SET-1. `suggestion_records` ingår eftersom raderna är
+     * bytesförslag med användarens avståenden) — irreversibelt, se SET-1. `suggestion_records` ingår eftersom raderna är
      * genuin, ej rekonstruerbar användardata (samma skäl som de ingår i backup-kontraktet):
      * lämnades de kvar visade Hem efter en tömning fortfarande "Sälj X → Köp Y" för en
      * portfölj som inte längre finns, och dygnsdedupen spärrade en nyberäknad plan.
@@ -55,6 +56,7 @@ class RoomTransactionRepository @Inject constructor(
     private val fundPriceDao: FundPriceDao,
     private val suggestionRecordDao: SuggestionRecordDao,
     private val switchWatchDao: SwitchWatchDao,
+    private val suggestionDismissalDao: SuggestionDismissalDao,
 ) : TransactionRepository {
 
     override fun observeFunds(): Flow<List<Fund>> =
@@ -89,6 +91,8 @@ class RoomTransactionRepository @Inject constructor(
             transactionDao.deleteAll()
             fundPriceDao.deleteAll()
             suggestionRecordDao.deleteAll()
+            // Avståendena (HEM-14) gäller en portfölj som inte längre finns.
+            suggestionDismissalDao.deleteAll()
             // Bevakade byten är användardata i samma kategori som förslagen (NFR-1) och töms
             // med dem (SET-1) — kandidaterna följer med via ON DELETE CASCADE.
             switchWatchDao.deleteAll()

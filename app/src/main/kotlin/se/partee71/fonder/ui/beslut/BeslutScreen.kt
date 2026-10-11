@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.beslut
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
@@ -38,7 +40,9 @@ import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.FollowedToggleRow
+import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
 
@@ -70,6 +74,8 @@ fun BeslutScreen(
         onOpenSwitchWatch = onOpenSwitchWatch,
         onSwitchFollowedChange = viewModel::setSwitchFollowed,
         onStartSwitchWatch = viewModel::startSwitchWatch,
+        onDismissSuggestion = viewModel::dismissSuggestion,
+        onUndoDismissal = viewModel::undoDismissal,
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
         onOpenFacit = onOpenFacit,
         modifier = modifier,
@@ -89,6 +95,8 @@ fun BeslutContent(
     onOpenSwitchWatch: (Long) -> Unit = {},
     onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
+    onDismissSuggestion: (SwitchPlanResolver.Suggestion) -> Unit = {},
+    onUndoDismissal: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onRecomputeSwitchPlan: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
 ) {
@@ -121,6 +129,7 @@ fun BeslutContent(
                     watched = switch.sellIsin in decisions.watchedSellIsins,
                     onFollowedChange = onSwitchFollowedChange,
                     onStartSwitchWatch = onStartSwitchWatch,
+                    onDismiss = onDismissSuggestion,
                 )
             }
             item { CaptionText(stringResource(R.string.switch_plan_disclaimer)) }
@@ -151,6 +160,12 @@ fun BeslutContent(
 
         item { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
         item { FacitRow(followedCount = state.followedCount, onOpen = onOpenFacit) }
+
+        // Avstådda förslag (HEM-14) längst ned: ingen snackbar finns i appen, så ångra-vägen är en
+        // hopfälld rad som bara visas när något avståtts och fortfarande ingår i planen.
+        if (decisions.dismissedSuggestions.isNotEmpty()) {
+            item { DismissedSection(decisions.dismissedSuggestions, onUndo = onUndoDismissal) }
+        }
     }
 }
 
@@ -265,10 +280,12 @@ private fun SwitchWatchCard(watch: OpenSwitchWatch, working: Boolean, onOpen: (L
  * listpositionen: planen är girig och sekventiell, så numret är en del av rådet (issue #75).
  * Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
  *
- * "Genomförd" utför inget byte, den **registrerar** att användaren gjorde det (SET-5), så facit
- * kan mäta följda råd separat. "Bevaka alternativ" erbjuds först efter kvitteringen — bevakningen
- * handlar om perioden **efter** säljet (ANA-12) — och bara när säljfonden inte redan bevakas,
- * annars hade varje tryck startat ytterligare en bevakning av samma byte.
+ * **Följ** och **Avstå** (HEM-14) är förslagets två beslut. "Följ" utför inget byte, den
+ * **registrerar** att användaren gjorde det (SET-5) — samma markering som "Genomförd", som då tar
+ * över raden så att kvitteringen kan ångras på samma sätt som i Facit och Fonddetalj. "Avstå" döljer
+ * fondparet (se [SuggestionDismissals]). "Bevaka alternativ" erbjuds först efter kvitteringen —
+ * bevakningen handlar om perioden **efter** säljet (ANA-12) — och bara när säljfonden inte redan
+ * bevakas, annars hade varje tryck startat ytterligare en bevakning av samma byte.
  */
 @Composable
 private fun SwitchSuggestionCard(
@@ -276,6 +293,7 @@ private fun SwitchSuggestionCard(
     watched: Boolean,
     onFollowedChange: (Long, Boolean) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
+    onDismiss: (SwitchPlanResolver.Suggestion) -> Unit,
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(
@@ -302,16 +320,76 @@ private fun SwitchSuggestionCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        FollowedToggleRow(
-            followed = switch.followed,
-            onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
-        )
-        if (switch.followed && !watched) {
-            AppButton(
-                text = stringResource(R.string.switch_watch_start),
-                onClick = { onStartSwitchWatch(switch) },
-                variant = AppButtonVariant.Text,
+        if (switch.followed) {
+            FollowedToggleRow(
+                followed = true,
+                onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
             )
+            if (!watched) {
+                AppButton(
+                    text = stringResource(R.string.switch_watch_start),
+                    onClick = { onStartSwitchWatch(switch) },
+                    variant = AppButtonVariant.Text,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppButton(
+                    text = stringResource(R.string.beslut_follow),
+                    onClick = { onFollowedChange(switch.recordId, true) },
+                    variant = AppButtonVariant.Outlined,
+                )
+                AppButton(
+                    text = stringResource(R.string.beslut_dismiss),
+                    onClick = { onDismiss(switch) },
+                    variant = AppButtonVariant.Text,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "Avstådda (N)" (HEM-14) — hopfälld som standard, med en rad per avstått byte och **Ångra**, som
+ * visar förslaget igen. Rangordningen står kvar i raden, så det syns vilket steg i planen som
+ * hoppats över.
+ */
+@Composable
+private fun DismissedSection(dismissed: List<SwitchPlanResolver.Suggestion>, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
+    ExpandableSection(
+        title = stringResource(R.string.format_beslut_dismissed_title, dismissed.size),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+    ) {
+        Column {
+            Text(
+                stringResource(R.string.format_beslut_dismissed_explain, SuggestionDismissals.TTL_DAYS),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            dismissed.forEach { switch ->
+                ItemRow(
+                    headline = stringResource(
+                        R.string.format_switch_plan_row,
+                        switch.planIndex + 1,
+                        switch.sellFundName,
+                        switch.fromLevel,
+                        switch.buyFundName,
+                        switch.toLevel,
+                    ),
+                    headlineStyle = MaterialTheme.typography.bodyMedium,
+                    trailing = {
+                        AppButton(
+                            text = stringResource(R.string.beslut_undo_dismissal),
+                            onClick = { onUndo(switch) },
+                            variant = AppButtonVariant.Text,
+                        )
+                    },
+                )
+            }
         }
     }
 }
