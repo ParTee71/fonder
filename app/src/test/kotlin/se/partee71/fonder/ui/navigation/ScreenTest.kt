@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Regressionstest för NAV-1/NAV-7/NAV-9 — flikradens fyra flikar, startskärmen och att
- * Inställningar, Sålda fonder och Facit är skärmar i stacken med egen rubrik. Ren datakontroll av [Screen], inget
+ * Inställningar och Facit är skärmar i stacken med egen rubrik. Ren datakontroll av [Screen], inget
  * Compose/Hilt behövs för det.
  */
 class ScreenTest {
@@ -25,11 +25,12 @@ class ScreenTest {
     }
 
     @Test
-    fun `installningar och salda ar inte flikar men har rubrik`() {
+    fun `installningar ar inte en flik men har rubrik, och salda fonder finns inte langre som skarm`() {
         assertNull(Screen.forRoute(Routes.SETTINGS))
-        assertNull(Screen.forRoute(Routes.SOLD))
         assertEquals(se.partee71.fonder.R.string.nav_settings, titleResFor(Routes.SETTINGS))
-        assertEquals(se.partee71.fonder.R.string.sold_funds_title, titleResFor(Routes.SOLD))
+        // Sedan 0.62.0 (SLD-1, NAV-5) står säljen i Händelsers lista – rutten "salda" är borttagen.
+        assertNull(Screen.forRoute("salda"))
+        assertNull(titleResFor("salda"))
     }
 
     @Test

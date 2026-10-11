@@ -14,6 +14,15 @@ object MoneyFormat {
     fun kr(amount: Double): String =
         String.format(locale, "%,.2f kr", amount)
 
+    /**
+     * Formaterar ett kronbelopp med tecken, t.ex. 2140.0 → "+2 140,00 kr", -50.0 → "−50,00 kr"
+     * (äkta minustecken) — för in- och utflöden och realiserat resultat i Händelser (TRX-1, SLD-1).
+     */
+    fun krSigned(amount: Double): String {
+        val sign = if (amount >= 0.0) "+" else "−" // äkta minustecken
+        return sign + kr(kotlin.math.abs(amount))
+    }
+
     /** Formaterar en avkastning med tecken, t.ex. 0.1234 → "+12,3 %", -0.05 → "−5,0 %". */
     fun percentSigned(fraction: Double): String {
         val pct = fraction * 100.0

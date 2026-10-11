@@ -3,12 +3,16 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -75,6 +79,45 @@ class AppCardTest {
             AppCard(modifier = Modifier.fillMaxWidth(), variant = AppCardVariant.Error) {
                 Text("Farozon", style = MaterialTheme.typography.titleSmall)
                 Text("Det här går inte att ångra.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+
+    @Test
+    fun `grupperade kort delar kontur – tre kort blir två konturbredder kortare`() {
+        composeRule.setContent {
+            FonderTheme {
+                Column(modifier = Modifier.testTag("grupp")) {
+                    repeat(3) { index ->
+                        AppCard(
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            groupPosition = AppCardGroupPosition.of(index, 3),
+                        ) { Text("Rad $index") }
+                    }
+                }
+            }
+        }
+
+        // Mellersta och sista kortet dras upp 1 dp var, så att konturerna sammanfaller.
+        composeRule.onNodeWithTag("grupp").assertHeightIsEqualTo(148.dp)
+    }
+
+    @Test
+    fun `platsen i gruppen ges av index och antal`() {
+        assertEquals(AppCardGroupPosition.Single, AppCardGroupPosition.of(0, 1))
+        assertEquals(AppCardGroupPosition.First, AppCardGroupPosition.of(0, 3))
+        assertEquals(AppCardGroupPosition.Middle, AppCardGroupPosition.of(1, 3))
+        assertEquals(AppCardGroupPosition.Last, AppCardGroupPosition.of(2, 3))
+    }
+
+    @Test
+    fun `skärmdump av ett grupperat kort`() = composeRule.captureLightAndDark("AppCard_grouped") {
+        Column {
+            listOf("Sverige Småbolag", "Global Indexfond A", "Räntefond Kort").forEachIndexed { index, name ->
+                AppCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    groupPosition = AppCardGroupPosition.of(index, 3),
+                ) { Text(name, style = MaterialTheme.typography.titleSmall) }
             }
         }
     }

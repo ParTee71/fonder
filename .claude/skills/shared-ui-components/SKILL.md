@@ -26,25 +26,25 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 
 | Elementtyp | Komponent | Används i · det som gör den speciell |
 |---|---|---|
-| Kort | `AppCard` | Varje kort på varje skärm. `AppCardVariant.Outlined` (yta + svag kontur, standard), `Filled` (tonad, för rader inne i ett kort – Hems avgifts- och analysrader), `Error` (farozonen). 16 dp inre marginal (`contentPadding`; 0 för ett utfällbart kort vars klickyta går ut i kanten, Facit och Sålda). Med `onClick` en klickbar nod (UI-13). |
+| Kort | `AppCard` | Varje kort på varje skärm. `AppCardVariant.Outlined` (yta + svag kontur, standard), `Filled` (tonad, för rader inne i ett kort – Hems avgifts- och analysrader), `Error` (farozonen). 16 dp inre marginal (`contentPadding`; 0 för ett kort vars klickytor går ut i kanten, Facit och Händelsers lista). Med `onClick` en klickbar nod (UI-13). `groupPosition` (`AppCardGroupPosition.of(index, count)`) låter rader som är egna `LazyColumn`-items se ut som ett kort med delad kontur (Händelser). |
 | Knapp | `AppButton`, `AppIconButton` | Varje knapp. `AppButtonVariant.Primary`/`Tonal`/`Outlined`/`Text`/`Danger`; M3E-formmorf (`ButtonDefaults.shapes()`). Ikonknappen kräver `contentDescription` (UI-3, UI-13); `AppIconButtonVariant.Tonal` = rund platta i ytvariant, Översiktens Inställningar. |
 | Textfält | `AppTextField` | Transaktionsformuläret, importerna, fondsök, ISIN-fältet, riskprofilens andelar. Konturerat, `shapes.extraSmall`; `label`, `keyboardOptions`, `suffix`, `supportingText`, `isError` (UI-13). |
 | Dialog | `AppDialog`, `ConfirmDialog`, `LoadingDialog` | `ConfirmDialog` före varje åtgärd som raderar eller ersätter data (Transaktioner, Inställningar) – `destructive` ger bekräftelseknappen i felfärgen; `AppDialog` för en enda åtgärd (`ImportCompleteDialog`); `LoadingDialog` för importernas blockerande väntan. 28 dp (UI-13). |
 | Kryssrad | `CheckRow` | Importernas rader, och via `FollowedToggleRow` "Genomförd". `toggleable` på hela raden, en nod med rollen kryssruta, ≥ 48 dp; `supportingText`, `labelStyle` (UI-3, UI-13). |
-| Listrad | `ItemRow` | Fondsök. Rubrik, `supporting`, `trailing`; ≥ 56 dp, rubrik och undertext i en nod. De övriga egna raderna flyttas hit (se *Kända dubbletter*). |
+| Listrad | `ItemRow` | Fondsök, Händelser. Rubrik, `supporting`, `trailing`, `leading` (Händelsers datum); ≥ 56 dp, rubrik och undertext i en nod. De övriga egna raderna flyttas hit (se *Kända dubbletter*). |
 | Förloppsstapel | `ProgressBar` | Fondsökens katalogladdning. M3E:s vågiga stapel, obestämd utan `progress` (UI-13). |
 | Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster, Beslut. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
-| Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Sålda, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
+| Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
 | Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i flikrubrikens och topprads åtgärder (`AppNavigation`) och renderar ingenting i vila. |
 | Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). Indikatorn är `PullToRefreshDefaults.LoadingIndicator`. |
-| Ett val bland några (knappgrupp) | `ChoiceChipRow`, `ConnectedChoiceButton` | Tema, kontotyp (Inställningar), riskenkäten; `ConnectedChoiceButton` även i `FundLineChart`s periodrad. Sammanhängande M3E-knappgrupp (`ToggleButton` med `ButtonGroupDefaults`-former), läses som radioval (UI-12). `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
+| Ett val bland några (knappgrupp) | `ChoiceChipRow`, `ConnectedChoiceButton` | Tema, kontotyp (Inställningar), riskenkäten, Händelsers filter Alla/Köp/Sälj; `ConnectedChoiceButton` även i `FundLineChart`s periodrad. Sammanhängande M3E-knappgrupp (`ToggleButton` med `ButtonGroupDefaults`-former), läses som radioval (UI-12). `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
 | Dropdown | `SelectField` | Fondsök, transaktionsformuläret, importerna. `clearOptionLabel` ger ett "alla/inget"-val överst. |
 | Datumfält | `DateField` | Transaktionsformuläret, importerna. Plattformens `DatePickerDialog` med livscykel via `DisposableEffect`; läses som **en** knapp med etikett och värde. |
-| Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster. kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4). |
+| Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster, Händelser (realiserat resultat). kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4). |
 | "Värde per <datum>" | `ValueAsOfRow` | Hem och Portfölj. Renderar ingenting utan datum (POR-7). |
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
-| Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit, Sålda. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
+| Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
 | "Genomförd"-kvittering | `FollowedToggleRow` | Beslut, Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). Rundad rektangel (`shapes.small`), som `ProfitTakeBadge`. |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
@@ -73,13 +73,13 @@ raden här. Bygg aldrig en tredje kopia.
 |---|---|---|
 | `TotalCard` | `hem/HemScreen.kt` och `portfolj/PortfoljScreen.kt` – identisk kod, olika `UiState` | en delad komponent som tar primitiver (värde, vinst, andel, `working`) |
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
-| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchSuggestionCard`, `SwitchWatchCard` (Beslut), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
-| Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) och motsvarande kort i `transaktioner/SoldFundsScreen.kt` | `ExpandableInfoRow` i ett `AppCard` |
+| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchSuggestionCard`, `SwitchWatchCard` (Beslut), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
+| Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) – Sålda fonders kopia försvann med vyn i 0.62.0 | `ExpandableInfoRow` i ett `AppCard` |
 | Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
 | Testuppställning | ~40 testfiler med kopierade fakes och fixturer – flest `HemViewModelTest`/`PortfoljViewModelTest`, sedan `SettingsViewModelTest`, `FacitViewModelTest`, migreringstesterna | delade fakes och fixturer (skill `testing-strategy` → DRY i tester) |
 
 Alla kopior som fanns när `cpdCheck` infördes står i `config/cpd-baseline.txt` (en rad per
-uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`, när kontrollen infördes – 59 respektive 4 sedan 0.61.0). Raderna ovan är
+uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`, när kontrollen infördes – 54 respektive 3 sedan 0.62.0). Raderna ovan är
 produktionskoden bland dem. Baslinjen ska bara krympa – se *Kontroller*.
 
 ## Planerade delade delar

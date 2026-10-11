@@ -60,8 +60,8 @@ fun AppFabMenu(
 ) {
     val openDescription = stringResource(R.string.fab_menu_open)
     val closeDescription = stringResource(R.string.fab_menu_close)
-    val expandedState = stringResource(R.string.fab_menu_expanded)
-    val collapsedState = stringResource(R.string.fab_menu_collapsed)
+    val expandedState = stringResource(R.string.state_expanded)
+    val collapsedState = stringResource(R.string.state_collapsed)
     BackHandler(enabled = expanded) { onExpandedChange(false) }
     FloatingActionButtonMenu(
         expanded = expanded,

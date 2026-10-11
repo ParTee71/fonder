@@ -28,7 +28,7 @@ import javax.inject.Inject
  * En rad i facit — ett inspelat bytesförslag med fondnamnen uppslagna och utfallet räknat.
  *
  * Fondnamnen kommer ur den **cachade** metadatan; saknas raden visas ISIN:et i stället för ett
- * gissat namn (samma princip som [se.partee71.fonder.ui.transaktioner.SoldFundsViewModel] som
+ * gissat namn (samma princip som [se.partee71.fonder.ui.transaktioner.TransaktionerViewModel] som
  * faller tillbaka på fundId).
  */
 data class FacitRad(

@@ -33,7 +33,6 @@ enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
  */
 fun titleResFor(route: String?): Int? = when (route) {
     Routes.SETTINGS -> R.string.nav_settings
-    Routes.SOLD -> R.string.sold_funds_title
     Routes.FOND -> R.string.fond_title
     Routes.FUND_SEARCH -> R.string.fondsok_title
     Routes.TRANSACTION_FORM -> R.string.transaktionsform_title
@@ -50,9 +49,6 @@ fun titleResFor(route: String?): Int? = when (route) {
 object Routes {
     /** Inställningar — sedan NAV-7 en skärm bakom ikonen på Översikt, inte en flik. */
     const val SETTINGS = "settings"
-
-    /** Sålda fonder (SLD-1) — sedan NAV-7 en länk från Händelser, inte en flik (steg 3c slår ihop listorna). */
-    const val SOLD = "salda"
 
     /** Fonddetalj för ett givet fundId (Handelsbankens fondlista-id, se issue #2/#3). */
     const val FOND = "fond/{fundId}"

@@ -21,7 +21,7 @@ import se.partee71.fonder.ui.theme.FonderTheme
 /**
  * Instrumenterat test av facit-skärmens tillståndsdrivna innehåll (SET-5, issue #80). Bygger
  * [FacitUiState] direkt i stället för att gå via ett riktigt [FacitViewModel]/Hilt — samma
- * mönster som [se.partee71.fonder.ui.transaktioner.SoldFundsScreenTest].
+ * mönster som [se.partee71.fonder.ui.transaktioner.TransaktionerScreenTest].
  */
 @RunWith(AndroidJUnit4::class)
 class FacitScreenTest {

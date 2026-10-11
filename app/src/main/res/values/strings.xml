@@ -32,8 +32,8 @@
     <string name="format_toolbar_tab_badge">%1$s, %2$d nya</string>
     <string name="fab_menu_open">Lägg till</string>
     <string name="fab_menu_close">Stäng meny</string>
-    <string name="fab_menu_expanded">Utfälld</string>
-    <string name="fab_menu_collapsed">Ihopfälld</string>
+    <string name="state_expanded">Utfälld</string>
+    <string name="state_collapsed">Ihopfälld</string>
     <string name="fab_import_orders">Importera avräkningsnota</string>
     <string name="fab_import_holdings">Importera innehav</string>
     <string name="fab_watch_fund">Bevaka ny fond</string>
@@ -106,14 +106,23 @@
     <string name="portfolj_exposure_unknown_risk">Okänd risknivå</string>
     <string name="format_portfolj_exposure_excluded">%1$d innehav saknar ISIN, fondmetadata eller känd kurs och räknas inte in i exponeringen.</string>
 
-    <!-- Transaktioner -->
-    <string name="transaktioner_title">Transaktioner</string>
+    <!-- Händelser (transaktionerna, TRX) -->
     <string name="transaktioner_empty_title">Inga transaktioner</string>
     <string name="transaktioner_empty_body">Registrera köp och sälj för att räkna ut värde.</string>
     <string name="transaktioner_add">Ny transaktion</string>
     <string name="transaktion_kop">Köp</string>
     <string name="transaktion_salj">Sälj</string>
     <string name="format_transaktion_rad">%1$s andelar à %2$s</string>
+    <string name="format_transaktion_fee">Avgift %s</string>
+    <string name="handelser_filter_all">Alla</string>
+    <string name="handelser_realized_year">Realiserat resultat i år</string>
+    <string name="handelser_realized_uncertain">Osäkert — något sälj saknar matchande köp i historiken.</string>
+    <string name="handelser_realized_row">Realiserat resultat</string>
+    <string name="handelser_buy_empty_title">Inga köp</string>
+    <string name="handelser_buy_empty_body">Registrerade köp visas här.</string>
+    <string name="format_handelse_sell_gain">%1$s · vinst %2$s</string>
+    <string name="format_handelse_sell_loss">%1$s · förlust %2$s</string>
+    <string name="format_handelse_uncertain">%1$s · osäkert</string>
     <string name="transaktion_delete_title">Ta bort transaktion?</string>
     <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
     <string name="date_field_not_set">inget datum valt</string>
@@ -128,12 +137,10 @@
     <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
 
-    <!-- Sålda fonder — realiserat resultat (issue #10) -->
-    <string name="sold_funds_title">Sålda fonder</string>
+    <!-- Sälj i Händelser — realiserat resultat (issue #10, SLD) -->
     <string name="sold_funds_empty_title">Inga sälj ännu</string>
     <string name="sold_funds_empty_body">Realiserat resultat visas här när du säljer andelar i en fond.</string>
     <string name="sold_funds_total_title">Totalt realiserat resultat</string>
-    <string name="format_sold_fund_shares">%1$s andelar sålda %2$s</string>
     <string name="format_sold_fund_detail">Belopp %1$s · Avgift %2$s · Anskaffningsvärde %3$s</string>
     <string name="sold_fund_uncovered_warning">Osäkert resultat — sålda andelar saknar matchande köp i historiken.</string>
     <string name="sold_fund_expand">Visa detaljer</string>

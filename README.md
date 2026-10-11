@@ -26,7 +26,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Kurshistorik sedan första köpet, utan datumtak (#7-uppföljning, källan utnyttjad fullt ut i #37)
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
 - [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
-- [x] Realiserat resultat (FIFO) och avgifter vid försäljning, egen vy "Sålda fonder" (#10)
+- [x] Realiserat resultat (FIFO) och avgifter vid försäljning, på säljraderna i Händelser (#10, sedan 0.62.0 ingen egen vy)
 - [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
 - [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
 - [x] Fondmetadata (avgift, kategori, risk) — sökbart datalager, grund för en framtida
@@ -130,6 +130,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.62.0 | **Händelser som en lista** (TRX-1, TRX-3, TRX-4, SLD-1–SLD-5, NAV-5): Sålda fonder är ingen egen skärm längre. Händelser visar alla köp och sälj i en lista med filtret Alla · Köp · Sälj och ett kort med årets realiserade resultat; ett sälj visar sin vinst eller förlust direkt i raden (osäkert markerat i text), och ett tryck fäller ut andelar, belopp, avgift, anskaffningsvärde och "Bevaka alternativ". Totalen sedan start står i säljfiltret. |
 | 0.61.0 | **Fliken Beslut** (NAV-9, HEM-13): det som väntar på dig samlas på en egen flik – pågående byten med det alternativ som gått bäst sedan säljdagen, bytesplanens förslag mot din riskprofil med "Genomförd" och "Bevaka alternativ" som förut, knappen "Räkna om bytesplanen" och raden "Hur gick det?" till Facit, som nu öppnas som en egen skärm med bakåtpil. Raden överst visar vilken riskprofil och kontotyp förslagen räknas mot, med en genväg till riskprofilen. Fliken bär ett kopparmärke med antalet öppna förslag och pågående byten, och Översikten visar samma antal i raden "Att besluta" under värdet. Översikten visar därefter jämförelsen mot index och påminnelsen om säkerhetskopia; bytesplanen och kortet för pågående byte har flyttat till Beslut. |
 | 0.60.0 | **Ny navigering: fyra flikar och en plusmeny** (NAV-1, NAV-7, NAV-8, UI-14): flikarna heter nu Översikt, Innehav, Beslut och Händelser och ligger i en flytande flikrad längs nederkanten, där den valda fliken visar sitt namn. Plusknappen bredvid fäller ut Ny transaktion, Importera avräkningsnota, Importera innehav och Bevaka ny fond – samma knapp på alla flikar i stället för en egen på Portfölj och Transaktioner. Inställningar öppnas med kugghjulet på Översikt och Sålda fonder med länken på Händelser. Beslut visar tills vidare Facit. Bakåt från en flik går till Översikt. |
 | 0.59.0 | **Samma knappar, kort, fält och dialoger överallt** (UI-13): alla skärmar använder appens delade komponenter i stället för egna – knappar som byter form när de trycks ned, kort med svag kontur, konturerade fält med 12 dp hörn och dialoger där en radering bekräftas med en knapp i felfärgen. Köp/Sälj väljs i samma knappgrupp som övriga val, kryssraderna i importen är klickbara på hela raden, och importens väntan visas i en gemensam dialog med den formskiftande laddningsindikatorn. |
@@ -197,8 +198,8 @@ ui/
 ├── beslut/       BeslutScreen + ViewModel (fliken Beslut: pågående byten, bytesplanen, vägen till Facit, NAV-9)
 ├── facit/        FacitScreen + ViewModel (utfallet av inspelade förslag, skärm i stacken under Beslut, SET-5)
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
-├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
-│                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
+├── transaktioner/TransaktionerScreen + ViewModel (fliken Händelser: filter Alla/Köp/Sälj, årets realiserade
+│                 resultat, sälj med realiserat resultat per rad, #10) · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift)
 ├── fond/         FondDetaljScreen + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
 │                 jämförelsediagram, ANA-10/ANA-11/#85 · kurshistorik i diagram sedan första köpet, #7 ·
 │                 hopfälld Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
