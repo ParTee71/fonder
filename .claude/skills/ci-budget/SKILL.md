@@ -15,15 +15,22 @@ att inte skriva det (regel 2).
 
 | Händelse | Jobb som körs | Actions-minuter |
 |---|---|---|
-| PR som bara rör dokument, `.claude/` eller andra workflows | `changes` + `ci-ok` | ~2 |
-| PR som rör kod eller byggfiler | `changes` + `build-and-test` + `ci-ok` | ~5–6 |
+| PR som bara rör dokument, `.claude/` eller andra workflows | `changes` (med hooktestet) + `ci-ok` | ~2 |
+| PR som rör kod eller byggfiler | `changes` + `build-and-test` + `ci-ok` | ~6–7 |
 | … och `app/src/main/**`, `app/src/androidTest/**` eller byggfiler | dessutom `instrumented-tests` | +~10–15 |
-| Push till `master` | `changes` + `build-and-test` + `ci-ok` | ~5–6 |
+| Push till `master` | `changes` + `build-and-test` + `ci-ok` | ~6–7 |
 | Veckovis `quality.yml` (bara om `master` ändrats) | `quality` | ~8–12 |
 
 Före CI-etappen kostade varje PR-push ~17–20 minuter (`build-and-test` + `release-build` +
 emulatorn i `instrumented.yml`, oavsett vad PR:en ändrade). Siffrorna ovan är uppskattningar –
 ersätt dem med uppmätta värden när de finns.
+
+**Verkstads-PR:en** lade till regel 4-kontrollerna och JVM-UI-testerna i de befintliga jobben –
+inga nya jobb. Uppskattat tillägg (varm cache): hooktestet ~2 s i `changes`; i `build-and-test`
+`cpdCheck` ~7 s (PMD CPD över ~270 filer, uppmätt lokalt), `UiConsistencyTest` (Konsist tolkar
+`app/src/main`) ~5–10 s, Robolectric-uppstart ~10–20 s för den första testklassen plus
+SDK-jaren (~100 MB) en gång per cachenyckel, och något längre testkompilering – sammanlagt
+**~+0,5–1 minut** per kod-PR. Ersätt med uppmätt värde efter första körningen.
 
 ## Vad som körs när (enda källan för denna tabell)
 
@@ -34,8 +41,8 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 <!-- ci-table:start -->
 | Workflow · jobb | Trigger | Villkor | Steg |
 |---|---|---|---|
-| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); i PR `dorny/paths-filter@v3` med filtren `app` (`app/src/**`, `app/build.gradle.kts`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
-| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-java` 17, `gradle/actions/setup-gradle@v4` (cache skrivs från `master`, läses i PR), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin` med build cache (`org.gradle.caching=true`); testrapport som artifact |
+| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); hooktest `node --test .claude/hooks/test/*.test.mjs` (regel4-hooken, baslinjen i `ui-allowlist.txt`, hookkommandona); i PR `dorny/paths-filter@v3` med filtren `app` (`app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
+| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-java` 17, `gradle/actions/setup-gradle@v4` (cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `testDebugUnitTest` omfattar Robolectric-testerna och `UiConsistencyTest`; testrapport och CPD-rapport som artifact. Roborazzi spelar inte in och jämför inte här |
 | `android.yml` · `instrumented-tests` (timeout 18) | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | `setup-java` 17, `setup-gradle`, KVM, `reactivecircus/android-emulator-runner@v2` (API 34, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
 | `android.yml` · `ci-ok` (timeout 2) | som ovan | alltid (`if: always()`) | grönt när alla jobb ovan blivit `success` eller `skipped` – **enda obligatoriska statuskravet** |
 | `quality.yml` · `quality` (timeout 20) | `schedule` måndagar 04:23 UTC, `workflow_dispatch` | schemalagd körning hoppas över om senaste gröna `quality.yml` gällde samma commit | `setup-java` 17, `setup-gradle` (bara läsning), `:app:assembleRelease` osignerat och sedan `:app:lintDebug` (separata anrop – i samma anrop krockade debug- och release-KSP om Room-schemat) (R8 + resursskrympning); lintrapport som artifact vid fel |
@@ -74,8 +81,14 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 - **Nytt beroende eller plugin:** ange uppmätt byggtidseffekt i PR-beskrivningen. Ny R8-känslig
   dependency får keep-regler i `app/proguard-rules.pro` (skill `data-privacy-security`), och
   `quality.yml` körs på PR-grenen för hand (`workflow_dispatch`) så att R8 prövas före merge.
-- **Ny testnivå eller nytt verktyg** (t.ex. Roborazzi, Konsist, `cpdCheck` – *kommer i
-  verkstads-PR:en*): lägg det i JVM-jobbet, aldrig i emulatorjobbet om det inte kräver enhet.
+- **Ny testnivå eller nytt verktyg** (som Robolectric, Konsist och `cpdCheck` i verkstads-PR:en):
+  lägg det i JVM-jobbet, aldrig i emulatorjobbet om det inte kräver enhet. Snabba kontroller utan
+  JDK (som hooktestet) läggs som steg i `changes`, inte som eget jobb.
+- **Skärmdumpar (Roborazzi):** `verifyRoborazziDebug` körs inte i PR-flödet än – referensbilderna
+  kan inte spelas in i en session utan Android SDK. Förslaget är en `workflow_dispatch`-workflow
+  som kör `recordRoborazziDebug` på en gren och committar `app/src/test/screenshots/` dit (eller
+  laddar upp dem som artifact); därefter läggs `verifyRoborazziDebug` i samma Gradle-anrop som
+  ovan. Byggs i ett eget issue.
 - **Över budget:** eget issue med mätning och förslag – aldrig en tyst höjning av timeouten.
 - **Lokalt före push** (skill `testing-strategy`): kör de tasks ändringen berör. Lokala körningar
   kostar inga Actions-minuter; en röd CI-runda gör det.

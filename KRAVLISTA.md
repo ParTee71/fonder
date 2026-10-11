@@ -119,6 +119,7 @@
 | NFR-2 | Ingen beteendeändring utan **tester** på berörd nivå (enhet/instrument/migrering); i PR körs de enligt CI-budgeten (NFR-4, skill `ci-budget`) — enhetstester när koden ändrats, instrumenttester när `app/src/main`, `app/src/androidTest` eller byggfilerna ändrats. **Release** (`assembleRelease`, R8 + resursskrympning) byggs veckovis när `master` ändrats och på begäran (`quality.yml`) samt vid varje släpp (`release.yml`), inte längre i varje PR *(ändrat i CI-etappen; issue #112 lade det i varje PR)*: debugbygget kör inte R8, så minifiering, resursskrympning och proguard-reglerna prövades tidigare först vid ett faktiskt släpp — och brast då två gånger (#108, #111). Ett nytt R8-känsligt beroende körs därför genom `quality.yml` på PR-grenen före merge. Lint (`lintDebug`) körs i samma veckoflöde. |
 | NFR-3 | Room-schemaändring kräver **migrering** utan dataförlust. |
 | NFR-4 | **CI-budget:** en PR kostar ca 8 Actions-minuter på varm cache, plus instrumenttesterna på emulator bara när PR:en rör koden de testar. Ett `changes`-jobb väljer jobb utifrån ändrade sökvägar, en ny push till samma PR avbryter den förra körningen, och `ci-ok` är den enda samlade statusen. Release-bygge och lint hör inte till PR-flödet (NFR-2). Vad som körs när står i skill `ci-budget`. *(CI-etappen)* |
+| NFR-5 | **Enhetlighetskontroll (regel 4):** samma typ av element ska se likadant ut och finnas på ett ställe, och det kontrolleras automatiskt. Förbjudna mönster i `app/src/main` – råa Material 3-komponenter med en delad motsvarighet och hårdkodat utseende i feature-kod, Material3:s `PullToRefreshBox`/`ExposedDropdownMenuBox` utanför `ui/components`, Vico utanför `ui/diagram` – står i **en** fil (`ui-forbidden.txt`) och fäller bygget via `UiConsistencyTest` (Konsist); hooken `regel4-check` säger samma sak direkt efter en filändring i Claude-sessionen. Kopierad Kotlin (PMD CPD, 80 tokens) i `app/src` fäller `cpdCheck`. Undantag bara i `ui-allowlist.txt` med motivering och användarens ok. Brotten och kopiorna som fanns när kontrollen infördes ligger i baslinjer (`ui-allowlist.txt`, `config/cpd-baseline.txt`) som bara får krympa. Kontrollerna körs inom CI-budgeten (NFR-4). Detaljer i skill `shared-ui-components`. *(verkstads-PR:en)* |
 
 ---
 
@@ -181,6 +182,13 @@ deklarerade i versionskatalogen men avsiktligt inte inkopplade, eftersom `google
 fäller bygget så länge `app/google-services.json` saknas.
 
 ## Historik
+
+- **Verkstads-PR:en – regel 4 och JVM-UI-tester:** Ny kravrad **NFR-5** (enhetlighetskontrollen).
+  Dagbokens kontroller portade: `UiConsistencyTest` (Konsist) mot `ui-forbidden.txt`, hooken
+  `regel4-check` och `cpdCheck` (PMD CPD), med baslinjer för befintliga brott (19 rader i
+  `ui-allowlist.txt`) och kopior (66 filuppsättningar i `config/cpd-baseline.txt`). Robolectric
+  och Roborazzi infrastruktur plus första Compose-testet i JVM (`EmptyStateTest`); skärmdumpsreferenser
+  spelas in i ett senare steg. Inget synligt beteende ändrat, ingen persisterad data.
 
 - **Uppdatering låg tre skärmar bort (#119):** Ny kravrad **UI-11** (dra ned för att uppdatera på
   de sex skärmar som visar hämtad data), **SET-2**:s "Uppdatera nu"-knapp struken och **TP-17**

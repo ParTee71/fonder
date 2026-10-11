@@ -1,0 +1,45 @@
+# Förbjudna mönster för regel 4 – enda källan.
+# Läses av hooken .claude/hooks/regel4-check.mjs och av UiConsistencyTest.
+# Format per rad: <regex><TAB><vad som ska användas i stället>
+# [feature]        = Kotlin i ett ui-paket under app/src/main utom ui/components, ui/diagram och ui/theme
+#                    (även filer direkt under ui/, t.ex. MainViewModel.kt)
+# [component-only] = all Kotlin under app/src/main utom ui/components/ (Material3-delar som bara den
+#                    delade komponenten får linda in)
+# [vico]           = all Kotlin under app/src/main utom ui/diagram/ (diagrambiblioteket bara i FundLineChart, TP-12)
+# Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
+# padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
+# kontrolleras därför inte (skill shared-ui-components → Förbjudet).
+# Komponenter som står som "planerad" finns inte än: bygg den delade delen först (med mockup), eller
+# be om ett undantag i ui-allowlist.txt.
+# Importrader och kommentarer kontrolleras inte.
+# Regexarna ska fungera både i JavaScript och Kotlin (ingen lookbehind).
+
+[feature]
+\bColor\(	MaterialTheme.colorScheme / ReturnColors / StatusColors / ChartSeriesColors (ui/theme)
+\bColor\.[A-Z][A-Za-z]*	MaterialTheme.colorScheme / ReturnColors / StatusColors / ChartSeriesColors (ui/theme)
+\bRoundedCornerShape\(	MaterialTheme.shapes (FonderShapes)
+\bCutCornerShape\(	MaterialTheme.shapes (FonderShapes)
+\bTextStyle\(	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
+\b(fontSize|lineHeight|letterSpacing)\s*=	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
+\.shadow\(	AppCard (planerad)
+\.(height|requiredHeight|heightIn)\(\s*[0-9]+(\.[0-9]+)?\.dp	komponentens parametrar (ingen literal höjd i feature-kod)
+\bSurface\s*[({]	AppCard (planerad)
+\b(Elevated|Outlined)?Card\s*[({]	AppCard (planerad)
+\bListItem\s*[({]	ItemRow (planerad)
+\bAlertDialog\s*[({]	ConfirmDialog (planerad) / ImportCompleteDialog
+\b[A-Za-z]*DatePicker[A-Za-z]*\s*[({]	DateField
+\bDropdownMenu(Item)?\s*[({]	SelectField
+\b(Filter|Assist|Suggestion|Input)Chip\s*[({]	ChoiceChipRow
+\b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow
+\bBadge\s*[({]	RiskBadge / ProfitTakeBadge / StatusDot
+\bCheckbox\s*[({]	FollowedToggleRow
+
+[component-only]
+\bPullToRefreshBox\b	PullToRefreshContainer
+\bExposedDropdownMenuBox\b	SelectField
+
+[vico]
+\bcom\.patrykandpatrick\.vico\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
+\b[A-Za-z]*Cartesian[A-Za-z]*\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
+\b(VerticalAxis|HorizontalAxis)\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
+\brememberVico[A-Za-z]*\b	FundLineChart i ui/diagram – Vico bara där (TP-12)

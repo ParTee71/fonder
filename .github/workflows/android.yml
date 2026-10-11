@@ -55,6 +55,12 @@ jobs:
             exit 1
           fi
 
+      # Hooktestet (regel4-check, baslinjen i ui-allowlist.txt, hookkommandona i settings.json)
+      # körs i varje PR – det tar några sekunder och behöver varken JDK eller Gradle. Globben
+      # expanderas av skalet: runnerns Node 20 tolkar inte globbar i `node --test`.
+      - name: Hooktest (regel 4)
+        run: node --test .claude/hooks/test/*.test.mjs
+
       - name: Ändrade sökvägar
         id: filter
         if: github.event_name == 'pull_request'
@@ -64,6 +70,7 @@ jobs:
             app:
               - 'app/src/**'
               - 'app/build.gradle.kts'
+              - 'config/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - 'gradle/**'
@@ -110,7 +117,8 @@ jobs:
             echo "| Del | Körs |"
             echo "|---|---|"
             echo "| nyckelgrind | true |"
-            echo "| kompilering och enhetstester (\`build-and-test\`) | $app |"
+            echo "| hooktest (regel 4) | true |"
+            echo "| kompilering, enhetstester, Robolectric, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
             echo "| instrumenttester på emulator (\`instrumented-tests\`) | $instrumented |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -136,24 +144,34 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
+      # Robolectric hämtar sin SDK-jar (android-all-instrumented) till ~/.m2 utanför Gradles cache.
+      - name: Cache för Robolectrics SDK-jar
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('gradle/libs.versions.toml', 'app/src/test/resources/robolectric.properties') }}
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       # Ett enda Gradle-anrop (projektet konfigureras en gång). testDebugUnitTest kompilerar
-      # enhetstesterna; androidTest-koden kompileras här så att ett kompileringsfel syns innan
-      # emulatorn startar.
+      # enhetstesterna och kör även Robolectric-testerna och UiConsistencyTest (Konsist);
+      # cpdCheck är copy-paste-detektorn (regel 4). androidTest-koden kompileras här så att ett
+      # kompileringsfel syns innan emulatorn startar.
       - name: Kompilera och kör enhetstester
         env:
           LC_ALL: C.UTF-8
           LANG: C.UTF-8
-        run: ./gradlew --continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin
+        run: ./gradlew --continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :cpdCheck
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: app/build/reports/tests/testDebugUnitTest/
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            build/reports/cpd/
           if-no-files-found: ignore
 
   # Emulatorkonfigurationen är oförändrad från den tidigare instrumented.yml. `needs` på

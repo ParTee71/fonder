@@ -25,9 +25,11 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Backup-rundtur | `app/src/androidTest/…/data/repository/BackupRoundTripTest.kt` | riktig Room + riktig DataStore | `instrumented-tests` |
 | Compose-UI (skärmar och komponenter) | `app/src/androidTest/…/ui/**` | `createComposeRule` mot `*Content` | `instrumented-tests` |
 | WorkManager-schemaläggning | `app/src/androidTest/…/worker/` | `work-testing` | `instrumented-tests` |
-| Compose-UI i JVM *(kommer i verkstads-PR:en)* | `app/src/test` | Robolectric + `ui-test-junit4` | – |
-| Skärmdump *(kommer i verkstads-PR:en)* | `app/src/test` + referensbilder | Roborazzi, ljust + mörkt | – |
-| Konsistens och dubbelkod *(kommer i verkstads-PR:en)* | `app/src/test`, hela `app/src` | Konsist `UiConsistencyTest`, `cpdCheck` | – |
+| Compose-UI i JVM | `app/src/test/…/ui/**` (först: `ui/components/EmptyStateTest.kt`) | Robolectric (`@RunWith(RobolectricTestRunner::class)`) + `createComposeRule`; SDK, mått och `Application` i `app/src/test/resources/robolectric.properties` | `android.yml` (`build-and-test`) |
+| Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `captureLightAndDark`, ljust + mörkt | inte än: referenserna är inte inspelade (`recordRoborazziDebug`, skill `ci-budget`) – anropen är verkningslösa i en vanlig testkörning |
+| Konsistens (regel 4) | `app/src/test/…/consistency/UiConsistencyTest.kt` mot hela `app/src/main` | Konsist + `ui-forbidden.txt`/`ui-allowlist.txt` | `android.yml` (`build-and-test`) |
+| Dubbelkod (regel 4) | hela `app/src` (`main`, `test`, `androidTest`) mot `config/cpd-baseline.txt` | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
+| Hooken `regel4-check` och baslinjeskriptet | `.claude/hooks/test/regel4-check.test.mjs` | `node --test` | `android.yml` (`changes`, varje PR) |
 
 Vad som körs när i CI står i skill `ci-budget` (enda källan). **Selektiv körning ändrar inte
 kravet på att skriva tester.**
@@ -48,7 +50,7 @@ Testernas paketstruktur **speglar** `main`: en ViewModel i `ui/settings/` testas
 | Drive-backup | Ren logik i `DriveBackupFiles` (`DriveBackupFilesTest`) och `outcomeFor` (`DriveBackupOutcomeTest`); aldrig mot riktig Drive |
 | Extern källa (Avanza, Handelsbanken, Riksbanken) | Parsertest mot **sparad** HTML/JSON. Aldrig ett test mot nätet. |
 | Skärm | Compose-test mot den tillståndsdrivna `*Content`-funktionen med handskrivet `UiState`: rendering, aktiverad/inaktiverad, klick → callback |
-| Delad komponent | Compose-test i `androidTest/…/ui/components/` (alla befintliga har ett); skärmdump ljust + mörkt när Roborazzi finns |
+| Delad komponent | Compose-test – nya i `app/src/test/…/ui/components/` med Robolectric (billigare än emulatorn), befintliga ligger i `androidTest/…/ui/components/`; skärmdump ljust + mörkt med `captureLightAndDark` |
 | Bugfix | **Först** ett test som reproducerar buggen och faller, sedan fixen |
 
 ## DRY i tester (regel 4 gäller även här)
@@ -57,7 +59,8 @@ Testernas paketstruktur **speglar** `main`: en ViewModel i `ui/settings/` testas
 |---|---|---|
 | `FakeFundMetadataRepository`, `FakeSwitchWatchRepository` | `app/src/test/…/data/repository/` | egna fakes per test |
 | `FakeFundPriceRefreshScheduler` | `app/src/test/…/worker/` | egen schemaläggare i ViewModel-tester |
-| `MainDispatcherRule`, delade skärmkontrakt (`runListScreenContract`/`runEditScreenContract`), `captureLightAndDark` *(kommer i verkstads-PR:en)* | `app/src/test/…/testing/` | `Dispatchers.setMain` i varje test; tomt/fel/laddar och spara-aktivering per skärm; egna Roborazzi-anrop |
+| `captureLightAndDark` | `app/src/test/…/testing/Screenshots.kt` | egna Roborazzi-anrop och egen temaväxling |
+| `MainDispatcherRule`, delade skärmkontrakt (`runListScreenContract`/`runEditScreenContract`) *(planerade)* | `app/src/test/…/testing/` | `Dispatchers.setMain` i varje test; tomt/fel/laddar och spara-aktivering per skärm |
 
 Behövs samma uppställning på två ställen → gör en hjälpare innan det tredje. Lägger du en
 metod på ett interface måste **alla** fakes uppdateras, annars bryts testbygget.
@@ -101,14 +104,16 @@ svar (ANA-4). Testa **den** skillnaden – att ett saknat NAV ger "ej utvärdera
 ## Innan du anser dig klar
 
 ```bash
-./gradlew :app:testDebugUnitTest               # enhetstester
+./gradlew :app:testDebugUnitTest               # enhetstester, Robolectric och UiConsistencyTest
+./gradlew cpdCheck                             # copy-paste-detektor (regel 4)
 ./gradlew :app:compileDebugAndroidTestKotlin   # instrumenttester ska minst kompilera
 ./gradlew :app:connectedDebugAndroidTest       # kräver emulator/enhet
+node --test .claude/hooks/test/*.test.mjs      # hooken regel4-check och baslinjen (ingen SDK behövs)
 ```
 
 **Kör det du ändrat lokalt innan varje push** när Android SDK finns (session-start-hooken
 säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
-taget och sätt `LC_ALL=C.UTF-8` (testnamn med å/ä/ö). Saknas SDK: CI får bekräfta – säg det i
+taget och sätt `LC_ALL=C.UTF-8` (testnamn med å/ä/ö). Saknas SDK: installera den (`.claude/hooks/install-android-sdk.sh`, CLAUDE.md → Bygg & test); går inte det får CI bekräfta – säg det i
 PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
 emulatortesterna (`instrumented-tests`) **bara i PR** som rör `app/src/main`,
 `app/src/androidTest` eller byggfilerna – en ren push ger ingen instrumenttäckning (skill

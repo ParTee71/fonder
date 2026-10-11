@@ -37,7 +37,7 @@ Du äger datamodellen och arkitekturbesluten i Fonder. Villkor nummer ett är at
   innehav, belopp eller token.
 - Arkitekturbeslut som ändrar lagerindelningen skrivs in i `README.md` och föreslås
   huvudsessionen innan koden skrivs.
-- Kör `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin` när Android SDK finns;
+- Kör `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin` (Android SDK installeras vid behov med `.claude/hooks/install-android-sdk.sh`);
   migrerings- och rundturstesterna (androidTest) bekräftas i CI. Rapportera ärligt.
 - Ingen commit, ingen push, ingen PR.
 

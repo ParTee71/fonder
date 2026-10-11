@@ -50,7 +50,7 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   bevarar dagens beteende (så kom `comparisonSeries`, `valueAxis` och `working` till). En ny
   diagramtyp (staplar, sparkline) blir en ny komponent i `ui/diagram/` med test.
 - **Vico bara i `ui/diagram/`.** Ingen `com.patrykandpatrick.vico`-import utanför. Kontrolleras
-  automatiskt *(kommer i verkstads-PR:en: Konsist/förbudslista)*.
+  automatiskt: scope `vico` i `ui-forbidden.txt` (hooken `regel4-check` och `UiConsistencyTest`).
 - **Vico är låst till 2.0.3** (`gradle/libs.versions.toml`, artefakten `compose-m3`): 2.1+ är byggt
   mot Kotlin 2.1.21+ och kan inte läsas av projektets Kotlin 2.1.0. Höj bara tillsammans med
   Kotlin i ett eget steg (skill `ci-budget`: ange byggtidseffekt). Läs Vico 2.0.3-API:t i den
@@ -74,11 +74,13 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   `domain/usecase/`. Paddningsberäkningen bör flyttas till ett rent objekt i `domain/usecase/`.
 - `FundLineChart` matar Vico via `CartesianChartModelProducer` i en `LaunchedEffect`
   (asynkront) och anropar M3 (`FilterChip`, `Text`) och literala `dp`/`sp` direkt.
-  Skärmdumpstester (Roborazzi) som kräver samma bild varje gång *kommer i verkstads-PR:en*.
+  Skärmdumpstester (Roborazzi) som kräver samma bild varje gång väntar på inspelade referenser
+  (skill `ci-budget` → Skärmdumpar).
 
 ## Tester
 
 - JVM: tabellen ovan + `FundLineChartTest` (y-intervallet).
 - Instrument: `HemScreenTest` och `SwitchWatchScreenTest` (periodraden via
   `CHART_PERIOD_ROW_TEST_TAG` och `performScrollToIndex`, UI-5).
-- Roborazzi ljust + mörkt per diagramläge *(kommer i verkstads-PR:en)*.
+- Roborazzi ljust + mörkt per diagramläge med `captureLightAndDark` *(planerat – referenserna
+  spelas in när inspelnings-workflowen finns, skill `ci-budget`)*.

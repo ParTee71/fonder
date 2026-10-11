@@ -37,8 +37,8 @@ granskar och committar; du skriver koden och testerna och rapporterar ärligt va
   `BackupPayload`/`BackupSerializer` eller en DataStore-nyckel: stanna och lämna det till
   `arkitekt` (eller gör exakt det uppdraget säger och flagga det i rapporten).
 - Uppdatera `KRAVLISTA.md` när synligt beteende ändras (skill `requirements-kravlista`).
-- Kör de kontroller ändringen berör. Gradle går att köra när Android SDK finns
-  (session-start-hooken säger det); annars säg att CI får bekräfta.
+- Kör de kontroller ändringen berör. Gradle körs med Android SDK i `/opt/android-sdk`;
+  saknas den, installera med `.claude/hooks/install-android-sdk.sh`. Bara om det inte går får CI bekräfta.
 - Går samma steg fel två gånger i rad: sluta och rapportera – huvudsessionen flyttar upp det
   till `arkitekt`.
 - Ingen commit, ingen push, ingen PR.

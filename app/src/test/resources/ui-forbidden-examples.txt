@@ -1,0 +1,135 @@
+# Exempel på hur ui-forbidden.txt och ui-allowlist.txt ska tolkas – körs av BÅDE hooktestet
+# (.claude/hooks/test/regel4-check.test.mjs) och UiConsistencyTest, så att hooken och
+# bygget alltid tolkar filerna likadant. Lägg till ett exempel här när ett mönster ändras.
+# Allt körs med tom allowlist utom sektionen allowlist.
+#
+# ok            = rader som är tillåtna i feature-kod (app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt)
+# stopp         = rader som ska stoppas i feature-kod
+# komponent-ok  = rader som är tillåtna i en delad komponent (app/src/main/kotlin/se/partee71/fonder/ui/components/X.kt)
+# komponent-stopp = rader som stoppas överallt utom i ui/components – även i ui/diagram (X.kt)
+# diagram-ok    = rader som är tillåtna i ett delat diagram (app/src/main/kotlin/se/partee71/fonder/ui/diagram/X.kt)
+# diagram-stopp = Vico-rader som stoppas även i en delad komponent i ui/components (X.kt)
+# scope         = <sökväg><TAB><scope, kommaseparerade; tomt = inga>
+# allowlist     = <allowlist-rad><TAB><kodrad i HemRow.kt><TAB><ok|stopp>
+# allowlist-fel = allowlist-rader som ska avvisas (saknar symbol eller motivering)
+
+[ok]
+EmptyState(title = "Ingen portfölj ännu", body = "")
+CardTitleRow(title = "Värde")
+PeriodRow(label = "1 år", amount = null, percent = 4.2)
+ValueAsOfRow(date)
+ExposureBar(segments)
+ExpandableSection(title = "Analys") { }
+ExpandableInfoRow(title = "Avgift")
+FollowedToggleRow(checked = true, onCheckedChange = {})
+RiskBadge(level = 5)
+ProfitTakeBadge(state)
+StatusDot(status)
+ChoiceChipRow(options, selected, onSelect = {})
+SelectField(label = "Fond", options = options)
+DateField(label = "Datum", value = date)
+PullToRefreshContainer(refreshing = false, onRefresh = {}) { }
+WorkingIndicator()
+ImportCompleteDialog(onDismiss = {})
+FundLineChart(series)
+Text("Hej", style = MaterialTheme.typography.titleMedium)
+Text("1 234 kr", style = MonoAmountStyle)
+color = MaterialTheme.colorScheme.onSurfaceVariant
+color = ReturnColors.gain
+shape = MaterialTheme.shapes.medium
+Icon(Icons.Default.Refresh, contentDescription = null)
+Modifier.padding(16.dp)
+Spacer(Modifier.width(8.dp))
+LazyColumn(modifier = Modifier.testTag("hem")) { }
+Button(onClick = {}) { Text("Spara") }
+import androidx.compose.material3.Card
+// Card(modifier) i en kommentar
+ * Card(modifier) i en KDoc
+
+[stopp]
+val c = Color(0xFF167C6E)
+tint = Color.Red
+shape = RoundedCornerShape(12.dp)
+shape = CutCornerShape(4.dp)
+style = TextStyle(fontFamily = SpaceGrotesk)
+Text("x", fontSize = 14.sp)
+lineHeight = 20.sp
+Modifier.height(48.dp)
+Modifier.heightIn(120.dp)
+Modifier.shadow(4.dp)
+Card(modifier = Modifier) { }
+Card { }
+ElevatedCard(onClick = {}) { }
+OutlinedCard { }
+Surface(color = x) { }
+ListItem(headlineContent = {})
+AlertDialog(onDismissRequest = {})
+DatePickerDialog(onDismissRequest = {})
+DropdownMenu(expanded = true, onDismissRequest = {})
+DropdownMenuItem(text = {}, onClick = {})
+FilterChip(selected = true, onClick = {}, label = {})
+AssistChip(onClick = {}, label = {})
+CircularProgressIndicator()
+LinearProgressIndicator(progress = { 0.5f })
+Badge { }
+Checkbox(checked = true, onCheckedChange = {})
+PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
+ExposedDropdownMenuBox(expanded = false, onExpandedChange = {}) { }
+CartesianChartHost(chart, model)
+val layer = rememberLineCartesianLayer()
+val zoom = rememberVicoZoomState(initialZoom = Zoom.Content)
+VerticalAxis.rememberStart()
+val p = com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProducer()
+
+[komponent-ok]
+Card(modifier = modifier) { content() }
+PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) { content() }
+ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) { }
+shape = RoundedCornerShape(50)
+Modifier.height(48.dp)
+CircularProgressIndicator(strokeWidth = 2.dp)
+
+[komponent-stopp]
+PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
+ExposedDropdownMenuBox(expanded = false, onExpandedChange = {}) { }
+
+[diagram-ok]
+CartesianChartHost(chart, model)
+val layer = rememberLineCartesianLayer()
+val zoom = rememberVicoZoomState(initialZoom = Zoom.Content)
+VerticalAxis.rememberStart()
+Modifier.height(200.dp)
+drawLine(color = Color.Transparent, start, end)
+
+[diagram-stopp]
+CartesianChartHost(chart, model)
+val layer = rememberLineCartesianLayer()
+val zoom = rememberVicoZoomState(initialZoom = Zoom.Content)
+VerticalAxis.rememberStart()
+
+[scope]
+README.md
+app/src/main/kotlin/se/partee71/fonder/ui/hem/notes.md
+app/src/test/kotlin/X.kt
+app/src/main/kotlin/se/partee71/fonder/data/repository/FundRepository.kt	component-only,vico
+app/src/main/kotlin/se/partee71/fonder/ui/theme/Theme.kt	component-only,vico
+app/src/main/kotlin/se/partee71/fonder/ui/components/PullToRefreshContainer.kt	vico
+app/src/main/kotlin/se/partee71/fonder/ui/diagram/FundLineChart.kt	component-only
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt	feature,component-only,vico
+app/src/main/kotlin/se/partee71/fonder/ui/navigation/AppNavigation.kt	feature,component-only,vico
+app/src/main/kotlin/se/partee71/fonder/ui/MainViewModel.kt	feature,component-only,vico
+app/src/main/kotlin/se/partee71/fonder/MainActivity.kt	component-only,vico
+app/src/main/kotlin/se/partee71/fonder/di/AppModule.kt	component-only,vico
+
+[allowlist]
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card( – test	Card(modifier) { }	ok
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card( – test	Card(colors = CardDefaults.cardColors(Color.Red)) { }	stopp
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card( – test	AlertDialog(onDismissRequest = {})	stopp
+app/src/main/kotlin/se/partee71/fonder/ui/portfolj/PortfoljRow.kt:Card( – annan fil	Card(modifier) { }	stopp
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Color.Red – test	tint = Color.Red	ok
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna	Card(modifier) { }	ok
+
+[allowlist-fel]
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt – saknar symbol
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card(
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemRow.kt:Card( –
