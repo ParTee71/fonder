@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.dashed
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.marker.rememberDefaultCartesianMarker
@@ -341,7 +342,11 @@ private fun rememberSeriesLineProvider(colors: List<Color>, areaUnderPrimary: Bo
         fill = LineCartesianLayer.LineFill.single(fill(colors[0])),
         areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(fill(areaColor)) else null,
     )
-    val comparison = LineCartesianLayer.rememberLine(LineCartesianLayer.LineFill.single(fill(colors[1])))
+    // Referensen/jämförelsen är streckad och i koppar så den skiljs från innehavet både i färg och form.
+    val comparison = LineCartesianLayer.rememberLine(
+        fill = LineCartesianLayer.LineFill.single(fill(colors[1])),
+        stroke = LineCartesianLayer.LineStroke.dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP),
+    )
     return LineCartesianLayer.LineProvider.series(primary, comparison)
 }
 
@@ -493,3 +498,6 @@ private object DateValueFormatter : CartesianValueFormatter {
         verticalAxisPosition: Axis.Position.Vertical?,
     ): CharSequence = LocalDate.ofEpochDay(value.roundToLong()).format(format)
 }
+
+private val COMPARISON_DASH = 6.dp
+private val COMPARISON_GAP = 4.dp

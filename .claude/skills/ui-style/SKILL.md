@@ -49,7 +49,7 @@ används för vad → skill `shared-ui-components`. Koden är facit; tabellerna 
 |---|---|---|
 | `ReturnColors` | `gain`, `loss`, `forAmount(amount)` (≥ 0 → vinst) | alltid tillsammans med tecken eller pil (UI-3); belopp med `MoneyFormat.percentSigned` ger äkta minustecken |
 | `StatusColors` | `gron`, `gul`, `rod` | säljsignaler (ANA-3); grön/röd återanvänder `ReturnColors`, gul är kopparen – ingen egen trafikljuspalett |
-| `ChartSeriesColors` | `holding` (= `primary`), `candidate` (= `onSurfaceVariant`, grå) | serierna skiljs på **ljushet**, inte bara kulör; koppar är reserverad för köpmarkörer |
+| `ChartSeriesColors` | `holding` (= `primary`, heldragen), `candidate` (= `secondary`, koppar, **streckad**) | serierna skiljs på kulör **och** form; köpmarkörerna är också koppar men lodräta |
 
 En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett nytt objekt i
 `Theme.kt`) med värden för båda temana – aldrig `Color(…)` i feature-kod.

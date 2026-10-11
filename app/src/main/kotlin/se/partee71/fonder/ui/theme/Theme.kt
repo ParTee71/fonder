@@ -80,11 +80,11 @@ object StatusColors {
  * Kurvfärger i jämförelsediagrammet (ANA-11, issue #85) — innehavet mot en föreslagen fond.
  *
  * Två grannar i samma primärskala går i praktiken inte att skilja åt, så kurvorna skiljs på
- * **ljushet**, inte bara i kulör: innehavet är primärblått och kandidaten grå (onSurfaceVariant).
+ * **ljushet**, inte bara i kulör: innehavet är primärblått och heldraget, jämförelsen koppar och streckad. Köpmarkörerna är också koppar men lodräta, så de förväxlas inte med kurvan.
  * Skillnaden håller därmed i båda temana.
  *
- * Kopparaccenten är medvetet inte tagen i anspråk: den bär redan köpmarkörerna i samma
- * diagram (issue #55) och gula risknivåer i övrigt ([StatusColors.gul]).
+ * Kopparaccenten delas med köpmarkörerna (issue #55), men de är lodräta linjer med datum och
+ * jämförelsekurvan är streckad, så de går inte att förväxla.
  */
 object ChartSeriesColors {
     /** Innehavets egen kurva — primärfärgen (mörkblå i ljust tema, ljusblå i mörkt, UI-1). */
@@ -92,8 +92,8 @@ object ChartSeriesColors {
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.primary
 
-    /** Den föreslagna fondens kurva — grå, så den skiljer sig från innehavet i ljushet i båda temana. */
+    /** Jämförelsekurvan (referens/kandidat) — koppar och streckad i diagrammet, så den skiljer sig från innehavet i både kulör och form. */
     val candidate: Color
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.onSurfaceVariant
+        get() = MaterialTheme.colorScheme.secondary
 }
