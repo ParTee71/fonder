@@ -141,7 +141,7 @@ Only worth adding if the project grows to 3+ modules. For a single-module app, k
 
 ## AGP Compatibility
 
-Current project uses AGP 8.13.2. Key rules:
+Current project uses AGP 9.4.1 (built-in Kotlin, new DSL: `androidComponents.onVariants`, no `applicationVariants`) and Kotlin 2.4.21. Key rules:
 - `jvmToolchain(21)` — target Java 21
 - Use `kotlin.plugin.compose` (separate plugin from Kotlin 2.0+) — do NOT use `buildFeatures.compose = true` alone without the compose compiler plugin
 - KSP for annotation processing (Hilt, Room) — KAPT is deprecated

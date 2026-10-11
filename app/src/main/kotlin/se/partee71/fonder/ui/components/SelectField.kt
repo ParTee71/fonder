@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -18,9 +20,8 @@ import androidx.compose.ui.Modifier
  * Delad dropdown för att välja ett värde ur en lista (regel 4 — återbruk). Använd i stället
  * för att bygga en ny `ExposedDropdownMenuBox`-variant för varje skärm.
  *
- * `ExposedDropdownMenu`/`Modifier.menuAnchor()` löses implicit via mottagarscopet
- * (`ExposedDropdownMenuBoxScope`) — importera dem inte explicit, det finns ingen
- * fristående toppnivåfunktion med de namnen.
+ * `ExposedDropdownMenu` är sedan material3 1.5 en importerad extension på
+ * `ExposedDropdownMenuBoxScope`; `Modifier.menuAnchor(type)` löses via mottagarscopet.
  *
  * @param clearOptionLabel om satt visas ett extra menyval överst som sätter valet till null
  *   (t.ex. "Alla fondbolag"). Lämna null när ett värde alltid måste vara valt.
@@ -50,7 +51,7 @@ fun <T> SelectField(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (clearOptionLabel != null) {
