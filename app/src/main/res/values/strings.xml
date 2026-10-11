@@ -38,7 +38,7 @@
     <!-- Hem — avkastningsdiagram med indexjämförelse (HEM-9/HEM-10, issue #96) -->
     <string name="hem_return_chart_title">Avkastning över tid</string>
     <string name="hem_return_chart_series_portfolio">Din portfölj</string>
-    <string name="hem_return_chart_explain">Hur dina fonder har utvecklats under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Insättningar, uttag och byten flyttar inte kurvan, så perioderna går att jämföra med varandra. Därför slutar den inte på samma procent som visas överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick. Köpdagarna markeras.</string>
+    <string name="hem_return_chart_explain" formatted="false">Hur dina fonder har utvecklats under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Insättningar, uttag och byten flyttar inte kurvan, så perioderna går att jämföra med varandra. Därför slutar den inte på samma procent som visas överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick. Köpdagarna markeras.</string>
     <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, där i stället. Blandningen speglar din nuvarande fördelning mellan aktier och räntor. Skatt och courtage ingår inte.</string>
     <string name="format_hem_return_chart_benchmark_unclassified">%1$s av portföljen är blandfonder eller fonder utan känd typ och ingår inte i viktningen — jämförelsen är då en grov uppskattning.</string>
     <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
@@ -282,7 +282,7 @@
     <string name="settings_riskprofile_button">Öppna riskprofil</string>
     <!-- Kontotyp (SET-4, issue #70) -->
     <string name="settings_account_type_section">Kontotyp</string>
-    <string name="settings_account_type_body">Styr om Hem föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
+    <string name="settings_account_type_body" formatted="false">Styr om Hem föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
     <string name="account_type_isk_kf">ISK/KF</string>
     <string name="account_type_depa_af">Depå/AF</string>
     <!-- Facit för bytesplanen (SET-5, issue #80) -->
@@ -362,7 +362,7 @@
     <string name="risk_horizon_3_7">3–7 år</string>
     <string name="risk_horizon_7_15">7–15 år</string>
     <string name="risk_horizon_over_15">Mer än 15 år</string>
-    <string name="riskprofile_q_reaction">Om portföljen tappade 30 % på ett år</string>
+    <string name="riskprofile_q_reaction" formatted="false">Om portföljen tappade 30 % på ett år</string>
     <string name="risk_reaction_saljer_allt">Säljer allt</string>
     <string name="risk_reaction_saljer_del">Säljer en del</string>
     <string name="risk_reaction_gor_inget">Gör inget</string>
@@ -376,7 +376,7 @@
     <string name="riskprofile_allocation_disclaimer">Fördelningarna är utgångspunkter, inte optima — ett verkligt optimum kräver uppgifter om ålder, övriga tillgångar och inkomst som appen varken har eller frågar om.</string>
     <string name="format_riskprofile_level_label">Nivå %1$d</string>
     <string name="format_riskprofile_allocation_sum">Summa: %1$d %%</string>
-    <string name="riskprofile_allocation_sum_error">Summan måste bli 100 % för att kunna sparas.</string>
+    <string name="riskprofile_allocation_sum_error" formatted="false">Summan måste bli 100 % för att kunna sparas.</string>
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
     <string name="riskprofile_save_button">Spara</string>
 

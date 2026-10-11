@@ -63,9 +63,18 @@ jobs:
       # Osignerat med flit: build.gradle.kts sätter bara signingConfig när SIGNING_*
       # finns, så jobbet behöver varken keystore eller secrets. APK:n slängs; det är R8 vi
       # är ute efter, inget installerbart (att publicera en APK är release.yml:s uppgift).
-      - name: Lint och release-bygge (R8 + resursskrympning)
+      # Två separata Gradle-anrop: i samma anrop körde kspDebugKotlin (för lint) och
+      # kspReleaseKotlin parallellt och skrev båda Room-schemat app/schemas/…/15.json – den ena
+      # läste filen medan den andra just skapat den tom ("Empty schema file"). Release-steget
+      # körs även när lint fallerat, så båda resultaten syns i samma körning.
+      - name: Release-bygge (R8 + resursskrympning)
+        id: release
         if: steps.fresh.outputs.skip != 'true'
-        run: ./gradlew --continue :app:lintDebug :app:assembleRelease
+        run: ./gradlew :app:assembleRelease
+
+      - name: Lint
+        if: steps.fresh.outputs.skip != 'true' && (success() || steps.release.outcome == 'failure')
+        run: ./gradlew :app:lintDebug
 
       - name: Lintrapport
         if: failure()
