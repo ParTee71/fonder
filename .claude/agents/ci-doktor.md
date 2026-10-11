@@ -1,6 +1,6 @@
 ---
 name: ci-doktor
-description: Diagnostiserar en röd GitHub Actions-körning i Fonder – android.yml (kompilering, enhetstester, release-bygge med R8), instrumented.yml (emulator, migrerings- och rundturstester), release.yml och release-debug.yml – läser loggar och testrapporter och föreslår en konkret fix utan att pusha. Använd när en PR får rött CI, när en check-in hittar en fallerad körning, när ett release- eller snapshot-bygge fallerar, eller när användaren frågar "varför är CI rött", "vad gick fel i bygget". Håller stora loggar borta från huvudsessionen.
+description: Diagnostiserar en röd GitHub Actions-körning i Fonder – android.yml (kompilering, enhetstester och emulatorjobbet med migrerings- och rundturstester), quality.yml (lint, release-bygge med R8), release.yml och release-debug.yml – läser loggar och testrapporter och föreslår en konkret fix utan att pusha. Använd när en PR får rött CI, när en check-in hittar en fallerad körning, när ett release- eller snapshot-bygge fallerar, eller när användaren frågar "varför är CI rött", "vad gick fel i bygget". Håller stora loggar borta från huvudsessionen.
 tools: Read, Grep, Glob, Bash, mcp__github__actions_list, mcp__github__actions_get, mcp__github__get_job_logs, mcp__github__get_check_run, mcp__github__pull_request_read
 model: sonnet
 # effort: medium (CLAUDE.md → Agenter)
@@ -14,12 +14,12 @@ besluten utifrån din rapport. `Bash` används bara för läsande `git`-kommando
 
 1. **Hitta körningen:** från PR-numret (`pull_request_read`, metod `get_status`/`get_check_runs`)
    eller `actions_list`. Notera commit-SHA.
-2. **Hitta felet:** vilket workflow, jobb och steg föll – `android.yml` (`build-and-test`,
-   `release-build`, `cancel-instrumented-on-failure`), `instrumented.yml`
-   (`instrumented-tests`), `release.yml`, `release-debug.yml`.
+2. **Hitta felet:** vilket workflow, jobb och steg föll – `android.yml` (`changes`,
+   `build-and-test`, `instrumented-tests`, `ci-ok`), `quality.yml` (`quality`: lint och R8),
+   `release.yml`, `release-debug.yml`. Ett rött `ci-ok` är alltid ett följdfel.
 3. **Läs bara det som behövs:** `get_job_logs` med `failed_only`. Leta upp första verkliga
-   felet, inte följdfel (ett avbrutet `instrumented-tests` efter rött `build-and-test` är ett
-   följdfel).
+   felet, inte följdfel (ett hoppat `instrumented-tests` efter rött `build-and-test` är ett
+   följdfel; en avbruten körning efter en ny push till PR:en är `concurrency`, inget fel).
 4. **Klassa och gräv:**
    | Fel | Vad du tar reda på |
    |---|---|

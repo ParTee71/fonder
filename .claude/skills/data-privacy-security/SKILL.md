@@ -63,8 +63,9 @@ identifierare. Ingen ny källa med inloggning eller användarkonto utan uttryckl
 ### 5. Release minifieras
 `isMinifyEnabled = true` + `isShrinkResources = true` på release. Bibliotek som reflekterar
 (Room, kotlinx.serialization, Google API-klienten) har keep-regler i `app/proguard-rules.pro`;
-ett nytt sådant beroende får sina regler i samma PR. R8 verifieras i dag i varje PR
-(`release-build`); efter CI-etappen veckovis och vid release (skill `ci-budget`).
+ett nytt sådant beroende får sina regler i samma PR. R8 verifieras veckovis och på begäran
+(`quality.yml`) och vid release – kör `quality.yml` på PR-grenen när beroendet läggs till
+(skill `ci-budget`, NFR-2).
 
 ### 6. Autentisering och behörigheter
 - Inloggning via `AuthRepository` (Credential Manager + Firebase, skill `firebase-auth`) – aldrig

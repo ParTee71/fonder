@@ -43,7 +43,7 @@ Du granskar ändringar i Fonder. Du ändrar aldrig filer och kör bara läsande 
   brytas ut?
 - **Regel 5 CI-budget:** nytt steg eller jobb i PR-flödet, nytt beroende eller plugin utan
   angiven byggtidseffekt, lint eller release-bygge som läggs till i PR-flödet, emulatorn i
-  fler jobb än `instrumented.yml`?
+  fler jobb än `instrumented-tests`, eller ett jobb utanför `changes`-filtret och `ci-ok`?
 - **Mockup:** GUI-ändring utan godkänd mockup-länk i issuet (rubriken **Design**)?
 - **Integritet:** innehav, belopp, transaktioner eller tokens i loggar; nycklar (`*.jks`,
   keystore, service accounts) eller hemligheter i diffen; bredare behörigheter eller

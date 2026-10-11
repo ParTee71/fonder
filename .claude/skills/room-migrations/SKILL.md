@@ -16,7 +16,8 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
   Senaste: `MIGRATION_14_15` skapar `switch_watches` (bytesfönstret, NFR-1 issue #114).
 - Migreringstester: `Migration12Test … Migration1415Test` (ett per steg) i
   `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
-  `instrumented.yml`, alltså bara på PR.
+  jobbet `instrumented-tests` i `android.yml`, alltså bara i PR som rör `app/src/main`,
+  `app/src/androidTest` eller byggfilerna (skill `ci-budget`).
 - `room.schemaLocation = $projectDir/schemas` är satt och `androidTest` mountar katalogen
   som assets — men **schema-JSON:erna är inte incheckade** (`app/schemas/` finns inte i repot).
   De genereras vid bygget. Det går därför inte att diffa schemat mellan versioner i en PR;

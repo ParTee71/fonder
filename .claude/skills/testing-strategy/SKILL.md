@@ -20,11 +20,11 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Domän, use cases, parsers, formatering | `app/src/test` | JUnit4, kotlin.test | `android.yml` (push + PR) |
 | ViewModel, repository, worker-logik | `app/src/test` | JUnit4, MockK, Turbine, kotlinx-coroutines-test, fakes | `android.yml` |
 | Backupformatet + fältvakten | `app/src/test/…/data/repository/BackupSerializerTest.kt` | JUnit4 | `android.yml` |
-| Room-DAO | `app/src/androidTest/…/data/room/*DaoTest.kt` | AndroidX Test, in-memory Room | `instrumented.yml` (bara PR) |
-| Migrering | `app/src/androidTest/…/data/room/MigrationXYTest.kt` | rå `SQLiteDatabase` (skill `room-migrations`) | `instrumented.yml` |
-| Backup-rundtur | `app/src/androidTest/…/data/repository/BackupRoundTripTest.kt` | riktig Room + riktig DataStore | `instrumented.yml` |
-| Compose-UI (skärmar och komponenter) | `app/src/androidTest/…/ui/**` | `createComposeRule` mot `*Content` | `instrumented.yml` |
-| WorkManager-schemaläggning | `app/src/androidTest/…/worker/` | `work-testing` | `instrumented.yml` |
+| Room-DAO | `app/src/androidTest/…/data/room/*DaoTest.kt` | AndroidX Test, in-memory Room | `instrumented-tests` (bara PR) |
+| Migrering | `app/src/androidTest/…/data/room/MigrationXYTest.kt` | rå `SQLiteDatabase` (skill `room-migrations`) | `instrumented-tests` |
+| Backup-rundtur | `app/src/androidTest/…/data/repository/BackupRoundTripTest.kt` | riktig Room + riktig DataStore | `instrumented-tests` |
+| Compose-UI (skärmar och komponenter) | `app/src/androidTest/…/ui/**` | `createComposeRule` mot `*Content` | `instrumented-tests` |
+| WorkManager-schemaläggning | `app/src/androidTest/…/worker/` | `work-testing` | `instrumented-tests` |
 | Compose-UI i JVM *(kommer i verkstads-PR:en)* | `app/src/test` | Robolectric + `ui-test-junit4` | – |
 | Skärmdump *(kommer i verkstads-PR:en)* | `app/src/test` + referensbilder | Roborazzi, ljust + mörkt | – |
 | Konsistens och dubbelkod *(kommer i verkstads-PR:en)* | `app/src/test`, hela `app/src` | Konsist `UiConsistencyTest`, `cpdCheck` | – |
@@ -109,8 +109,10 @@ svar (ANA-4). Testa **den** skillnaden – att ett saknat NAV ger "ej utvärdera
 **Kör det du ändrat lokalt innan varje push** när Android SDK finns (session-start-hooken
 säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
 taget och sätt `LC_ALL=C.UTF-8` (testnamn med å/ä/ö). Saknas SDK: CI får bekräfta – säg det i
-PR:en. `android.yml` kör kompilering och enhetstester på push och PR; `instrumented.yml` kör
-emulatortesterna **bara på PR**, så en ren push ger ingen instrumenttäckning. Vid rött CI – låt
+PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
+emulatortesterna (`instrumented-tests`) **bara i PR** som rör `app/src/main`,
+`app/src/androidTest` eller byggfilerna – en ren push ger ingen instrumenttäckning (skill
+`ci-budget`). Vid rött CI – låt
 agenten `ci-doktor` diagnostisera.
 
 ## Anti-mönster

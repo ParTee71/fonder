@@ -54,9 +54,10 @@ rör koden de testar. Release-bygge (R8) och lint hör inte till PR-flödet; de 
 veckovis och vid release. Nya beroenden eller plugins får inte fördubbla byggtiden – ange
 effekten i PR:en. Att slippa köra ett test är aldrig ett skäl att inte skriva det.
 
-**Läget i dag:** Fonder ligger på **~19–20 minuter per PR-push** (`android.yml` med
-release-bygge + `instrumented.yml` på varje PR). Målet nås i CI-etappen; till dess får ingen
-ändring göra det dyrare.
+**Läget i dag:** efter CI-etappen uppskattat **~2 minuter** för en dokument-PR och **~5–6
+minuter** för en kod-PR (`changes` + `build-and-test` + `ci-ok`), plus emulatorn (~10–15) bara
+när `app/src/main/**`, `app/src/androidTest/**` eller byggfilerna ändrats. Tidigare ~19–20
+minuter per PR-push. Ingen ändring får göra det dyrare.
 → Skill: **ci-budget**.
 
 ---
@@ -114,12 +115,13 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 **Gradle går att köra i sessionen när Android SDK finns** (session-start-hooken säger om den
 finns); kör då det du ändrat innan varje push. Annars får CI bekräfta – säg det i PR:en.
 
-I GitHub Actions kör `.github/workflows/android.yml` kompilering, enhetstester och ett
-release-bygge (R8) vid push och PR mot `master`. Instrumenttester
-(`.github/workflows/instrumented.yml`, emulator) körs **endast på pull requests** mot
-`master` — ren push triggar dem inte. `release.yml` bygger signerad release (tagg eller
-manuellt), `release-debug.yml` en debug-snapshot. Från telefonen: **pusha branchen och öppna
-en PR mot `master`** så kör Actions båda.
+I GitHub Actions kör `.github/workflows/android.yml` vid push och PR mot `master`: ett
+`changes`-jobb avgör utifrån ändrade sökvägar om kompilering och enhetstester
+(`build-and-test`) och instrumenttesterna på emulator (`instrumented-tests`, **bara i PR**
+som rör koden de testar) körs, och `ci-ok` är den samlade statusen. Lint och release-bygget
+(R8) körs veckovis och på begäran i `quality.yml` samt i `release.yml`. `release.yml` bygger
+signerad release (tagg eller manuellt), `release-debug.yml` en debug-snapshot. Vad som körs
+när står i skill `ci-budget`. Från telefonen: **pusha branchen och öppna en PR mot `master`**.
 
 **Länka alltid APK:n efter ett bygge.** Har en körning producerat en installerbar APK ska
 svaret alltid avslutas med **länken till den** — release-sidan (t.ex.

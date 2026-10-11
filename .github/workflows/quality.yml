@@ -1,0 +1,76 @@
+# Dyra kontroller som hålls utanför PR-flödet (regel 5, skill ci-budget): lint och det
+# minifierade release-bygget (R8 + resursskrympning). Veckovis – men bara om master ändrats
+# sedan förra gröna körningen – och på begäran. release.yml bygger dessutom release vid varje
+# släpp (NFR-2, NFR-4).
+#
+# Skälet till R8-bygget: debug kör inte R8, så minifiering, resursskrympning och
+# proguard-reglerna prövas annars av ingen automatik alls. Det brast två gånger: pdfbox
+# saknade JPEG-2000-avkodare låg latent i månader (#108), och Google API-klienten (#111)
+# avvärjdes bara av ett manuellt releasebygge någon råkade tänka på.
+name: Kvalitet
+
+on:
+  schedule:
+    - cron: '23 4 * * 1' # måndagar 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # Schemalagd körning på en commit som redan klarat kvalitet: inget att göra.
+      - name: Ny kod sedan förra kontrollen?
+        id: fresh
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          done_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/quality.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // ""')"
+          if [ "$done_sha" = "$GITHUB_SHA" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Master oförändrad sedan senaste gröna kvalitetskörningen – inget att kontrollera." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.fresh.outputs.skip != 'true'
+
+      - name: Set up JDK 17
+        if: steps.fresh.outputs.skip != 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gradle
+        if: steps.fresh.outputs.skip != 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Grant execute permission for gradlew
+        if: steps.fresh.outputs.skip != 'true'
+        run: chmod +x gradlew
+
+      # Osignerat med flit: build.gradle.kts sätter bara signingConfig när SIGNING_*
+      # finns, så jobbet behöver varken keystore eller secrets. APK:n slängs; det är R8 vi
+      # är ute efter, inget installerbart (att publicera en APK är release.yml:s uppgift).
+      - name: Lint och release-bygge (R8 + resursskrympning)
+        if: steps.fresh.outputs.skip != 'true'
+        run: ./gradlew --continue :app:lintDebug :app:assembleRelease
+
+      - name: Lintrapport
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
