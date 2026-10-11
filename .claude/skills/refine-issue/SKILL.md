@@ -1,214 +1,173 @@
 ---
 name: refine-issue
-description: Turn a rough idea, bug report, or feature request into a well-refined, planned GitHub issue for Fonder — clarify intent, research the codebase for affected areas, define scope and acceptance criteria grounded in the project's four non-negotiable rules, then create or update the issue on GitHub after confirmation. Use when the user wants to "create an issue", "update an issue", "plan a feature", "write up a bug", "refine this idea into a ticket", or similar. Pairs with the implement-issue skill, which does the work this skill plans.
+description: 'Turn a rough idea, bug report, or feature request into a well-refined, planned GitHub issue for Fonder — clarify intent, research the codebase, define scope and acceptance criteria grounded in the project''s five non-negotiable rules, make a mockup for new GUI, name Agent · modell · effort, and create or update the issue on GitHub after confirmation. Use when the user wants to "create an issue", "update an issue", "plan a feature", "write up a bug", "refine this idea into a ticket". Svenska trigger-ord: skapa issue, nytt issue, uppdatera issue, planera, förfina, skriv upp en bugg, idé, önskemål, ticket. Pairs with implement-issue.'
 ---
 
-# Refine & Plan a New Issue
+# Förfina och planera ett issue
 
-Take a half-formed idea and turn it into a GitHub issue another contributor (or a future
-Claude session running `implement-issue`) could pick up and finish without further
-questions.
+Gör en halvfärdig idé till ett GitHub-issue som en annan session (med `implement-issue`)
+kan genomföra utan fler frågor.
 
-Work through the steps in order. Keep the conversation tight — batch clarifying questions,
-don't interrogate. **Do not create or update the issue until Step 6.**
+Gå igenom stegen i ordning. Samla frågor, förhör inte. **Skapa eller uppdatera inte
+issuet förrän i steg 7.**
 
-The Definition of Done (Step 4) is anchored in the four non-negotiable rules in
-[CLAUDE.md](../../../CLAUDE.md). A refined issue must make those rules concrete for *this*
-change — that is the main thing this skill adds over a plain bug report.
+Definition of Done (steg 5) vilar på de fem reglerna i [CLAUDE.md](../../../CLAUDE.md).
+Ett förfinat issue gör reglerna konkreta för *just den här* ändringen.
 
-### New vs existing issue
-
-At the very start, check if the user provided an issue number or URL:
-- **No number** → follow all steps, create a new issue at Step 6.
-- **Issue number given** (e.g. `/refine-issue #42`) → fetch it first with
-  `mcp__github__issue_read`, show the current title/body, then refine and **update** it at
-  Step 6 instead of creating.
+### Nytt eller befintligt issue
+- **Inget nummer** → alla steg, skapa nytt issue i steg 7.
+- **Nummer angivet** → hämta med `mcp__github__issue_read` (owner `ParTee71`, repo `fonder`),
+  visa titel och innehåll, förfina och **uppdatera** i steg 7.
 
 ---
 
-## Step 1 — Capture the raw idea
+## Steg 1 – Fånga idén
 
-Restate the user's request in one or two sentences so they can confirm you understood it.
-Classify it:
+Återge begäran i en eller två meningar. Klassa den:
 
-| Type | Signals |
+| Typ | Signaler |
 |---|---|
-| **Feature** | new screen, new capability, "add", "support", "allow users to…" |
-| **Bug** | "broken", "crashes", "wrong", "doesn't work", reproduction steps |
-| **Chore / tech-debt** | refactor, dependency bump, build/CI, cleanup, no user-visible change |
+| **Funktion** | ny skärm, ny förmåga, "lägg till", "stöd för" |
+| **Bugg** | "fel", "kraschar", "räknar fel", "fungerar inte" |
+| **Underhåll** | refaktorering, beroende, bygg/CI, städning, ingen synlig ändring |
 
-If the idea may duplicate existing work, search first and surface close matches:
-```
-mcp__github__search_issues  (repo: partee71/fonder, query: <keywords>)
-```
+Sök efter dubbletter först: `mcp__github__search_issues` (`repo:ParTee71/fonder <ord>`).
 
----
+## Steg 2 – Klargör avsikt
 
-## Step 2 — Clarify intent (batch the questions)
+Fråga bara det som inte går att härleda ur begäran eller koden. `AskUserQuestion` vid
+konkreta val. Bugg: steg, förväntat/faktiskt, enhet/Android-version, logcat. Hoppa över
+steget om begäran redan är entydig.
 
-Ask only what you genuinely cannot infer from the request or the codebase. Use
-`AskUserQuestion` when there are concrete choices. Typical gaps:
+## Steg 3 – Undersök koden
 
-- **Feature**: who is it for, what problem does it solve, what does "done" look like, any UI expectations?
-- **Bug**: exact steps to reproduce, expected vs actual, device/Android version, frequency, any logcat/stack trace?
-- **Chore**: motivation (perf, maintainability, security), blast radius?
+- Vilka skärmar (`ui/hem`, `ui/portfolj`, `ui/fond`, `ui/fondsok`, `ui/transaktioner`,
+  `ui/imports`, `ui/facit`, `ui/bytesfonster`, `ui/riskprofil`, `ui/settings`), ViewModels,
+  repositories, use cases (`domain/usecase/`) och workers berörs?
+- **Återbruk (regel 4):** vilka komponenter och byggstenar ur skill `shared-ui-components`
+  används? Berörs en känd dubblett (`TotalCard`, `ComparisonChart`, importens
+  laddningsdialoger, egna listrader)? Då slås den ihop först. Behövs något **nytt delat**? Då
+  byggs det först.
+- **Data (regel 1):** nytt eller ändrat persisterat fält eller ny entitet? Då krävs Room-migrering
+  med `MigrationXYTest` (skill `room-migrations`) och plats i `BackupPayload`, fältvakten och
+  rundturen (skill `data-safety-backup`) – eller ett uttryckligt motiv till att det är cache.
+- **Externa källor:** `data/network/` (Avanza, Handelsbanken, Riksbanken) är odokumenterade
+  (TP-10, TP-14) – flagga skörheten.
+- **Import:** `data/imports/` (`HoldingsImportParser`, `AvrakningsnotaPdfParser`) och
+  matchningen (`FundCompanyMatcher`, `FundNameMatcher`, `ImportFundMatcher`)?
+- **Inloggning och molnbackup:** `AuthRepository` (TP-6), `DriveBackupRepository` och
+  `DriveBackupWorker` (TP-7 steg 2, SET-7)?
+- **Krav (regel 3):** vilka ID:n i KRAVLISTA.md berörs, eller behövs nya?
+- **Tester (regel 2):** vilka tester finns i dag, vilka nivåer berörs?
+- **CI (regel 5):** nytt beroende eller nytt steg? Byggtidseffekt?
+- **Agent:** vilken del tar `byggare`, `arkitekt`, `testskrivare` (steg 6)?
 
-Don't re-ask what the user already answered. Skip this step entirely if the request is
-already unambiguous.
+Anteckna konkreta filsökvägar.
 
----
+## Steg 4 – Mockup (endast ny GUI)
 
-## Step 3 — Research the codebase
+Syns förändringen i en tumnagel (ny skärm, ny delad komponent, tydligt ändrat
+utseende/beteende): bygg mockupen nu (skill `mockup`) av befintliga komponenter, i Fonders
+designspråk, med svenska texter och påhittad data – aldrig användarens riktiga innehav. Visa
+länken och vänta på ok innan issuet skapas. Länken går in under **Design**. Padding, ordval
+eller ikonbyte → ingen mockup.
 
-Locate the parts of the app this issue would touch. This grounds the plan in reality and
-catches hidden complexity. Use `Grep` / `Glob` / `Read`:
+## Steg 5 – Omfång och Definition of Done
 
-- Which screen(s) (`ui/portfolj`, `ui/transaktioner`, `ui/fond`, `ui/fondsok`, `ui/imports`,
-  `ui/settings`), ViewModel(s), repository(ies) (`FundPriceRepository`,
-  `TransactionRepository`, `BackupRepository`), Room entities (`FundEntity`,
-  `TransactionEntity`, `FundPriceEntity`), or the worker (`FundPriceUpdateWorker`) are involved?
-- Is there an existing pattern for this kind of change? (See `android-dev`'s existing-pattern audit.)
-- **Data model / persistence** → does it add or change a persisted field/entity? Then it
-  needs a Room migration (bump `AppDatabase` version, write a `MigrationXYTest` in
-  `app/src/androidTest/.../data/room/`) **and** backup-chain coverage
-  (`data-safety-backup` — the local backup round-trip exists since SET-6, see Step 4).
-- **UI** → is there a shared component in `ui/components/` (`EmptyState`, `SelectField`,
-  `DateField`, …) or `ui/diagram/` (`FundLineChart`) to reuse instead of a new variant
-  (`shared-ui-components`)? Any accessibility impact (touch targets, `contentDescription`)?
-- **External data sources** → does it touch `data/network/` (`HandelsbankenFondlistaClient`
-  + `HandelsbankenHtmlParser`, or `AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource`)?
-  These are undocumented/unofficial sources (see KRAVLISTA TP-10, TP-14) — flag fragility risk.
-- **Import** → does it touch `data/imports/` (`HoldingsImportParser`) or the fond↔fondbolag
-  matching (`FundCompanyMatcher`, `FundNameMatcher`)?
-- Auth (`AuthRepository` — currently a stub, Google Sign-in is planned per TP-6) or backup
-  (`BackupRepository`/`LocalBackupRepository` + `BackupPayload` — local file backup is built,
-  Drive transport planned per TP-7 step 2)
-  touchpoints? DI (Hilt) touchpoints?
-- **Which requirements** in `KRAVLISTA.md` does it touch? Find the ID(s) — prefixes in use:
-  `ÖV` (syfte), `TP` (teknisk plattform), `UI` (utseende/tema), `NAV`/`POR`/`TRX`/`IMP`
-  (navigation/skärmar), `NFR` (datasäkerhet/tester) — or note a **new** ID is needed.
-- **Which tests** cover the affected code today? Check `app/src/test` (unit) and
-  `app/src/androidTest` (instrumented, incl. `Migration12Test`/`Migration23Test`-style migration tests).
+- **Inom omfång** – vad issuet levererar.
+- **Utanför omfång** – vad det medvetet inte gör.
+- **Acceptanskriterier** – observerbara, testbara punkter
+  (`- [ ] Sparar en transaktion och den finns kvar efter omstart`).
 
-Note the concrete file paths you find — they go into the issue.
+### Definition of Done – de fem reglerna konkret
+1. **Datasäkerhet** – entitet, `version`, migrering + `MigrationXYTest`; fältet i
+   `BackupPayload` med default, i `export()`/`restore()`, fältvakten i `BackupSerializerTest`
+   uppdaterad och `BackupRoundTripTest` asserterar på det; eller "ingen persisterad ändring",
+   eller motivet till att det är cache.
+2. **Tester** – nivåer och klasser; bugg → regressionstest som faller före fixen.
+3. **Krav** – ID:n att lägga till, ändra eller stryka (skill `requirements-kravlista`).
+4. **Enhetligt** – vilka delade delar som används, vad nytt som byggs delat, vilken dubblett
+   som slås ihop.
+5. **CI-budget** – nya beroenden och deras byggtidseffekt; eller "ingen påverkan".
 
----
+Plus **mockup** (Design) för ny GUI, **integritet** (logga aldrig innehav, belopp, tokens eller
+hela HTTP-svar) och **tillgänglighet** (`contentDescription`, 48 dp) där det är relevant. Gäller
+en regel inte, skriv varför. Stort arbete → föreslå uppdelning i under-issues
+(`mcp__github__sub_issue_write`), var och en med egen DoD.
 
-## Step 4 — Define scope & Definition of Done
-
-Draw the boundary explicitly:
-
-- **In scope** — what this issue delivers.
-- **Out of scope / follow-ups** — what it deliberately does NOT include (prevents scope creep).
-- **Acceptance criteria** — a checklist of observable, testable outcomes, each verifiable by
-  running the app or a test, e.g. `- [ ] Sparar en transaktion och den finns kvar efter omstart av appen`.
-
-### Definition of Done — the four rules, made concrete
-
-Every issue **must** carry these, each tied to a non-negotiable rule. If one genuinely
-doesn't apply, say why in the issue rather than dropping it silently.
-
-1. **Data safety (rule 1)** — if the change adds/alters persisted data: a Room migration is
-   written (with a migration test), and the field is accounted for in the backup contract
-   (`BackupPayload`, the file format). Since SET-6 the round trip is real and tested
-   (`BackupRoundTripTest`), so a new persisted field must be added to `BackupPayload` **and**
-   to `BackupSerializerTest`'s field guard — that guard fails on purpose when a model gains a
-   field, so decide deliberately whether it belongs in the contract. Only the Drive transport
-   (TP-7 step 2) is still outstanding. (`data-safety-backup`)
-2. **Tests at all levels (rule 2)** — unit (`app/src/test`) for ViewModel/domain/mapper/
-   parser logic (fakes over mocks, Turbine for flows); instrumented (`app/src/androidTest`)
-   for Compose UI, Room DAO, and migrations. A bug fix adds a **regression test that fails
-   before the fix and passes after**. (`testing-strategy`)
-3. **Requirements updated (rule 3)** — `KRAVLISTA.md` reflects the change: new requirement
-   row (next ID in the relevant section) for new behaviour, amended row for changed
-   behaviour, or `~~…~~ *(borttaget)*` for removed behaviour. (`requirements-kravlista`)
-4. **Component reuse (rule 4)** — any UI uses/extends the shared components (`ui/components/`,
-   `ui/diagram/`) rather than a new variant. (`shared-ui-components`)
-
-Plus, where relevant: don't log full HTTP responses/secrets from the fund-data sources, and
-add `contentDescription`/adequate touch targets for new interactive UI.
-
-If the work is large, propose splitting it and ask whether to file separate issues or a
-parent with sub-issues (`mcp__github__sub_issue_write`). Each split keeps its own DoD.
-
----
-
-## Step 5 — Draft the issue
-
-Assemble the body using this template. Fill every section; drop one only if it genuinely
-doesn't apply (and consider saying so).
+## Steg 6 – Utkast
 
 ```markdown
-## Summary
-<one paragraph: what and why>
+## Sammanfattning
+<vad och varför>
 
-## Motivation / Problem
-<the user need or bug impact>
+## Design
+<mockup-länk, eller "ingen GUI-ändring">
 
-## Proposed approach
-<technical plan grounded in Step 3 — name real files/classes>
+## Föreslaget upplägg
 1. …
-2. …
 
-## Affected areas
-- `app/src/main/.../PortfoljViewModel.kt`
-- `app/src/main/.../TransactionRepository.kt`
+## Återbruk (regel 4)
+- Komponenter: …
+- Use cases/byggstenar: …
+- Dubblett som slås ihop: … (eller "ingen")
+- Nytt delat som byggs först: … (eller "inget")
 
-## Data safety (backup/restore)
-<persisted fields added/changed, the Room migration, and how it fits the backup contract
-(`BackupRepository`) — or "no persisted data change">
+## Berörda filer
+- `app/src/main/kotlin/se/partee71/fonder/…`
 
-## Requirements (KRAVLISTA.md)
-- <new or amended requirement ID(s) and the exact row text to add/change>
+## Datasäkerhet
+<entitet/fält, migrering, BackupPayload och rundtur – eller "ingen persisterad ändring">
 
-## Test plan
-- **Unit** (`app/src/test`): <which test class(es), what cases>
-- **Instrumented** (`app/src/androidTest`): <which screen/DAO/migration test(s), what cases>
+## Krav (KRAVLISTA.md)
+- <ID och radtext>
 
-## Acceptance criteria
-- [ ] <behaviour 1, observable/testable>
-- [ ] Shared components reused where applicable (no duplicate UI variant)
-- [ ] Room migration written and tested (if schema changed)
-- [ ] Persisted data accounted for in the backup contract (if applicable)
-- [ ] `KRAVLISTA.md` updated (new/amended/struck requirement row)
-- [ ] Unit tests added/updated and passing (`app/src/test`)
-- [ ] Instrumented tests added/updated and passing (`app/src/androidTest`)
+## Testplan
+- Enhet (`app/src/test`): …
+- Instrument (`app/src/androidTest`): … (Compose, DAO, migrering, rundtur)
 
-## Out of scope
+## Acceptanskriterier
+- [ ] <beteende>
+- [ ] Mockup godkänd (om GUI)
+- [ ] Migrering + `MigrationXYTest` (om schemat ändras)
+- [ ] Backup-kedjan + rundturstest (om användardata)
+- [ ] KRAVLISTA uppdaterad
+- [ ] Tester tillagda/uppdaterade och gröna
+
+## Utanför omfång
 - …
 
-## Risks / Open questions
-- <hidden complexity, migration risk, undocumented-source fragility (Handelsbanken/Avanza), or "none">
+## Risker / Öppna frågor
+- <migreringsrisk, skör extern källa, eller "inga">
+
+## Agent · modell · effort
+- <agent> · <modell> · <effort> – <vilken del> (t.ex. `arkitekt` · Opus · high – migrering och
+  backup-kedjan; `byggare` · Opus · medium – skärmen)
 ```
 
-For a **bug**, swap "Proposed approach / Motivation" for **Steps to reproduce**, **Expected
-behaviour**, **Actual behaviour**, and **Environment**, and require the regression test in
-acceptance criteria.
+För **buggar**: byt Föreslaget upplägg mot **Steg för att återskapa**, **Förväntat**,
+**Faktiskt**, **Miljö**, och kräv regressionstestet.
 
-Show the full drafted title and body. Propose a concise title
-(`<area>: <imperative summary>`, e.g. `Transaktioner: bekräftelsedialog vid borttagning av rad`).
+**Agent · modell · effort är obligatoriskt.** Varje del anger agent (`byggare`, `arkitekt`,
+`testskrivare` …), modell och effort, utifrån agenttabellen i CLAUDE.md; Room-schema,
+migreringar och backup-kedjan minst `arkitekt` · high. Ett issue utan avsnittet är inte
+färdigförfinat.
 
-**Wait for explicit confirmation. Ask whether to apply labels** (fetch real ones via repo
-labels if unsure).
+Titel: `<område>: <sammanfattning i imperativ>` (t.ex. `Transaktioner: bekräftelsedialog vid
+borttagning av rad`). Visa hela utkastet och **vänta på bekräftelse**. Fråga om etiketter
+(hämta repots verkliga etiketter om du är osäker).
 
----
+## Steg 7 – Skapa eller uppdatera
 
-## Step 6 — Create or update the issue
+- **Nytt:** `mcp__github__issue_write` (method `create`, owner `ParTee71`, repo `fonder`,
+  title, body, labels). Vid uppdelning: förälder först, sedan varje under-issue med
+  `mcp__github__sub_issue_write`.
+- **Befintligt:** `method: update` med hela den förfinade texten – lägg inte till i slutet.
+  Behåll etiketterna om användaren inte vill ändra dem.
 
-Only after confirmation:
+Rapportera nummer och länk.
 
-**New:** `mcp__github__issue_write (method: create, repo: partee71/fonder, title, body, labels?)`
-**Existing:** `mcp__github__issue_write (method: update, repo: partee71/fonder, issue_number: <N>, title?, body?, labels?)`
+## Steg 8 – Nästa steg
 
-When updating, replace the full body with the refined version — do not append. Keep existing
-labels unless the user wants them changed. Report the issue number and URL. For a split,
-create the parent first, then each sub-issue with `mcp__github__sub_issue_write`.
-
----
-
-## Step 7 — Offer next steps
-
-Briefly offer (don't auto-run):
-- **Implement it now** → hand off to the `implement-issue` skill.
-- File the out-of-scope items as follow-up issues.
-- Leave it as a planned ticket for later.
+Erbjud kort: genomför nu (`implement-issue`), skapa uppföljande issues för det som låg
+utanför omfånget, eller låt det ligga planerat.

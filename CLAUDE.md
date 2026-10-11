@@ -12,7 +12,7 @@ Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, fö
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
 skrivs normalt.
 
-Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #C9A227), rubriker i
+Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #B8862F ljust / #E3C05A mörkt), rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
 ---
@@ -57,7 +57,7 @@ effekten i PR:en. Att slippa köra ett test är aldrig ett skäl att inte skriva
 **Läget i dag:** Fonder ligger på **~19–20 minuter per PR-push** (`android.yml` med
 release-bygge + `instrumented.yml` på varje PR). Målet nås i CI-etappen; till dess får ingen
 ändring göra det dyrare.
-→ Skill: **ci-budget** *(tillkommer)*.
+→ Skill: **ci-budget**.
 
 ---
 
@@ -75,7 +75,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - Tumregel: syns förändringen i en tumnagel → mockup först. Padding, ordval eller
   ikonbyte → beskrivningen i PR:en räcker.
 
-→ Skill: **mockup** *(tillkommer)*.
+→ Skill: **mockup**.
 
 ---
 
@@ -194,10 +194,12 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 | `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt reglerna). |
 | `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt reglerna. |
 | `release` | Endast vid uttrycklig release. |
-
-**Tillkommer** (finns inte än – nämns i reglerna men kan inte laddas): `ci-budget` (regel 5),
-`mockup` (processregeln), `ui-style`, `accessibility-compose`, `diagram`,
-`data-privacy-security`.
+| `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
+| `mockup` | Ny skärm, komponent eller ändrat utseende: mockup före kod. |
+| `ui-style` | Designspråket — petrol, mässing, vinst/förlust, Space Grotesk, tabulära siffror, former. |
+| `accessibility-compose` | TalkBack, belopp och procent som läses begripligt, tryckytor, dynamisk text. |
+| `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 2.0.3). |
+| `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
 
 > Reglerna gäller både i Claude Android-appen och i Claude inuti Android Studio —
 > båda läser denna fil och `.claude/`. Skill-filerna är vanlig Markdown och kan läsas
