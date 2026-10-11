@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -19,6 +20,12 @@ class MoneyFormatTest {
         val out = MoneyFormat.percentSigned(0.1234)
         assertTrue("fick: $out", out.startsWith("+"))
         assertTrue("fick: $out", out.contains("12,3"))
+    }
+
+    @Test
+    fun `krSigned ger plus for inflode och akta minustecken for utflode`() {
+        assertEquals("+2 140,00 kr", MoneyFormat.krSigned(2140.0).replace('\u00A0', ' ').replace('\u202F', ' '))
+        assertEquals("−50,00 kr", MoneyFormat.krSigned(-50.0).replace('\u00A0', ' ').replace('\u202F', ' '))
     }
 
     @Test

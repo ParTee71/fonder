@@ -24,7 +24,7 @@ import se.partee71.fonder.ui.theme.FonderTheme
  * Navigeringsskalet (NAV-7, NAV-8, UI-8) i JVM med Robolectric – riktiga flikrad, plusmeny och
  * toppradsval, men enkla ersättare för skärmarna så att testet inte behöver Hilt: fyra flikar med
  * Översikt som start, plusmenyn på varje flik som öppnar sina skärmar, Inställningar bakom ikonen på
- * Översikt, Sålda fonder från Händelser, flikraden och plusmenyn borta på en djupare skärm, och
+ * Översikt, ingen länk till Sålda fonder på Händelser (SLD-1), flikraden och plusmenyn borta på en djupare skärm, och
  * bakåt från en annan flik till Översikt.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -36,7 +36,6 @@ class AppNavigationShellTest {
     private val stubRoutes = Screen.entries.map { it.route } + listOf(
         Routes.SETTINGS,
         Routes.FACIT,
-        Routes.SOLD,
         Routes.TRANSACTION_FORM,
         Routes.IMPORT_ORDERS,
         Routes.IMPORT_HOLDINGS,
@@ -123,16 +122,15 @@ class AppNavigationShellTest {
     }
 
     @Test
-    fun `Sålda fonder nås från Händelser`() {
+    fun `Händelser har ingen länk till Sålda fonder – säljen står i listan`() {
+        // Sedan 0.62.0 (SLD-1, NAV-5): Sålda fonder är en del av Händelser, inte en egen skärm.
         setShell()
 
         composeRule.onNodeWithContentDescription("Händelser").performClick()
-        composeRule.onNodeWithText("Sålda fonder").performClick()
 
-        assertOnScreen(Routes.SOLD)
-        assertTabChrome(visible = false)
-        composeRule.onNodeWithContentDescription("Tillbaka").performClick()
         assertOnScreen("transaktioner")
+        assertTabChrome(visible = true)
+        composeRule.onNodeWithText("Sålda fonder").assertDoesNotExist()
     }
 
     @Test

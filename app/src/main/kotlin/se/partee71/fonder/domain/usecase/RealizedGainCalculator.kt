@@ -2,6 +2,7 @@ package se.partee71.fonder.domain.usecase
 
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 
 /**
  * Realiserat resultat för en enskild säljtransaktion (issue #10).
@@ -33,6 +34,23 @@ data class RealizedSale(
 }
 
 /**
+ * Summerat realiserat resultat över en mängd sälj (SLD-3, TRX-4) — det Händelsers kort visar för
+ * året och, i säljfiltret, sedan start.
+ *
+ * @param uncertain sant om något av de ingående säljen har `uncoveredShares` (SLD-2): summan
+ *   överskattar då vinsten och ska visas som osäker, aldrig tystas ner.
+ */
+data class RealizedTotal(
+    val realizedGain: Double,
+    val costBasis: Double,
+    val saleCount: Int,
+    val uncertain: Boolean,
+) {
+    /** [realizedGain] som andel av summerat anskaffningsvärde, eller null om den summan är 0. */
+    val realizedGainFraction: Double? get() = if (costBasis == 0.0) null else realizedGain / costBasis
+}
+
+/**
  * Kvarvarande (ej sålda) andelar för en fond och deras FIFO-anskaffningsvärde — vad som
  * blir kvar i respektive köp-lott efter att alla kända sälj konsumerat äldsta köpen
  * först. Underlag för [PortfolioCalc] (POR-1), skiljt från [RealizedSale] som gäller de
@@ -57,7 +75,7 @@ data class RemainingPosition(
  * transaktionerna kommer från manuell registrering, Excel-import eller PDF-import
  * (issue #10). Ren, testbar domänlogik utan repository-beroende. Delar en enda
  * lot-konsumering mellan de två vyerna så att [PortfolioCalc]s orealiserade resultat och
- * "Sålda fonder"-vyns realiserade resultat alltid bygger på samma sanning.
+ * Händelsers realiserade resultat (SLD-1) alltid bygger på samma sanning.
  */
 object RealizedGainCalculator {
 
@@ -112,6 +130,18 @@ object RealizedGainCalculator {
             .groupBy { it.fundId }
             .flatMap { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).sales }
             .sortedWith(compareByDescending<RealizedSale> { it.epochDay }.thenByDescending { it.transactionId })
+
+    /** Summerat realiserat resultat över [sales] (SLD-3). */
+    fun total(sales: List<RealizedSale>): RealizedTotal = RealizedTotal(
+        realizedGain = sales.sumOf { it.realizedGain },
+        costBasis = sales.sumOf { it.costBasis },
+        saleCount = sales.size,
+        uncertain = sales.any { it.uncoveredShares > 0.0 },
+    )
+
+    /** Summerat realiserat resultat för sälj gjorda under kalenderåret [year] (TRX-4). */
+    fun totalForYear(sales: List<RealizedSale>, year: Int): RealizedTotal =
+        total(sales.filter { LocalDate.ofEpochDay(it.epochDay).year == year })
 
     /**
      * Kvarvarande andelar och FIFO-anskaffningsvärde per fond, efter att alla kända sälj

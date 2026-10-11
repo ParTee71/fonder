@@ -25,7 +25,7 @@ KRAVLISTA.md består av numrerade avsnitt med tabeller `| ID | Krav |`. Varje kr
 | `IMP` | Import (§4) |
 | `SET` | Inställningar, inklusive säkerhetskopiering (§4) |
 | `NFR` | Datasäkerhet och tester – NFR-1 rundtur, NFR-2 tester, NFR-3 migrering (§5) |
-| `SLD` | Sålda fonder (§6) |
+| `SLD` | Sålda fonder – säljen i Händelser (§6) |
 | `HEM` | Hem (dashboard) (§7) |
 | `ANA` | Analys – nyckeltal och säljsignaler (§8) |
 

@@ -25,7 +25,7 @@ const val PULL_TO_REFRESH_TEST_TAG = "pull_to_refresh"
  * innan datan landat eller fortsätter efter att jobbet tagit slut, och indikatorn skulle då
  * beskriva något annat än vad appen faktiskt gör.
  *
- * Skärmar utan hämtad data (Transaktioner, Sålda fonder, Riskprofil, Inställningar,
+ * Skärmar utan hämtad data (Händelser, Riskprofil, Inställningar,
  * importflödena) använder den **inte** — en gest som inte gör något är värre än ingen gest.
  *
  * Indikatorn är M3 Expressives formskiftande laddningsindikator i en primärbehållare (UI-12),

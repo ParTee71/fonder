@@ -2,10 +2,12 @@ package se.partee71.fonder.domain.usecase
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 
 private fun kop(fundId: String, day: Long, shares: Double, price: Double, id: Long = 0) =
     Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
@@ -177,5 +179,54 @@ class RealizedGainCalculatorTest {
         val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
         assertEquals(6.0, position.shares, 1e-9)
         assertEquals(600.0, position.costBasis, 1e-9)
+    }
+
+    @Test
+    fun `total summerar resultat och anskaffningsvarde over flera fonder (SLD-3)`() {
+        val sales = RealizedGainCalculator.compute(
+            listOf(
+                kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
+                salj("F1", day = 200, shares = 10.0, price = 150.0, id = 2),
+                kop("F2", day = 100, shares = 5.0, price = 200.0, id = 3),
+                salj("F2", day = 200, shares = 5.0, price = 190.0, id = 4),
+            ),
+        )
+
+        val total = RealizedGainCalculator.total(sales)
+
+        // 500 − 50 = 450 på 2000 i anskaffningsvärde.
+        assertEquals(450.0, total.realizedGain, 1e-9)
+        assertEquals(450.0 / 2000.0, total.realizedGainFraction!!, 1e-9)
+        assertEquals(2, total.saleCount)
+        assertFalse(total.uncertain)
+    }
+
+    @Test
+    fun `total utan anskaffningsvarde saknar andel och ar osaker nar ett salj saknar kop (SLD-2)`() {
+        val total = RealizedGainCalculator.total(
+            RealizedGainCalculator.compute(listOf(salj("F1", day = 200, shares = 5.0, price = 150.0, id = 1))),
+        )
+
+        assertNull(total.realizedGainFraction)
+        assertTrue(total.uncertain)
+    }
+
+    @Test
+    fun `totalForYear tar bara med salj gjorda under aret (TRX-4)`() {
+        val lastYear = LocalDate.of(2025, 12, 31).toEpochDay()
+        val thisYear = LocalDate.of(2026, 1, 1).toEpochDay()
+        val sales = RealizedGainCalculator.compute(
+            listOf(
+                kop("F1", day = lastYear - 100, shares = 20.0, price = 100.0, id = 1),
+                salj("F1", day = lastYear, shares = 10.0, price = 110.0, id = 2),
+                salj("F1", day = thisYear, shares = 10.0, price = 130.0, id = 3),
+            ),
+        )
+
+        val total = RealizedGainCalculator.totalForYear(sales, year = 2026)
+
+        assertEquals(300.0, total.realizedGain, 1e-9)
+        assertEquals(1, total.saleCount)
+        assertEquals(0, RealizedGainCalculator.totalForYear(sales, year = 2024).saleCount)
     }
 }

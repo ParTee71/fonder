@@ -33,8 +33,6 @@ import se.partee71.fonder.R
 import se.partee71.fonder.ui.beslut.BeslutScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchViewModel
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppFabMenu
 import se.partee71.fonder.ui.components.AppFabMenuDefaults
 import se.partee71.fonder.ui.components.AppFabMenuItem
@@ -55,7 +53,6 @@ import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.settings.SettingsViewModel
-import se.partee71.fonder.ui.transaktioner.SoldFundsScreen
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 
@@ -205,9 +202,9 @@ fun AppNavigationShell(
 private val TOOLBAR_HALF_HEIGHT = 32.dp
 
 /**
- * Flikens rubrik med dess egna åtgärder: Inställningar på Översikt (NAV-7) och länken till Sålda
- * fonder på Händelser (tills steg 3c slår ihop listorna). Chromets bakgrundsindikator (NAV-6) på
- * alla flikar.
+ * Flikens rubrik med dess egna åtgärder: Inställningar på Översikt (NAV-7). Chromets
+ * bakgrundsindikator (NAV-6) på alla flikar. Sålda fonder har ingen egen länk längre – säljen och
+ * deras realiserade resultat står i Händelsers lista (SLD-1, NAV-5).
  */
 @Composable
 private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, navController: NavHostController) {
@@ -220,12 +217,7 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, navController: Nav
                 onClick = { navController.navigateToSettings() },
                 variant = AppIconButtonVariant.Tonal,
             )
-            Screen.Handelser -> AppButton(
-                text = stringResource(R.string.sold_funds_title),
-                onClick = { navController.navigate(Routes.SOLD) { launchSingleTop = true } },
-                variant = AppButtonVariant.Text,
-            )
-            Screen.Innehav, Screen.Beslut -> Unit
+            Screen.Innehav, Screen.Beslut, Screen.Handelser -> Unit
         }
     }
 }
@@ -261,10 +253,7 @@ fun NavGraphBuilder.fonderDestinations(
         FacitScreen()
     }
     composable(Screen.Handelser.route) {
-        TransaktionerScreen()
-    }
-    composable(Routes.SOLD) {
-        SoldFundsScreen(
+        TransaktionerScreen(
             onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
         )
     }
