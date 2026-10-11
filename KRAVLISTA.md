@@ -911,7 +911,7 @@ fäller bygget så länge `app/google-services.json` saknas.
   (CAGR/portföljandel har inget kr-belopp) i stället för en ny komponent; ny delad
   `AnalysisStatus.kt` (statusfärg/-titel/-triggertexter, `StatusDot`, `AnalysisStatusBanner`)
   återanvänds mellan Fonddetalj och Hem. `StatusColors` (`ui/theme/`) återanvänder befintlig
-  grön/röd (`ReturnColors`) och den befintliga mässings-/guldaccenten för gul — ingen ny
+  grön/röd (`ReturnColors`) och den befintliga accentfärgen för gul (då mässing, sedan UI-1 koppar) — ingen ny
   hårdkodad färg, fast palett bevarad (UI-1). Ingen ny persisterad data — allt härleds ur
   befintlig kurshistorik/transaktioner vid läsning, precis som `PortfolioCalc`/
   `PortfolioPerformanceCalc`.
@@ -1166,7 +1166,7 @@ fäller bygget så länge `app/google-services.json` saknas.
   kräver ett x-värde som exakt matchar en punkt i serien, utan interpolering, så en köpdag
   som inte råkar sammanfalla med en cachad kursdag (helg, röd dag, lucka i historiken)
   skulle annars inte visa någon markör alls. `FundLineChart` ritar en vertikal linje och
-  en kompakt datumetikett (mässingsaccenten `secondary`) vid varje sådan punkt.
+  en kompakt datumetikett (accentfärgen `secondary`, sedan UI-1 koppar) vid varje sådan punkt.
 - **Fondmetadata — grunden för en framtida fondrobot (TP-21, #57):** nytt datalager,
   ingen UI. Avanzas odokumenterade `fund-guide/list`-API (samma källa som TP-14) visade sig
   live vara en frågedriven screener, inte bara en lista — `AvanzaFundListRequestBuilder`
