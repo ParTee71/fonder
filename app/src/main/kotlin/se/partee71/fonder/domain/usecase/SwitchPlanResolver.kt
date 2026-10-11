@@ -47,6 +47,11 @@ object SwitchPlanResolver {
         val switchValueKr: Double? = null,
         /** Sant om användaren markerat bytet som genomfört (SET-5, issue #80) — null i inspelningen betyder "inte markerat", inte "inte genomfört". */
         val followed: Boolean = false,
+        /**
+         * Sorten av råd — bytesplanens byte eller ett billigare alternativ ([CheaperAlternatives], ANA-9).
+         * Bärs med så att ett avstående (HEM-14) skrivs mot rätt sort: samma fondpar kan vara båda.
+         */
+        val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
     )
 
     /**

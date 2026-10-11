@@ -15,7 +15,6 @@ import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.AccountType
-import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
@@ -59,8 +58,9 @@ data class BeslutUiState(
 }
 
 /**
- * Fliken **Beslut** (NAV-9) — det som väntar på användaren: pågående byten (ANA-12) och
- * bytesplanen (HEM-8) med Följ och Avstå (HEM-14), mot riskprofilen och kontotypen, plus vägen till Facit (SET-5).
+ * Fliken **Beslut** (NAV-9) — det som väntar på användaren: pågående byten (ANA-12), bytesplanen
+ * (HEM-8) och de billigare alternativen (ANA-9) med Följ och Avstå (HEM-14), mot riskprofilen och
+ * kontotypen, plus vägen till Facit (SET-5).
  *
  * Förslagen och bevakningarna kommer ur [PendingDecisionsSource], samma källa som Översiktens
  * "Att besluta"-rad och flikradens märke läser — antalet räknas därför på ett ställe. Läser bara
@@ -116,20 +116,21 @@ class BeslutViewModel @Inject constructor(
     }
 
     /**
-     * Avstår från ett förslag (HEM-14): fondparet döljs på Beslut och räknas inte i märket eller i
-     * "Att besluta" så länge avståendet gäller. Förslaget självt rörs inte — det är fortfarande ett
-     * givet råd i facit (SET-5).
+     * Avstår från ett förslag (HEM-14) — ett byte i planen eller ett billigare alternativ (ANA-9),
+     * efter förslagets egen sort: fondparet döljs på Beslut och i Fonddetalj och räknas inte i märket
+     * eller i "Att besluta" så länge avståendet gäller. Förslaget självt rörs inte — det är
+     * fortfarande ett givet råd i facit (SET-5).
      */
     fun dismissSuggestion(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
-            suggestionDismissalRepository.dismiss(suggestion.sellIsin, suggestion.buyIsin, SuggestionKind.RISK_PLAN)
+            suggestionDismissalRepository.dismiss(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
         }
     }
 
     /** Ångrar ett avstående (HEM-14) — förslaget visas igen. */
     fun undoDismissal(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
-            suggestionDismissalRepository.undoDismissal(suggestion.sellIsin, suggestion.buyIsin, SuggestionKind.RISK_PLAN)
+            suggestionDismissalRepository.undoDismissal(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
         }
     }
 

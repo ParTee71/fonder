@@ -23,6 +23,14 @@ interface SuggestionRecordRepository {
     fun observeHistory(): Flow<List<SuggestionRecord>>
 
     /**
+     * Förslag av sorten [kind] inspelade [sinceEpochDay] eller senare, nyast först — Beslutets läsväg
+     * för avgiftsbytena (ANA-9, NAV-9). Room filtrerar i SQL, så flikmärket inte materialiserar hela
+     * historiken vid varje ändring; defaulten här är samma urval ur [observeHistory], för fakes.
+     */
+    fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> =
+        observeHistory().map { all -> all.filter { it.kind == kind && it.suggestedAtEpochDay >= sinceEpochDay } }
+
+    /**
      * Sant om det här bytet av den här sorten redan spelats in [epochDay] — dedupspärr mot
      * upprepad inspelning samma dag (se [se.partee71.fonder.worker.FundPriceUpdateWorker]).
      * [kind] ingår i nyckeln sedan issue #91: samma fondpar kan vara både ett riskplansbyte och
@@ -64,6 +72,9 @@ class RoomSuggestionRecordRepository @Inject constructor(
 
     override fun observeHistory(): Flow<List<SuggestionRecord>> =
         dao.observeHistory().map { list -> list.map(SuggestionRecordEntity::toDomain) }
+
+    override fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> =
+        dao.observeRecent(kind.name, sinceEpochDay).map { list -> list.map(SuggestionRecordEntity::toDomain) }
 
     override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean =
         dao.existsForDay(sellIsin, buyIsin, epochDay, kind.name)

@@ -73,7 +73,7 @@ raden här. Bygg aldrig en tredje kopia.
 |---|---|---|
 | `TotalCard` | `hem/HemScreen.kt` och `portfolj/PortfoljScreen.kt` – identisk kod, olika `UiState` | en delad komponent som tar primitiver (värde, vinst, andel, `working`) |
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
-| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchSuggestionCard`, `SwitchWatchCard` (Beslut), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
+| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SuggestionCard` (Beslut – bytesplanens och de billigare alternativens förslag), `SwitchWatchCard` (Beslut), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
 | Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) – Sålda fonders kopia försvann med vyn i 0.62.0 | `ExpandableInfoRow` i ett `AppCard` |
 | Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
 | Testuppställning | ~40 testfiler med kopierade fakes och fixturer – flest `HemViewModelTest`/`PortfoljViewModelTest`, sedan `SettingsViewModelTest`, `FacitViewModelTest`, migreringstesterna | delade fakes och fixturer (skill `testing-strategy` → DRY i tester) |
@@ -100,7 +100,7 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 | Portföljberäkningar, avgifter, risk, avkastningsserier | `PortfolioCalc`, `PortfolioFeeCalc`, `PortfolioRiskCalc`, `PortfolioPerformanceCalc`, `PortfolioReturnSeriesCalc`, `PortfolioExposureCalc` i `domain/usecase/` |
 | Analys och säljsignaler | `FundAnalysisCalc`, `AnalysisGuidance` |
 | Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc`; `SwitchWatchRepository.startFromSuggestion` (bevakning ur ett kvitterat förslag – Beslut och Fonddetalj) |
-| Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan utan avstådda byten + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa; vilka förslag ett avstående döljer och hur länge: `SuggestionDismissals` (HEM-14) |
+| Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan och billigare alternativ utan avstådda förslag + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa; de inspelade avgiftsbytena som förslag: `CheaperAlternatives` (ANA-9, även Fonddetaljs kvittering); vilka förslag ett avstående döljer och hur länge: `SuggestionDismissals` (HEM-14, även Fonddetalj) |
 | Diagrammets data | `ChartPeriodFilter`, `ChartSeriesNormalizer`, `PurchaseMarkerFilter`, `IndexBenchmarkSelector` |
 | Belopp och tal i text | `MoneyFormat`, `SwedishNumberFormat` |
 | Fondnamn och matchning | `FundNameKey`, `FundNameMatcher`, `FundCompanyMatcher`, `ImportFundMatcher` |

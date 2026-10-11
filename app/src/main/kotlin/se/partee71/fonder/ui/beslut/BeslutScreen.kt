@@ -30,9 +30,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
+import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.components.AppButton
@@ -124,8 +126,13 @@ fun BeslutContent(
         if (decisions.switchPlan.isNotEmpty()) {
             item { SectionHeading(stringResource(R.string.beslut_suggestions_title), working = state.suggestionsWorking) }
             items(decisions.switchPlan, key = { "plan-${it.recordId}" }) { switch ->
-                SwitchSuggestionCard(
-                    switch = switch,
+                SuggestionCard(
+                    suggestion = switch,
+                    title = switchPlanHeadline(switch),
+                    details = listOfNotNull(
+                        switch.switchValueKr?.let { stringResource(R.string.format_switch_plan_amount, MoneyFormat.kr(it)) },
+                        stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
+                    ),
                     watched = switch.sellIsin in decisions.watchedSellIsins,
                     onFollowedChange = onSwitchFollowedChange,
                     onStartSwitchWatch = onStartSwitchWatch,
@@ -158,13 +165,34 @@ fun BeslutContent(
             }
         }
 
+        // Billigare alternativ (ANA-9) under planen och dess omräkning, som egna förslag med samma
+        // två beslut. Egen rubrik: de svarar på en annan fråga än planen — samma exponering till
+        // lägre avgift.
+        if (decisions.cheaperAlternatives.isNotEmpty()) {
+            item { SectionHeading(stringResource(R.string.fee_comparison_title)) }
+            items(decisions.cheaperAlternatives, key = { "fee-${it.suggestion.recordId}" }) { alternative ->
+                SuggestionCard(
+                    suggestion = alternative.suggestion,
+                    title = cheaperAlternativeHeadline(alternative),
+                    details = listOfNotNull(
+                        alternative.annualSavingsKr?.let { stringResource(R.string.format_beslut_cheaper_savings, MoneyFormat.kr(it)) },
+                    ),
+                    watched = alternative.suggestion.sellIsin in decisions.watchedSellIsins,
+                    onFollowedChange = onSwitchFollowedChange,
+                    onStartSwitchWatch = onStartSwitchWatch,
+                    onDismiss = onDismissSuggestion,
+                )
+            }
+            item { CaptionText(stringResource(R.string.fee_comparison_explain)) }
+        }
+
         item { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
         item { FacitRow(followedCount = state.followedCount, onOpen = onOpenFacit) }
 
         // Avstådda förslag (HEM-14) längst ned: ingen snackbar finns i appen, så ångra-vägen är en
         // hopfälld rad som bara visas när något avståtts och fortfarande ingår i planen.
-        if (decisions.dismissedSuggestions.isNotEmpty()) {
-            item { DismissedSection(decisions.dismissedSuggestions, onUndo = onUndoDismissal) }
+        if (decisions.dismissedCount > 0) {
+            item { DismissedSection(decisions, onUndo = onUndoDismissal) }
         }
     }
 }
@@ -274,61 +302,71 @@ private fun SwitchWatchCard(watch: OpenSwitchWatch, working: Boolean, onOpen: (L
     }
 }
 
+/** "1. Sälj X (nivå 6) → Köp Y (nivå 4)" — ett byte i bytesplanen, på kortet och bland de avstådda. */
+@Composable
+private fun switchPlanHeadline(switch: SwitchPlanResolver.Suggestion): String =
+    stringResource(
+        R.string.format_switch_plan_row,
+        switch.planIndex + 1,
+        switch.sellFundName,
+        switch.fromLevel,
+        switch.buyFundName,
+        switch.toLevel,
+    )
+
+/** "Sverige Småbolag 1,40 % → Småbolag Index 0,40 %" — ett billigare alternativ (ANA-9), på kortet och bland de avstådda. */
+@Composable
+private fun cheaperAlternativeHeadline(alternative: CheaperAlternative): String =
+    stringResource(
+        R.string.format_beslut_cheaper_row,
+        alternative.suggestion.sellFundName,
+        MoneyFormat.feePercent(alternative.sellFeePercent),
+        alternative.suggestion.buyFundName,
+        MoneyFormat.feePercent(alternative.buyFeePercent),
+    )
+
 /**
- * Ett byte i bytesplanen (HEM-8) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus belopp och
- * avgiftsskillnad. Rangordningen kommer ur [SwitchPlanResolver.Suggestion.planIndex], aldrig ur
- * listpositionen: planen är girig och sekventiell, så numret är en del av rådet (issue #75).
- * Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
+ * Ett förslag på Beslut — ett byte i bytesplanen (HEM-8) eller ett billigare alternativ (ANA-9):
+ * rubrik, underlag och förslagets två beslut. För planen kommer rangordningen ur
+ * [SwitchPlanResolver.Suggestion.planIndex], aldrig ur listpositionen: planen är girig och
+ * sekventiell, så numret är en del av rådet (issue #75).
  *
  * **Följ** och **Avstå** (HEM-14) är förslagets två beslut. "Följ" utför inget byte, den
  * **registrerar** att användaren gjorde det (SET-5) — samma markering som "Genomförd", som då tar
  * över raden så att kvitteringen kan ångras på samma sätt som i Facit och Fonddetalj. "Avstå" döljer
- * fondparet (se [SuggestionDismissals]). "Bevaka alternativ" erbjuds först efter kvitteringen —
- * bevakningen handlar om perioden **efter** säljet (ANA-12) — och bara när säljfonden inte redan
- * bevakas, annars hade varje tryck startat ytterligare en bevakning av samma byte.
+ * fondparet för förslagets sort (se [SuggestionDismissals]). "Bevaka alternativ" erbjuds först efter
+ * kvitteringen — bevakningen handlar om perioden **efter** säljet (ANA-12) — och bara när säljfonden
+ * inte redan bevakas, annars hade varje tryck startat ytterligare en bevakning av samma byte.
  */
 @Composable
-private fun SwitchSuggestionCard(
-    switch: SwitchPlanResolver.Suggestion,
+private fun SuggestionCard(
+    suggestion: SwitchPlanResolver.Suggestion,
+    title: String,
+    details: List<String>,
     watched: Boolean,
     onFollowedChange: (Long, Boolean) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
     onDismiss: (SwitchPlanResolver.Suggestion) -> Unit,
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Text(
-            stringResource(
-                R.string.format_switch_plan_row,
-                switch.planIndex + 1,
-                switch.sellFundName,
-                switch.fromLevel,
-                switch.buyFundName,
-                switch.toLevel,
-            ),
-            style = MaterialTheme.typography.titleSmall,
-        )
-        switch.switchValueKr?.let { valueKr ->
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        details.forEachIndexed { index, detail ->
             Text(
-                stringResource(R.string.format_switch_plan_amount, MoneyFormat.kr(valueKr)),
+                detail,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = if (index == 0) Modifier.padding(top = 4.dp) else Modifier,
             )
         }
-        Text(
-            stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (switch.followed) {
+        if (suggestion.followed) {
             FollowedToggleRow(
                 followed = true,
-                onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
+                onFollowedChange = { checked -> onFollowedChange(suggestion.recordId, checked) },
             )
             if (!watched) {
                 AppButton(
                     text = stringResource(R.string.switch_watch_start),
-                    onClick = { onStartSwitchWatch(switch) },
+                    onClick = { onStartSwitchWatch(suggestion) },
                     variant = AppButtonVariant.Text,
                 )
             }
@@ -340,15 +378,15 @@ private fun SwitchSuggestionCard(
             ) {
                 AppButton(
                     text = stringResource(R.string.beslut_follow),
-                    onClick = { onFollowedChange(switch.recordId, true) },
+                    onClick = { onFollowedChange(suggestion.recordId, true) },
                     variant = AppButtonVariant.Outlined,
-                    contentDescription = stringResource(R.string.format_beslut_follow_a11y, switch.sellFundName, switch.buyFundName),
+                    contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName),
                 )
                 AppButton(
                     text = stringResource(R.string.beslut_dismiss),
-                    onClick = { onDismiss(switch) },
+                    onClick = { onDismiss(suggestion) },
                     variant = AppButtonVariant.Text,
-                    contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, switch.sellFundName, switch.buyFundName),
+                    contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, suggestion.sellFundName, suggestion.buyFundName),
                 )
             }
         }
@@ -356,14 +394,14 @@ private fun SwitchSuggestionCard(
 }
 
 /**
- * "Avstådda (N)" (HEM-14) — hopfälld som standard, med en rad per avstått byte och **Ångra**, som
- * visar förslaget igen. Rangordningen står kvar i raden, så det syns vilket steg i planen som
- * hoppats över.
+ * "Avstådda (N)" (HEM-14) — hopfälld som standard, med en rad per avstått förslag och **Ångra**, som
+ * visar förslaget igen: först planens byten, sedan de billigare alternativen. Planens rangordning står
+ * kvar i raden, så det syns vilket steg i planen som hoppats över.
  */
 @Composable
-private fun DismissedSection(dismissed: List<SwitchPlanResolver.Suggestion>, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
+private fun DismissedSection(decisions: PendingDecisions, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
     ExpandableSection(
-        title = stringResource(R.string.format_beslut_dismissed_title, dismissed.size),
+        title = stringResource(R.string.format_beslut_dismissed_title, decisions.dismissedCount),
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
     ) {
         Column {
@@ -372,33 +410,34 @@ private fun DismissedSection(dismissed: List<SwitchPlanResolver.Suggestion>, onU
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            dismissed.forEach { switch ->
-                ItemRow(
-                    headline = stringResource(
-                        R.string.format_switch_plan_row,
-                        switch.planIndex + 1,
-                        switch.sellFundName,
-                        switch.fromLevel,
-                        switch.buyFundName,
-                        switch.toLevel,
-                    ),
-                    headlineStyle = MaterialTheme.typography.bodyMedium,
-                    trailing = {
-                        AppButton(
-                            text = stringResource(R.string.beslut_undo_dismissal),
-                            onClick = { onUndo(switch) },
-                            variant = AppButtonVariant.Text,
-                            contentDescription = stringResource(
-                                R.string.format_beslut_undo_dismissal_a11y,
-                                switch.sellFundName,
-                                switch.buyFundName,
-                            ),
-                        )
-                    },
-                )
+            decisions.dismissedSuggestions.forEach { switch ->
+                DismissedRow(headline = switchPlanHeadline(switch), suggestion = switch, onUndo = onUndo)
+            }
+            decisions.dismissedCheaperAlternatives.forEach { alternative ->
+                DismissedRow(headline = cheaperAlternativeHeadline(alternative), suggestion = alternative.suggestion, onUndo = onUndo)
             }
         }
     }
+}
+
+@Composable
+private fun DismissedRow(headline: String, suggestion: SwitchPlanResolver.Suggestion, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
+    ItemRow(
+        headline = headline,
+        headlineStyle = MaterialTheme.typography.bodyMedium,
+        trailing = {
+            AppButton(
+                text = stringResource(R.string.beslut_undo_dismissal),
+                onClick = { onUndo(suggestion) },
+                variant = AppButtonVariant.Text,
+                contentDescription = stringResource(
+                    R.string.format_beslut_undo_dismissal_a11y,
+                    suggestion.sellFundName,
+                    suggestion.buyFundName,
+                ),
+            )
+        },
+    )
 }
 
 /**

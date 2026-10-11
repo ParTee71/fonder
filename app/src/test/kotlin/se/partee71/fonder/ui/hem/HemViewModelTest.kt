@@ -49,6 +49,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
@@ -633,6 +634,25 @@ class HemViewModelTest {
             while (state.loading || state.decisions.count < 2) state = awaitItem()
             assertEquals(1, state.decisions.openSuggestionCount)
             assertEquals(1, state.decisions.openWatches.size)
+            assertEquals(2, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `att besluta raknar billigare alternativ for sig ur den delade kallan (HEM-13, ANA-9)`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        // Innehavets senaste jämförelse visar kandidaten, och bakgrundsskanningen har spelat in avgiftsbytet.
+        metadataByIsin = metadataByIsin + ("SE_HELD" to metadataByIsin.getValue("SE_HELD").copy(shownAlternativeIsins = listOf("SE_CAND")))
+        fakeSuggestionRecordRepo.records.value += fakeSuggestionRecordRepo.records.value.single().copy(id = 43, kind = SuggestionKind.FEE)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.count < 2) state = awaitItem()
+            assertEquals(1, state.decisions.openSwitchCount)
+            assertEquals(1, state.decisions.openCheaperAlternativeCount)
+            assertEquals(2, state.decisions.openSuggestionCount)
             assertEquals(2, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }

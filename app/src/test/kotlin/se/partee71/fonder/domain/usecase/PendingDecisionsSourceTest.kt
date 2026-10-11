@@ -39,13 +39,25 @@ class PendingDecisionsSourceTest {
     private val dismissals = FakeSuggestionDismissalRepository()
     private val metadata = FakeFundMetadataRepository(
         metadataByIsin = listOf("SE_SALJ_1" to 5, "SE_KOP_1" to 3, "SE_SALJ_2" to 6, "SE_KOP_2" to 4)
-            .associate { (isin, risk) -> isin to meta(isin, risk) },
+            .associate { (isin, risk) -> isin to meta(isin, risk) } +
+            // Ett innehav vars senaste jämförelse (ANA-9) visar ett billigare alternativ.
+            mapOf(
+                "SE_DYR" to meta("SE_DYR", 4, fee = 1.4, shown = listOf("SE_BILLIG")),
+                "SE_BILLIG" to meta("SE_BILLIG", 4, fee = 0.4),
+            ),
     )
 
-    private fun meta(isin: String, risk: Int) = FundMetadata(
-        isin = isin, name = isin, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
+    private fun meta(isin: String, risk: Int, fee: Double = 0.5, shown: List<String> = emptyList()) = FundMetadata(
+        isin = isin, name = isin, orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), shownAlternativeIsins = shown,
+    )
+
+    /** Ett inspelat avgiftsbyte (ANA-9) SE_DYR → SE_BILLIG, [daysAgo] dagar gammalt. */
+    private fun feeRecord(id: Long, followed: Boolean? = null, daysAgo: Long = 0) = SuggestionRecord(
+        id = id, suggestedAtEpochDay = LocalDate.now().minusDays(daysAgo).toEpochDay(), planIndex = 0,
+        sellIsin = "SE_DYR", buyIsin = "SE_BILLIG", sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0,
+        switchValueKr = 10_000.0, followed = followed, batchEpochMillis = 2_000, kind = SuggestionKind.FEE,
     )
 
     private fun record(id: Long, planIndex: Int, followed: Boolean? = null) = SuggestionRecord(
@@ -55,14 +67,16 @@ class PendingDecisionsSourceTest {
         followed = followed, batchEpochMillis = 1_000,
     )
 
-    /** Läser källan när planen (synlig eller avstådd) har kommit fram. */
-    private suspend fun TestScope.decisions(): PendingDecisions {
+    /** Läser källan när [until] är uppfyllt — som standard när planen (synlig eller avstådd) har kommit fram. */
+    private suspend fun TestScope.decisions(
+        until: (PendingDecisions) -> Boolean = { it.switchPlan.size + it.dismissedSuggestions.size == 2 },
+    ): PendingDecisions {
         val preferences = testPreferencesRepository(dispatcher, tempFolder, "pending_${System.nanoTime()}")
         preferences.setAccountType(AccountType.ISK_KF)
         val source = PendingDecisionsSource(
             preferences, records, FakeSwitchWatchRepository(), FakeCachedPriceRepository(), metadata, dismissals,
         )
-        return source.observe().first { it.switchPlan.size + it.dismissedSuggestions.size == 2 }
+        return source.observe().first(until)
     }
 
     @Test
@@ -104,5 +118,76 @@ class PendingDecisionsSourceTest {
         // Det genomförda är redan beslutat (SET-5) — bara det andra är öppet.
         assertEquals(1, decisions.openSuggestionCount)
         assertEquals(1, decisions.count)
+    }
+
+    // --- Billigare alternativ (ANA-9) ur de inspelade avgiftsbytena ---
+
+    @Test
+    fun `ett oppet billigare alternativ visas och raknas`() = runTest(dispatcher) {
+        records.records.value = listOf(record(1, 0), record(2, 1), feeRecord(10))
+
+        val decisions = decisions()
+
+        val alternative = decisions.cheaperAlternatives.single()
+        assertEquals(10L, alternative.suggestion.recordId)
+        assertEquals(SuggestionKind.FEE, alternative.suggestion.kind)
+        assertEquals(100.0, alternative.annualSavingsKr!!, 1e-6)
+        // Planens byten och avgiftsbytet blandas aldrig: planen har sina två byten, inget mer.
+        assertEquals(listOf(1L, 2L), decisions.switchPlan.map { it.recordId })
+        assertEquals(2, decisions.openSwitchCount)
+        assertEquals(1, decisions.openCheaperAlternativeCount)
+        assertEquals(3, decisions.openSuggestionCount)
+        assertEquals(3, decisions.count)
+    }
+
+    @Test
+    fun `ett genomfort billigare alternativ visas men raknas inte`() = runTest(dispatcher) {
+        records.records.value = listOf(record(1, 0), record(2, 1), feeRecord(10, followed = true))
+        dismissals.dismiss("SE_DYR", "SE_BILLIG", SuggestionKind.FEE, LocalDate.now())
+
+        val decisions = decisions()
+
+        // Kvitteringen är det starkare beskedet — även ett avstått par visas då som genomfört.
+        assertTrue(decisions.cheaperAlternatives.single().suggestion.followed)
+        assertTrue(decisions.dismissedCheaperAlternatives.isEmpty())
+        assertEquals(0, decisions.openCheaperAlternativeCount)
+        assertEquals(2, decisions.count)
+    }
+
+    @Test
+    fun `ett avstatt billigare alternativ ligger bland de avstadda och raknas inte`() = runTest(dispatcher) {
+        records.records.value = listOf(record(1, 0), record(2, 1), feeRecord(10))
+        dismissals.dismiss("SE_DYR", "SE_BILLIG", SuggestionKind.FEE, LocalDate.now())
+
+        val decisions = decisions()
+
+        assertTrue(decisions.cheaperAlternatives.isEmpty())
+        assertEquals(listOf(10L), decisions.dismissedCheaperAlternatives.map { it.suggestion.recordId })
+        assertEquals(1, decisions.dismissedCount)
+        // Avståendet gäller sorten: planens byten påverkas inte.
+        assertEquals(2, decisions.switchPlan.size)
+        assertEquals(2, decisions.count)
+    }
+
+    @Test
+    fun `ett billigare alternativ som inte spelats in pa TTL_DAYS visas inte`() = runTest(dispatcher) {
+        records.records.value = listOf(record(1, 0), record(2, 1), feeRecord(10, daysAgo = CheaperAlternatives.TTL_DAYS + 2))
+
+        val decisions = decisions()
+
+        assertTrue(decisions.cheaperAlternatives.isEmpty())
+        assertTrue(decisions.dismissedCheaperAlternatives.isEmpty())
+        assertEquals(2, decisions.count)
+    }
+
+    @Test
+    fun `billigare alternativ visas utan bytesplan och raknas i det tomma laget`() = runTest(dispatcher) {
+        records.records.value = listOf(feeRecord(10))
+
+        val decisions = decisions { it.cheaperAlternatives.isNotEmpty() }
+
+        assertTrue(decisions.switchPlan.isEmpty())
+        assertEquals(1, decisions.count)
+        assertTrue(!decisions.isEmpty)
     }
 }

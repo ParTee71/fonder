@@ -54,6 +54,20 @@ interface SuggestionRecordDao {
     fun observeHistory(): Flow<List<SuggestionRecordEntity>>
 
     /**
+     * Förslag av sorten [kind] från och med [sinceEpochDay], nyast först — avgiftsbytena som Beslut
+     * och flikmärket läser (ANA-9, NAV-9). Urvalet ligger i SQL av samma skäl som [observeLatestBatch]:
+     * märket är aktivt hela tiden, och tabellen växer med varje backstop-körning.
+     */
+    @Query(
+        """
+        SELECT * FROM suggestion_records
+        WHERE kind = :kind AND suggestedAtEpochDay >= :sinceEpochDay
+        ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, id DESC
+        """,
+    )
+    fun observeRecent(kind: String, sinceEpochDay: Long): Flow<List<SuggestionRecordEntity>>
+
+    /**
      * Markerar (eller avmarkerar) ett förslag som genomfört (HEM-8/SET-5, issue #80). Kolumnen
      * har funnits sedan tabellen skapades (Room 9→10) men saknade skrivväg — utan den kan facit
      * inte skilja rådets träffsäkerhet från det faktiska utfallet.
