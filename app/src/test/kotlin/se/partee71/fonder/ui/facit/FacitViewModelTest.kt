@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
@@ -112,7 +113,11 @@ class FacitViewModelTest {
     /** Driver summeringskortets väntesnurra (NAV-6) — se [FakeFundPriceRefreshScheduler.runningWork]. */
     private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
-    private fun viewModel() = FacitViewModel(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo, fakeScheduler)
+    private fun viewModel() = FacitViewModel(
+        FacitSummary(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo),
+        fakeSuggestionRepo,
+        fakeScheduler,
+    )
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()

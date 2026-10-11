@@ -47,6 +47,8 @@ import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
+import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.theme.ReturnColors
 
 /** Gör Besluts lista adresserbar för `performScrollToIndex` i tester (UI-5, samma mönster som Hem och Facit). */
 const val BESLUT_LIST_TEST_TAG = "beslut_list"
@@ -187,7 +189,7 @@ fun BeslutContent(
         }
 
         item { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
-        item { FacitRow(followedCount = state.followedCount, onOpen = onOpenFacit) }
+        item { FacitRow(followedCount = state.followedCount, followedExcessKr = state.followedExcessKr, onOpen = onOpenFacit) }
 
         // Avstådda förslag (HEM-14) längst ned: ingen snackbar finns i appen, så ångra-vägen är en
         // hopfälld rad som bara visas när något avståtts och fortfarande ingår i planen.
@@ -441,12 +443,13 @@ private fun DismissedRow(headline: String, suggestion: SwitchPlanResolver.Sugges
 }
 
 /**
- * Vägen till Facit (SET-5) — en skärm djupare i stacken. Visar antalet genomförda förslag, men
- * ingen summa: facit redovisar bytesplanens och avgiftsbytenas utfall var för sig och slår aldrig
- * ihop dem till ett tal.
+ * Vägen till Facit (SET-5) — en skärm djupare i stacken. Visar antalet genomförda förslag och, när
+ * det finns ett mätbart utfall, deras meravkastning i kronor till höger ([BeslutUiState.followedExcessKr]):
+ * summan av Facits två "Genomförda"-rader, aldrig ett procentsnitt över sorterna. Utan mätbart utfall
+ * visas bara antalet — aldrig 0 kr (ANA-4-principen).
  */
 @Composable
-private fun FacitRow(followedCount: Int, onOpen: () -> Unit) {
+private fun FacitRow(followedCount: Int, followedExcessKr: Double?, onOpen: () -> Unit) {
     AppCard(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
@@ -457,6 +460,14 @@ private fun FacitRow(followedCount: Int, onOpen: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
+            if (followedCount > 0 && followedExcessKr != null) {
+                Text(
+                    MoneyFormat.krSigned(followedExcessKr),
+                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                    color = ReturnColors.forAmount(followedExcessKr),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,

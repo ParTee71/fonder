@@ -23,7 +23,9 @@ import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.PrimaryGoal
@@ -36,6 +38,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
@@ -66,9 +69,11 @@ class BeslutViewModelTest {
     private val metadataRepo = FakeFundMetadataRepository()
     private val scheduler = FakeFundPriceRefreshScheduler()
     private val dismissalRepo = FakeSuggestionDismissalRepository()
+    private val transactionRepo = FakeTransactionRepository()
 
     private fun viewModel() = BeslutViewModel(
         PendingDecisionsSource(preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo, dismissalRepo),
+        FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
         preferencesRepository,
         suggestionRepo,
         switchWatchRepo,
@@ -740,6 +745,39 @@ class BeslutViewModelTest {
             var state = awaitItem()
             while (state.loading || state.followedCount == 0) state = awaitItem()
             assertEquals(2, state.followedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `facitraden bar de foljda radernas resultat i kronor ur facit`() = runTest(dispatcher) {
+        // planRecord: sälj 120 → 126 (+5 %), köp 50 → 56 (+12 %) → +7 pp på 2 500 kr = +175 kr.
+        // Säljfonden är bevakad, så dess kurs ligger under fondens fundId — samma uppslag som Facit.
+        transactionRepo.funds.value = listOf(Fund(fundId = "SHB1", name = "Innehav", isin = "SE_HELD"))
+        priceRepo.latestPrices.value = mapOf(
+            "SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 126.0),
+            "SE_CAND" to FundPrice(fundId = "SE_CAND", epochDay = 20_100, nav = 56.0),
+        )
+        suggestionRepo.records.value = listOf(planRecord(id = 1).copy(followed = true), planRecord(id = 2))
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.followedExcessKr == null) state = awaitItem()
+            assertEquals(1, state.followedCount)
+            assertEquals(175.0, state.followedExcessKr!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `facitraden saknar belopp nar inget foljt forslag ar matbart`() = runTest(dispatcher) {
+        // Ingen kurs i cachen: raden räknas men har inget utfall — beloppet är null, aldrig 0 kr.
+        suggestionRepo.records.value = listOf(planRecord(id = 1).copy(followed = true))
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.followedCount == 0) state = awaitItem()
+            assertNull(state.followedExcessKr)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -1,5 +1,8 @@
 package se.partee71.fonder.ui.beslut
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -12,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.text.AnnotatedString
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -26,6 +30,7 @@ import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.CheaperAlternative
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -61,13 +66,14 @@ class BeslutScreenTest {
 
     /**
      * Mockupens läge: ett pågående byte, två förslag (ett med Följ/Avstå, ett kvitterat), ett billigare
-     * alternativ och sju följda i facit.
+     * alternativ och sju följda i facit med deras resultat i kronor.
      */
     private val full = BeslutUiState(
         loading = false,
         riskProfile = balanced,
         accountType = AccountType.ISK_KF,
         followedCount = 7,
+        followedExcessKr = 4_210.0,
         decisions = PendingDecisions(
             openWatches = listOf(
                 OpenSwitchWatch(
@@ -129,6 +135,28 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("Facit · 1 följt förslag").performClick()
 
         assertEquals(1, facit)
+    }
+
+    @Test
+    fun `facitraden visar de foljda radernas resultat i kronor med tecken`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(followedExcessKr = -1_250.0)) } }
+
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Facit · 7 följda förslag"))
+        // Beloppet sitter i samma klickbara kort som antalet, och tecknet bär förlusten även utan
+        // färg (ReturnColors får aldrig stå ensam).
+        composeRule.onNode(hasText("Facit · 7 följda förslag"))
+            .assert(hasText(MoneyFormat.krSigned(-1_250.0)))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `facitraden visar bara antalet utan matbart resultat`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(followedExcessKr = null)) } }
+
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Facit · 7 följda förslag"))
+        // Kortet bär bara antalet — inget belopp, och särskilt inte "0 kr" (ANA-4-principen).
+        composeRule.onNode(hasText("Facit · 7 följda förslag"))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Text, listOf(AnnotatedString("Facit · 7 följda förslag"))))
     }
 
     @Test

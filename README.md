@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.64.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.65.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -134,6 +134,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.65.0 | **Resultatet på Beslut** (NAV-9, SET-5): raden "Hur gick det?" visar nu vad de förslag du följt har gett i kronor mot att ha behållit innehavet, färgat som vinst eller förlust, bredvid antalet ("Facit · 7 följda förslag  +4 210,00 kr"). Beloppet är samma som Facits rader "Genomförda" tillsammans. Utan mätbart resultat visas bara antalet. |
 | 0.64.0 | **Billigare alternativ på Beslut** (ANA-9, ANA-10, NAV-9, HEM-13, HEM-14): de billigare alternativen till dina fonder visas nu också på Beslut, under bytesplanen, ett kort per alternativ med fondparet, avgifterna och besparingen per år samt Följ och Avstå. Ett följt alternativ visar "Genomförd" och "Bevaka alternativ", ett avstått hamnar under "Avstådda (N)". Öppna alternativ räknas i flikens märke och i "Att besluta" ("2 bytesförslag · 1 billigare alternativ · 1 pågående byte"). Ett avstått förslag visas inte heller i Fonddetalj, som i stället säger hur många som avståtts. |
 | 0.63.0 | **Följ och Avstå på förslagen** (HEM-14, HEM-8, NAV-9, HEM-13): varje bytesförslag på Beslut har knapparna Följ och Avstå. Följ markerar förslaget som genomfört, som "Genomförd" förut, och erbjuder sedan "Bevaka alternativ". Avstå döljer förslaget och tar det ur antalet på flikens märke och i "Att besluta" – även när planen räknas om nästa dag – i 30 dagar. Längst ned på Beslut finns raden "Avstådda (N)" där ett avstående kan ångras. Avståendena följer med i säkerhetskopian. Jämförelsekurvan i diagrammen (index, alternativ) är nu streckad och kopparfärgad så att den syns tydligt mot den egna kurvan. |
 | 0.62.0 | **Händelser som en lista** (TRX-1, TRX-3, TRX-4, SLD-1–SLD-5, NAV-5): Sålda fonder är ingen egen skärm längre. Händelser visar alla köp och sälj i en lista med filtret Alla · Köp · Sälj och ett kort med årets realiserade resultat; ett sälj visar sin vinst eller förlust direkt i raden (osäkert markerat i text), och ett tryck fäller ut andelar, belopp, avgift, anskaffningsvärde och "Bevaka alternativ". Totalen sedan start står i säljfiltret. |
@@ -199,7 +200,8 @@ domain/
                   PendingDecisionsSource (bytesplan + billigare alternativ + pågående byten och deras antal,
                   en källa för Beslut, Översikten och flikmärket, NAV-9/HEM-13) ·
                   CheaperAlternatives (inspelade avgiftsbyten som förslag på Beslut, ANA-9) ·
-                  SuggestionDismissals (vilka förslag ett avstående döljer och hur länge, HEM-14)
+                  SuggestionDismissals (vilka förslag ett avstående döljer och hur länge, HEM-14) ·
+                  FacitSummary (facit ur cachen, en källa för Facit och Beslut-flikens resultat, SET-5/NAV-9)
 ui/
 ├── hem/          HemScreen + ViewModel (Översikt: värde, "Att besluta" HEM-13, avkastning mot index,
 │                 dag/vecka/månadsresultat, analys-summeringskort #16, fondavgiftskort HEM-5/HEM-6,
