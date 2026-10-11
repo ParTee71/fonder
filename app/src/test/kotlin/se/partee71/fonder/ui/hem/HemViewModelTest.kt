@@ -13,7 +13,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -36,31 +35,27 @@ import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.data.repository.FundMetadataRepository
-import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.RiskProfile
-import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
-import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
@@ -88,29 +83,12 @@ class HemViewModelTest {
         override suspend fun clearAll() {}
     }
 
-    private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
-    private var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
+    private val fakeFundPriceRepo = FakeCachedPriceRepository()
+    private val latestPrices = fakeFundPriceRepo.latestPrices
+    private var priceHistoryByFundId: Map<String, List<FundPrice>> by fakeFundPriceRepo::priceHistoryByFundId
 
     /** Varje `priceHistory`-anrop, i ordning — driver testet att hämtningen sker en gång per fond och emission. */
-    private val priceHistoryCalls = mutableListOf<String>()
-
-    private val fakeFundPriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> {
-            priceHistoryCalls += fundId
-            return priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
-        }
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
-    }
+    private val priceHistoryCalls = fakeFundPriceRepo.priceHistoryCalls
 
     private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
     private var metadataForCall: List<String>? = null
@@ -130,30 +108,6 @@ class HemViewModelTest {
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
-    private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
-        val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { all ->
-            // Speglar DAO:ns SQL: senaste dygnets senaste körning, sorterad på plats i planen.
-            if (all.isEmpty()) return@map emptyList()
-            val latestDay = all.maxOf { it.suggestedAtEpochDay }
-            val sameDay = all.filter { it.suggestedAtEpochDay == latestDay }
-            val latestBatch = sameDay.maxOf { it.batchEpochMillis }
-            sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex }
-        }
-
-        override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { all ->
-            all.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex })
-        }
-
-        var prunedBefore: LocalDate? = null
-        override suspend fun prune(today: LocalDate) { prunedBefore = today }
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
-        override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
-        override suspend fun setFollowed(id: Long, followed: Boolean) {
-            records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
-        }
-    }
-
     private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
 
     /**
@@ -170,8 +124,7 @@ class HemViewModelTest {
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
-        fakeSuggestionRecordRepo,
-        fakeSwitchWatchRepo,
+        PendingDecisionsSource(preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo),
         fakeScheduler,
         backupStatus,
     )
@@ -579,7 +532,7 @@ class HemViewModelTest {
         }
     }
 
-    // --- switchPlan: läser senaste inspelade facit-batch (HEM-8, issue #70) ---
+    // --- Att besluta (HEM-13): bytesplan och pågående byten ur den delade källan ---
 
     private fun setUpHoldingWithMetadataForSwitchPlan() {
         val today = LocalDate.now()
@@ -613,309 +566,6 @@ class HemViewModelTest {
     }
 
     @Test
-    fun `switchPlan bar med radens id och genomford-markering`() = runTest(dispatcher) {
-        // SET-5 (issue #80): utan id:t finns ingen nyckel att skriva "Genomförd" mot, och utan
-        // markeringen kan facit inte skilja ett följt råd från ett bara givet.
-        setUpHoldingWithMetadataForSwitchPlan()
-        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map { it.copy(followed = true) }
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-            val switch = state.switchPlan.single()
-            assertEquals(42L, switch.recordId)
-            assertTrue(switch.followed)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `omarkerat forslag ar inte genomfort - null betyder inte markerat`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-            assertFalse(state.switchPlan.single().followed)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `setSwitchFollowed skriver mot inspelningen och speglas i planen`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-            assertFalse(state.switchPlan.single().followed)
-
-            vm.setSwitchFollowed(42, true)
-
-            while (!state.switchPlan.single().followed) state = awaitItem()
-            assertTrue(fakeSuggestionRecordRepo.records.value.single { it.id == 42L }.followed == true)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan visar senaste inspelade byte i ISK-KF`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-            val switch = state.switchPlan.single()
-            assertEquals("Innehav", switch.sellFundName)
-            assertEquals("Kandidat", switch.buyFundName)
-            assertEquals(5, switch.fromLevel)
-            assertEquals(3, switch.toLevel)
-            assertEquals(0.3 - 1.0, switch.feeDeltaPercent, 1e-9)
-            // Beloppet är en del av rådet (bytet storleksbestäms till gapet, issue #75) och
-            // måste nå UI-lagret — annars är raden tvetydig.
-            assertEquals(2_500.0, switch.switchValueKr ?: -1.0, 1e-9)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan reagerar nar kontotypen andras under prenumeration`() = runTest(dispatcher) {
-        // Regression (issue #75): riskProfile/accountType lästes med first() inne i map-kroppen,
-        // så uiState emitterade aldrig om på en inställningsändring. Bottennavigeringen sparar
-        // ViewModel:ens tillstånd, så Hem kunde ligga kvar med det gamla valet i upp till 12
-        // timmar — tills en kursuppdatering eller en ny transaktion råkade trigga flödet.
-        setUpHoldingWithMetadataForSwitchPlan()
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertTrue(state.switchPlan.isEmpty())
-
-            preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-            state = awaitItem()
-            while (state.switchPlan.isEmpty()) state = awaitItem()
-            assertEquals("Innehav", state.switchPlan.single().sellFundName)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan visar bara den senaste korningens plan, inte hela dygnets`() = runTest(dispatcher) {
-        // Regression (issue #75): backstopen kör var 12:e timme, så två körningar landar samma
-        // dygn. "Senaste dygnet" slog ihop två planer — samma fond kunde säljas två gånger och
-        // två rader bära planIndex 0. Batch-id:t håller ihop en körning.
-        setUpHoldingWithMetadataForSwitchPlan()
-        // Den äldre körningens köpkandidat har metadata, så raden *skulle* renderas om
-        // batch-filtret inte fungerade — annars vore testet grönt av fel skäl.
-        metadataByIsin = metadataByIsin + mapOf(
-            "SE_ANNAN" to FundMetadata(
-                isin = "SE_ANNAN", name = "Annan kandidat", orderbookId = "Z", totalFee = 0.4, managementFee = 0.4,
-                category = null, fundType = null, companyName = null, risk = 3, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
-        )
-        val today = LocalDate.now().toEpochDay()
-        fakeSuggestionRecordRepo.records.value = listOf(
-            SuggestionRecord(
-                suggestedAtEpochDay = today, planIndex = 0,
-                sellIsin = "SE_HELD", buyIsin = "SE_ANNAN",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 70.0,
-                switchValueKr = 1_000.0, batchEpochMillis = 1_000,
-            ),
-            SuggestionRecord(
-                suggestedAtEpochDay = today, planIndex = 0,
-                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
-                switchValueKr = 2_500.0, batchEpochMillis = 2_000,
-            ),
-        )
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-
-            // Bara den senare körningens rad — inte båda, och inte den äldre.
-            val switch = state.switchPlan.single()
-            assertEquals("Kandidat", switch.buyFundName)
-            assertEquals(2_500.0, switch.switchValueKr ?: -1.0, 1e-9)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan visas inte alls nar det forsta bytet inte gar att sla upp`() = runTest(dispatcher) {
-        // Planen är girig och sekventiell: byte 1 förutsätter att byte 0 genomförts. Faller
-        // byte 0 bort får resten inte visas som om det vore fristående (issue #75).
-        setUpHoldingWithMetadataForSwitchPlan()
-        val today = LocalDate.now().toEpochDay()
-        fakeSuggestionRecordRepo.records.value = listOf(
-            SuggestionRecord(
-                suggestedAtEpochDay = today, planIndex = 0,
-                sellIsin = "SE_HELD", buyIsin = "SE_UTAN_METADATA",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 70.0,
-                switchValueKr = 1_000.0, batchEpochMillis = 2_000,
-            ),
-            SuggestionRecord(
-                suggestedAtEpochDay = today, planIndex = 1,
-                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
-                switchValueKr = 2_500.0, batchEpochMillis = 2_000,
-            ),
-        )
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            advanceUntilIdle()
-            assertTrue(vm.uiState.value.switchPlan.isEmpty())
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan doljs nar den inspelade planen blivit for gammal`() = runTest(dispatcher) {
-        // Regression (issue #75, punkt 5): planen visades oavsett ålder. Slutar backstopen köra
-        // (inget nät, batterioptimering, appen inte öppnad) låg ett gammalt "Sälj X → Köp Y"
-        // kvar på Hem, prissatt mot en portfölj som sedan dess rört sig. HEM-6 gör uttryckligen
-        // tvärtom för avgiftsjämförelsen; ett bytesförslag är samma sorts råd.
-        setUpHoldingWithMetadataForSwitchPlan()
-        val gammalt = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS + 1).toEpochDay()
-        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
-            it.copy(suggestedAtEpochDay = gammalt)
-        }
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            advanceUntilIdle()
-            assertTrue(vm.uiState.value.switchPlan.isEmpty())
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan visas fortfarande dagen innan farskhetsgransen loper ut`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        val precisInomGransen = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS).toEpochDay()
-        fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value.map {
-            it.copy(suggestedAtEpochDay = precisInomGransen)
-        }
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.switchPlan.isEmpty()) state = awaitItem()
-            assertEquals("Innehav", state.switchPlan.single().sellFundName)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan ar tom utan vald kontotyp`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertTrue(state.switchPlan.isEmpty())
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `switchPlan ar tom i depa-AF`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.DEPA_AF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertTrue(state.switchPlan.isEmpty())
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // --- Omräkning av bytesplanen på begäran (HEM-8, issue #88) ---
-
-    @Test
-    fun `canRecomputeSwitchPlan kraver bade profil och ISK eller KF`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.canRecomputeSwitchPlan) state = awaitItem()
-            assertTrue(state.canRecomputeSwitchPlan)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `canRecomputeSwitchPlan ar falskt i depa eller AF`() = runTest(dispatcher) {
-        // SET-4-gaten ger ingen plan där — knappen ska då inte lova en omräkning.
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.DEPA_AF)
-        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.riskProfile == null) state = awaitItem()
-            assertFalse(state.canRecomputeSwitchPlan)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `canRecomputeSwitchPlan ar falskt utan sparad riskprofil`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        preferencesRepository.setAccountType(AccountType.ISK_KF)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
-            assertFalse(state.canRecomputeSwitchPlan)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `backgroundWorkRunning speglar schemalaggarens korstatus`() = runTest(dispatcher) {
-        setUpHoldingWithMetadataForSwitchPlan()
-        fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
-
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.backgroundWorkRunning) state = awaitItem()
-            assertTrue(state.backgroundWorkRunning)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
     fun `en kursuppdatering snurrar kurskorten men inte riskkortet`() = runTest(dispatcher) {
         setUpHoldingWithMetadataForSwitchPlan()
         fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
@@ -928,9 +578,10 @@ class HemViewModelTest {
             assertTrue(state.performanceWorking)
             assertTrue(state.returnChartWorking)
             assertTrue(state.analysisWorking)
-            // Riskkortet vilar på bytesplanen och metadatan, inte på kurserna — det ska stå
-            // stilla medan bara kurserna hämtas, annars säger snurran ingenting.
-            assertFalse(state.switchPlanWorking)
+            // Riskkortet vilar på metadatan, inte på kurserna — det ska stå stilla medan bara
+            // kurserna hämtas, annars säger snurran ingenting.
+            while (state.metadataWorking) state = awaitItem()
+            assertFalse(state.riskWorking)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -946,22 +597,42 @@ class HemViewModelTest {
             while (state.loading || !state.benchmarkWorking) state = awaitItem()
             assertTrue(state.returnChartWorking)
             assertFalse(state.pricesWorking)
-            assertFalse(state.switchPlanWorking)
+            while (state.metadataWorking) state = awaitItem()
+            assertFalse(state.riskWorking)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `en bytesplansskanning snurrar riskkortet`() = runTest(dispatcher) {
+    fun `en bytesplansskanning snurrar inte riskkortet - planen visas pa Beslut`() = runTest(dispatcher) {
+        // Sedan 0.61.0 ligger bytesplanen på Beslut (NAV-9); riskkortet visar bara fördelningen
+        // och vilar på metadatan. En snurra här hade sagt att fördelningen är osäker när den inte är det.
         setUpHoldingWithMetadataForSwitchPlan()
         fakeScheduler.runningWork.value = setOf(BackgroundWork.SWITCH_PLAN_SCAN)
 
-        val vm = viewModel()
-        vm.uiState.test {
+        viewModel().uiState.test {
             var state = awaitItem()
-            while (state.loading || !state.switchPlanWorking) state = awaitItem()
-            assertTrue(state.riskWorking)
+            while (state.loading || state.metadataWorking) state = awaitItem()
+            assertFalse(state.riskWorking)
             assertFalse(state.pricesWorking)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `att besluta raknar oppna forslag och pagaende byten ur den delade kallan (HEM-13)`() = runTest(dispatcher) {
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        fakeSwitchWatchRepo.start(
+            SwitchWatch(sellIsin = "SE_ANNAN_SALJ", sellFundName = "Fond B", soldAtEpochDay = LocalDate.now().toEpochDay()),
+        )
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.count < 2) state = awaitItem()
+            assertEquals(1, state.decisions.openSuggestionCount)
+            assertEquals(1, state.decisions.openWatches.size)
+            assertEquals(2, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -975,15 +646,6 @@ class HemViewModelTest {
         vm.refresh()
 
         assertEquals(1, fakeScheduler.manualRefreshes)
-    }
-
-    @Test
-    fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
-        val vm = viewModel()
-
-        vm.recomputeSwitchPlan()
-
-        assertEquals(1, fakeScheduler.switchPlanScans)
     }
 
     // --- Avkastningskurvan och indexjämförelsen (HEM-9/HEM-10, issue #96) ---
@@ -1304,110 +966,6 @@ class HemViewModelTest {
             assertEquals(0.30, benchmark.points.last().second, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
-    }
-
-    @Test
-    fun `en oppen bevakning visas som kort med ledaren ur cachade kurser (HEM-11)`() = runTest(dispatcher) {
-        // Kortet ska rendera utan nätverk: ledaren räknas ur kurscachen, som bakgrundskörningen
-        // fyller budgeterat — inte ur en hämtning Hem gör själv.
-        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_SALJ"))
-        transactions.value = listOf(
-            Transaction(id = 1, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 10.0, pricePerShare = 100.0),
-        )
-        latestPrices.value = mapOf(
-            "SHB0000442" to FundPrice("SHB0000442", LocalDate.now().toEpochDay(), 100.0),
-            "SE_A" to FundPrice("SE_A", LocalDate.now().toEpochDay(), 105.0),
-            "SE_B" to FundPrice("SE_B", LocalDate.now().toEpochDay(), 110.0),
-        )
-        fakeSwitchWatchRepo.start(
-            SwitchWatch(
-                sellIsin = "SE_SALJ",
-                sellFundName = "Fond A",
-                soldAtEpochDay = LocalDate.now().minusDays(2).toEpochDay(),
-                proceedsKr = 10_000.0,
-                candidates = listOf(
-                    SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A", navAtStart = 100.0),
-                    SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B", navAtStart = 100.0),
-                ),
-            ),
-        )
-
-        viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.openSwitchWatch == null) state = awaitItem()
-
-            val watch = state.openSwitchWatch!!
-            assertEquals("Fond A", watch.sellFundName)
-            assertEquals(2, watch.daysWaiting)
-            assertEquals(2, watch.candidateCount)
-            assertEquals("Kandidat B", watch.leaderName)
-            assertEquals(0.10, watch.leaderChangeFraction!!, 1e-9)
-            assertEquals(setOf("SE_SALJ"), state.watchedSellIsins)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `en utgangen bevakning visas inte men blockerar fortfarande en ny for samma salj`() = runTest(dispatcher) {
-        // Den beskriver inte längre läget (ANA-12) — men att samtidigt dölja den och erbjuda en
-        // ny hade gett två rader om samma byte tills bakgrundskörningen hunnit stänga den.
-        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_SALJ"))
-        transactions.value = listOf(
-            Transaction(id = 1, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 10.0, pricePerShare = 100.0),
-        )
-        latestPrices.value = mapOf("SHB0000442" to FundPrice("SHB0000442", LocalDate.now().toEpochDay(), 100.0))
-        fakeSwitchWatchRepo.start(
-            SwitchWatch(
-                sellIsin = "SE_SALJ",
-                sellFundName = "Fond A",
-                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
-            ),
-        )
-
-        viewModel().uiState.test {
-            // Vänta på att bevakningsgrenen hunnit in i tillståndet — inte på ytterligare en
-            // emission efter den. `expectMostRecentItem()` kastar när inget *nytt* kommit, och
-            // här är den sista emissionen redan den slutgiltiga: bevakningen är utgången, så
-            // kortet fylls aldrig i och inget mer händer.
-            var state = awaitItem()
-            while (state.loading || state.watchedSellIsins.isEmpty()) state = awaitItem()
-
-            assertNull(state.openSwitchWatch)
-            assertEquals(setOf("SE_SALJ"), state.watchedSellIsins)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `startSwitchWatch skapar en bevakning ur forslaget och startar den bara en gang`() = runTest(dispatcher) {
-        val vm = viewModel()
-        val suggestion = SwitchPlanResolver.Suggestion(
-            recordId = 42,
-            planIndex = 0,
-            sellIsin = "SE_SALJ",
-            buyIsin = "SE_KOP",
-            sellFundName = "Fond A",
-            buyFundName = "Fond B",
-            fromLevel = 6,
-            toLevel = 4,
-            feeDeltaPercent = -0.1,
-            switchValueKr = 4_200.0,
-            followed = true,
-        )
-
-        vm.startSwitchWatch(suggestion)
-        advanceUntilIdle()
-        vm.startSwitchWatch(suggestion)
-        advanceUntilIdle()
-
-        val watch = fakeSwitchWatchRepo.watches.value.single()
-        assertEquals("SE_SALJ", watch.sellIsin)
-        assertEquals("Fond A", watch.sellFundName)
-        assertEquals(LocalDate.now().toEpochDay(), watch.soldAtEpochDay)
-        assertEquals(4_200.0, watch.proceedsKr!!, 1e-9)
-        // Målnivån är den nivå bytet skulle fylla — annars föreslås alternativ på fel risk.
-        assertEquals(4, watch.targetLevel)
-        assertEquals(42L, watch.sourceRecordId)
     }
 
     // --- Påminnelse om säkerhetskopia (HEM-12) ---

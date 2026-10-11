@@ -5,8 +5,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Regressionstest för NAV-1/NAV-7 — flikradens fyra flikar, startskärmen och att Inställningar
- * och Sålda fonder blivit skärmar i stacken med egen rubrik. Ren datakontroll av [Screen], inget
+ * Regressionstest för NAV-1/NAV-7/NAV-9 — flikradens fyra flikar, startskärmen och att
+ * Inställningar, Sålda fonder och Facit är skärmar i stacken med egen rubrik. Ren datakontroll av [Screen], inget
  * Compose/Hilt behövs för det.
  */
 class ScreenTest {
@@ -14,7 +14,7 @@ class ScreenTest {
     @Test
     fun `flikraden har fyra flikar i ratt ordning`() {
         assertEquals(
-            listOf("hem", "portfolj", "facit", "transaktioner"),
+            listOf("hem", "portfolj", "beslut", "transaktioner"),
             Screen.entries.map { it.route },
         )
     }
@@ -33,8 +33,10 @@ class ScreenTest {
     }
 
     @Test
-    fun `facit ar fliken Beslut`() {
-        assertEquals(Screen.Beslut, Screen.forRoute(Routes.FACIT))
-        assertNull(titleResFor(Routes.FACIT))
+    fun `facit ar en skarm i stacken under Beslut med egen rubrik`() {
+        // Sedan 0.61.0 (NAV-9): Beslut är en egen flik och Facit en djupare skärm med bakåtpil.
+        assertNull(Screen.forRoute(Routes.FACIT))
+        assertEquals(se.partee71.fonder.R.string.facit_title, titleResFor(Routes.FACIT))
+        assertEquals(Screen.Beslut, Screen.forRoute("beslut"))
     }
 }

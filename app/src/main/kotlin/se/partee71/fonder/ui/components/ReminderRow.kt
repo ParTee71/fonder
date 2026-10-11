@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,11 @@ import androidx.compose.ui.unit.dp
  * sammanhållen beskrivning — rubrik, undertext och åtgärd — i stället för tre noder, och
  * tryckytan blir hela raden, minst 48 dp hög (UI-3). Ingen stängknapp: raden försvinner när
  * orsaken gör det.
+ *
+ * Varianten för Översiktens "Att besluta" (HEM-13): [tone] = [ReminderRowTone.Accent] tonar raden
+ * i sekundärbehållaren (koppar), [count] ersätter ikonen med ett stort [CountBadge] och
+ * [chevron] ritar åtgärden som en pil i stället för etiketten – etiketten blir då bara
+ * klickåtgärdens namn för skärmläsaren. Standardvärdena ger påminnelseraden som förut.
  */
 @Composable
 fun ReminderRow(
@@ -40,10 +46,14 @@ fun ReminderRow(
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector = Icons.Outlined.Backup,
+    count: Int? = null,
+    tone: ReminderRowTone = ReminderRowTone.Neutral,
+    chevron: Boolean = false,
 ) {
+    val accent = tone == ReminderRowTone.Accent
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (accent) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (accent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         shape = MaterialTheme.shapes.medium,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -55,17 +65,28 @@ fun ReminderRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(icon, contentDescription = null)
+            if (count != null) CountBadge(count, size = CountBadgeSize.Large) else Icon(icon, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(body, style = MaterialTheme.typography.bodySmall)
             }
-            Text(
-                actionLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
+            if (chevron) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            } else {
+                Text(
+                    actionLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         }
     }
 }
+
+/** Radens ton: neutral ytvariant (påminnelser) eller kopparens sekundärbehållare (något att besluta). */
+enum class ReminderRowTone { Neutral, Accent }

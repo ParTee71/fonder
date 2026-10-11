@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -21,30 +19,26 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionRecordRepository
-import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
-import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.RiskProfile
-import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.PendingDecisions
+import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
-import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
@@ -52,14 +46,6 @@ import javax.inject.Inject
 
 /** Ett innehav flaggat gul eller röd i analysen (HEM-4), med det underliggande resultatet för visning av triggade signaler. */
 data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysis)
-
-/**
- * Ett enskilt föreslaget byte i bytesplanen, redo för visning (HEM-8, issue #70). Modellen och
- * uppslagslogiken bor sedan issue #85 i [SwitchPlanResolver], eftersom Fonddetaljs bytesavsnitt
- * (ANA-10) visar samma byten för en enskild fond — två kopior hade kunnat glida isär och ge två
- * olika råd om samma byte. Aliaset behålls så Hems egen kod läser som förut.
- */
-typealias SwitchSuggestionUi = SwitchPlanResolver.Suggestion
 
 /**
  * Indexjämförelsens kurva, redo för visning (HEM-10) — skuggportföljen i referensen [fundName],
@@ -82,24 +68,6 @@ data class AnalysisSummary(
     val rodCount: Int = 0,
     /** Bara gul/röd, sorterat mest allvarligt (röd) först — se [HemScreen]. */
     val flagged: List<FlaggedHolding> = emptyList(),
-)
-
-/**
- * Ett öppet pågående byte, redo för Hems kort (HEM-11, issue #114) — den enda vägen tillbaka
- * till bevakningen när man lämnat skärmen.
- *
- * Ledaren räknas ur **cachade** kurser (fyllda budgeterat av bakgrundskörningen), aldrig ur ett
- * nätverksanrop: Hem ska rendera direkt, och den dyra hämtningen hör hemma på bevakningens egen
- * skärm (ANA-12). Är ingen kandidat utvärderad än sägs det ut i stället för att en tom rad
- * läses som "inget har hänt".
- */
-data class OpenSwitchWatchUi(
-    val watchId: Long,
-    val sellFundName: String,
-    val daysWaiting: Long,
-    val candidateCount: Int,
-    val leaderName: String? = null,
-    val leaderChangeFraction: Double? = null,
 )
 
 data class HemUiState(
@@ -131,33 +99,17 @@ data class HemUiState(
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
     /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
     val riskLevelDeviations: List<PortfolioRiskCalc.LevelDeviation> = emptyList(),
-    /** Rangordnad bytesplan mot målfördelningen (HEM-8, issue #70) — tom utom i ISK/KF med en avvikelse som passerat [se.partee71.fonder.domain.usecase.SwitchPlanCalc.MIN_GAP_PP]. */
-    val switchPlan: List<SwitchSuggestionUi> = emptyList(),
     /**
-     * Sant när en omräkning av bytesplanen (HEM-8, issue #88) över huvud taget kan ge något:
-     * riskprofil satt (SET-3) **och** kontotyp ISK/KF (SET-4). Styr om knappen visas — utan
-     * gaten hade den lovat något SET-4 ändå vägrar infria.
+     * Det som väntar på ett beslut (HEM-13) — samma källa som fliken Beslut och flikradens märke
+     * läser ([PendingDecisionsSource]), så "Att besluta" aldrig kan visa ett annat antal.
      */
-    val canRecomputeSwitchPlan: Boolean = false,
-    /** Sant medan en bakgrundskörning pågår — knappen är då släckt, samma signal som bakgrundsindikatorn (NAV-6). */
-    val backgroundWorkRunning: Boolean = false,
+    val decisions: PendingDecisions = PendingDecisions(),
     /** Kurserna hämtas just nu ([BackgroundWork.PRICE_REFRESH]) — kurskortens väntesnurra (NAV-6). */
     val pricesWorking: Boolean = false,
     /** Referensfonden väljs/hämtas just nu ([BackgroundWork.BENCHMARK_SCAN]) — bara avkastningskortet berörs. */
     val benchmarkWorking: Boolean = false,
-    /** Bytesplanen skannas just nu ([BackgroundWork.SWITCH_PLAN_SCAN]) — bara riskkortet berörs. */
-    val switchPlanWorking: Boolean = false,
     /** Fondmetadatan slås upp just nu (nätverk per okänd ISIN) — avgifts- och riskkortet vilar på den. */
     val metadataWorking: Boolean = false,
-    /** Öppen bevakning av ett pågående byte (HEM-11, issue #114), null när ingen pågår. */
-    val openSwitchWatch: OpenSwitchWatchUi? = null,
-    /**
-     * Säljfonder som redan har en öppen bevakning — styr om ett kvitterat byte erbjuder
-     * "Bevaka alternativ". Utan den hade samma sälj kunnat starta en bevakning per tryck.
-     */
-    val watchedSellIsins: Set<String> = emptySet(),
-    /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [HemViewModel.onSwitchWatchOpened]. */
-    val startedSwitchWatchId: Long? = null,
     /** Påminnelsen om att säkerhetskopiera (HEM-12), null när innehållet redan finns i en kopia. */
     val backupReminder: BackupReminder? = null,
 ) {
@@ -173,8 +125,7 @@ data class HemUiState(
     val returnChartWorking: Boolean get() = loading || pricesWorking || benchmarkWorking
     val analysisWorking: Boolean get() = loading || pricesWorking
     val feeWorking: Boolean get() = loading || pricesWorking || metadataWorking
-    val riskWorking: Boolean get() = loading || metadataWorking || switchPlanWorking
-    val switchWatchWorking: Boolean get() = loading || pricesWorking
+    val riskWorking: Boolean get() = loading || metadataWorking
 }
 
 /** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #16) om inget köp finns (bör inte hända för ett verkligt innehav, men skyddar mot en tom historik-hämtning). */
@@ -195,56 +146,10 @@ class HemViewModel @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val switchWatchRepository: SwitchWatchRepository,
+    private val pendingDecisionsSource: PendingDecisionsSource,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
     private val backupStatusRepository: BackupStatusRepository,
 ) : ViewModel() {
-
-    /** Se [HemUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
-    private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
-
-    /**
-     * Hems läsning av pågående byten (HEM-11, issue #114): kortet för den öppna bevakningen och
-     * mängden säljfonder som redan bevakas.
-     *
-     * En bevakning som passerat färskhetsgränsen visas inte — den beskriver ett läge som inte
-     * finns kvar (ANA-12) — men ligger kvar i [SwitchWatchHemState.watchedSellIsins] tills
-     * bakgrundskörningen stängt den: annars hade Hem samtidigt dolt bevakningen och erbjudit en
-     * ny för samma sälj, och användaren fått två rader om samma byte.
-     */
-    private val switchWatches: Flow<SwitchWatchHemState> =
-        switchWatchRepository.observeOpen().flatMapLatest { watches ->
-            val today = LocalDate.now()
-            val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
-            val visible = watches.firstOrNull { !SwitchWatchCalc.isExpired(it, today) }
-                ?: return@flatMapLatest flowOf(SwitchWatchHemState(null, sellIsins))
-
-            fundPriceRepository.observeLatestPrices(visible.candidates.map { it.isin }).map { prices ->
-                val leader = SwitchWatchCalc.ranked(
-                    visible.candidates.map { candidate ->
-                        SwitchWatchCalc.outcome(
-                            candidate = candidate,
-                            latestNav = prices[candidate.isin]?.nav,
-                            proceedsKr = visible.proceedsKr,
-                            soldAtEpochDay = visible.soldAtEpochDay,
-                        )
-                    },
-                ).firstOrNull { it.isEvaluated }
-
-                SwitchWatchHemState(
-                    open = OpenSwitchWatchUi(
-                        watchId = visible.id,
-                        sellFundName = visible.sellFundName,
-                        daysWaiting = SwitchWatchCalc.daysWaiting(visible, today),
-                        candidateCount = visible.candidates.size,
-                        leaderName = leader?.candidate?.name,
-                        leaderChangeFraction = leader?.changeFraction,
-                    ),
-                    watchedSellIsins = sellIsins,
-                )
-            }
-        }
 
     /**
      * [PortfolioInput.funds] bärs med, inte bara de sammanräknade innehaven: avkastningskurvan
@@ -273,23 +178,21 @@ class HemViewModel @Inject constructor(
     private val settings: Flow<Settings> =
         combine(
             preferencesRepository.riskProfile,
-            preferencesRepository.accountType,
             combine(preferencesRepository.benchmark, preferencesRepository.chosenBenchmarkIsin) { derived, chosen ->
                 // Eget val vinner alltid över appens (HEM-10, issue #102) — och ersätter hela
                 // blandningen, inte en del av den: väljer man en fond är det den man vill mätas
                 // mot, inte den plus appens gissning om resten.
                 chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: derived
             },
-        ) { riskProfile, accountType, benchmark ->
-            Settings(riskProfile, accountType, benchmark)
+        ) { riskProfile, benchmark ->
+            Settings(riskProfile, benchmark)
         }
 
     /**
      * Fondmetadata i ett eget flöde — samma skäl som i
      * [se.partee71.fonder.ui.portfolj.PortfoljViewModel]: [FundMetadataRepository.metadataFor]
      * gör ett sekventiellt nätverksuppslag per okänd/inaktuell ISIN, och låg det i `map`
-     * blockerades hela Hem på nätverket. Slår upp både innehavens och den visade planens
-     * köpkandidater i **ett** anrop.
+     * blockerades hela Hem på nätverket.
      */
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
     private var metadataJob: Job? = null
@@ -341,8 +244,7 @@ class HemViewModel @Inject constructor(
                 fundPriceRepository.observeLatestPrices(fundIds),
                 metadata,
                 settings,
-                suggestionRecordRepository.observeLatestBatch(),
-            ) { prices, metadataByIsin, currentSettings, latestBatch ->
+            ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
                 val firstPurchaseByFund = transactions
@@ -363,11 +265,10 @@ class HemViewModel @Inject constructor(
                         toEpochDay = today.toEpochDay(),
                     )
                 }
-                refreshMetadata(enriched.mapNotNull { it.fund.isin } + latestBatch.map { it.buyIsin })
+                refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
-                val switchPlan = SwitchPlanResolver.resolve(currentSettings.accountType, latestBatch, metadataByIsin, today)
                 HemUiState(
                     loading = false,
                     hasHoldings = enriched.isNotEmpty(),
@@ -399,16 +300,12 @@ class HemViewModel @Inject constructor(
                             actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel),
                         )
                     }.orEmpty(),
-                    switchPlan = switchPlan,
-                    canRecomputeSwitchPlan = riskProfile != null && currentSettings.accountType == AccountType.ISK_KF,
                 )
             }
-        }.combine(switchWatches) { state, watches ->
-            // Egen gren av samma skäl som körstatusen nedan: en bevakning har ingenting med
-            // innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
-            state.copy(openSwitchWatch = watches.open, watchedSellIsins = watches.watchedSellIsins)
-        }.combine(startedSwitchWatchId) { state, startedId ->
-            state.copy(startedSwitchWatchId = startedId)
+        }.combine(pendingDecisionsSource.observe()) { state, decisions ->
+            // Egen gren av samma skäl som körstatusen nedan: förslag och bevakningar har ingenting
+            // med innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
+            state.copy(decisions = decisions)
         }.combine(backupStatusRepository.reminder.onStart { emit(null) }) { state, reminder ->
             // Egen gren: påminnelsen (HEM-12) räknas ur backup-kontraktet, inte ur innehav och
             // kurser, och ska inte kunna räkna om portföljen. `onStart` så Hem inte väntar in
@@ -423,10 +320,8 @@ class HemViewModel @Inject constructor(
             // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
             // den ska inte kunna räkna om portföljen bara för att ett jobb startade.
             state.copy(
-                backgroundWorkRunning = running.isNotEmpty(),
                 pricesWorking = BackgroundWork.PRICE_REFRESH in running,
                 benchmarkWorking = BackgroundWork.BENCHMARK_SCAN in running,
-                switchPlanWorking = BackgroundWork.SWITCH_PLAN_SCAN in running,
                 metadataWorking = metadataPending,
             )
         }.stateIn(
@@ -543,47 +438,6 @@ class HemViewModel @Inject constructor(
     }
 
     /**
-     * Markerar ett förslag i den visade planen som genomfört (HEM-8/SET-5, issue #80). Skriver
-     * bara flaggan — inget byte utförs, appen rör aldrig användarens innehav. Facit (SET-5)
-     * läser den för att mäta följda råd separat från alla givna råd.
-     */
-    fun setSwitchFollowed(recordId: Long, followed: Boolean) {
-        viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
-    }
-
-    /**
-     * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12/HEM-8,
-     * issue #114). Säljdagen sätts till **idag**: kvitteringen görs när bytet gjorts, och ett
-     * påhittat tidigare datum hade mätt kandidaternas utveckling över dagar pengarna inte var
-     * fria (en bevakning för ett äldre sälj startas i stället från Sålda fonder, SLD-5, där det
-     * verkliga säljdatumet finns).
-     *
-     * Målnivån är förslagets `toLevel` — den nivå bytet skulle fylla — så de automatiska
-     * alternativen (ANA-13) hämtas ur samma pool som planens egen köpkandidat.
-     */
-    fun startSwitchWatch(suggestion: SwitchSuggestionUi) {
-        viewModelScope.launch {
-            val today = LocalDate.now()
-            if (switchWatchRepository.hasOpenFor(suggestion.sellIsin, today.toEpochDay())) return@launch
-            startedSwitchWatchId.value = switchWatchRepository.start(
-                SwitchWatch(
-                    sellIsin = suggestion.sellIsin,
-                    sellFundName = suggestion.sellFundName,
-                    soldAtEpochDay = today.toEpochDay(),
-                    proceedsKr = suggestion.switchValueKr,
-                    targetLevel = suggestion.toLevel,
-                    sourceRecordId = suggestion.recordId,
-                ),
-            )
-        }
-    }
-
-    /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
-    fun onSwitchWatchOpened() {
-        startedSwitchWatchId.value = null
-    }
-
-    /**
      * Dra ned för att uppdatera (UI-11) — forcerar en kursuppdatering, exakt den körning
      * Inställningars borttagna "Uppdatera nu" startade (SET-2). Kör inte själv: hämtningen hör
      * hemma i WorkManager med nätverksvillkor, och `REPLACE` under det unika arbetsnamnet gör
@@ -593,25 +447,8 @@ class HemViewModel @Inject constructor(
         fundPriceRefreshScheduler.triggerManualRefresh()
     }
 
-    /**
-     * Ber om en omräkning av bytesplanen (HEM-8, issue #88) — knappen på riskkortet. Kör inte
-     * själv: skanningen kostar en källfråga plus budgeterad köpbarhetsverifiering per
-     * underviktad nivå och hör därför hemma i WorkManager, med nätverksvillkor och
-     * koalescering, precis som backstopens egen körning.
-     */
-    fun recomputeSwitchPlan() {
-        fundPriceRefreshScheduler.triggerSwitchPlanScan()
-    }
-
-    /** Se [switchWatches] — två svar ur samma flöde, hållna ihop så combinen inte växer i onödan. */
-    private data class SwitchWatchHemState(
-        val open: OpenSwitchWatchUi?,
-        val watchedSellIsins: Set<String>,
-    )
-
     private data class Settings(
         val riskProfile: RiskProfile?,
-        val accountType: AccountType?,
         /** Referensblandningen (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
         val benchmark: List<BenchmarkComponentRef>,
     )

@@ -255,7 +255,7 @@ private fun SwitchDecisionSection(
         )
 
         if (state.switchPlan.isNotEmpty()) {
-            SwitchGroupLabel(stringResource(R.string.hem_switch_plan_title))
+            SwitchGroupLabel(stringResource(R.string.switch_plan_title))
             state.switchPlan.forEach { suggestion ->
                 SwitchPlanRow(
                     suggestion = suggestion,
@@ -377,9 +377,9 @@ private fun SwitchPlanRow(
     val counterpartName = if (sellingThisFund) suggestion.buyFundName else suggestion.sellFundName
     val counterpartIsin = suggestion.counterpartIsin(fundIsin)
     val explanation = listOfNotNull(
-        suggestion.switchValueKr?.let { stringResource(R.string.format_hem_switch_plan_amount, MoneyFormat.kr(it)) },
-        stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0)),
-        stringResource(R.string.hem_switch_plan_disclaimer),
+        suggestion.switchValueKr?.let { stringResource(R.string.format_switch_plan_amount, MoneyFormat.kr(it)) },
+        stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0)),
+        stringResource(R.string.switch_plan_disclaimer),
     ).joinToString("\n")
 
     Column {

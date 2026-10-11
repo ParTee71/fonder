@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.riskprofil
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -211,7 +212,9 @@ private fun DownturnReaction.labelRes(): Int = when (this) {
     DownturnReaction.KOPER_MER -> R.string.risk_reaction_koper_mer
 }
 
-private fun PrimaryGoal.labelRes(): Int = when (this) {
+/** Målets namn – i enkäten och i Besluts rubrikrad (NAV-9), en gång (regel 4). */
+@StringRes
+fun PrimaryGoal.labelRes(): Int = when (this) {
     PrimaryGoal.BEVARA -> R.string.risk_goal_bevara
     PrimaryGoal.BALANSERAD -> R.string.risk_goal_balanserad
     PrimaryGoal.MAXIMAL_TILLVAXT -> R.string.risk_goal_maximal_tillvaxt

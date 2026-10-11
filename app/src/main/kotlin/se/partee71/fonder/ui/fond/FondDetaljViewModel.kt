@@ -30,7 +30,6 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
@@ -38,6 +37,7 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.startFromSuggestion
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -321,24 +321,13 @@ class FondDetaljViewModel @Inject constructor(
 
     /**
      * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12, issue
-     * #114) — identisk med Hems väg (`HemViewModel.startSwitchWatch`), eftersom det är samma
-     * förslag och samma inspelade rad: fondkortet och Hem får aldrig ge två olika bevakningar
+     * #114) — samma väg som Beslut ([startFromSuggestion]), eftersom det är samma
+     * förslag och samma inspelade rad: fondkortet och Beslut får aldrig ge två olika bevakningar
      * av samma byte.
      */
     fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
-            val today = LocalDate.now()
-            if (switchWatchRepository.hasOpenFor(suggestion.sellIsin, today.toEpochDay())) return@launch
-            startedSwitchWatchId.value = switchWatchRepository.start(
-                SwitchWatch(
-                    sellIsin = suggestion.sellIsin,
-                    sellFundName = suggestion.sellFundName,
-                    soldAtEpochDay = today.toEpochDay(),
-                    proceedsKr = suggestion.switchValueKr,
-                    targetLevel = suggestion.toLevel,
-                    sourceRecordId = suggestion.recordId,
-                ),
-            )
+            switchWatchRepository.startFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
     }
 

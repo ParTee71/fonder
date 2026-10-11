@@ -2,7 +2,6 @@ package se.partee71.fonder.ui.hem
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -20,6 +19,8 @@ import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.BackupReminder
+import se.partee71.fonder.domain.usecase.OpenSwitchWatch
+import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
@@ -561,140 +562,27 @@ class HemScreenTest {
     }
 
     @Test
-    fun riskkortet_visar_bytesplanen_med_ratt_rangordning_och_avgiftsskillnad() {
-        val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
-            switchPlan = listOf(
-                SwitchSuggestionUi(
-                    recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
-                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
-                ),
-            ),
-        )
-
-        composeRule.setContent {
-            FonderTheme { HemContent(state = state) }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Bytesplan").assertExists()
-        composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
-        // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75). Belopp
-        // under tusen — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg beroende på
-        // JVM/lokal (se MoneyFormatTest), och ett test som beror på vilket vore flakigt.
-        composeRule.onNodeWithText("Belopp: 250,00 kr", substring = true).assertExists()
-        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
-    }
-
-    @Test
-    fun bytesplanens_rangordning_kommer_ur_planIndex_inte_listpositionen() {
-        // Regression (issue #75): numret togs ur listpositionen, så ett byte vars föregångare
-        // fallit bort presenterades som "1." — fast planen är girig och sekventiell, och att
-        // följa byte 1 utan byte 0 flyttar portföljen bort från målet.
-        val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
-            switchPlan = listOf(
-                SwitchSuggestionUi(
-                    recordId = 1, planIndex = 1, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
-                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
-                ),
-            ),
-        )
-
-        composeRule.setContent {
-            FonderTheme { HemContent(state = state) }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("2. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
-    }
-
-    @Test
-    fun riskkortet_visar_bytesplan_utan_belopp_for_forslag_inspelade_fore_beloppsfaltet() {
-        val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
-            switchPlan = listOf(
-                SwitchSuggestionUi(
-                    recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
-                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = null,
-                ),
-            ),
-        )
-
-        composeRule.setContent {
-            FonderTheme { HemContent(state = state) }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").assertExists()
-        composeRule.onNodeWithText("Belopp:", substring = true).assertDoesNotExist()
-    }
-
-    @Test
-    fun genomford_markeringen_i_bytesplanen_anropar_callbacken() {
-        // SET-5 (issue #80): markeringen utför inget byte, den registrerar att användaren gjorde
-        // det — annars kan facit inte skilja ett följt råd från ett bara givet.
-        var callback: Pair<Long, Boolean>? = null
-        val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
-            switchPlan = listOf(
-                SwitchSuggestionUi(
-                    recordId = 42, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-                    sellFundName = "Dyr fond", buyFundName = "Billig fond",
-                    fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
-                ),
-            ),
-        )
-
-        composeRule.setContent {
-            FonderTheme {
-                HemContent(state = state, onSwitchFollowedChange = { id, followed -> callback = id to followed })
-            }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
-
-        assertEquals(42L to true, callback)
-    }
-
-    @Test
-    fun riskkortet_visar_ingen_bytesplan_utan_forslag() {
+    fun riskkortet_visar_ingen_bytesplan_den_ligger_pa_beslut() {
+        // Sedan 0.61.0 visas bytesplanen på Beslut (NAV-9); riskkortet visar bara fördelningen,
+        // och Översikten säger bara hur många förslag som väntar (HEM-13).
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
             riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion)),
         )
 
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
         }
 
-        scrollToRiskCard()
+        composeRule.onNodeWithText("1 bytesförslag").assertExists()
+        composeRule.onNodeWithTag(HEM_LIST_TEST_TAG).performScrollToIndex(RISK_CARD_INDEX + 1)
 
         composeRule.onNodeWithText("Bytesplan").assertDoesNotExist()
+        composeRule.onNodeWithText("Sälj Dyr fond", substring = true).assertDoesNotExist()
     }
-
     @Test
     fun riskkortet_visar_otillrackligt_data_nar_ingen_faktisk_niva_kunde_beraknas() {
         val state = HemUiState(
@@ -714,62 +602,6 @@ class HemScreenTest {
         // testtillståndet), den fjärde är riskradens "otillräcklig data".
         composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(4)
         composeRule.onNodeWithText("1 fond(er) saknar känd risknivå", substring = true).assertExists()
-    }
-
-    // --- Knappen "Räkna om bytesplanen" (HEM-8, issue #88) ---
-
-    private fun riskState(
-        canRecomputeSwitchPlan: Boolean = true,
-        backgroundWorkRunning: Boolean = false,
-    ) = HemUiState(
-        loading = false,
-        hasHoldings = true,
-        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-        portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 5.0, includedValueKr = 10_000.0, excludedCount = 0),
-        canRecomputeSwitchPlan = canRecomputeSwitchPlan,
-        backgroundWorkRunning = backgroundWorkRunning,
-    )
-
-    @Test
-    fun riskkortet_visar_omraknningsknappen_nar_en_plan_kan_ges() {
-        composeRule.setContent { FonderTheme { HemContent(state = riskState()) } }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().assertExists()
-    }
-
-    @Test
-    fun omraknningsknappen_uteblir_nar_ingen_plan_kan_ges() {
-        // Depå/AF eller ingen profil — knappen ska inte lova något SET-4-gaten vägrar infria.
-        composeRule.setContent { FonderTheme { HemContent(state = riskState(canRecomputeSwitchPlan = false)) } }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Räkna om bytesplanen").assertDoesNotExist()
-    }
-
-    @Test
-    fun omraknningsknappen_ar_slackt_medan_en_korning_pagar() {
-        composeRule.setContent { FonderTheme { HemContent(state = riskState(backgroundWorkRunning = true)) } }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Räknar om …").performScrollTo().assertIsNotEnabled()
-    }
-
-    @Test
-    fun klick_pa_omraknningsknappen_anropar_callbacken() {
-        var clicks = 0
-        composeRule.setContent {
-            FonderTheme { HemContent(state = riskState(), onRecomputeSwitchPlan = { clicks++ }) }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Räkna om bytesplanen").performScrollTo().performClick()
-
-        assertEquals(1, clicks)
     }
 
     // --- Avkastningsdiagrammet med indexjämförelse (HEM-9/HEM-10, issue #96) ---
@@ -809,8 +641,8 @@ class HemScreenTest {
     }
 
     @Test
-    fun avkastningsdiagrammet_ar_tredje_kortet_och_natt_via_skroll() {
-        // UI-5: kortet ligger under totalen och periodraden, alltså utanför skärmen på en
+    fun avkastningsdiagrammet_ar_natt_via_skroll() {
+        // UI-5: kortet ligger under totalen och "Att besluta", alltså delvis utanför skärmen på en
         // telefon — det ska gå att skrolla till, inte bara finnas i semantikträdet (issue #63).
         composeRule.setContent { FonderTheme { HemContent(state = returnState()) } }
 
@@ -935,122 +767,56 @@ class HemScreenTest {
         composeRule.onNodeWithContentDescription("Avkastningsdiagram", substring = true)
             .assertExists()
     }
+    // --- Att besluta (HEM-13) — förslagen och de pågående bytena själva ligger på Beslut ---
+
     @Test
-    fun kortet_for_pagaende_byte_visar_ledaren_och_oppnar_bevakningen() {
-        var opened: Long? = null
+    fun att_besluta_visar_antalet_och_leder_till_beslut() {
+        var opened = 0
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            openSwitchWatch = OpenSwitchWatchUi(
-                watchId = 7,
-                sellFundName = "Fond A",
-                daysWaiting = 2,
-                candidateCount = 3,
-                leaderName = "Kandidat B",
-                leaderChangeFraction = 0.021,
+            decisions = PendingDecisions(
+                switchPlan = listOf(planSuggestion, planSuggestion.copy(recordId = 2, planIndex = 1)),
+                openWatches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3)),
             ),
         )
 
-        composeRule.setContent {
-            FonderTheme { HemContent(state = state, onOpenSwitchWatch = { opened = it }) }
-        }
+        composeRule.setContent { FonderTheme { HemContent(state = state, onOpenBeslut = { opened++ }) } }
 
-        composeRule.onNodeWithText("Sålt Fond A · dag 2 · 3 alternativ bevakas").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Bäst sedan säljdagen: Kandidat B", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Visa bevakningen").performClick()
+        composeRule.onNodeWithText("Att besluta").assertIsDisplayed()
+        composeRule.onNodeWithText("2 bytesförslag · 1 pågående byte").assertIsDisplayed()
+        // Själva bytet visas inte här — det har flyttat till Beslut (NAV-9).
+        composeRule.onNodeWithText("Fond A", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Att besluta").performClick()
 
-        assertEquals(7L, opened)
+        assertEquals(1, opened)
     }
 
     @Test
-    fun utan_uppmatt_utveckling_sags_det_ut_i_stallet_for_en_tom_rad() {
-        // Kandidaternas kurser fylls på av bakgrundskörningen — tills dess finns ingen ledare,
-        // och en tom rad hade lästs som "inget har hänt" (ANA-4-principen).
+    fun att_besluta_uteblir_nar_inget_vantar() {
+        // Ett kvitterat förslag är redan beslutat — raden ska då inte stå kvar med en nolla.
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            openSwitchWatch = OpenSwitchWatchUi(
-                watchId = 7,
-                sellFundName = "Fond A",
-                daysWaiting = 1,
-                candidateCount = 2,
-            ),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))),
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = state) } }
 
-        composeRule.onNodeWithText("Ingen utveckling uppmätt än", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Att besluta").assertDoesNotExist()
     }
 
-    /** Ett förslag i bytesplanen (HEM-8) — gemensamt underlag för bevakningstesterna nedan. */
-    private fun switchSuggestion(followed: Boolean) = SwitchPlanResolver.Suggestion(
-        recordId = 1,
-        planIndex = 0,
-        sellIsin = "SE_SALJ",
-        buyIsin = "SE_KOP",
-        sellFundName = "Fond A",
-        buyFundName = "Fond B",
-        fromLevel = 6,
-        toLevel = 4,
-        feeDeltaPercent = -0.1,
-        switchValueKr = 4_200.0,
-        followed = followed,
+    /** Ett förslag i bytesplanen (HEM-8) — underlaget för Att besluta-testerna ovan. */
+    private val planSuggestion = SwitchPlanResolver.Suggestion(
+        recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+        sellFundName = "Dyr fond", buyFundName = "Billig fond",
+        fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
     )
-
-    private fun switchPlanState(followed: Boolean, watchedSellIsins: Set<String> = emptySet()) = HemUiState(
-        loading = false,
-        hasHoldings = true,
-        riskProfile = RiskProfile(targetAllocation = mapOf(4 to 1.0)),
-        switchPlan = listOf(switchSuggestion(followed)),
-        watchedSellIsins = watchedSellIsins,
-    )
-
-    @Test
-    fun ett_okvitterat_byte_erbjuder_ingen_bevakning() {
-        // Bevakningen gäller perioden **efter** säljet — erbjuds den innan bytet gjorts mäter
-        // den dagar då pengarna fortfarande låg kvar.
-        composeRule.setContent { FonderTheme { HemContent(state = switchPlanState(followed = false)) } }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
-    }
-
-    @Test
-    fun ett_salj_som_redan_bevakas_erbjuder_ingen_ny_bevakning() {
-        // Annars hade varje tryck startat ytterligare en bevakning av samma byte.
-        composeRule.setContent {
-            FonderTheme { HemContent(state = switchPlanState(followed = true, watchedSellIsins = setOf("SE_SALJ"))) }
-        }
-
-        scrollToRiskCard()
-
-        composeRule.onNodeWithText("Bevaka alternativ").assertDoesNotExist()
-    }
-
-    @Test
-    fun ett_kvitterat_byte_utan_bevakning_erbjuder_att_starta_en() {
-        var started: SwitchPlanResolver.Suggestion? = null
-
-        composeRule.setContent {
-            FonderTheme {
-                HemContent(
-                    state = switchPlanState(followed = true),
-                    onStartSwitchWatch = { started = it },
-                )
-            }
-        }
-
-        scrollToRiskCard()
-        composeRule.onNodeWithText("Bevaka alternativ").performScrollTo().performClick()
-
-        assertEquals(1L, started?.recordId)
-    }
 }
 
 /**
- * Riskkortets plats i Hems lista: total, utveckling, avkastning, analys, avgifter, risk — utan
- * ett pågående byte, som testerna nedan inte har. Ett index och inte en sökning på rubriken:
+ * Riskkortets plats i Hems lista: total, avkastning, utveckling, analys, avgifter, risk — utan
+ * "Att besluta" och utan påminnelse om säkerhetskopia, som testerna ovan inte har. Ett index och inte en sökning på rubriken:
  * rubriken finns inte i semantikträdet förrän kortet komponerats, vilket är just det som ska
  * åstadkommas.
  */
