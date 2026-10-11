@@ -53,6 +53,10 @@ LoadingDialog(title = "Importerar", body = "")
 CheckRow(checked = true, onCheckedChange = {}, label = "Ta med")
 ProgressBar()
 ItemRow(headline = "Global Indexfond A")
+AppFloatingToolbar(tabs = tabs, selectedIndex = 0, onSelect = {})
+AppFabMenu(expanded = false, onExpandedChange = {}, items = items)
+AppTopBar(title = "Fond", onBack = {})
+AppTabHeading(title = "Översikt") { }
 import androidx.compose.material3.Card
 // Card(modifier) i en kommentar
  * Card(modifier) i en KDoc
@@ -93,6 +97,15 @@ CircularProgressIndicator()
 LinearProgressIndicator(progress = { 0.5f })
 Badge { }
 Checkbox(checked = true, onCheckedChange = {})
+NavigationBar { }
+NavigationBarItem(selected = true, onClick = {}, icon = {})
+HorizontalFloatingToolbar(expanded = true) { }
+FloatingActionButton(onClick = {}) { }
+ExtendedFloatingActionButton(onClick = {}) { }
+ToggleFloatingActionButton(checked = false, onCheckedChange = {}) { }
+FloatingActionButtonMenu(expanded = false, button = {}) { }
+TopAppBar(title = {})
+CenterAlignedTopAppBar(title = {})
 PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
 ExposedDropdownMenuBox(expanded = false, onExpandedChange = {}) { }
 CartesianChartHost(chart, model)
@@ -110,6 +123,9 @@ Modifier.height(48.dp)
 CircularProgressIndicator(strokeWidth = 2.dp)
 Button(onClick = onClick, shapes = shapes) { label() }
 OutlinedTextField(value = value, onValueChange = onValueChange)
+TopAppBar(title = { Text(title) }, navigationIcon = {})
+HorizontalFloatingToolbar(expanded = true, modifier = modifier) { }
+ToggleFloatingActionButton(checked = expanded, onCheckedChange = onExpandedChange) { }
 
 [komponent-stopp]
 PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
