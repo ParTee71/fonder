@@ -342,11 +342,13 @@ private fun SwitchSuggestionCard(
                     text = stringResource(R.string.beslut_follow),
                     onClick = { onFollowedChange(switch.recordId, true) },
                     variant = AppButtonVariant.Outlined,
+                    contentDescription = stringResource(R.string.format_beslut_follow_a11y, switch.sellFundName, switch.buyFundName),
                 )
                 AppButton(
                     text = stringResource(R.string.beslut_dismiss),
                     onClick = { onDismiss(switch) },
                     variant = AppButtonVariant.Text,
+                    contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, switch.sellFundName, switch.buyFundName),
                 )
             }
         }
@@ -386,6 +388,11 @@ private fun DismissedSection(dismissed: List<SwitchPlanResolver.Suggestion>, onU
                             text = stringResource(R.string.beslut_undo_dismissal),
                             onClick = { onUndo(switch) },
                             variant = AppButtonVariant.Text,
+                            contentDescription = stringResource(
+                                R.string.format_beslut_undo_dismissal_a11y,
+                                switch.sellFundName,
+                                switch.buyFundName,
+                            ),
                         )
                     },
                 )

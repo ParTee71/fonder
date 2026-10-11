@@ -2,7 +2,9 @@ package se.partee71.fonder.ui.beslut
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -175,6 +177,35 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("Ångra").performClick()
 
         assertEquals(11L, undone?.recordId)
+    }
+
+    @Test
+    fun `folj avsta och angra sager vilket fondpar de galler`() {
+        // UI-3: knapparna upprepas per kort med samma korta etikett — skärmläsaren ska höra paret.
+        val twoOpen = full.copy(
+            decisions = full.decisions.copy(
+                switchPlan = full.decisions.switchPlan.map { it.copy(followed = false) },
+                dismissedSuggestions = listOf(full.decisions.switchPlan.first()),
+            ),
+        )
+        composeRule.setContent { FonderTheme { BeslutContent(state = twoOpen) } }
+
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        listOf(
+            "Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A",
+            "Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A",
+            "Följ: sälj Sverige Småbolag, köp Räntefond Kort",
+            "Avstå: sälj Sverige Småbolag, köp Räntefond Kort",
+        ).forEach { label ->
+            list.performScrollToNode(hasContentDescription(label))
+            composeRule.onAllNodesWithContentDescription(label).assertCountEquals(1)
+        }
+
+        list.performScrollToNode(hasText("Avstådda (1)"))
+        composeRule.onNodeWithText("Avstådda (1)").performClick()
+        val undo = "Ångra avstående: sälj Tillväxtmarknad Bred, köp Global Indexfond A"
+        list.performScrollToNode(hasContentDescription(undo))
+        composeRule.onAllNodesWithContentDescription(undo).assertCountEquals(1)
     }
 
     @Test

@@ -15,6 +15,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 /** Knappens tyngd — en per roll, så samma sorts åtgärd ser likadan ut på varje skärm (UI-13). */
 enum class AppButtonVariant {
@@ -38,6 +40,10 @@ enum class AppButtonVariant {
  * Appens enda knapp (UI-13, regel 4) — M3 Expressive-knappen med **formmorf**: helt rundad i vila,
  * fyrkantigare när den trycks ned (`ButtonDefaults.shapes()`). Etiketten är text; ingen skärm
  * ritar en egen knapp eller färgar en knapp för hand.
+ *
+ * @param contentDescription vad skärmläsaren säger i stället för etiketten (UI-3) — för en knapp
+ *   som upprepas per kort med samma korta etikett ("Följ", "Avstå"), så att varje knapp säger vad
+ *   den gäller. Null (standard) läser etiketten som förut.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -47,17 +53,23 @@ fun AppButton(
     modifier: Modifier = Modifier,
     variant: AppButtonVariant = AppButtonVariant.Primary,
     enabled: Boolean = true,
+    contentDescription: String? = null,
 ) {
+    val buttonModifier = if (contentDescription != null) {
+        modifier.semantics { this.contentDescription = contentDescription }
+    } else {
+        modifier
+    }
     val shapes = ButtonDefaults.shapes()
     val label: @Composable () -> Unit = { Text(text) }
     when (variant) {
         AppButtonVariant.Primary ->
-            Button(onClick = onClick, shapes = shapes, modifier = modifier, enabled = enabled) { label() }
+            Button(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
         AppButtonVariant.Tonal ->
             FilledTonalButton(
                 onClick = onClick,
                 shapes = shapes,
-                modifier = modifier,
+                modifier = buttonModifier,
                 enabled = enabled,
                 // Tonad = primärbehållaren (ljusblå), som i mockupen; M3:s standard är secondaryContainer (koppar).
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -66,13 +78,13 @@ fun AppButton(
                 ),
             ) { label() }
         AppButtonVariant.Outlined ->
-            OutlinedButton(onClick = onClick, shapes = shapes, modifier = modifier, enabled = enabled) { label() }
+            OutlinedButton(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
         AppButtonVariant.Text ->
-            TextButton(onClick = onClick, shapes = shapes, modifier = modifier, enabled = enabled) { label() }
+            TextButton(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
         AppButtonVariant.Danger -> Button(
             onClick = onClick,
             shapes = shapes,
-            modifier = modifier,
+            modifier = buttonModifier,
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,

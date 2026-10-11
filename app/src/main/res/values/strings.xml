@@ -510,6 +510,9 @@
     <string name="format_beslut_dismissed_title">Avstådda (%1$d)</string>
     <string name="format_beslut_dismissed_explain">Ett avstått förslag döljs i %1$d dagar och räknas inte som ett beslut. Ångra visar det igen.</string>
     <string name="beslut_undo_dismissal">Ångra</string>
+    <string name="format_beslut_follow_a11y">Följ: sälj %1$s, köp %2$s</string>
+    <string name="format_beslut_dismiss_a11y">Avstå: sälj %1$s, köp %2$s</string>
+    <string name="format_beslut_undo_dismissal_a11y">Ångra avstående: sälj %1$s, köp %2$s</string>
     <plurals name="format_beslut_facit_row">
         <item quantity="one">Facit · %1$d följt förslag</item>
         <item quantity="other">Facit · %1$d följda förslag</item>
