@@ -1,6 +1,6 @@
 ---
 name: room-migrations
-description: Fonders Room-schemamigreringar — varje databasändring måste migreras utan dataförlust (kärnan i datasäkerhetsregeln). Ladda denna ALLTID när du ändrar en @Entity, lägger till eller ändrar en kolumn eller tabell, höjer databasversionen eller rör Room-schemat. Trigger-ord: Room, migration, migrering, @Entity, schema, AppDatabase, databasversion, SupportSQLiteDatabase, execSQL, exportSchema, fallbackToDestructiveMigration, MigrationXYTest, kolumn, tabell, DAO.
+description: 'Fonders Room-schemamigreringar — varje databasändring måste migreras utan dataförlust (kärnan i datasäkerhetsregeln). Ladda denna ALLTID när du ändrar en @Entity, lägger till eller ändrar en kolumn eller tabell, höjer databasversionen eller rör Room-schemat. Trigger-ord: Room, migration, migrering, @Entity, schema, AppDatabase, databasversion, SupportSQLiteDatabase, execSQL, exportSchema, fallbackToDestructiveMigration, MigrationXYTest, kolumn, tabell, DAO.'
 ---
 
 # Room-migreringar
@@ -11,18 +11,22 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 14`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_13_14` ligger i `companion object` och samlas i `MIGRATIONS`.
-- Migreringstester: `Migration12Test … Migration1314Test` i
-  `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`.
+- `data/room/AppDatabase.kt` — `version = 15`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_14_15` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_14_15` skapar `switch_watches` (bytesfönstret, NFR-1 issue #114).
+- Migreringstester: `Migration12Test … Migration1415Test` (ett per steg) i
+  `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
+  `instrumented.yml`, alltså bara på PR.
 - `room.schemaLocation = $projectDir/schemas` är satt och `androidTest` mountar katalogen
-  som assets — men **schemafilerna är inte incheckade**. De genereras vid bygget.
+  som assets — men **schema-JSON:erna är inte incheckade** (`app/schemas/` finns inte i repot).
+  De genereras vid bygget. Det går därför inte att diffa schemat mellan versioner i en PR;
+  SQL:en i migreringen och testet är det enda som bevisar ändringen.
 
 ## Migreringstester byggs för hand här
 
 Fonder använder **inte** `MigrationTestHelper` med incheckade schema-JSON:er. Testerna
 skapar i stället den gamla databasen direkt med `SQLiteDatabase.openOrCreateDatabase` och
-rå `execSQL`, fyller den med data, kör migreringen och asserterar. Se `Migration1314Test`.
+rå `execSQL`, fyller den med data, kör migreringen och asserterar. Se `Migration1415Test`.
 
 Det betyder två saker:
 
@@ -37,15 +41,15 @@ Följ mönstret i det senaste `MigrationXYTest` när du skriver nästa.
 ## Procedur
 
 1. **Ändra entiteten** (`@Entity`) — ny kolumn, tabell eller index.
-2. **Höj `version`** i `@Database` (14 → 15).
-3. **Skriv `MIGRATION_14_15`** med exakt motsvarande `execSQL`. Nya `NOT NULL`-kolumner
+2. **Höj `version`** i `@Database` (15 → 16).
+3. **Skriv `MIGRATION_15_16`** med exakt motsvarande `execSQL`. Nya `NOT NULL`-kolumner
    måste ha `DEFAULT`. Återskapa index som entiteten deklarerar.
 4. **Lägg objektet i `MIGRATIONS`-arrayen** — annars används det aldrig.
-5. **Skriv `Migration1415Test`**: bygg en v14-databas med data, kör migreringen, verifiera
+5. **Skriv `Migration1516Test`**: bygg en v15-databas med data, kör migreringen, verifiera
    att den gamla datan finns kvar **och** att den nya kolumnen fick rätt defaultvärde.
 6. **Uppdatera backup-kedjan** om fältet är användardata — skill `data-safety-backup`.
    Är det härledd cache (som `fund_prices`, `fx_rates`, `fund_metadata`) ska det uttryckligen
-   **inte** in i kontraktet, och det motivet hör hemma i kravraden.
+   **inte** in i kontraktet; motivet skrivs i PR-beskrivningen och i KDoc på `BackupPayload`.
 7. **Uppdatera KRAVLISTA** — skill `requirements-kravlista`.
 
 ## Defaultvärdet är ett beslut, inte en formalitet
@@ -68,6 +72,8 @@ och det inte är sant, välj ett som är ärligt tomt i stället.
   schema. Lägg en ny migrering i stället.
 - **En migrering som tyst gallrar data.** Retention är ett krav, inte en implementationsdetalj
   — den ska stå i KRAVLISTA innan den står i SQL.
+- **Checka in schema-JSON utan beslut.** Att börja checka in `app/schemas/` (och gå över till
+  `MigrationTestHelper`) är ett arkitekturval för agenten `arkitekt`, i ett eget issue.
 
 ## Checklista
 

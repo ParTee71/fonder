@@ -1,6 +1,6 @@
 ---
 name: data-safety-backup
-description: Fonders datasäkerhetsregel (regel 1) — backup och restore får ALDRIG tappa användardata. Ladda denna ALLTID när du lägger till, ändrar eller tar bort persisterad data: en Room-entitet eller -kolumn, ett DataStore-värde, en domänmodell som sparas, eller något som rör backup/restore/export/import/JSON. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, LocalBackupRepository, BackupRoundTripTest, fältvakt, formatVersion, DataStore, PreferencesRepository, SAF, rundtur, round-trip, Drive, appDataFolder.
+description: 'Fonders datasäkerhetsregel (regel 1) — backup och restore får ALDRIG tappa användardata. Ladda denna ALLTID när du lägger till, ändrar eller tar bort persisterad data: en Room-entitet eller -kolumn, ett DataStore-värde, en domänmodell som sparas, eller något som rör backup/restore/export/import/JSON. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, LocalBackupRepository, BackupRoundTripTest, fältvakt, formatVersion, DataStore, PreferencesRepository, SAF, rundtur, round-trip, Drive, appDataFolder, molnbackup, DriveBackupRepository, DriveBackupWorker, DriveBackupFiles, fonder-backup-, gallring.'
 ---
 
 # Datasäkerhet: backup & restore
@@ -10,14 +10,14 @@ med identiskt innehåll. Ett fält som läggs till utan att komma med i backup-k
 regression även om appen kompilerar och alla gamla tester är gröna — datan faller tyst ur
 varje framtida säkerhetskopia och märks först när någon behöver den.
 
-Relaterade krav: **NFR-1**, **TP-7**, **SET-6**.
+Relaterade krav: **NFR-1**, **NFR-3**, **TP-7**, **SET-6**, **SET-7**.
 
 ## Kedjan (var datan passerar)
 
 ```
-Room + DataStore  →  BackupPayload  →  BackupSerializer.encode  →  JSON-sträng  →  SAF-fil
-       ▲                                                                │
-       └────  LocalBackupRepository.restore  ←  BackupSerializer.decode ┘
+Room + DataStore  →  BackupPayload  →  BackupSerializer.encode  →  JSON-sträng  ─┬→  SAF-fil (SET-6)
+       ▲                                                                         └→  Drive appDataFolder (SET-7)
+       └────  LocalBackupRepository.restore  ←  BackupSerializer.decode  ←  samma sträng
 ```
 
 Filer under `data/repository/`:
@@ -30,22 +30,30 @@ Filer under `data/repository/`:
   `restore(json): Result<RestoreSummary>`) och `LocalBackupRepository`.
 
 **Kontraktet är en `String`, inte en `Uri` eller en fil.** Transporten hör inte hemma i
-repositoryt: SAF skriver strängen i dag (SET-6), Drive `appDataFolder` skriver samma sträng
-i morgon (TP-7 steg 2), och formatet ändras inte av bytet. Bygg aldrig in en `Uri`, en
-`ContentResolver` eller ett `File` här — den I/O:n ligger i skärmen.
+repositoryt: SAF skriver strängen (SET-6) och Drive `appDataFolder` skriver samma sträng
+(TP-7 steg 2, SET-7) – formatet är detsamma. Bygg aldrig in en `Uri`, en `ContentResolver`,
+ett `File` eller ett Drive-anrop i `BackupRepository` — den I/O:n ligger i skärmen respektive i
+`DriveBackupRepository`.
 
 ## Vad som ingår — och vad som medvetet inte gör det
 
-**Ingår:** fonder, transaktioner, samtliga inspelade förslag (`SuggestionRecord`, inkl.
-`followed`, `switchValueKr`, `batchEpochMillis`, `kind`), riskprofil (SET-3, inkl.
-legacy-fältet `targetRiskLevel`), kontotyp (SET-4), temaval.
+**Ingår** (fälten i `BackupPayload`, `formatVersion = 1`): fonder, transaktioner, samtliga
+inspelade förslag (`SuggestionRecord`, inkl. `followed`, `switchValueKr`, `batchEpochMillis`,
+`kind`), pågående och avslutade byten (`switchWatches`, ANA-12, #114), riskprofil (SET-3, inkl.
+legacy-fältet `targetRiskLevel`), kontotyp (SET-4), temaval och den egenvalda referensfonden
+(`chosenBenchmarkIsin`, HEM-10).
 
 **Ingår inte, med avsikt:** `fund_prices`, `fx_rates`, `fund_metadata`. Härledd cache som
 hämtas om från källan och som skulle mångdubbla filen utan att skydda något oåterskapbart.
 De **töms heller inte** av en återställning, så lokal kurshistorik behålls.
 
-Samma gräns gäller cache-metadata i DataStore: `lastPriceSyncEpochMillis` och
-`fundFilterVocabulary` är inte användardata. Riskprofilen och kontotypen **är** det.
+Samma gräns gäller cache och driftstatus i DataStore: `lastPriceSyncEpochMillis`,
+`fundFilterVocabulary`, den automatiskt valda jämförelseblandningen (`benchmark`) och
+Drive-statusen (senaste lyckade körning, "behöver auktorisering") är inte användardata.
+Riskprofilen, kontotypen och den egenvalda referensfonden **är** det.
+
+`formatVersion` höjs **bara** när ett fält tas bort eller byter betydelse – ett tillagt fält med
+default läses av äldre appar (okända nycklar ignoreras).
 
 Frågan att ställa om ett nytt fält: *går det att återskapa från en källa, eller är det något
 användaren själv matat in eller som appen räknat fram och aldrig kan räkna fram igen?* Det
@@ -105,14 +113,27 @@ det fältet**. Ett fält som bara finns i `BackupPayload` men aldrig assertas ä
 - **En migrering som gallrar data** (t.ex. retention på inspelade förslag) tar bort något som
   ingår i kontraktet. Det kräver ett uttryckligt krav i KRAVLISTA, inte bara en kodrad.
 
-## Drive-backupen (TP-7 steg 2) — inte byggd
+## Drive-backupen (TP-7 steg 2, SET-7) — byggd
 
-Bygg den **inte** som sidoeffekt av något annat issue. När den byggs är den ett rent
-transportbyte bakom `BackupRepository`; formatet är redan låst och testat. Två saker gäller
-då, och de står i [docs/GOOGLE-SETUP.md](../../../docs/GOOGLE-SETUP.md):
+En ren **transport** bakom samma sträng, inte en andra `BackupRepository`. Anroparen komponerar:
+`backupRepository.export()` → `driveBackup.upload(json)` och `driveBackup.downloadLatest()` →
+`backupRepository.restore(json)`. Ett nytt fält i kontraktet kräver därför **ingen** ändring här.
 
-- `appDataFolder` **delas med Dagboken** (samma Cloud-projekt). Filnamn prefixas
-  `fonder-backup-`, och **varje** listning filtrerar på prefixet. En obefiltrerad
-  gallringsrutin skulle radera Dagbokens säkerhetskopior.
-- Inloggningen (TP-6) bär ingen användardata i sig och ingår inte i kontraktet — en session
-  hör till enheten, inte till portföljen.
+| Del | Var | Vad |
+|---|---|---|
+| `DriveBackupRepository` / `GoogleDriveBackupRepository` | `data/repository/DriveBackupRepository.kt` | `upload`, `downloadLatest`, `list` mot `appDataFolder`; utfallet som `DriveResult` (`Success`, `Error`, `NoAccount`, `NoBackupFound`, `NeedsAuthorization`). Scopet `drive.appdata` begärs separat från inloggningen (TP-6), först när backupen används. |
+| `DriveBackupFiles` | `domain/usecase/DriveBackupFiles.kt` | Ren Kotlin: prefixet `fonder-backup-`, filnamn `fonder-backup-ÅÅÅÅMMDD-HHMM.json`, frågan `name contains 'fonder-backup-' and trashed = false`, och gallringen `staleFileIds` som behåller de **5** senaste (`KEEP_COUNT`). |
+| `DriveBackupWorker` | `worker/DriveBackupWorker.kt` | Dygnsvis körning under eget unikt arbetsnamn `fonder_drive_backup` (`KEEP`, kräver nätverk); "Säkerhetskopiera nu" under `fonder_drive_backup_now`. `outcomeFor` mappar utfallet: utloggad = tyst klart, saknad auktorisering = flagga utan retry, fel = retry. Misslyckas exporten laddas ingenting upp. |
+
+Regler som inte får brytas:
+
+- `appDataFolder` är per Google Cloud-**projekt** och **delas med Dagboken**. Varje listning
+  använder `DriveBackupFiles.QUERY`, och gallringen filtrerar om på `isOurs` – en ofiltrerad
+  gallring skulle radera Dagbokens säkerhetskopior. Ändras prefix, fråga eller `KEEP_COUNT`:
+  uppdatera `DriveBackupFilesTest` och SET-7 i samma PR.
+- Kursuppdateringens "Uppdatera nu" ersätter (`REPLACE`) sitt eget arbete – därför har backupen
+  ett eget arbetsnamn. Häng aldrig på den på `FundPriceUpdateWorker`.
+- Inloggningen (TP-6) bär ingen användardata och ingår inte i kontraktet.
+- Drive-anropen testas aldrig mot riktig Drive: logiken ligger i `DriveBackupFiles`
+  (`DriveBackupFilesTest`) och `outcomeFor` (`DriveBackupOutcomeTest`).
+- Konsolstegen (OAuth-klient, Drive API, SHA-1) står i [docs/GOOGLE-SETUP.md](../../../docs/GOOGLE-SETUP.md).

@@ -1,157 +1,121 @@
 ---
 name: release
-description: Fonder release workflow — propose a version bump, confirm, update build.gradle.kts + README, commit the release on master, then trigger release.yml via workflow_dispatch so GitHub Actions creates the tag, builds the signed APK and publishes a GitHub Release. CI-first (works from the phone); local Android Studio build is a documented fallback. Only use when the user explicitly asks to release or ship a new version.
+description: 'Fonders release-flöde — föreslå versionshöjning, bekräfta, uppdatera versionName/versionCode i app/build.gradle.kts och README:s versionshistorik, landa release-commiten på master och trigga release.yml via workflow_dispatch så att GitHub Actions skapar taggen, bygger den signerade APK:n och publicerar en GitHub Release – och avsluta med APK-länken. CI-först (fungerar från telefonen). Använd BARA när användaren uttryckligen ber om en release. Trigger-ord: release, släpp, ny version, publicera, versionshöjning, bygg APK, signerad APK, debug-snapshot.'
 ---
 
-# Fonder Release Workflow
+# Release
 
-Run the steps in order. After each step report what you did. Stop and explain clearly if
-anything fails. **Only run this when the user explicitly asks to release.**
+Kör stegen i ordning och rapportera efter varje steg. Stanna och förklara om något fallerar.
+**Kör bara när användaren uttryckligen ber om en release.**
 
-## How a release happens here
+## Hur en release går till
 
-- **Build & sign:** GitHub Actions `release.yml` (canonical) — decodes the keystore from
-  secrets and builds the signed APK in the cloud, so this works from the phone with no local
-  SDK. Building locally in Android Studio is a documented fallback (see end).
-- **Publish:** `release.yml` builds the signed APK and **publishes a GitHub Release**
-  (auto-generated changelog + APK attached). It has two triggers:
-  - pushing a tag `vX.Y.Z`, or
-  - `workflow_dispatch` on `master` with `version_name` set and `publish_release` ticked —
-    the workflow then **creates the tag itself** (via `action-gh-release`, on the dispatched
-    commit) and publishes the Release.
-- **Who creates the tag:** use the dispatch path. **Never try to `git push` a tag from an
-  agent session** — the network policy blocks `refs/tags/*` and the push fails with
-  `error: RPC failed; HTTP 403`. Branch pushes are unaffected. Pushing the tag from the
-  user's own machine still works and is a valid manual fallback.
-- **Tools:** use the **GitHub MCP** tools (`mcp__github__*`) — there is no `gh` CLI here.
-  The build runs in Actions, not in the session — don't run `./gradlew` in a phone/web session.
+- **Bygg och signering:** i Actions (`release.yml`); keystoren avkodas ur secrets
+  (`SIGNING_*`) och den signerade APK:n byggs i molnet. Ingen lokal SDK krävs.
+- **Publicering:** `release.yml` publicerar en GitHub Release med automatisk changelog och
+  APK:n. Två triggers: push av tagg `v*`, eller `workflow_dispatch` på `master` med
+  `version_name` och `publish_release` – då **skapar workflowen taggen själv** på den
+  dispatchade commiten.
+- **Grindar:** `release.yml` kör i dag inga tester själv. **Starta releasen först när CI
+  (`android.yml`) är grönt** för release-commiten på `master` – annars släpps oprövad kod.
+  Snålt med Actions-minuter (regel 5): kör inte om det som redan körts grönt.
+- **Ett fallerat jobb:** läs loggen (`get_job_logs`, eller agenten `ci-doktor`), fixa
+  grundorsaken och kör om bara det som föll – aldrig hela releasen i blindo.
+- **Testbygge utan publicering:** `workflow_dispatch` med bara `version_name` (utan
+  `publish_release`) ger den signerade APK:n som artifact – ingen tagg, ingen Release.
+- **Debug-snapshot:** `release-debug.yml` (bara `workflow_dispatch`) bygger en debug-APK och
+  publicerar den som rullande pre-release under taggen `debug-snapshot`, som skrivs över vid
+  varje körning. Ingen versionshöjning, ingen tagg `v*`.
+- **Taggar pushas aldrig från en agentsession** – nätverkspolicyn blockerar `refs/tags/*`
+  (`error: RPC failed; HTTP 403`). Använd dispatch-vägen. Branch-pushar påverkas inte.
+- **Verktyg:** GitHub MCP (`mcp__github__*`); ingen `gh`.
 
----
+## Steg 1 – Nuvarande version
 
-## Step 1 — Read current version
+Läs `versionCode` och `versionName` i `app/build.gradle.kts` (`versionNameOverride` sätts bara
+av workflowens `-PversionNameOverride`).
 
-Read `app/build.gradle.kts`: note `versionCode` (int) and `versionName` (string).
+## Steg 2 – Föreslå versionshöjning
 
----
+Senaste tagg: `mcp__github__list_tags` / `mcp__github__get_latest_release` (owner `ParTee71`,
+repo `fonder`). Commits sedan dess: `git log <tagg>..HEAD --oneline --no-merges`. PR:er
+squash-mergas, så varje rad är ett ämne som `feat(...)`/`fix(...)` med `(#NN)`. Den
+**allvarligaste** ändringen i hela intervallet styr (en `feat` → minor, även bland många `fix`).
 
-## Step 2 — Analyse commits and propose a version bump
-
-Find the latest release tag (local tags may be absent — prefer the remote):
-```
-mcp__github__list_tags          (owner: ParTee71, repo: fonder)   # newest vX.Y.Z
-mcp__github__get_latest_release (owner: ParTee71, repo: fonder)   # or the last published release
-```
-List commits since that tag: `git log <last-tag>..HEAD --oneline --no-merges`
-(or all commits if there is no tag). PRs are normally **squash-merged**, so each line is one
-conventional-commit subject (`feat(...)`, `fix(...)`, `chore(...)`) ending in `(#NN)` — that is
-your changelog material. A multi-PR feature landed since the last tag is still assessed as a
-whole: the **highest-severity** commit across the whole range sets the bump (one `feat` → minor,
-even amid many `chore`/`fix`).
-
-Classify the highest-severity change present:
-
-| Commit keyword / pattern | Bump |
+| Innehåll | Höjning |
 |---|---|
-| `BREAKING`, `!:`, major rewrite, removed feature | **major** — x+1.0.0 |
-| `feat`, `feature`, new screen, new capability | **minor** — x.y+1.0 |
-| `fix`, `chore`, `refactor`, `test`, `docs`, `i18n`, `deps`, polish | **patch** — x.y.z+1 |
+| `BREAKING`, `!:`, borttagen funktion, nytt backupformat som äldre appar inte kan läsa | **major** |
+| `feat`, ny skärm, ny förmåga | **minor** |
+| `fix`, `chore`, `refactor`, `test`, `docs`, beroenden | **patch** |
 
-Compute new `versionName` (per the bump) and new `versionCode` (= current + 1). Present:
+Har en funktions-PR redan höjt `versionName` sedan senaste tagg (CLAUDE.md regel 3), utgå från
+den – höj inte två gånger. Ny `versionCode` = nuvarande + 1. Visa:
 ```
-Current:  v<old_name>  (versionCode <old_code>)
-Proposed: v<new_name>  (versionCode <new_code>)
-Reason:   <one sentence>
-Commits:  <bullet list>
-Proceed with v<new_name>, or a different version?
+Nuvarande: v<gammal>  (versionCode <gammal>)
+Förslag:   v<ny>      (versionCode <ny>)
+Skäl:      <en mening>
+Commits:   <punktlista>
+Kör v<ny>, eller en annan version?
 ```
-**Wait for explicit confirmation before continuing.**
+**Vänta på bekräftelse.**
 
----
+## Steg 3 – Uppdatera version, README och krav
 
-## Step 3 — Update version + README version history
+1. `app/build.gradle.kts`: `versionCode = <ny>` och `versionName = "<ny>"`. Verifiera ändringen.
+2. README: versionsraden överst (`> Version: <ny> (följer versionName/KRAVLISTA.md)`).
+3. README "Versionshistorik": **ny rad** för `<ny>` med de användarsynliga ändringarna sedan
+   förra releasen, i samma stil som befintliga rader, med `(#NN)`-referenser. Funktions-PR:er
+   rör inte tabellen – raden **skrivs här**, utifrån commitarna i steg 2.
+4. Kontrollera att KRAVLISTA.md speglar det som släpps och att TP-kraven matchar SDK-nivåerna
+   i `build.gradle.kts` (`compileSdk`, `minSdk`, `targetSdk`).
+5. Har `BackupPayload.FORMAT_VERSION` höjts sedan förra releasen: nämn det tydligt – en äldre
+   app avvisar då nya säkerhetskopior (skill `data-safety-backup`).
 
-1. Edit `app/build.gradle.kts`: `versionCode = <new>` and `versionName = "<new>"`. Verify the
-   edit before committing.
-2. Update the version line near the top of `README.md`
-   (`> Version: <new_name> (följer versionName/KRAVLISTA.md)`).
-3. **Add a new row to the README "Versionshistorik" table** for `<new_name>`, summarising the
-   user-visible changes shipped since the last release (mirror the style of the existing rows:
-   one dense sentence per theme, with the `(#NN)` PR/issue refs). Feature PRs land throughout the
-   cycle **without** touching this table — so at release time the row is *written here*, not merely
-   "confirmed". Read the commits from Step 2 to compose it. This is the table `CLAUDE.md`'s rule 3
-   refers to.
-4. Confirm `KRAVLISTA.md` already reflects the shipped behaviour (features update it as they
-   land, per rule 3 in `CLAUDE.md`) and that the documented SDK levels still match
-   `build.gradle.kts` (e.g. `compileSdk`) — fix if a build-config change slipped through
-   without a requirement update.
+## Steg 4 – Release-commit på master
 
----
-
-## Step 4 — Land the release commit on master
-
-Releases are published from **master**. If you are on a feature branch, get the version bump
-onto master first (open/merge a PR), then release from the master commit. With explicit release
-intent the user may approve committing the bump directly to master.
-
+Via PR (grön och mergad, skill `implement-issue`), eller direkt till `master` om användaren
+uttryckligen godkänt det.
 ```
-git commit -am "Release v<new_name>"
-git push origin master            # land the release commit (retry with backoff on network errors)
+git commit -am "Release v<ny>"
+git push origin master
 ```
+Skapa ingen tagg här.
 
-Do **not** create or push a tag here — the workflow creates it in Step 5. A tag push from an
-agent session fails with `error: RPC failed; HTTP 403` (the network policy blocks `refs/tags/*`).
+## Steg 5 – Trigga release-bygget
 
----
-
-## Step 5 — Trigger the release build
-
-Dispatch `release.yml` on `master`, which creates the tag and publishes the Release:
+När CI är grönt på release-commiten:
 ```
 mcp__github__actions_run_trigger
   owner: ParTee71, repo: fonder
-  workflow_id: release.yml
-  ref: master
-  inputs: { version_name: "<new_name>", publish_release: "true" }
+  workflow_id: release.yml, ref: master
+  inputs: { version_name: "<ny>", publish_release: "true" }
 ```
-`version_name` is **without** the leading `v` (the workflow tags `v<new_name>`); `publish_release`
-must be the *string* `"true"` — `workflow_dispatch` inputs are sent as strings. The workflow fails
-fast if the tag already exists, so a repeated dispatch never overwrites a published Release.
+`version_name` utan `v`; `publish_release` som strängen `"true"`. Workflowen vägrar om
+taggen redan finns, så en upprepad dispatch skriver aldrig över en publicerad Release.
 
-Then follow the run and the published Release:
+Följ körningen: `actions_list` → `actions_get` → vid fel `get_job_logs` (`failed_only`) eller
+agenten `ci-doktor` → `get_release_by_tag` för `v<ny>`.
+
+**Manuell reserv:** från användarens egen dator `git tag v<ny> && git push origin v<ny>` –
+samma workflow. Erbjud bara om dispatch-vägen inte fungerar.
+
+## Steg 6 – Sammanfattning med APK-länk
+
+Avsluta **alltid** med länken till APK:n – appen installeras från telefonen, och "bygget är
+grönt" utan länk tvingar fram ett extra steg. Ange commit och `versionName`.
 ```
-mcp__github__actions_list        (owner: ParTee71, repo: fonder)             # find the run
-mcp__github__actions_get         (... run_id)                                # poll status
-mcp__github__get_job_logs        (... run_id, failed_only: true)             # on failure
-mcp__github__get_release_by_tag  (owner: ParTee71, repo: fonder, tag: v<new_name>)
+Släppt:  Fonder v<ny>  (versionCode <ny>)
+Commit:  <sha> "Release v<ny>" på master
+Tagg:    v<ny> (skapad av release.yml)
+CI:      <länk / status>
+APK:     <Release-länk> (signerad fonder-<ny>-<tidsstämpel>.apk)
 ```
-The workflow builds the signed APK and publishes a GitHub Release (changelog + APK). If it
-fails, report the failing step/log. (An artifact-only build without a Release: dispatch the same
-workflow with `version_name` only, leaving `publish_release` off.)
+Samma regel för `release-debug.yml` (länk till `releases/tag/debug-snapshot`) och för ett
+testbygge utan Release (länk till artifacten).
 
-**Manual fallback:** from the user's own machine `git tag v<new_name> && git push origin v<new_name>`
-triggers the exact same workflow. Only offer this if the dispatch path is unavailable.
+## Reserv – bygga lokalt i Android Studio
 
----
-
-## Step 6 — Summary
-
-```
-Released: Fonder v<new_name>  (versionCode <new_code>)
-Commit:   Release v<new_name>  on master
-Tag:      v<new_name>  created by release.yml on the master commit
-CI:       <run URL / status>
-GitHub:   <Release URL>  (signed APK attached, once built)
-```
-
----
-
-## Fallback — build the signed APK locally (Android Studio)
-
-When CI isn't an option and you have the SDK + keystore locally:
-```
-./gradlew :app:assembleRelease
-```
-APK lands in `app/build/outputs/apk/release/` (filename includes a build timestamp). Requires
-`fonder.jks` in `app/` and signing passwords via `local.properties` or the
-`SIGNING_*` environment variables. For a published Release, run Step 5 so `release.yml`
-attaches the cloud-built APK.
+`./gradlew :app:assembleRelease` kräver `fonder.jks` i `app/` och signeringslösenord via
+`local.properties` eller `SIGNING_*`-miljövariabler; APK:n hamnar i
+`app/build/outputs/apk/release/`. Checka aldrig in keystoren. För en publicerad Release, kör
+ändå steg 5.

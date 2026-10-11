@@ -1,152 +1,158 @@
 ---
 name: implement-issue
-description: Implement a GitHub issue, bug fix, feature, or chore in Fonder end to end — research, plan, change code following the project's patterns, add tests at every level, update requirements and the backup contract, then commit, push, and open a PR. Use when the user wants to "implement issue #N", "fix this bug", "build this feature", "do this ticket", "pick up #N", or hands off from refine-issue. Handles bugs, features, and chores alike.
+description: Implement a GitHub issue, bug fix, feature, or chore in Fonder end to end — check that the previous PR is merged, research, reuse shared parts, change code following the project's patterns, add tests at every level, update requirements and the backup chain, self-review with the granskare agent and /code-review, then commit, push, open a PR, watch it and link the APK. Use when the user wants to "implement issue #N", "fix this bug", "build this feature", "do this ticket", "pick up #N", or hands off from refine-issue. Svenska trigger-ord: genomför, implementera, kör #N, kör nästa, driv på, fixa buggen, bygg funktionen, ta issue.
 ---
 
-# Implement an Issue (bug · feature · chore)
+# Genomföra ett issue (bugg · funktion · underhåll)
 
-This is the "do the work" counterpart to `refine-issue`. It drives a change from a ticket
-or description all the way to a pushed branch with a PR, honouring the four non-negotiable
-rules in [CLAUDE.md](../../../CLAUDE.md). Don't skip steps to "save time" — the rules are the
-definition of done, not optional polish.
+Motsvarigheten till `refine-issue`: driver en ändring från issue till PR enligt de fem
+reglerna i [CLAUDE.md](../../../CLAUDE.md). Hoppa inte över steg – reglerna är definitionen
+av klart.
 
-> **Tests run in GitHub Actions, not in the session.** From the phone/web there is no
-> Android SDK and Google Maven may be blocked — do not try to run `./gradlew`. Reason about
-> correctness, write the tests, push, and let CI run them (see CLAUDE.md). Note:
-> `android.yml` (compile + unit tests) runs on both push and PR against `master`, but
-> `instrumented.yml` (emulator tests) runs **only on pull requests** — a plain push does not
-> trigger it, so open a PR to get instrumented coverage. In Android Studio you can run
-> everything locally.
+> **Tester körs lokalt före push när Android SDK finns, CI bekräftar** (skill
+> `testing-strategy`, "Innan du anser dig klar"). Saknas SDK får CI testa – säg det i PR:en.
+> `android.yml` (kompilering + enhetstester) körs på push och PR; `instrumented.yml`
+> (emulator) **bara på PR**.
 
-## Step 1 — Understand the work
+## Steg 0 – Föregående PR och branch (alltid först)
 
-- If given an issue number, fetch it: `mcp__github__issue_read (repo: partee71/fonder, issue_number: N)`.
-  Read its acceptance criteria and Definition of Done — those are your contract.
-- If it's a loose description and the scope is unclear or risky, consider running
-  `refine-issue` first (or at least restate scope and confirm) before writing code.
-- Classify: **bug**, **feature**, or **chore** — it changes the workflow below slightly.
+En PR i taget mot `master`, och sessionen har normalt en enda arbetsbranch.
 
-## Step 2 — Reproduce (bugs) / pin the target (features)
+1. Hämta den senaste PR:en från arbetsbranchen med `mcp__github__list_pull_requests`
+   (owner `ParTee71`, repo `fonder`, head `<branch>`, state `all`) och
+   `mcp__github__pull_request_read`. **Lita aldrig på ett antagande eller på att någon sagt
+   "mergad" – fråga GitHub.**
+2. **Mergad** → `git fetch origin master && git checkout -B <branch> origin/master`. Avsluta
+   bevakningen av den gamla PR:en (`unsubscribe_pr_activity`) och ta bort dess check-in.
+3. **Öppen** → säg direkt att den inte är mergad och att nytt arbete annars hamnar i samma PR.
+   Vänta på besked, eller förbered arbetet i en lokal commit utan push. **Återställ aldrig
+   branchen från `master` innan mergen bekräftats** – det tappar PR:ens commits lokalt.
+4. Ingen PR alls → skapa branchen från `origin/master`. Committa aldrig direkt på `master`.
 
-- **Bug:** establish the exact reproduction and the expected vs actual behaviour. Find the
-  faulty code path before changing anything. You will encode the repro as a failing test.
-- **Feature/chore:** identify the precise insertion point and the user-visible outcome that
-  marks "done".
+Skälet är konkret: parallella PR:ar mot samma bas krockar nästan alltid på
+`KRAVLISTA.md`/`README.md`/`versionName`.
 
-## Step 3 — Research existing patterns (before writing code)
+## Steg 1 – Förstå arbetet
 
-Mandatory — the project values consistency over cleverness.
+- Hämta issuet **och dess kommentarer**: `mcp__github__issue_read` (owner `ParTee71`, repo
+  `fonder`, metod `get` och `get_comments`). Acceptanskriterier, Design, Återbruk och
+  **Agent · modell · effort** är kontraktet; kommentarer med rubriken "Tillägg" gäller före
+  issuetexten.
+- Oklart eller riskabelt omfång → kör `refine-issue` först eller bekräfta omfånget.
+- Klassa: bugg, funktion eller underhåll.
 
-- Open a sibling ViewModel / screen / repository and copy its shape (state exposure, events,
-  error mapping) — e.g. `PortfoljViewModel`, `TransaktionerViewModel`, `FundSearchViewModel`.
-  See `android-dev`'s existing-pattern audit.
-- UI? Find the shared component to reuse/extend (`EmptyState`, `SelectField`, `DateField` in
-  `ui/components/`, `FundLineChart` in `ui/diagram/`) — don't fork a new variant
-  (`shared-ui-components`).
-- Data? Note Room entities (`FundEntity`, `TransactionEntity`, `FundPriceEntity`), DAOs, and
-  whether a migration is needed (bump `AppDatabase` version, write a `MigrationXYTest`
-  following the existing `Migration12Test`/`Migration23Test` pattern).
-- External fund-data source involved? `HandelsbankenFondlistaClient`/`HandelsbankenHtmlParser`
-  and `AvanzaClient`/`AvanzaJsonParser`/`AvanzaPriceSource` are isolated, undocumented-source
-  integrations (KRAVLISTA TP-10, TP-14) — keep new source logic similarly isolated in
-  `data/network/` and don't leak parsing details into repositories/ViewModels.
-- Map the touched code to `KRAVLISTA.md` requirement IDs (`ÖV`, `TP`, `UI`, `NAV`, `POR`,
-  `TRX`, `IMP`, `NFR`) and to existing tests.
+## Steg 2 – Mockup (ny GUI)
 
-## Step 4 — Plan the change
+Kräver issuet ny eller tydligt ändrad GUI (tumregel i CLAUDE.md, skill `mockup`) och det
+finns ingen godkänd mockup under **Design** → gör mockupen, visa den och **vänta på ok**
+innan kod.
 
-Write a short internal plan (and share it if the change is non-trivial): files to touch, the
-order, the tests to add, the migration + backup-contract edits, and the requirement rows to
-update. For anything architecturally significant or ambiguous, confirm with the user via
-`AskUserQuestion` before coding.
+## Steg 3 – Återskapa (bugg) / sikta (funktion)
 
-## Step 5 — Branch
+- **Bugg:** exakt återskapande, förväntat mot faktiskt, hitta felande kodväg. Reproduktionen
+  blir ett test som faller.
+- **Funktion/underhåll:** exakt var ändringen görs och vilket synligt utfall som betyder klart.
 
-Work on the designated development branch (see CLAUDE.md / task instructions); create it if
-missing. Never commit straight to `master`.
+## Steg 4 – Hitta befintliga mönster och delade delar
 
-## Step 6 — Implement (tests alongside, not after)
+- Öppna en syskon-ViewModel/skärm/repository och följ dess form (`PortfoljViewModel`,
+  `TransaktionerViewModel`, `FundSearchViewModel`) – skill `android-dev`.
+- Slå upp komponenter, kända dubbletter och byggstenar i skill `shared-ui-components`. Rör du
+  en känd dubblett (`TotalCard`, `ComparisonChart`, importens laddningsdialoger) – slå ihop den
+  först. Saknas något delat → planera det som **egen commit före** featuren.
+- Data → skills `data-safety-backup` och `room-migrations`.
+- Extern källa → `data/network/` (Avanza, Handelsbanken, Riksbanken) är odokumenterade källor
+  (TP-10, TP-14); håll parsning isolerad där och läck den inte in i repositories/ViewModels.
+- Beräkning → `domain/usecase/`, aldrig i ViewModel eller composable.
+- Mappa till KRAVLISTA-ID:n (skill `requirements-kravlista`) och befintliga tester.
 
-Follow the architecture: `Compose → ViewModel(StateFlow<UiState>) → Repository → Room/DataStore`,
-Hilt DI, errors mapped in the repository layer.
+## Steg 5 – Planera och delegera
 
-- **Bug:** first add a **regression test that fails** (reproduces the bug), then make the
-  minimal change that turns it green. Don't expand scope while you're in there.
-- **Feature:** build behind the existing patterns; reuse shared components; keep ViewModels
-  testable (inject dispatchers).
-- **Persisted data changed?** Write the Room migration (`AppDatabase` version bump + a
-  `MigrationXYTest`), and account for the new field in the backup contract
-  (`BackupPayload` in `data/repository/BackupPayload.kt` — the file format, built on the
-  domain models). Since SET-6 the backup round trip is real and tested: add the field to
-  `BackupPayload`, update `BackupSerializerTest`'s field guard (it fails deliberately when a
-  contract-bearing model gains a field), and make sure `BackupRoundTripTest` covers it. Only
-  the Drive transport (TP-7 step 2) is outstanding — don't build that as a side effect
-  (`data-safety-backup`).
-- Keep diffs focused. Match surrounding style. UI strings in Swedish via `strings.xml`.
-- Don't log full HTTP responses or secrets from the fund-data sources; add
-  `contentDescription`/adequate touch targets for new interactive UI.
+Kort plan: filer, ordning, tester, migrering och backup-kedjan, krav. Arkitektoniskt
+betydande eller tvetydigt → bekräfta med `AskUserQuestion` innan kod.
 
-## Step 7 — Tests at every touched level (rule 2)
+**Delegera på rätt nivå:** skärmar, komponenter, use cases, nätverkskällor, workers och
+CI-filer till agenten `byggare`; Room-schema, migreringar, backup-kedjan, DataStore och
+arkitekturval till agenten `arkitekt`; tester på tre eller fler nivåer till `testskrivare`.
+Huvudsessionen orkestrerar och granskar. Går ett steg fel två gånger i rad flyttas det upp en nivå.
 
-- **Unit** (`app/src/test`): ViewModel/domain/use-case/parser/mapper logic (`PortfolioCalc`,
-  `MoneyFormat`, `FundCompanyMatcher`, `FundNameMatcher`, `TransactionFormValidator`,
-  `HandelsbankenHtmlParser`, `AvanzaJsonParser`, …), fakes over mocks for the data layer,
-  Turbine for flows.
-- **Instrumented** (`app/src/androidTest`): Compose UI behaviour; Room DAO round-trips;
-  `MigrationXYTest` for schema changes.
-- Update — never delete or weaken — existing tests the change affects. If you add a method to
-  a DAO interface, update its fakes too (or the build breaks).
+**Kör agenten som issuet anger.** Läs avsnittet **Agent · modell · effort** och starta varje
+del med just den agenten, modellen och effort. Saknas avsnittet: komplettera issuet först
+(skill `refine-issue`). Avvikelse bara uppåt, och motiveras i PR-beskrivningen.
 
-## Step 8 — Self-review against the four rules (slutkontroll)
+## Steg 6 – Implementera (tester samtidigt, inte efter)
 
-Run the CLAUDE.md final checklist:
-- [ ] **Data safety** — persisted changes have a Room migration + test, and are accounted for
-  in the backup contract (or the issue explicitly notes backup is still pending). (rule 1)
-- [ ] **Tests** — added/updated at every touched level. (rule 2)
-- [ ] **Requirements** — `KRAVLISTA.md` (and README/version if scope changed) updated. (rule 3)
-- [ ] **Reuse** — no duplicate component. (rule 4)
-- [ ] **Architecture** — follows established patterns.
+`Compose → ViewModel(StateFlow<UiState>) → Repository → Room/DataStore`, Hilt, fel mappas i
+repository-lagret.
 
-Trace each issue acceptance-criterion to the code/test that satisfies it. If you can't,
-you're not done.
+- **Bugg:** regressionstest som faller först, sedan minsta ändringen som gör det grönt.
+  Utöka inte omfånget medan du är där.
+- **Funktion:** delade delar först (egen commit), sedan featuren ovanpå. Injicera dispatchers.
+- **Persisterad data:** hela kedjan i samma ändring – `@Entity`, `version`, `MIGRATION_N_N+1`
+  i `MIGRATIONS`, `MigrationXYTest`; fältet i `BackupPayload` med default, i `export()`/`restore()`,
+  fältvakten i `BackupSerializerTest` och `BackupRoundTripTest`. Drive-backupen är en transport
+  och rörs inte av ett nytt fält.
+- Svenska UI-strängar i `strings.xml`; återanvänd befintliga texter.
+- Logga aldrig hela HTTP-svar, innehav, belopp eller tokens; `contentDescription` och 48 dp
+  tryckyta för nya interaktiva element.
 
-## Step 9 — Commit & push
+## Steg 7 – Tester på varje berörd nivå
 
-- Conventional, **Swedish-OK** commit messages scoped to the change:
-  `feat(transaktioner): …`, `fix(portfolj): …`, `test(...)`, `chore(...)`.
-- Small, coherent commits over one giant blob. Include the commit trailers required by the
-  task/CLAUDE.md instructions.
-- Push the development branch: `git push -u origin <branch>` (retry with backoff on network errors).
+Enligt skill `testing-strategy`: enhet i `app/src/test`, Room/migrering/rundtur/Compose i
+`app/src/androidTest`; uppdatera – ta aldrig bort eller försvaga – befintliga tester; nya
+komponenter får ett Compose-test (och skärmdump ljust + mörkt när Roborazzi finns).
 
-## Step 10 — Pull request (only when the user wants one)
+## Steg 8 – Självgranskning
 
-Do **not** open a PR unless asked. When you do:
-- Target `master`. Title `<area>: <imperative summary>`.
-- Body: what changed, how it maps to the four rules, the test plan, and `Closes #N` to link
-  the issue. Mirror any PR template if the repo has one.
-- Opening the PR triggers GitHub Actions (`android.yml` on push+PR, `instrumented.yml` on PR
-  only) — that's where the tests actually run. Offer to watch the PR
-  (`subscribe_pr_activity`) and drive CI green.
+Kör agenten **`granskare`** på diffen och åtgärda varje ⚠️/❌ i dess tabell. Spåra varje
+acceptanskriterium till kod eller test. Kan du inte det är du inte klar.
 
-## Multiple issues
+Rör ändringen `domain/usecase/`, datalagret, Room-schemat, backup-kedjan, en nätverkskälla
+eller en delad komponent – eller är diffen större än ett par filer – kör dessutom
+**`/code-review`** på diffen, *efter* `granskare` och innan push. `granskare` kontrollerar
+reglerna; `/code-review` letar buggar. Verifiera varje fynd och åtgärda de verkliga. Rena
+dokument- och strängändringar behöver den inte.
 
-Implement them **one at a time**, each its own focused commit set (and PR if requested).
-Don't batch unrelated changes into one branch — it muddies review and CI.
+Ändras koden efter granskningen granskas rättningarna igen – `granskare` och `/code-review`
+på det som ändrats – innan push. En PR går aldrig ut med kod som ingen granskning sett.
 
-**Only one open PR against `master` at a time.** If a PR was requested, get it merged (or
-closed) before opening the next one — don't have two PRs open against `master`
-simultaneously. Parallel PRs based on the same stale `master` almost always collide on
-`KRAVLISTA.md`/`README.md`/`versionName` (both bump the same next version number), causing
-an avoidable merge conflict on whichever merges second. Implementing on separate branches
-ahead of time is fine; just sequence the PR-open-through-merge step.
+## Steg 9 – Commit och push
 
-## Anti-patterns
+- Konventionella meddelanden, gärna svenska: `feat(transaktioner): …`, `fix(portfolj): …`,
+  `test(...)`, `docs(...)`, `chore(...)`. Små, sammanhängande commits. `Closes #N` i den sista.
+  Avsluta med de commit-trailers som sessionen anger.
+- Kör kontrollerna lokalt (skill `testing-strategy`) och pusha först när de är gröna.
+- `git push -u origin <branch>` (försök igen med backoff vid nätverksfel).
 
-- Fixing a bug without a regression test.
-- Changing persisted data without a Room migration + test, or without accounting for it in
-  the backup contract.
-- A new component that duplicates a shared one (`ui/components/`, `ui/diagram/`).
-- Deleting/`@Ignore`-ing a failing test to "go green".
-- Trying to run `./gradlew` in a remote/phone session instead of trusting CI.
-- Inventing a real Drive backup implementation as a side effect of an unrelated feature —
-  that's its own issue; the local format is already built and must not be reshaped for it.
+## Steg 10 – Pull request och bevakning
+
+- Mot `master`. Titel `<område>: <sammanfattning>`. Innehåll: vad som ändrats, hur det
+  uppfyller de fem reglerna, krav-ID:n som ändrats eller uppfylls, testplan (och vad som inte
+  kunde köras lokalt), byggtidseffekt vid nya beroenden, `Closes #N`, och för GUI:
+  mockup-länk (+ skärmdumpar ljust/mörkt när Roborazzi finns).
+- **Prenumerera direkt** (`subscribe_pr_activity`) utan att fråga, och schemalägg en check-in.
+  Bevaka tills den är mergad eller stängd; hantera granskningskommentarer.
+- Rött CI → agenten **`ci-doktor`** diagnostiserar; fixa grundorsaken och pusha. Kör aldrig
+  bara om.
+- **APK-länk:** har en körning producerat en installerbar APK (debug-snapshot via
+  `release-debug.yml`, eller en artifact) – avsluta svaret med länken, commit och `versionName`
+  (CLAUDE.md → Bygg & test).
+- Har användaren bett om automatisk merge när den är grön: kontrollera att alla kontroller på
+  senaste commit är gröna och att PR:en är konfliktfri, merga med `merge_pull_request`
+  (`expectedHeadSha`), avsluta bevakningen och gå tillbaka till steg 0.
+
+## Flera issues
+
+Ett i taget, var och en med egen PR. Blanda aldrig orelaterade ändringar i samma branch.
+Att förbereda nästa på en lokal branch går bra – det är PR-öppning till merge som sekvenseras.
+
+## Anti-mönster
+
+- Påbörja nästa issue utan att ha frågat GitHub om föregående PR är mergad.
+- Kod för ny GUI utan godkänd mockup.
+- Bugfix utan regressionstest.
+- Persisterad ändring utan migrering + `MigrationXYTest`, eller utan plats i `BackupPayload`
+  och rundturen (eller ett uttryckligt motiv till att fältet är cache).
+- En lokal variant av en delad komponent, eller en tredje kopia av en känd dubblett.
+- Ta bort eller `@Ignore`:a ett rött test.
+- "Bygget är grönt" utan APK-länk när en APK byggts.
