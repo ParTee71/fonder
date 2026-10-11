@@ -5,11 +5,19 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -22,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -104,5 +113,26 @@ class AppFloatingToolbarTest {
     @Test
     fun `skärmdump ljust och mörkt`() = composeRule.captureLightAndDark("AppFloatingToolbar_default") {
         AppFloatingToolbar(tabs = tabs, selectedIndex = 0, onSelect = {})
+    }
+
+    @Test
+    fun `flikraden får plats på en 360 dp-telefon med stor text`() {
+        // 360 dp skärm minus 8 dp start och plusknappens 80 dp (AppNavigation) = 272 dp; textskala 1,3.
+        val available = 272.dp
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.3f)) {
+                FonderTheme {
+                    Box(Modifier.width(available)) {
+                        AppFloatingToolbar(tabs = tabs, selectedIndex = 3, onSelect = {})
+                    }
+                }
+            }
+        }
+
+        val bar = composeRule.onNodeWithTag(APP_FLOATING_TOOLBAR_TAG).getUnclippedBoundsInRoot()
+        assertTrue("flikraden är ${bar.right - bar.left} bred, ryms inte i $available", bar.right <= available)
+        val last = composeRule.onNodeWithContentDescription("Händelser").getUnclippedBoundsInRoot()
+        assertTrue("Händelser sticker ut: ${last.right} > ${bar.right}", last.right <= bar.right)
     }
 }

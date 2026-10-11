@@ -117,7 +117,8 @@ fun AppNavigationShell(
 
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
     // Menyn hör till flikarna: lämnas fliken (även via systemets bakåt) stängs den.
-    LaunchedEffect(currentTab) { if (currentTab == null) fabMenuExpanded = false }
+    // Före första kompositionen av grafen är rutten null; då rörs inte menyn (överlever rotation, UI-9).
+    LaunchedEffect(currentRoute) { if (currentRoute != null && currentTab == null) fabMenuExpanded = false }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
