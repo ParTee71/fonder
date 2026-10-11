@@ -46,6 +46,20 @@ roomTesting             = "2.6.1"
 okhttp                  = "4.12.0"
 jsoup                   = "1.17.2"
 pdfboxAndroid           = "2.0.27.0"
+# Kontroller och JVM-UI-tester (verkstads-PR:en, regel 2 och 4). Versionerna är valda mot
+# projektets Kotlin 2.1.0: Kotlin-metadatat i testberoendena får inte vara nyare än vad
+# kompilatorn läser (jfr Vico ovan).
+# - Robolectric är ren Java (inget Kotlin-metadata); 4.16.1 stöder compileSdk 36 och kör
+#   SDK 34 på JDK 17 (SDK 35+ kräver Java 21 i Robolectric – se robolectric.properties).
+# - Roborazzi 1.60.0 är sista utgåvan byggd med Kotlin-metadata 2.0; 1.61.0 och senare
+#   har 2.3 och går inte att kompilera mot med Kotlin 2.1.0. Höj med projektets Kotlin.
+# - Konsist 0.17.3 har metadata 1.8 och tolkar källkoden med kotlin-compiler-embeddable
+#   2.0.21 (bara testets körklassväg); 0.18 drar in kotlin-stdlib 2.4.
+# - PMD (CPD i cpdCheck) är ren Java och körs via sin CLI i en egen konfiguration.
+robolectric             = "4.16.1"
+roborazzi               = "1.60.0"
+konsist                 = "0.17.3"
+pmd                     = "7.28.0"
 
 [libraries]
 androidx-core-ktx                    = { group = "androidx.core",            name = "core-ktx",                       version.ref = "coreKtx" }
@@ -112,6 +126,13 @@ androidx-compose-ui-tooling          = { group = "androidx.compose.ui",      nam
 androidx-compose-ui-test-manifest    = { group = "androidx.compose.ui",      name = "ui-test-manifest" }
 mockk                                = { group = "io.mockk",                 name = "mockk",                          version.ref = "mockk" }
 turbine                              = { group = "app.cash.turbine",         name = "turbine",                        version.ref = "turbine" }
+robolectric                          = { group = "org.robolectric",          name = "robolectric",                    version.ref = "robolectric" }
+roborazzi                            = { group = "io.github.takahirom.roborazzi", name = "roborazzi",                 version.ref = "roborazzi" }
+roborazzi-compose                    = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose",         version.ref = "roborazzi" }
+roborazzi-junit-rule                 = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule",      version.ref = "roborazzi" }
+konsist                              = { group = "com.lemonappdev",          name = "konsist",                        version.ref = "konsist" }
+pmd-cli                              = { group = "net.sourceforge.pmd",      name = "pmd-cli",                        version.ref = "pmd" }
+pmd-kotlin                           = { group = "net.sourceforge.pmd",      name = "pmd-kotlin",                     version.ref = "pmd" }
 
 [plugins]
 android-application  = { id = "com.android.application",                   version.ref = "agp" }
@@ -123,3 +144,5 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 # Appliceras först i auth-issuet: pluginet fäller bygget så länge app/google-services.json
 # saknas, och filen kommer först när Firebase-projektet är uppsatt (docs/GOOGLE-SETUP.md)
 google-services      = { id = "com.google.gms.google-services",            version.ref = "googleServices" }
+# Skärmdumpar i JVM: recordRoborazziDebug / verifyRoborazziDebug (skill testing-strategy)
+roborazzi            = { id = "io.github.takahirom.roborazzi",             version.ref = "roborazzi" }

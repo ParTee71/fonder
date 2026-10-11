@@ -61,7 +61,7 @@ ska kommunicera läget (`stateDescription` eller `Role`) – utöka den delade k
 ## Tester (regel 2)
 
 Compose-UI-test asserterar semantik utan TalkBack (i dag instrumenttester i `app/src/androidTest`,
-t.ex. `RiskBadgeTest`, `CardTitleRowTest`; Robolectric i JVM *kommer i verkstads-PR:en*):
+t.ex. `RiskBadgeTest`, `CardTitleRowTest`, och med Robolectric i JVM i `app/src/test`, t.ex. `EmptyStateTest`):
 ```kotlin
 composeTestRule.onNodeWithContentDescription("Risknivå 5 av 7").assertExists()
 composeTestRule.onNodeWithText("−5,0 %").assertIsDisplayed()

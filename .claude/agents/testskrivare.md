@@ -32,7 +32,7 @@ Du skriver tester för Fonder.
 - Testdata är syntetisk – aldrig utdrag ur en riktig backup eller avräkningsnota.
 - Bugg: först ett test som reproducerar buggen och faller.
 - Ta aldrig bort, `@Ignore`:a eller försvaga befintliga tester.
-- Kör `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin` när Android SDK finns;
+- Kör `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin` (Android SDK installeras vid behov med `.claude/hooks/install-android-sdk.sh`);
   instrumenttester bekräftas i CI. Rapportera resultatet ärligt.
 
 ## Rapport

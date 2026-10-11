@@ -27,7 +27,9 @@
       "mcp__Claude_Code_Remote__delete_trigger",
       "mcp__Claude_Code_Remote__list_triggers",
       "mcp__Claude_Code_Remote__fire_trigger",
-      "mcp__Claude_Code_Remote__list_repos"
+      "mcp__Claude_Code_Remote__list_repos",
+      "Bash(node --test .claude/hooks/test/*.test.mjs)",
+      "Bash(node tools/regel4-baseline.mjs:*)"
     ]
   },
   "hooks": {
@@ -37,6 +39,18 @@
           {
             "type": "command",
             "command": "f=$(ls \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh \"$CLAUDE_PROJECT_DIR\"/fonder/.claude/hooks/session-start.sh 2>/dev/null | head -n1); [ -z \"$f\" ] || \"$f\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(ls \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/regel4-check.mjs \"$CLAUDE_PROJECT_DIR\"/fonder/.claude/hooks/regel4-check.mjs 2>/dev/null | head -n1); [ -z \"$f\" ] || node \"$f\"",
+            "timeout": 10
           }
         ]
       }

@@ -64,8 +64,16 @@ raden här. Bygg aldrig en tredje kopia.
 | `ImportLoadingDialog` / `ImportOrdersLoadingDialog` | `imports/ImportHoldingsScreen.kt`, `imports/ImportOrdersScreen.kt` – samma dialog, olika strängar | en delad laddningsdialog med `title`/`body` |
 | Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow`, `SwitchSuggestionRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | en delad listrad (`ItemRow`, planerad) med parametrar för undertext, badge, belopp och pil |
 | Kort | drygt 30 råa `Card(...)` med egen `padding(16.dp)` i feature-koden (flest i Hem och Inställningar) | ett delat kort (`AppCard`, planerat) |
+| Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) och motsvarande kort i `transaktioner/SoldFundsScreen.kt` | `ExpandableInfoRow` i ett `AppCard` |
+| Starta bytesbevakning | `startSwitchWatch` i `fond/FondDetaljViewModel.kt` och `hem/HemViewModel.kt` | en metod på `SwitchWatchRepository` (eller ett use case) som båda anropar |
+| Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
+| Testuppställning | ~40 testfiler med kopierade fakes och fixturer – flest `HemViewModelTest`/`PortfoljViewModelTest`, sedan `SettingsViewModelTest`, `FacitViewModelTest`, migreringstesterna | delade fakes och fixturer (skill `testing-strategy` → DRY i tester) |
 
-## Planerade delade delar *(kommer i verkstads-PR:en)*
+Alla kopior som fanns när `cpdCheck` infördes står i `config/cpd-baseline.txt` (en rad per
+uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`). Raderna ovan är
+produktionskoden bland dem. Baslinjen ska bara krympa – se *Kontroller*.
+
+## Planerade delade delar
 
 Finns **inte** än – låtsas inte att de gör det. Flyttas upp till tabellerna ovan i PR:en som
 bygger dem (med mockup, test och skärmdump ljust + mörkt).
@@ -100,18 +108,36 @@ Beräkningar ligger i `domain/usecase/`, aldrig i en ViewModel eller composable.
 
 ## Förbjudet
 
-I dag kontrolleras detta **bara i granskningen** (agenten `granskare`). Automatiska kontroller
-*(kommer i verkstads-PR:en)*: `UiConsistencyTest` (Konsist), `cpdCheck` (PMD CPD) och hooken
-`regel4-check`, med mönstren i en enda fil `ui-forbidden.txt` och undantag bara i
-`ui-allowlist.txt` (`fil:symbol – motivering`, användarens ok i PR:en).
+Mönstren står i **en** fil, `app/src/test/resources/ui-forbidden.txt` (regex + vad som ska
+användas i stället, per scope `feature`, `component-only` och `vico`); den här listan
+sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
+(`fil:symbol – motivering`, användarens ok i PR:en).
 
 - **Feature-kod** (ui-paket utom `ui/components`, `ui/diagram`, `ui/theme`): nya råa
-  Material 3-komponenter som har en delad motsvarighet ovan; hårdkodade `Color(…)`,
-  `RoundedCornerShape(…)`, `fontSize`, `TextStyle` eller literala dp för hörn och höjd. Befintliga
-  träffar är skuld, inte förebild.
+  Material 3-komponenter som har en delad motsvarighet ovan (`Card`/`Surface`, `ListItem`,
+  `AlertDialog`, datumväljare, `DropdownMenu`, chips, progressindikatorer, `Badge`, `Checkbox`);
+  hårdkodade `Color(…)`, `RoundedCornerShape(…)`, `fontSize`/`lineHeight`/`letterSpacing`,
+  `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.
 - **All kod utom `ui/diagram/`:** Vico.
 - **All kod utom `ui/components/`:** Material3:s `PullToRefreshBox`, `ExposedDropdownMenuBox`.
 - **En kontroll utan något att skriva mot** – visa den inte alls (ANA-4-principen).
+
+## Kontroller
+
+| Kontroll | När | Vad |
+|---|---|---|
+| Hooken `regel4-check` (`.claude/hooks/regel4-check.mjs`) | direkt efter varje `Edit`/`Write` av en `.kt`-fil i `app/src/main` | samma mönster och undantag som testet; exit 2 med rad, träff och ersättning. Kontrollerar bara Fonder (ett grannrepo i samma session har sin egen hook) |
+| `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hooktestet, så att hook och bygge tolkar lika |
+| `./gradlew cpdCheck` (PMD CPD, 80 tokens) | `build-and-test` | kopierad Kotlin i `app/src/{main,test,androidTest}`; fäller en kopia vars filuppsättning inte står i `config/cpd-baseline.txt` |
+
+**Baslinjerna** (skuld från före kontrollerna, får bara krympa):
+
+- `ui-allowlist.txt`: rader med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" (19 rader)
+  genereras av `node tools/regel4-baseline.mjs` – kör det när en skärm rättats. Ett undantag gäller
+  fil + symbol, så en baslinjerad för `Card(` i `HemScreen.kt` släpper igenom *alla* `Card(` i den
+  filen tills den rättats. Hooktestet fäller en inaktuell baslinje. Handskrivna undantag står kvar.
+- `config/cpd-baseline.txt`: skriv om med `./gradlew cpdCheck -PcpdWriteBaseline` efter en
+  sammanslagning; `cpdCheck` varnar för rader som inte längre gäller. Aldrig för att få in en ny kopia.
 
 ## Arbetsflöde
 

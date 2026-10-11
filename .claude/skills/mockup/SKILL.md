@@ -56,8 +56,9 @@ approximation – koden i `ui/theme` och de byggda komponenterna är facit.
 
 ## I PR:en
 
-- Mockup-länken och, när Roborazzi finns *(kommer i verkstads-PR:en)*, skärmdumpar ljust + mörkt
-  av det byggda bredvid. Till dess: beskriv resultatet och länka debug-snapshoten.
+- Mockup-länken och, när Roborazzis referensbilder kan spelas in (infrastrukturen finns, inspelningen
+  från CI är planerad – skill `ci-budget`), skärmdumpar ljust + mörkt av det byggda bredvid. Till dess:
+  beskriv resultatet och länka debug-snapshoten.
 - Avvikelser från mockupen förklaras i PR-beskrivningen.
 
 ## Mockup är inte kod

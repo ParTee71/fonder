@@ -46,6 +46,12 @@ ska fixas, inte ignoreras.
 Behöver du ett diagram, ett kort, en tom-tillståndsvy, en datum/tid-rad osv. — använd
 den befintliga delade komponenten i `ui/components/` eller `ui/diagram/`. Bygg inte en ny
 variant av något som redan finns; utöka den delade komponenten i stället.
+
+**Kontrolleras automatiskt:** hooken `regel4-check` ger besked direkt efter varje filändring;
+`UiConsistencyTest` (Konsist) och `cpdCheck` (copy-paste-detektor) fäller bygget. Förbjudna mönster
+finns i en fil (`ui-forbidden.txt`), undantag bara via `ui-allowlist.txt` med motivering och
+användarens ok i PR:en. Brotten och kopiorna från före kontrollerna står som baslinjer som bara får
+krympa (`tools/regel4-baseline.mjs`, `config/cpd-baseline.txt`).
 → Skill: **shared-ui-components**.
 
 ### 5. CI-budget
@@ -54,7 +60,7 @@ rör koden de testar. Release-bygge (R8) och lint hör inte till PR-flödet; de 
 veckovis och vid release. Nya beroenden eller plugins får inte fördubbla byggtiden – ange
 effekten i PR:en. Att slippa köra ett test är aldrig ett skäl att inte skriva det.
 
-**Läget i dag:** efter CI-etappen uppskattat **~2 minuter** för en dokument-PR och **~5–6
+**Läget i dag:** efter CI-etappen uppskattat **~2 minuter** för en dokument-PR och **~6–7
 minuter** för en kod-PR (`changes` + `build-and-test` + `ci-ok`), plus emulatorn (~10–15) bara
 när `app/src/main/**`, `app/src/androidTest/**` eller byggfilerna ändrats. Tidigare ~19–20
 minuter per PR-push. Ingen ändring får göra det dyrare.
@@ -107,13 +113,19 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 
 ```bash
 ./gradlew :app:compileDebugKotlin            # kompilera
-./gradlew :app:testDebugUnitTest             # enhetstester (JUnit/MockK/Turbine)
+./gradlew :app:testDebugUnitTest             # enhetstester (JUnit/MockK/Turbine), Robolectric, UiConsistencyTest
 ./gradlew :app:compileDebugAndroidTestKotlin # kompilera instrumenttester
+./gradlew cpdCheck                           # copy-paste-detektor (regel 4)
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
+node --test .claude/hooks/test/*.test.mjs    # hooktest regel4-check + baslinjen (ingen SDK behövs)
+node tools/regel4-baseline.mjs               # skriv om baslinjen i ui-allowlist.txt när en skärm rättats
 ```
 
-**Gradle går att köra i sessionen när Android SDK finns** (session-start-hooken säger om den
-finns); kör då det du ändrat innan varje push. Annars får CI bekräfta – säg det i PR:en.
+**Gradle körs i sessionen med Android SDK i `/opt/android-sdk`** (session-start-hooken säger
+om den finns); kör det du ändrat innan varje push. Saknas den: installera den – det är alltid ok
+att installera Android SDK och liknande verktyg i sessionen vid behov
+(`.claude/hooks/install-android-sdk.sh`, ≈450 MB, några minuter). Bara om installationen inte går
+får CI bekräfta – säg det i PR:en.
 
 I GitHub Actions kör `.github/workflows/android.yml` vid push och PR mot `master`: ett
 `changes`-jobb avgör utifrån ändrade sökvägar om kompilering och enhetstester

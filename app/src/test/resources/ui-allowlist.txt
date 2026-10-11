@@ -1,0 +1,28 @@
+# Undantag från regel 4 (skill shared-ui-components).
+# Format: <sökväg relativt repots rot>:<symbol> – <motivering>
+# Varje ny handskriven rad kräver användarens uttryckliga ok i PR:en.
+#
+# Raderna med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" är baslinjen: brotten som fanns när
+# kontrollen infördes. De genereras av `node tools/regel4-baseline.mjs` och ska bara bli färre –
+# kör skriptet igen när en skärm rättats. Lägg aldrig till en baslinjerad för hand.
+
+# Baslinje
+app/src/main/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/fondsok/FundSearchScreen.kt:LinearProgressIndicator( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/fondsok/FundSearchScreen.kt:ListItem( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt:Checkbox( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt:CircularProgressIndicator( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt:FilterChip( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportOrdersScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportOrdersScreen.kt:Checkbox( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportOrdersScreen.kt:CircularProgressIndicator( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/portfolj/PortfoljScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/settings/SettingsScreen.kt:AlertDialog( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/settings/SettingsScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/transaktioner/SoldFundsScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/transaktioner/TransactionFormScreen.kt:FilterChip( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/transaktioner/TransaktionerScreen.kt:AlertDialog( – baslinje 2026-10 – rättas i skärm-PR:erna
+app/src/main/kotlin/se/partee71/fonder/ui/transaktioner/TransaktionerScreen.kt:Card( – baslinje 2026-10 – rättas i skärm-PR:erna

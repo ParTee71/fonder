@@ -14,6 +14,8 @@ plugins {
     // som Credential Manager begär ID-token för (TP-6). Filen är incheckad — utan den
     // fäller pluginet bygget, se docs/GOOGLE-SETUP.md.
     alias(libs.plugins.google.services)
+    // Skärmdumpar i JVM (Robolectric): recordRoborazziDebug / verifyRoborazziDebug (skill testing-strategy)
+    alias(libs.plugins.roborazzi)
 }
 
 private val buildTimestamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
@@ -114,13 +116,20 @@ android {
 
     testOptions {
         unitTests {
+            // Robolectric läser appens resurser (strängar, tema) – krävs för Compose-tester i JVM.
             isIncludeAndroidResources = true
+            // Riktig rendering i Robolectric, så att Roborazzi kan ta skärmdumpar.
+            all { it.systemProperty("robolectric.graphicsMode", "NATIVE") }
         }
     }
 
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
+}
+
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
 
 kotlin {
@@ -212,6 +221,14 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
+    // Compose i JVM (Robolectric), skärmdumpar (Roborazzi) och regel 4-kontrollen (Konsist)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.konsist)
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit.ext)
