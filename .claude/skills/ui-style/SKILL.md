@@ -35,10 +35,12 @@ används för vad → skill `shared-ui-components`. Koden är facit; tabellerna 
 | bakgrund / yta | ljust `#F6F9F8` / `#FBFDFC` · mörkt `#0F1513` / `#121A18` | |
 | text / dämpad | ljust `#0F1513` / `#3F4B48` · mörkt `#DDE4E1` / `#BFC9C5` | `onSurface` / `onSurfaceVariant` |
 
-> **Öppen fråga – mässingens värde.** CLAUDE.md:s identitetsrad anger mässingsaccent
-> `#C9A227`, men koden har `Brass = #B8862F` (ljust) och `BrassBright = #E3C05A` (mörkt);
-> `#C9A227` förekommer inte i koden. Petrol `#167C6E` stämmer (`Petrol500`), men primärfärgen i
-> ljust tema är `Petrol700`. Använd kodens värden tills användaren avgjort vilket som gäller.
+> **Mässingens värde är avgjort:** kodens `Brass = #B8862F` (ljust) och `BrassBright = #E3C05A`
+> (mörkt) gäller (beslut 2026-10-11, mockup i
+> https://claude.ai/artifact/XJoun6DFZqTdKTRF9gmYWB). `#C9A227` valdes bort: vit text på den når
+> bara 2,4:1 och markörerna syns sämre mot ljus yta. Vit text på `#B8862F` når 3,2:1 – räcker för
+> stor text och ikoner, inte för brödtext; mörkt tema har `onSecondary` `#3A2E00` (7,6:1).
+> Petrol `#167C6E` är `Petrol500`; primärfärgen i ljust tema är `Petrol700` `#0E5249`.
 
 ### Semantiska färger (`Theme.kt`)
 

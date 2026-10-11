@@ -59,7 +59,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 ## Design
 
 Visuell identitet **grön petrol** (kärna `#167C6E`, primär `#0E5249`) med
-mässings-/guldaccent (`#C9A227`), **fast palett** (ingen dynamisk färg), ljust + mörkt
+mässings-/guldaccent (`#B8862F` ljust, `#E3C05A` mörkt), **fast palett** (ingen dynamisk färg), ljust + mörkt
 tema. Rubriker i **Space Grotesk**; belopp med **tabulära siffror**. Avkastning visas med
 semantisk färg **och** tecken/pil (aldrig färg ensam).
 

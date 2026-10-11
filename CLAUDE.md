@@ -12,7 +12,7 @@ Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, fö
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
 skrivs normalt.
 
-Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #C9A227), rubriker i
+Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #B8862F ljust / #E3C05A mörkt), rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
 ---
