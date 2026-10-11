@@ -645,6 +645,25 @@ class FondDetaljScreenTest {
     }
 
     @Test
+    fun avstadda_forslag_doljs_och_antalet_sags_ut_med_vagen_till_angra() {
+        // HEM-14: ett avstått förslag visas inte här heller — men det sägs ut, och ett avstått byte
+        // läses inte som att planen inte föreslår något.
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = holdingState(
+                        analysis = greenAnalysis(),
+                        feeComparison = FeeComparisonUiState.Found(emptyList()),
+                    ).copy(dismissedPlanCount = 1, dismissedFeeCount = 1),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("2 förslag du avstått från visas inte här", substring = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("Riskprofilens bytesplan föreslår inget byte", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun sager_att_bytesforslag_bara_ges_for_agda_fonder() {
         composeRule.setContent {
             FonderTheme { FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices)) }

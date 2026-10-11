@@ -10,14 +10,16 @@ import java.time.LocalDate
 /**
  * In-memory-fake av [SuggestionRecordRepository] för läsarna av bytesplanen (HEM-8) — Översikten,
  * Beslut och [se.partee71.fonder.domain.usecase.PendingDecisionsSource]. Speglar DAO:ns SQL där
- * det spelar roll: [observeLatestBatch] är senaste dygnets **senaste körning**, sorterad på plats i
- * planen, och [observeHistory] nyast först.
+ * det spelar roll: [observeLatestBatch] är bytesplanens senaste dygns **senaste körning**, sorterad på
+ * plats i planen, och [observeHistory] nyast först.
  */
 class FakeSuggestionRecordRepository : SuggestionRecordRepository {
 
     val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
 
-    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { all ->
+    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { stored ->
+        // Som DAO:n: bara planens rader, även när dygn och körning väljs (issue #91).
+        val all = stored.filter { it.kind == SuggestionKind.RISK_PLAN }
         if (all.isEmpty()) return@map emptyList()
         val latestDay = all.maxOf { it.suggestedAtEpochDay }
         val sameDay = all.filter { it.suggestedAtEpochDay == latestDay }

@@ -411,6 +411,109 @@ class BeslutViewModelTest {
         assertEquals(true, suggestionRepo.records.value.single().followed)
     }
 
+    // --- Billigare alternativ (ANA-9) som egna förslag ---
+
+    /** Ett innehav vars senaste jämförelse visar ett billigare alternativ, och dess inspelade avgiftsbyte. */
+    private fun setUpCheaperAlternative(followed: Boolean? = null) {
+        metadataRepo.metadataByIsin = mapOf(
+            "SE_HELD" to meta("SE_HELD", "Sverige Småbolag", fee = 1.4, risk = 5).copy(shownAlternativeIsins = listOf("SE_IDX")),
+            "SE_IDX" to meta("SE_IDX", "Småbolag Index", fee = 0.4, risk = 5),
+        )
+        suggestionRepo.records.value = listOf(
+            planRecord(id = 77, buyIsin = "SE_IDX", valueKr = 96_000.0).copy(kind = SuggestionKind.FEE, followed = followed),
+        )
+    }
+
+    private suspend fun loadedCheaper(vm: BeslutViewModel): BeslutUiState {
+        var result: BeslutUiState? = null
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
+            result = state
+            cancelAndIgnoreRemainingEvents()
+        }
+        return result!!
+    }
+
+    @Test
+    fun `ett billigare alternativ visas och raknas aven utan bytesplan och kontotyp`() = runTest(dispatcher) {
+        // ANA-9 gatas inte på kontotypen (SET-4) — det gör bara bytesplanen.
+        setUpCheaperAlternative()
+
+        val state = loadedCheaper(viewModel())
+
+        val alternative = state.decisions.cheaperAlternatives.single()
+        assertEquals("Sverige Småbolag", alternative.suggestion.sellFundName)
+        assertEquals("Småbolag Index", alternative.suggestion.buyFundName)
+        assertEquals(960.0, alternative.annualSavingsKr!!, 1e-6)
+        assertTrue(state.decisions.switchPlan.isEmpty())
+        assertEquals(1, state.decisions.count)
+        assertFalse(state.isEmpty)
+    }
+
+    @Test
+    fun `avsta pa ett billigare alternativ skriver sorten FEE - angra visar det igen`() = runTest(dispatcher) {
+        setUpCheaperAlternative()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
+            val suggestion = state.decisions.cheaperAlternatives.single().suggestion
+
+            vm.dismissSuggestion(suggestion)
+
+            while (state.decisions.cheaperAlternatives.isNotEmpty()) state = awaitItem()
+            assertEquals(listOf(77L), state.decisions.dismissedCheaperAlternatives.map { it.suggestion.recordId })
+            assertEquals(0, state.decisions.count)
+            assertEquals(
+                listOf(SuggestionDismissal("SE_HELD", "SE_IDX", SuggestionKind.FEE, LocalDate.now().toEpochDay())),
+                dismissalRepo.dismissals.value,
+            )
+
+            vm.undoDismissal(suggestion)
+
+            while (state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
+            assertTrue(state.decisions.dismissedCheaperAlternatives.isEmpty())
+            assertEquals(1, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `folj pa ett billigare alternativ kvitterar avgiftsraden och tar det ur antalet`() = runTest(dispatcher) {
+        // Samma rad som Fonddetalj och Facit skriver mot (SET-5).
+        setUpCheaperAlternative()
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
+
+            vm.setSwitchFollowed(77, true)
+
+            while (!state.decisions.cheaperAlternatives.single().suggestion.followed) state = awaitItem()
+            assertEquals(true, suggestionRepo.records.value.single().followed)
+            assertEquals(0, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `bevaka alternativ pa ett kvitterat billigare alternativ bevakar hela positionen`() = runTest(dispatcher) {
+        setUpCheaperAlternative(followed = true)
+
+        val vm = viewModel()
+        vm.startSwitchWatch(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion)
+        advanceUntilIdle()
+
+        val watch = switchWatchRepo.watches.value.single()
+        assertEquals("SE_HELD", watch.sellIsin)
+        assertEquals(96_000.0, watch.proceedsKr!!, 1e-9)
+        assertEquals(5, watch.targetLevel)
+        assertEquals(77L, watch.sourceRecordId)
+    }
+
     // --- Omräkning av bytesplanen på begäran (HEM-8, issue #88) ---
 
     @Test

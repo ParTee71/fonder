@@ -28,6 +28,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -45,6 +46,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import java.time.LocalDate
@@ -166,6 +168,7 @@ class FondDetaljViewModelTest {
     }
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
+    private val fakeDismissalRepo = FakeSuggestionDismissalRepository()
 
     private fun viewModel() = FondDetaljViewModel(
         SavedStateHandle(mapOf("fundId" to fund.fundId)),
@@ -175,6 +178,7 @@ class FondDetaljViewModelTest {
         preferencesRepository,
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
+        fakeDismissalRepo,
     )
 
     @Before
@@ -832,5 +836,98 @@ class FondDetaljViewModelTest {
         advanceUntilIdle()
 
         assertEquals(true, fakeSuggestionRecordRepo.records.value.single().followed)
+    }
+
+    // --- Avstådda förslag (HEM-14) döljs även på fondkortet ---
+
+    @Test
+    fun `ett avstatt byte i planen visas inte och raknas som avstatt`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+        fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.RISK_PLAN, LocalDate.now())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.dismissedPlanCount == 0) state = awaitItem()
+            assertTrue(state.switchPlan.isEmpty())
+            assertEquals(1, state.dismissedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `ett avstaende av avgiftsbytet doljer inte samma par i planen`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+        fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+            assertEquals(0, state.dismissedPlanCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    private fun cheaperAlternative(isin: String, name: String) = FeeComparisonCalc.Alternative(
+        candidate = metadata(isin, name, risk = 4, fee = 0.2),
+        candidateFeePercent = 0.2,
+        annualSavingsKr = 100.0,
+    )
+
+    @Test
+    fun `ett avstatt billigare alternativ visas inte - ovriga star kvar`() = runTest(dispatcher) {
+        setUpHolding()
+        suggestCheaperAlternativesReturn = listOf(
+            cheaperAlternative("SE0000581434", "Fond B"),
+            cheaperAlternative("SE0009778954", "Fond C"),
+        )
+        fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.feeComparison !is FeeComparisonUiState.Found) state = awaitItem()
+            val found = state.feeComparison as FeeComparisonUiState.Found
+            assertEquals(listOf("SE0009778954"), found.alternatives.map { it.candidate.isin })
+            assertEquals(1, state.dismissedFeeCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett kvitterat billigare alternativ doljs aldrig av ett avstaende`() = runTest(dispatcher) {
+        setUpRecordedFeeSwitch(followed = true)
+        suggestCheaperAlternativesReturn = listOf(cheaperAlternative("SE0000581434", "Fond B"))
+        fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.feeComparison !is FeeComparisonUiState.Found || state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+            assertEquals(1, (state.feeComparison as FeeComparisonUiState.Found).alternatives.size)
+            assertEquals(0, state.dismissedFeeCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett utganget avstaende visar alternativet igen`() = runTest(dispatcher) {
+        setUpHolding()
+        suggestCheaperAlternativesReturn = listOf(cheaperAlternative("SE0000581434", "Fond B"))
+        fakeDismissalRepo.dismiss(
+            "SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now().minusDays(SuggestionDismissals.TTL_DAYS + 1),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.feeComparison !is FeeComparisonUiState.Found) state = awaitItem()
+            assertEquals(1, (state.feeComparison as FeeComparisonUiState.Found).alternatives.size)
+            assertEquals(0, state.dismissedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

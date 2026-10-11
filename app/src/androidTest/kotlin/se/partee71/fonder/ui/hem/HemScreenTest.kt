@@ -18,7 +18,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.BackupReminder
+import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -777,6 +779,13 @@ class HemScreenTest {
             hasHoldings = true,
             decisions = PendingDecisions(
                 switchPlan = listOf(planSuggestion, planSuggestion.copy(recordId = 2, planIndex = 1)),
+                cheaperAlternatives = listOf(
+                    CheaperAlternative(
+                        suggestion = planSuggestion.copy(recordId = 3, kind = SuggestionKind.FEE),
+                        sellFeePercent = 1.4,
+                        buyFeePercent = 0.4,
+                    ),
+                ),
                 openWatches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3)),
             ),
         )
@@ -784,7 +793,8 @@ class HemScreenTest {
         composeRule.setContent { FonderTheme { HemContent(state = state, onOpenBeslut = { opened++ }) } }
 
         composeRule.onNodeWithText("Att besluta").assertIsDisplayed()
-        composeRule.onNodeWithText("2 bytesförslag · 1 pågående byte").assertIsDisplayed()
+        // Varje slag för sig (HEM-13), billigare alternativ (ANA-9) mellan bytesförslagen och bytena.
+        composeRule.onNodeWithText("2 bytesförslag · 1 billigare alternativ · 1 pågående byte").assertIsDisplayed()
         // Själva bytet visas inte här — det har flyttat till Beslut (NAV-9).
         composeRule.onNodeWithText("Fond A", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText("Att besluta").performClick()

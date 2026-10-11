@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -28,14 +29,17 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
+import se.partee71.fonder.domain.usecase.CheaperAlternatives
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.startFromSuggestion
 import java.time.LocalDate
@@ -80,6 +84,13 @@ data class FondDetaljUiState(
      * listan räknas fram live vid skärmöppning, raden skrivs av bakgrundsskanningen.
      */
     val recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
+    /**
+     * Bytesplanens förslag för fonden som användaren avstått från (HEM-14) — de saknas i [switchPlan]
+     * och visas bara som ett antal med vägen till Ångra på Beslut.
+     */
+    val dismissedPlanCount: Int = 0,
+    /** Billigare alternativ (ANA-9) användaren avstått från — de saknas i [feeComparison], se [dismissedPlanCount]. */
+    val dismissedFeeCount: Int = 0,
     /** Säljfonder som redan har en öppen bevakning (ANA-12) — styr om ett kvitterat byte erbjuder "Bevaka alternativ". */
     val watchedSellIsins: Set<String> = emptySet(),
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [FondDetaljViewModel.onSwitchWatchOpened]. */
@@ -92,6 +103,9 @@ data class FondDetaljUiState(
     val priceRefreshing: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
+
+    /** Avstådda förslag av båda sorterna för fonden. */
+    val dismissedCount: Int get() = dismissedPlanCount + dismissedFeeCount
 
     /** Rubriken och kurshistoriken vilar båda på samma hämtning — härlett här, inte i skärmen. */
     val chartWorking: Boolean get() = loading || priceRefreshing
@@ -147,6 +161,8 @@ private data class PlanInput(
     val metadataByIsin: Map<String, FundMetadata>,
     /** Hela inspelade historiken — avgiftsbytena kan vara äldre än den senaste körningen (issue #91). */
     val history: List<SuggestionRecord>,
+    /** Avståendena (HEM-14) — ett avstått förslag visas inte heller på fondkortet. */
+    val dismissals: List<SuggestionDismissal>,
 )
 
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
@@ -188,6 +204,7 @@ class FondDetaljViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val switchWatchRepository: SwitchWatchRepository,
+    suggestionDismissalRepository: SuggestionDismissalRepository,
 ) : ViewModel() {
 
     private val fundId: String = checkNotNull(savedStateHandle["fundId"])
@@ -280,7 +297,8 @@ class FondDetaljViewModel @Inject constructor(
         // som går sin egen takt — den senaste körningens rader säger inget om huruvida just den
         // här fondens alternativ har en inspelad rad.
         suggestionRecordRepository.observeHistory(),
-    ) { accountType, batch, metadataByIsin, history -> PlanInput(accountType, batch, metadataByIsin, history) }
+        suggestionDismissalRepository.observeAll(),
+    ) { accountType, batch, metadataByIsin, history, dismissals -> PlanInput(accountType, batch, metadataByIsin, history, dismissals) }
 
     /** Öppna bevakningar och den nystartades id — hållna ihop så combinen nedan inte växer i onödan. */
     private val switchWatchState: Flow<Pair<Set<String>, Long?>> = combine(
@@ -299,13 +317,27 @@ class FondDetaljViewModel @Inject constructor(
         // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
         // `metadata`-flödet ovan utan att blockera tillståndet.
         refreshMetadata(listOfNotNull(state.isin) + plan.batch.flatMap { listOf(it.sellIsin, it.buyIsin) })
-        val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, LocalDate.now())
+        val today = LocalDate.now()
+        val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, today)
+        // Ett avstått förslag (HEM-14) döljs här också, med samma regel som på Beslut — fondkortet
+        // och Beslut får inte ge olika besked om samma förslag.
+        val (fundPlan, dismissedPlan) = SuggestionDismissals.partition(
+            SwitchPlanResolver.forFund(resolvedPlan, state.isin), plan.dismissals, today,
+        )
+        val recordedFee = recordedFeeSwitches(plan.history, state.isin)
+        val (visibleFeeComparison, dismissedFeeCount) = feeComparison.withoutDismissed(
+            isin = state.isin,
+            recorded = recordedFee,
+            activeDismissals = SuggestionDismissals.activeKeys(plan.dismissals, today),
+        )
         state.copy(
-            feeComparison = feeComparison,
+            feeComparison = visibleFeeComparison,
             riskLevel = state.isin?.let { plan.metadataByIsin[it]?.risk },
-            switchPlan = SwitchPlanResolver.forFund(resolvedPlan, state.isin),
+            switchPlan = fundPlan,
+            dismissedPlanCount = dismissedPlan.size,
+            dismissedFeeCount = dismissedFeeCount,
             comparisons = comparisonsByIsin,
-            recordedFeeSwitches = recordedFeeSwitches(plan.history, state.isin),
+            recordedFeeSwitches = recordedFee,
             watchedSellIsins = watchedSellIsins,
             startedSwitchWatchId = startedWatchId,
         )
@@ -337,16 +369,32 @@ class FondDetaljViewModel @Inject constructor(
     }
 
     /**
-     * De inspelade avgiftsbytena för fonden [isin], nycklade på kandidatens ISIN (issue #91).
-     * `observeHistory` är sorterad nyast först, så `distinctBy` behåller den **senaste** raden
-     * per kandidat — kvitteringen ska gälla det senaste rådet, inte ett halvår gammalt.
+     * De inspelade avgiftsbytena för fonden [isin], nycklade på kandidatens ISIN (issue #91) — den
+     * **senaste** raden per kandidat ([CheaperAlternatives.latestPerPair], samma urval som Beslut):
+     * kvitteringen ska gälla det senaste rådet, inte ett halvår gammalt.
      */
     private fun recordedFeeSwitches(history: List<SuggestionRecord>, isin: String?): Map<String, RecordedFeeSwitch> {
         if (isin == null) return emptyMap()
-        return history
-            .filter { it.kind == SuggestionKind.FEE && it.sellIsin == isin }
-            .distinctBy { it.buyIsin }
+        return CheaperAlternatives.latestPerPair(history)
+            .filter { it.sellIsin == isin }
             .associate { it.buyIsin to RecordedFeeSwitch(recordId = it.id, followed = it.followed == true) }
+    }
+
+    /**
+     * Avgiftsjämförelsen utan de alternativ användaren avstått från (HEM-14), och hur många som
+     * dolts. Ett kvitterat alternativ döljs aldrig, samma regel som på Beslut ([SuggestionDismissals.hides]).
+     */
+    private fun FeeComparisonUiState?.withoutDismissed(
+        isin: String?,
+        recorded: Map<String, RecordedFeeSwitch>,
+        activeDismissals: Set<SuggestionDismissals.Key>,
+    ): Pair<FeeComparisonUiState?, Int> {
+        if (this !is FeeComparisonUiState.Found || isin == null || activeDismissals.isEmpty()) return this to 0
+        val (visible, dismissed) = alternatives.partition { alternative ->
+            val candidateIsin = alternative.candidate.isin
+            !SuggestionDismissals.hides(activeDismissals, SuggestionKind.FEE, isin, candidateIsin, recorded[candidateIsin]?.followed == true)
+        }
+        return FeeComparisonUiState.Found(visible) to dismissed.size
     }
 
     /**

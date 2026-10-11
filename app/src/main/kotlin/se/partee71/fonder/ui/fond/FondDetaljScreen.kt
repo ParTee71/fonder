@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -306,8 +307,14 @@ private fun SwitchDecisionSection(
         when {
             state.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
             state.switchPlan.isEmpty() && state.feeComparison == null -> Unit
-            state.switchPlan.isEmpty() -> SwitchMessage(stringResource(R.string.switch_none_plan_body))
+            // Ett avstått byte (HEM-14) är inte "planen föreslår inget" — det sägs ut nedan.
+            state.switchPlan.isEmpty() && state.dismissedPlanCount == 0 -> SwitchMessage(stringResource(R.string.switch_none_plan_body))
             else -> Unit
+        }
+        // Avstådda förslag döljs här som på Beslut; antalet och vägen till Ångra sägs ut, så ett
+        // dolt förslag inte läses som att appen inte har något att säga om fonden.
+        if (state.dismissedCount > 0) {
+            SwitchMessage(pluralStringResource(R.plurals.format_switch_dismissed, state.dismissedCount, state.dismissedCount))
         }
     }
 }

@@ -174,4 +174,17 @@ class SuggestionRecordDaoTest {
         assertFalse(dao.existsForDay("SE_SELL", "SE_BUY", 20_000, SuggestionKind.FEE.name))
         assertFalse(dao.existsForDay("SE_SELL", "SE_BUY", 20_001, SuggestionKind.RISK_PLAN.name))
     }
+
+    @Test
+    // ANA-9 på Beslut (NAV-9): bara sorten och fönstret, nyast först.
+    fun `observeRecent ger sortens rader fran och med dagen nyast forst`() = runTest {
+        dao.insert(entity(suggestedAtEpochDay = 19_990, buyIsin = "SE_GAMMAL", kind = SuggestionKind.FEE))
+        dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, buyIsin = "SE_A", kind = SuggestionKind.FEE))
+        dao.insert(entity(suggestedAtEpochDay = 20_001, batchEpochMillis = 2_000, buyIsin = "SE_B", kind = SuggestionKind.FEE))
+        dao.insert(entity(suggestedAtEpochDay = 20_001, batchEpochMillis = 2_000, buyIsin = "SE_PLAN"))
+
+        val recent = dao.observeRecent(SuggestionKind.FEE.name, sinceEpochDay = 20_000).first()
+
+        assertEquals(listOf("SE_B", "SE_A"), recent.map { it.buyIsin })
+    }
 }

@@ -5,12 +5,13 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import java.time.LocalDate
 
 /**
- * Regeln för avstådda bytesförslag (HEM-14) — ren logik, så Beslut, Översiktens "Att besluta" och
- * flikmärket (via [PendingDecisionsSource]) delar exakt samma tolkning.
+ * Regeln för avstådda förslag (HEM-14) — ren logik, så Beslut, Översiktens "Att besluta",
+ * flikmärket (via [PendingDecisionsSource]) och Fonddetalj (ANA-10) delar exakt samma tolkning.
  *
- * Ett avstående gäller **fondparet och sorten**, inte en inspelad rad: planen spelas in på nytt
- * varje dygn med nya rader, och ett "nej" till Sälj X → Köp Y ska inte komma tillbaka i morgon.
- * Ett omvänt byte (Sälj Y → Köp X) är ett annat par och påverkas inte.
+ * Ett avstående gäller **fondparet och sorten**, inte en inspelad rad: planen och avgiftsbytena
+ * spelas in på nytt varje dygn med nya rader, och ett "nej" till Sälj X → Köp Y ska inte komma
+ * tillbaka i morgon. Ett omvänt byte (Sälj Y → Köp X) är ett annat par och påverkas inte, och ett
+ * avgiftsbyte (ANA-9) och ett riskplansbyte för samma par avstås var för sig.
  */
 object SuggestionDismissals {
 
@@ -22,26 +23,49 @@ object SuggestionDismissals {
      */
     const val TTL_DAYS = 30L
 
+    /** Det ett avstående gäller: sorten och fondparet. */
+    data class Key(val kind: SuggestionKind, val sellIsin: String, val buyIsin: String)
+
     /** Sant medan avståendet gäller [today] — dagen då det gjordes och [TTL_DAYS] dagar framåt. */
     fun isActive(dismissal: SuggestionDismissal, today: LocalDate): Boolean =
         !FundMetadataFreshness.isStale(dismissal.dismissedAtEpochDay, today, TTL_DAYS)
 
+    /** Paren som är avstådda [today]. */
+    fun activeKeys(dismissals: List<SuggestionDismissal>, today: LocalDate): Set<Key> =
+        dismissals.filter { isActive(it, today) }.mapTo(mutableSetOf()) { Key(it.kind, it.sellIsin, it.buyIsin) }
+
     /**
-     * Delar [plan] i de förslag som visas och de användaren avstått från. Ett **genomfört**
-     * förslag (SET-5) räknas aldrig som avstått — kvitteringen är det starkare beskedet, och
-     * facit mäter det som följt. Ordningen och rangordningen ([SwitchPlanResolver.Suggestion.planIndex])
-     * bevaras i båda listorna; ett avstått byte numreras inte om, så det syns att ett steg hoppats över.
+     * Sant om ett förslag ska döljas som avstått. Ett **genomfört** förslag (SET-5) räknas aldrig
+     * som avstått — kvitteringen är det starkare beskedet, och facit mäter det som följts.
      */
+    fun hides(activeKeys: Set<Key>, kind: SuggestionKind, sellIsin: String, buyIsin: String, followed: Boolean): Boolean =
+        !followed && Key(kind, sellIsin, buyIsin) in activeKeys
+
+    /** [partition] för en lista förslag. */
     fun partition(
         plan: List<SwitchPlanResolver.Suggestion>,
         dismissals: List<SuggestionDismissal>,
         today: LocalDate,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
-    ): Pair<List<SwitchPlanResolver.Suggestion>, List<SwitchPlanResolver.Suggestion>> {
-        val active = dismissals
-            .filter { it.kind == kind && isActive(it, today) }
-            .mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin }
-        if (active.isEmpty()) return plan to emptyList()
-        return plan.partition { it.followed || (it.sellIsin to it.buyIsin) !in active }
+    ): Pair<List<SwitchPlanResolver.Suggestion>, List<SwitchPlanResolver.Suggestion>> =
+        partition(plan, dismissals, today) { it }
+
+    /**
+     * Delar [items] i de förslag som visas och de användaren avstått från, efter varje förslags
+     * egen sort ([SwitchPlanResolver.Suggestion.kind]). Ordningen och rangordningen
+     * ([SwitchPlanResolver.Suggestion.planIndex]) bevaras i båda listorna; ett avstått byte numreras
+     * inte om, så det syns att ett steg hoppats över.
+     */
+    fun <T> partition(
+        items: List<T>,
+        dismissals: List<SuggestionDismissal>,
+        today: LocalDate,
+        suggestionOf: (T) -> SwitchPlanResolver.Suggestion,
+    ): Pair<List<T>, List<T>> {
+        val active = activeKeys(dismissals, today)
+        if (active.isEmpty()) return items to emptyList()
+        return items.partition { item ->
+            val suggestion = suggestionOf(item)
+            !hides(active, suggestion.kind, suggestion.sellIsin, suggestion.buyIsin, suggestion.followed)
+        }
     }
 }

@@ -13,6 +13,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -155,6 +157,54 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("Ångra").performScrollTo().performClick()
 
         assertEquals(42L, undone?.recordId)
+    }
+
+    // --- Billigare alternativ (ANA-9) som egna förslag ---
+
+    private fun billigareAlternativ(followed: Boolean = false) = CheaperAlternative(
+        suggestion = dyrTillBillig(recordId = 77, switchValueKr = 500.0, followed = followed).copy(kind = SuggestionKind.FEE),
+        sellFeePercent = 1.40,
+        buyFeePercent = 0.40,
+    )
+
+    @Test
+    fun billigare_alternativ_visar_paret_avgifterna_och_besparingen_och_kan_avstas() {
+        var dismissed: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = stateWith().let { it.copy(decisions = it.decisions.copy(cheaperAlternatives = listOf(billigareAlternativ()))) },
+                    onDismissSuggestion = { dismissed = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Billigare alternativ").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Dyr fond 1,40 % → Billig fond 0,40 %").performScrollTo().assertIsDisplayed()
+        // 1,40 % − 0,40 % av 500 kr = 5 kr per år (under tusen: se tusentalsavgränsaren ovan).
+        composeRule.onNodeWithText("Sparar ca 5,00 kr/år").assertExists()
+        composeRule.onNodeWithText("Avstå").performScrollTo().performClick()
+
+        assertEquals(SuggestionKind.FEE, dismissed?.kind)
+        assertEquals(77L, dismissed?.recordId)
+    }
+
+    @Test
+    fun ett_kvitterat_billigare_alternativ_visar_genomford() {
+        var callback: Pair<Long, Boolean>? = null
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(
+                    state = stateWith().let { it.copy(decisions = it.decisions.copy(cheaperAlternatives = listOf(billigareAlternativ(followed = true)))) },
+                    onSwitchFollowedChange = { id, value -> callback = id to value },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Följ").assertDoesNotExist()
+        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+
+        assertEquals(77L to false, callback)
     }
 
     @Test
