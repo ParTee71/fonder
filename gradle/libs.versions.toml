@@ -29,11 +29,8 @@ googleAuthPlayServices  = "21.3.0"
 googleApiClientAndroid  = "2.7.0"
 googleApiServicesDrive  = "v3-rev20241206-2.0.0"
 # UI-beroenden för kommande features (aktiveras i respektive issue)
-# OBS: nyare Vico (2.1+) är byggt mot Kotlin 2.1.21+/2.2.x/2.3.x — inkompatibelt med
-# projektets Kotlin 2.1.0 (Kotlin-metadatats binärversion måste matcha exakt eller lägre).
-# 2.0.3 är sista utgåvan byggd mot exakt Kotlin 2.1.0 och drar in core-ktx 1.15.0
-# (kompatibelt med compileSdk 36). Höj tillsammans med projektets Kotlin-version i ett
-# eget steg om en nyare Vico behövs.
+# Vico 2.0.3 valdes mot det tidigare Kotlin 2.1.0. Med Kotlin 2.4 går nyare Vico att läsa,
+# men en höjning tas i ett eget steg med skärmdumpsdiff (skill diagram).
 vico                    = "2.0.3"
 shimmer                 = "1.3.2"
 material3Adaptive       = "1.0.0"
@@ -46,13 +43,11 @@ roomTesting             = "2.8.5"
 okhttp                  = "4.12.0"
 jsoup                   = "1.17.2"
 pdfboxAndroid           = "2.0.27.0"
-# Kontroller och JVM-UI-tester (verkstads-PR:en, regel 2 och 4). Versionerna är valda mot
-# projektets Kotlin 2.1.0: Kotlin-metadatat i testberoendena får inte vara nyare än vad
-# kompilatorn läser (jfr Vico ovan).
-# - Robolectric är ren Java (inget Kotlin-metadata); 4.16.1 stöder compileSdk 36 och kör
-#   SDK 34 på JDK 17 (SDK 35+ kräver Java 21 i Robolectric – se robolectric.properties).
-# - Roborazzi 1.60.0 är sista utgåvan byggd med Kotlin-metadata 2.0; 1.61.0 och senare
-#   har 2.3 och går inte att kompilera mot med Kotlin 2.1.0. Höj med projektets Kotlin.
+# Kontroller och JVM-UI-tester (verkstads-PR:en, regel 2 och 4). Versionerna valdes mot det
+# tidigare Kotlin 2.1.0; med Kotlin 2.4 kan de höjas i ett eget steg.
+# - Robolectric är ren Java (inget Kotlin-metadata); 4.16.1 kör SDK 34 på JDK 17
+#   (SDK 35+ kräver Java 21 i Robolectric – se robolectric.properties).
+# - Roborazzi 1.60.0 (Kotlin-metadata 2.0).
 # - Konsist 0.17.3 har metadata 1.8 och tolkar källkoden med kotlin-compiler-embeddable
 #   2.0.21 (bara testets körklassväg); 0.18 drar in kotlin-stdlib 2.4.
 # - PMD (CPD i cpdCheck) är ren Java och körs via sin CLI i en egen konfiguration.
@@ -136,7 +131,6 @@ pmd-kotlin                           = { group = "net.sourceforge.pmd",      nam
 
 [plugins]
 android-application  = { id = "com.android.application",                   version.ref = "agp" }
-kotlin-android       = { id = "org.jetbrains.kotlin.android",              version.ref = "kotlin" }
 kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",       version.ref = "kotlin" }
 ksp                  = { id = "com.google.devtools.ksp",                   version.ref = "ksp" }
 hilt                 = { id = "com.google.dagger.hilt.android",            version.ref = "hilt" }
