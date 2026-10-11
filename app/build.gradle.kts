@@ -34,8 +34,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 65
-        versionName = versionNameOverride ?: "0.56.0"
+        versionCode = 66
+        versionName = versionNameOverride ?: "0.57.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

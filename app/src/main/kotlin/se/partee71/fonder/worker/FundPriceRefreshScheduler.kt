@@ -36,8 +36,7 @@ import javax.inject.Singleton
  *
  * [observeRunningWork] driver bakgrundsindikatorerna (NAV-6): chromets `WorkerStatusIcon` via
  * [observeIsRunning], och korten via varje skärms egna flaggor. Den är **sorterad per sorts
- * jobb**, inte ett enda booleskt "något kör": ett kort ska snurra när just dess data bearbetas,
- * och en molnbackup rör varken kurser, bytesplan eller referensfond.
+ * jobb**, inte ett enda booleskt "något kör": ett kort ska snurra när just dess data bearbetas.
  */
 interface FundPriceRefreshScheduler {
     fun scheduleOnLaunch()
@@ -71,18 +70,13 @@ interface FundPriceRefreshScheduler {
     fun triggerBenchmarkScan()
 
     /**
-     * Schemalägger den dygnsvisa molnbackupen till Drive (SET-7, TP-7 steg 2). Anropas vid
-     * appstart; `KEEP` gör upprepade anrop gratis.
-     *
-     * Eget unikt arbetsnamn och en **egen worker** ([DriveBackupWorker]) — till skillnad från
-     * bytesplans- och referensfondsskanningarna, som kör kursuppdateringens worker. En
-     * säkerhetskopiering får inte kunna avbrytas av den manuella "Uppdatera nu" (SET-2), som
-     * ersätter (`REPLACE`) allt som väntar under kursuppdateringens namn.
+     * Avregistrerar jobb som tidigare versioner schemalade men som inte finns längre — i dag den
+     * dygnsvisa molnbackupen (SET-7, borttagen till förmån för manuell kopia med påminnelse,
+     * HEM-12). Anropas vid varje appstart: en uppgraderad installation har annars kvar ett
+     * periodiskt jobb vars worker-klass saknas, och WorkManager försöker köra det för evigt.
+     * Att avbryta ett namn som inte finns kostar ingenting.
      */
-    fun scheduleDriveBackup()
-
-    /** Kör molnbackupen nu (knappen i Inställningar, SET-7). Koalescerar med den periodiska. */
-    fun triggerDriveBackupNow()
+    fun cancelRetiredWork()
 
     /**
      * Vilka sorters bakgrundsjobb som kör **just nu**. Tom mängd i vila.
@@ -113,9 +107,6 @@ enum class BackgroundWork {
 
     /** Val och hämtning av Hems referensfond (HEM-10). */
     BENCHMARK_SCAN,
-
-    /** Molnbackupen till Drive (SET-7) — rör ingen fonddata, bara Inställningars backup-kort. */
-    DRIVE_BACKUP,
 }
 
 @Singleton
@@ -202,24 +193,8 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         workManager.enqueueUniqueWork(BENCHMARK_WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
-    override fun scheduleDriveBackup() {
-        val request = PeriodicWorkRequestBuilder<DriveBackupWorker>(DRIVE_BACKUP_INTERVAL_HOURS, TimeUnit.HOURS)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
-            .setConstraints(networkConstraints)
-            .build()
-        workManager.enqueueUniquePeriodicWork(
-            DRIVE_BACKUP_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
-    }
-
-    override fun triggerDriveBackupNow() {
-        val request = OneTimeWorkRequestBuilder<DriveBackupWorker>()
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
-            .setConstraints(networkConstraints)
-            .build()
-        workManager.enqueueUniqueWork(DRIVE_BACKUP_NOW_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    override fun cancelRetiredWork() {
+        RETIRED_WORK_NAMES.forEach(workManager::cancelUniqueWork)
     }
 
     override fun observeRunningWork(): Flow<Set<BackgroundWork>> =
@@ -228,8 +203,7 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
             workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(SWITCH_PLAN_WORK_NAME),
             workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME),
-            workManager.getWorkInfosForUniqueWorkFlow(DRIVE_BACKUP_NOW_WORK_NAME),
-        ) { oneTime, periodic, switchPlan, benchmark, driveBackup ->
+        ) { oneTime, periodic, switchPlan, benchmark ->
             buildSet {
                 if (oneTime.isRunning()) add(BackgroundWork.PRICE_REFRESH)
                 // Backstopen bär alla tre skanningarna, se observeRunningWork i gränssnittet.
@@ -248,7 +222,6 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
                     add(BackgroundWork.BENCHMARK_SCAN)
                     add(BackgroundWork.PRICE_REFRESH)
                 }
-                if (driveBackup.isRunning()) add(BackgroundWork.DRIVE_BACKUP)
             }
         }
 
@@ -266,12 +239,12 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         private const val BACKSTOP_INTERVAL_HOURS = 12L
 
         /**
-         * Egna unika namn för molnbackupen (SET-7) — se
-         * [FundPriceRefreshScheduler.scheduleDriveBackup]. Den periodiska och den manuella
-         * körningen hålls isär så ett knapptryck inte skjuter fram nästa dygnsvisa körning.
+         * Unika namn som tidigare versioner använde och som [cancelRetiredWork] avregistrerar:
+         * den dygnsvisa molnbackupen och dess "kör nu" (SET-7 före HEM-12). Namnen får aldrig
+         * återanvändas för något nytt — det skulle avbrytas vid varje appstart.
          */
-        internal const val DRIVE_BACKUP_WORK_NAME = "fonder_drive_backup"
-        internal const val DRIVE_BACKUP_NOW_WORK_NAME = "fonder_drive_backup_now"
-        private const val DRIVE_BACKUP_INTERVAL_HOURS = 24L
+        internal const val RETIRED_DRIVE_BACKUP_WORK_NAME = "fonder_drive_backup"
+        internal const val RETIRED_DRIVE_BACKUP_NOW_WORK_NAME = "fonder_drive_backup_now"
+        private val RETIRED_WORK_NAMES = listOf(RETIRED_DRIVE_BACKUP_WORK_NAME, RETIRED_DRIVE_BACKUP_NOW_WORK_NAME)
     }
 }

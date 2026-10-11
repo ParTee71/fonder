@@ -136,7 +136,7 @@ Compose → ViewModel → Repository → Data sources
 - **State exposure**: `private val _state = MutableStateFlow(...)`, `val state = _state.asStateFlow()`
 - **State updates**: `_state.value = _state.value.copy(...)` (acceptable in this project since it's single-threaded by viewModelScope)
 - **Auth**: `FirebaseAuthRepository` wraps Firebase Auth + Credential Manager — never call Firebase directly from UI
-- **Backup**: `DriveBackupRepository` + `BackupWorker` (daily via WorkManager)
+- **Backup**: manual only — `BackupRepository` (file) + `DriveBackupRepository` (Drive); `BackupStatusRepository` drives the reminder on Hem (HEM-12). No backup worker.
 - **Local DB**: Room with `AktiviteterRepository`, `MedicinerRepository`, `PreferencesRepository`
 
 ## Adaptability

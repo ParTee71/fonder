@@ -42,6 +42,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
+| Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Mässingstonad (`secondaryContainer`), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
 | Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar dialog, inte en fullskärmsvy. |
 
 ## Diagram (`ui/diagram/`)

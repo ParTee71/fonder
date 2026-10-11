@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -21,11 +24,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,12 +42,18 @@ import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupRecord
+import se.partee71.fonder.domain.model.BackupTarget
+import se.partee71.fonder.domain.usecase.BackupReminderCalc
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+/** Säkerhetskopieringskortet — målet för Hems påminnelse (HEM-12), adresserbart i tester. */
+const val SETTINGS_BACKUP_CARD_TEST_TAG = "settings_backup_card"
 
 private val lastSyncFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
@@ -60,6 +72,8 @@ fun SettingsScreen(
     onOpenRiskProfile: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
     onOpenBenchmarkPicker: () -> Unit = {},
+    scrollToBackup: Boolean = false,
+    onScrolledToBackup: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -118,11 +132,14 @@ fun SettingsScreen(
         onSignInErrorDismissed = viewModel::onSignInErrorDismissed,
         onClearDatabase = viewModel::clearDatabase,
         onClearedMessageDismissed = viewModel::onClearedMessageDismissed,
+        scrollToBackup = scrollToBackup,
+        onScrolledToBackup = onScrolledToBackup,
         modifier = modifier,
     )
 }
 
 /** Tillståndsdriven, testbar del av [SettingsScreen] — inget ViewModel/Hilt-beroende (issue #27). */
+@OptIn(ExperimentalFoundationApi::class) // BringIntoViewRequester, för Hems påminnelse (HEM-12)
 @Composable
 fun SettingsContent(
     state: SettingsUiState,
@@ -144,8 +161,20 @@ fun SettingsContent(
     onSignInErrorDismissed: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
     onClearedMessageDismissed: () -> Unit = {},
+    scrollToBackup: Boolean = false,
+    onScrolledToBackup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // Hems påminnelse (HEM-12) landar här: säkerhetskopieringen ligger långt ned, så den
+    // skrollas fram och begäran kvitteras — en gång, inte vid varje återbesök.
+    val backupBringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(scrollToBackup) {
+        if (scrollToBackup) {
+            backupBringIntoView.bringIntoView()
+            onScrolledToBackup()
+        }
+    }
+
     // rememberSaveable: en bekräftelsedialog ska inte försvinna tyst vid rotation (issue #78).
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
     var showRestoreConfirm by rememberSaveable { mutableStateOf(false) }
@@ -358,18 +387,32 @@ fun SettingsContent(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+                .bringIntoViewRequester(backupBringIntoView)
+                .testTag(SETTINGS_BACKUP_CARD_TEST_TAG),
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardTitleRow(
                     title = stringResource(R.string.settings_backup_section),
-                    working = state.backupWorking,
+                    working = state.backupInProgress,
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
                     stringResource(R.string.settings_backup_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                // En rad för båda transporterna: det är samma kopia, och det är den Hems
+                // påminnelse (HEM-12) räknar från.
+                Text(
+                    lastBackupText(state.lastBackup),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
                 // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en, av samma
                 // skäl som "databasen tömd" nedan: en engångshändelse lagrad som bestående
@@ -401,22 +444,15 @@ fun SettingsContent(
                 // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
                 // antytt två sorters säkerhetskopia.
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                CardTitleRow(
-                    title = stringResource(R.string.settings_drive_backup_title),
-                    working = state.driveBackupWorking,
+                Text(
+                    stringResource(R.string.settings_drive_backup_title),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
                     stringResource(R.string.settings_drive_backup_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                )
-                Text(
-                    lastDriveBackupText(state.lastDriveBackupEpochMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
                 if (state.driveBackupNeedsAuth) {
                     Text(
@@ -537,10 +573,14 @@ fun SettingsContent(
 }
 
 @Composable
-private fun lastDriveBackupText(epochMillis: Long?): String {
-    if (epochMillis == null) return stringResource(R.string.settings_drive_backup_never)
-    val formatted = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(lastSyncFormatter)
-    return stringResource(R.string.format_settings_drive_backup_last, formatted)
+private fun lastBackupText(record: BackupRecord?): String {
+    if (record == null) return stringResource(R.string.settings_backup_never)
+    val date = BackupReminderCalc.formatDate(record.epochMillis)
+    return when (record.target) {
+        BackupTarget.DRIVE -> stringResource(R.string.format_settings_backup_last, date, stringResource(R.string.backup_target_drive))
+        BackupTarget.FILE -> stringResource(R.string.format_settings_backup_last, date, stringResource(R.string.backup_target_file))
+        null -> stringResource(R.string.format_settings_backup_last_date_only, date)
+    }
 }
 
 @Composable

@@ -1,7 +1,13 @@
 package se.partee71.fonder.data.repository
 
+import androidx.room.InvalidationTracker
 import androidx.room.withTransaction
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.FundDao
@@ -10,6 +16,8 @@ import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
+import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import javax.inject.Inject
@@ -29,6 +37,19 @@ interface BackupRepository {
 
     /** Serialiserar hela kontraktet. Fel fångas och returneras, aldrig kastade. */
     suspend fun export(): Result<String>
+
+    /**
+     * Kontraktets innehåll just nu, oserialiserat — samma läsning som [export] gör. Underlaget
+     * för fingeravtrycket ([BackupFingerprint]) som Hems påminnelse (HEM-12) jämför mot.
+     */
+    suspend fun snapshot(): BackupPayload
+
+    /**
+     * Signalerar (inte nödvändigtvis bara) när något som ingår i kontraktet kan ha ändrats, med
+     * en första signal direkt. Grov med flit: anroparen räknar om [snapshot] och avgör själv om
+     * innehållet faktiskt skiljer sig — då behövs ingen krok i varje skrivväg.
+     */
+    fun observeChanges(): Flow<Unit>
 
     /**
      * Läser in en säkerhetskopia och **ersätter** kontraktets data med den. Ersättning, inte
@@ -56,21 +77,41 @@ class LocalBackupRepository @Inject constructor(
     private val preferences: PreferencesRepository,
 ) : BackupRepository {
 
-    override suspend fun export(): Result<String> = runCatching {
-        BackupSerializer.encode(
-            BackupPayload(
-                exportedAtEpochMillis = System.currentTimeMillis(),
-                funds = fundDao.getAll().map(FundEntity::toDomain),
-                transactions = transactionDao.getAll().map(TransactionEntity::toDomain),
-                suggestionRecords = suggestionRecordDao.getAll().map(SuggestionRecordEntity::toDomain),
-                switchWatches = switchWatchDao.getAll().map(SwitchWatchWithCandidates::toDomain),
-                riskProfile = preferences.riskProfile.first(),
-                accountType = preferences.accountType.first(),
-                themeMode = preferences.themeMode.first(),
-                chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first(),
-            ),
-        )
-    }
+    override suspend fun export(): Result<String> = runCatching { BackupSerializer.encode(snapshot()) }
+
+    override suspend fun snapshot(): BackupPayload = BackupPayload(
+        exportedAtEpochMillis = System.currentTimeMillis(),
+        funds = fundDao.getAll().map(FundEntity::toDomain),
+        transactions = transactionDao.getAll().map(TransactionEntity::toDomain),
+        suggestionRecords = suggestionRecordDao.getAll().map(SuggestionRecordEntity::toDomain),
+        switchWatches = switchWatchDao.getAll().map(SwitchWatchWithCandidates::toDomain),
+        riskProfile = preferences.riskProfile.first(),
+        accountType = preferences.accountType.first(),
+        themeMode = preferences.themeMode.first(),
+        chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first(),
+    )
+
+    /**
+     * Room-halvan via [InvalidationTracker] på kontraktets tabeller — bara en signal, ingen
+     * läsning av raderna — och DataStore-halvan via kontraktets fyra inställningar. Varje källa
+     * ger en första signal, så anroparen bör `debounce`:a.
+     */
+    override fun observeChanges(): Flow<Unit> = merge(
+        callbackFlow {
+            val observer = object : InvalidationTracker.Observer(CONTRACT_TABLES) {
+                override fun onInvalidated(tables: Set<String>) {
+                    trySend(Unit)
+                }
+            }
+            database.invalidationTracker.addObserver(observer)
+            send(Unit)
+            awaitClose { database.invalidationTracker.removeObserver(observer) }
+        },
+        preferences.riskProfile.map { },
+        preferences.accountType.map { },
+        preferences.themeMode.map { },
+        preferences.chosenBenchmarkIsin.map { },
+    )
 
     /**
      * Room-halvan körs i **en** transaktion, så en avbruten återställning inte kan lämna
@@ -127,3 +168,12 @@ class LocalBackupRepository @Inject constructor(
         }
     }
 }
+
+/** Room-tabellerna som bär backup-kontraktet — se [LocalBackupRepository.observeChanges]. */
+private val CONTRACT_TABLES = arrayOf(
+    FundEntity.TABLE_NAME,
+    TransactionEntity.TABLE_NAME,
+    SuggestionRecordEntity.TABLE_NAME,
+    SwitchWatchEntity.TABLE_NAME,
+    SwitchWatchCandidateEntity.TABLE_NAME,
+)

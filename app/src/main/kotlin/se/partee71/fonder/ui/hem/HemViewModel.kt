@@ -13,10 +13,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -31,6 +33,7 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -155,6 +158,8 @@ data class HemUiState(
     val watchedSellIsins: Set<String> = emptySet(),
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [HemViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null,
+    /** Påminnelsen om att säkerhetskopiera (HEM-12), null när innehållet redan finns i en kopia. */
+    val backupReminder: BackupReminder? = null,
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 
@@ -193,6 +198,7 @@ class HemViewModel @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val switchWatchRepository: SwitchWatchRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val backupStatusRepository: BackupStatusRepository,
 ) : ViewModel() {
 
     /** Se [HemUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
@@ -403,6 +409,11 @@ class HemViewModel @Inject constructor(
             state.copy(openSwitchWatch = watches.open, watchedSellIsins = watches.watchedSellIsins)
         }.combine(startedSwitchWatchId) { state, startedId ->
             state.copy(startedSwitchWatchId = startedId)
+        }.combine(backupStatusRepository.reminder.onStart { emit(null) }) { state, reminder ->
+            // Egen gren: påminnelsen (HEM-12) räknas ur backup-kontraktet, inte ur innehav och
+            // kurser, och ska inte kunna räkna om portföljen. `onStart` så Hem inte väntar in
+            // påminnelsens debounce innan något alls visas.
+            state.copy(backupReminder = reminder)
         }.combine(
             combine(fundPriceRefreshScheduler.observeRunningWork(), metadataLoading) { running, metadataPending ->
                 running to metadataPending

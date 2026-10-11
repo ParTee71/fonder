@@ -22,6 +22,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupRepository
+import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.DriveBackupRepository
 import se.partee71.fonder.data.repository.DriveResult
 import se.partee71.fonder.data.repository.FundMetadataRepository
@@ -29,6 +30,8 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupRecord
+import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -94,22 +97,13 @@ data class SettingsUiState(
      * `CANCELLED` hamnar aldrig här: att stänga kontoväljaren är ett val, inte ett fel.
      */
     val signInError: SignInException.Reason? = null,
-    /** Epoch-millisekunder för senaste lyckade molnbackup till Drive, null om ingen körts än (SET-7). */
-    val lastDriveBackupEpochMillis: Long? = null,
+    /** Senaste lyckade säkerhetskopia eller återställning, till Drive eller fil — null om ingen gjorts (SET-7, HEM-12). */
+    val lastBackup: BackupRecord? = null,
     /** Sant när Drive-scopet saknas — kortet erbjuder då knappen som löser det (SET-7). */
     val driveBackupNeedsAuth: Boolean = false,
     /** En kursuppdatering kör just nu ([BackgroundWork.PRICE_REFRESH]) — kurskortets väntesnurra (NAV-6). */
     val priceRefreshWorking: Boolean = false,
-    /** Molnbackupen kör just nu ([BackgroundWork.DRIVE_BACKUP]) — bara backup-kortet berörs. */
-    val driveBackupWorking: Boolean = false,
-) {
-    /**
-     * Backup-kortet snurrar både för en knapptryckning här (export/återställ, [backupInProgress])
-     * och för den dygnsvisa molnkörningen (SET-7) — kortet redovisar båda, och användaren ska
-     * inte behöva veta vilken av dem som startade arbetet.
-     */
-    val backupWorking: Boolean get() = backupInProgress || driveBackupWorking
-}
+)
 
 /** Referensvalets del av tillståndet — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
 private data class BenchmarkState(val chosenName: String? = null, val pickFailed: Boolean = false)
@@ -118,7 +112,7 @@ private data class BenchmarkState(val chosenName: String? = null, val pickFailed
 private data class BackupState(
     val inProgress: Boolean = false,
     val message: BackupMessage? = null,
-    val lastDriveBackupEpochMillis: Long? = null,
+    val lastBackup: BackupRecord? = null,
     val driveNeedsAuth: Boolean = false,
 )
 
@@ -132,22 +126,23 @@ class SettingsViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val authRepository: AuthRepository,
     private val driveBackupRepository: DriveBackupRepository,
+    private val backupStatusRepository: BackupStatusRepository,
 ) : ViewModel() {
 
     private val databaseCleared = MutableStateFlow(false)
     private val backupProgress = MutableStateFlow(BackupState())
 
     /**
-     * Drive-metadatan bor i DataStore och inte i [backupProgress]: den skrivs även av
-     * [se.partee71.fonder.worker.DriveBackupWorker] i bakgrunden, och en lokal spegling hade
-     * visat ett inaktuellt "senast säkerhetskopierad" tills skärmen öppnades om.
+     * "Senaste säkerhetskopia" bor i DataStore och inte i [backupProgress]: Hems påminnelse
+     * (HEM-12) läser samma post, och en lokal spegling hade kunnat visa ett annat datum här än
+     * det Hem räknar med.
      */
     private val backupState: Flow<BackupState> = combine(
         backupProgress,
-        preferences.lastDriveBackupEpochMillis,
+        backupStatusRepository.lastBackup,
         preferences.driveBackupNeedsAuth,
-    ) { progress, lastDrive, needsAuth ->
-        progress.copy(lastDriveBackupEpochMillis = lastDrive, driveNeedsAuth = needsAuth)
+    ) { progress, lastBackup, needsAuth ->
+        progress.copy(lastBackup = lastBackup, driveNeedsAuth = needsAuth)
     }
     private var backupJob: Job? = null
     private val benchmarkPickFailed = MutableStateFlow(false)
@@ -189,7 +184,7 @@ class SettingsViewModel @Inject constructor(
                 accountType = accountType,
                 backupInProgress = backup.inProgress,
                 backupMessage = backup.message,
-                lastDriveBackupEpochMillis = backup.lastDriveBackupEpochMillis,
+                lastBackup = backup.lastBackup,
                 driveBackupNeedsAuth = backup.driveNeedsAuth,
             )
         }.combine(benchmarkState) { state, benchmark ->
@@ -206,10 +201,7 @@ class SettingsViewModel @Inject constructor(
         }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
             // Eget led i kedjan av samma skäl som grenarna ovan: körstatusen kommer från
             // WorkManager och ska inte kunna räkna om tema, kontotyp eller backup-tillstånd.
-            state.copy(
-                priceRefreshWorking = BackgroundWork.PRICE_REFRESH in running,
-                driveBackupWorking = BackgroundWork.DRIVE_BACKUP in running,
-            )
+            state.copy(priceRefreshWorking = BackgroundWork.PRICE_REFRESH in running)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -304,7 +296,11 @@ class SettingsViewModel @Inject constructor(
         if (backupJob?.isActive == true) return
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
-            val result = backupRepository.export().mapCatching { json -> write(json) }
+            val result = backupRepository.export().mapCatching { json ->
+                write(json)
+                json
+            }
+            result.onSuccess { json -> recordBackup(json, BackupTarget.FILE) }
             backupProgress.update {
                 it.copy(
                     inProgress = false,
@@ -330,17 +326,37 @@ class SettingsViewModel @Inject constructor(
             val message = if (json == null) {
                 BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE)
             } else {
-                backupRepository.restore(json).fold(
-                    onSuccess = { BackupMessage.Restored(it) },
-                    onFailure = { error ->
-                        val reason = (error as? BackupFormatException)?.reason
-                            ?: BackupFormatException.Reason.UNREADABLE
-                        BackupMessage.RestoreFailed(reason)
-                    },
-                )
+                restoreMessage(json, BackupTarget.FILE)
             }
             backupProgress.update { it.copy(inProgress = false, message = message) }
         }
+    }
+
+    /**
+     * Återställer [json] och — när det lyckas — antecknar att enhetens data nu är lika med en
+     * kopia på [target], så Hem inte påminner om en ändring som bara är återställningen själv
+     * (HEM-12). Delad av fil- och Drive-återställningen.
+     */
+    private suspend fun restoreMessage(json: String, target: BackupTarget): BackupMessage =
+        backupRepository.restore(json).fold(
+            onSuccess = {
+                recordBackup(json, target)
+                BackupMessage.Restored(it)
+            },
+            onFailure = { error ->
+                val reason = (error as? BackupFormatException)?.reason
+                    ?: BackupFormatException.Reason.UNREADABLE
+                BackupMessage.RestoreFailed(reason)
+            },
+        )
+
+    /**
+     * Antecknar en lyckad kopia (SET-7, HEM-12) ur exakt den sträng som skrevs eller lästes. Ett fel här får inte göra den lyckade kopian
+     * till ett misslyckande i användarens ögon — värsta utfallet är att Hem påminner en gång för
+     * mycket.
+     */
+    private suspend fun recordBackup(json: String, target: BackupTarget) {
+        runCatching { backupStatusRepository.recordBackup(json, target) }
     }
 
     /** Kvitterar backup-meddelandet — en händelse, inte ett tillstånd (samma princip som [onClearedMessageDismissed]). */
@@ -382,8 +398,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Säkerhetskopierar till Drive nu (SET-7). Kör i förgrunden, inte via workern, så användaren
-     * får ett kvitto direkt — den periodiska körningen finns kvar oberoende av den här.
+     * Säkerhetskopierar till Drive nu (SET-7) — det enda sättet, det finns ingen automatisk
+     * körning (HEM-12). Kör i förgrunden så användaren får ett kvitto direkt.
      *
      * [onNeedsAuthorization] får den `PendingIntent` som måste startas från aktiviteten när
      * `drive.appdata` inte är beviljat. Den vägen kan inte gå via tillståndet: en `PendingIntent`
@@ -394,7 +410,11 @@ class SettingsViewModel @Inject constructor(
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
             val message = backupRepository.export().fold(
-                onSuccess = { json -> driveMessage(driveBackupRepository.upload(json), onNeedsAuthorization) },
+                onSuccess = { json ->
+                    val upload = driveBackupRepository.upload(json)
+                    if (upload is DriveResult.Success) recordBackup(json, BackupTarget.DRIVE)
+                    driveMessage(upload, onNeedsAuthorization)
+                },
                 onFailure = { BackupMessage.ExportFailed },
             )
             backupProgress.update { it.copy(inProgress = false, message = message) }
@@ -411,14 +431,7 @@ class SettingsViewModel @Inject constructor(
             backupProgress.update { it.copy(inProgress = true, message = null) }
             val download = driveBackupRepository.downloadLatest()
             val message = if (download is DriveResult.Success) {
-                backupRepository.restore(download.value).fold(
-                    onSuccess = { BackupMessage.Restored(it) },
-                    onFailure = { error ->
-                        val reason = (error as? BackupFormatException)?.reason
-                            ?: BackupFormatException.Reason.UNREADABLE
-                        BackupMessage.RestoreFailed(reason)
-                    },
-                )
+                restoreMessage(download.value, BackupTarget.DRIVE)
             } else {
                 driveMessage(download, onNeedsAuthorization)
             }

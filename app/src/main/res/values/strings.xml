@@ -32,6 +32,14 @@
     <string name="nav_settings">Inställningar</string>
 
     <!-- Hem (dashboard, issue #14) -->
+    <string name="hem_backup_reminder_title">Ändringar sedan senaste säkerhetskopian</string>
+    <string name="hem_backup_reminder_action">Säkerhetskopiera</string>
+    <string name="hem_backup_reminder_never">Ingen säkerhetskopia än</string>
+    <string name="format_hem_backup_reminder_last">Senast %1$s</string>
+    <plurals name="format_hem_backup_reminder_new_transactions">
+        <item quantity="one">%1$d ny transaktion · senast %2$s</item>
+        <item quantity="other">%1$d nya transaktioner · senast %2$s</item>
+    </plurals>
     <string name="hem_empty_title">Ingen portfölj ännu</string>
     <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
 
@@ -262,7 +270,7 @@
     <string name="settings_account_signed_out">Inte inloggad</string>
     <string name="format_settings_account_signed_in">Inloggad som %1$s</string>
     <string name="settings_account_unknown_user">ditt Google-konto</string>
-    <string name="settings_account_body">Inloggningen flyttar ingen data i sig — den är förutsättningen för molnbackup till Google Drive, som läggs till i en kommande version. Säkerhetskopiering till fil fungerar utan inloggning.</string>
+    <string name="settings_account_body">Inloggningen flyttar ingen data i sig — den behövs för att säkerhetskopiera till Google Drive. Säkerhetskopiering till fil fungerar utan inloggning.</string>
     <string name="settings_account_sign_in_button">Logga in med Google</string>
     <string name="settings_account_sign_out_button">Logga ut</string>
     <string name="sign_in_failed">Inloggningen misslyckades. Försök igen.</string>
@@ -416,7 +424,12 @@
     <!-- Töm databas (farozon i Inställningar) -->
     <string name="settings_danger_section">Farozon</string>
     <string name="settings_backup_section">Säkerhetskopiering</string>
-    <string name="settings_backup_body">Exportera alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till en fil du väljer själv. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
+    <string name="settings_backup_body">Spara alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till Google Drive eller till en fil. Inget sparas automatiskt — Hem påminner när något har ändrats sedan senaste kopian. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
+    <string name="settings_backup_never">Ingen säkerhetskopia har gjorts än.</string>
+    <string name="format_settings_backup_last">Senaste säkerhetskopia: %1$s, %2$s</string>
+    <string name="format_settings_backup_last_date_only">Senaste säkerhetskopia: %1$s</string>
+    <string name="backup_target_drive">Google Drive</string>
+    <string name="backup_target_file">fil</string>
     <string name="settings_backup_export_button">Exportera till fil</string>
     <string name="settings_backup_restore_button">Återställ från fil</string>
     <string name="backup_export_success">Säkerhetskopian har sparats.</string>
@@ -425,9 +438,7 @@
     <string name="backup_restore_failed_unreadable">Filen kunde inte läsas som en säkerhetskopia. Ingenting har ändrats.</string>
     <string name="backup_restore_failed_version">Filen kommer från en nyare version av appen och kan inte läsas. Ingenting har ändrats.</string>
     <string name="settings_drive_backup_title">Molnbackup till Google Drive</string>
-    <string name="settings_drive_backup_body">Samma innehåll som filexporten, men skrivet automatiskt en gång per dygn till en dold mapp i din Google Drive som bara Fonder kommer åt. Kräver att du är inloggad. De fem senaste kopiorna behålls.</string>
-    <string name="settings_drive_backup_never">Ingen molnbackup har gjorts än.</string>
-    <string name="format_settings_drive_backup_last">Senaste molnbackup: %1$s</string>
+    <string name="settings_drive_backup_body">Samma innehåll som filexporten, skrivet till en dold mapp i din Google Drive som bara Fonder kommer åt. Kräver att du är inloggad. De fem senaste kopiorna behålls.</string>
     <string name="settings_drive_backup_needs_auth">Fonder behöver din tillåtelse att använda Google Drive. Tryck på Säkerhetskopiera till Drive så frågar Google.</string>
     <string name="settings_drive_backup_button">Säkerhetskopiera till Drive</string>
     <string name="settings_drive_restore_button">Återställ från Drive</string>

@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import se.partee71.fonder.domain.model.Fund
 
-@Entity(tableName = "funds")
+@Entity(tableName = FundEntity.TABLE_NAME)
 data class FundEntity(
     @PrimaryKey val fundId: String,
     val name: String,
@@ -22,6 +22,9 @@ data class FundEntity(
     )
 
     companion object {
+        /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
+        const val TABLE_NAME = "funds"
+
         fun fromDomain(fund: Fund) = FundEntity(
             fundId = fund.fundId,
             name = fund.name,

@@ -37,7 +37,7 @@ class WorkerStatusViewModelTest {
 
             // Chromets indikator är "något kör alls" — vilken sorts jobb det är spelar ingen
             // roll här, det är kortens sak (NAV-6).
-            fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
+            fakeScheduler.runningWork.value = setOf(BackgroundWork.BENCHMARK_SCAN)
             assertTrue(awaitItem())
 
             fakeScheduler.runningWork.value = emptySet()

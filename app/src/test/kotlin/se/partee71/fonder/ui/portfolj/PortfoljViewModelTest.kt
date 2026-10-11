@@ -459,29 +459,6 @@ class PortfoljViewModelTest {
     }
 
     @Test
-    fun `en molnbackup snurrar inga kort i portfoljen`() = runTest(dispatcher) {
-        val today = java.time.LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
-        fakeScheduler.runningWork.value = setOf(BackgroundWork.DRIVE_BACKUP)
-
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.metadataWorking) state = awaitItem()
-            assertFalse(state.pricesWorking)
-            assertFalse(state.totalWorking)
-            assertFalse(state.exposureWorking)
-            assertFalse(state.holdingWorking(fond.fundId))
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
     fun `exposure exkluderar innehav utan isin, aldrig gissar en kategori`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = null)

@@ -7,7 +7,7 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 
 @Entity(
-    tableName = "transactions",
+    tableName = TransactionEntity.TABLE_NAME,
     indices = [Index("fundId")],
 )
 data class TransactionEntity(
@@ -30,6 +30,9 @@ data class TransactionEntity(
     )
 
     companion object {
+        /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
+        const val TABLE_NAME = "transactions"
+
         fun fromDomain(tx: Transaction) = TransactionEntity(
             id = tx.id,
             fundId = tx.fundId,

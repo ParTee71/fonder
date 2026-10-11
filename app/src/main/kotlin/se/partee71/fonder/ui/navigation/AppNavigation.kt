@@ -15,6 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,6 +56,20 @@ fun AppNavigation() {
     val topLevel = Screen.entries
     val showBars = currentRoute in topLevel.map { it.route }
 
+    // Ett ställe för hur en flik öppnas — bottenraden och Hems backup-påminnelse (HEM-12) ska
+    // landa i samma flikstack, inte i en ny kopia av Inställningar ovanpå Hem.
+    val navigateToTopLevel: (Screen) -> Unit = { screen ->
+        navController.navigate(screen.route) {
+            popUpTo(Screen.START.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // Engångsbegäran från Hems påminnelse: Inställningar skrollar fram säkerhetskopieringen och
+    // kvitterar. Sparad så den överlever rotation mellan trycket och skrollningen.
+    var scrollSettingsToBackup by rememberSaveable { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             // Toppnivåerna bär sin titel i Screen, övriga rutter i titleResFor. Utan den andra
@@ -86,13 +103,7 @@ fun AppNavigation() {
                     topLevel.forEach { screen ->
                         NavigationBarItem(
                             selected = currentRoute == screen.route,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(Screen.START.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateToTopLevel(screen) },
                             icon = { Icon(screen.icon, contentDescription = null) },
                             label = { Text(stringResource(screen.labelRes)) },
                         )
@@ -125,6 +136,10 @@ fun AppNavigation() {
                 HemScreen(
                     onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) },
                     onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+                    onOpenBackup = {
+                        scrollSettingsToBackup = true
+                        navigateToTopLevel(Screen.Settings)
+                    },
                 )
             }
             composable(Screen.Portfolj.route) {
@@ -145,6 +160,8 @@ fun AppNavigation() {
                     onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
                     onOpenFacit = { navController.navigate(Routes.FACIT) },
                     onOpenBenchmarkPicker = { navController.navigate(Routes.BENCHMARK_PICKER) },
+                    scrollToBackup = scrollSettingsToBackup,
+                    onScrolledToBackup = { scrollSettingsToBackup = false },
                 )
             }
             composable(

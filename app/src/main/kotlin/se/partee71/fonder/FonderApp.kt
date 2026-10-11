@@ -27,13 +27,14 @@ class FonderApp : Application(), Configuration.Provider {
         // Krävs av PdfBox-Android (se PdfBoxTextExtractor, import av avräkningsnotor) innan
         // några PDF-anrop görs.
         PDFBoxResourceLoader.init(applicationContext)
+        // Den dygnsvisa molnbackupen är borttagen (HEM-12, SET-7): säkerhetskopiering är manuell
+        // och Hem påminner. Uppgraderade installationer har kvar det periodiska jobbet, vars
+        // worker inte finns längre — det avregistreras här, före allt annat arbete.
+        fundPriceRefreshScheduler.cancelRetiredWork()
         // Handelsdagsmedveten kursuppdatering (issue #27, TP-17/TP-5) — launch-gate vid
         // varje appstart plus en gles periodisk backstop, båda billiga tack vare
         // FundPriceUpdateWorker.refreshAll:s egen staleness-gate.
         fundPriceRefreshScheduler.scheduleOnLaunch()
         fundPriceRefreshScheduler.scheduleBackstop()
-        // Dygnsvis molnbackup till Drive (SET-7). Hoppar över tyst när ingen är inloggad, så
-        // den kostar ingenting för den som inte använder molnbackupen.
-        fundPriceRefreshScheduler.scheduleDriveBackup()
     }
 }

@@ -55,8 +55,8 @@ steget om begäran redan är entydig.
   (TP-10, TP-14) – flagga skörheten.
 - **Import:** `data/imports/` (`HoldingsImportParser`, `AvrakningsnotaPdfParser`) och
   matchningen (`FundCompanyMatcher`, `FundNameMatcher`, `ImportFundMatcher`)?
-- **Inloggning och molnbackup:** `AuthRepository` (TP-6), `DriveBackupRepository` och
-  `DriveBackupWorker` (TP-7 steg 2, SET-7)?
+- **Inloggning och molnbackup:** `AuthRepository` (TP-6), `DriveBackupRepository` (TP-7 steg 2,
+  SET-7) och påminnelsen `BackupStatusRepository` (HEM-12)?
 - **Krav (regel 3):** vilka ID:n i KRAVLISTA.md berörs, eller behövs nya?
 - **Tester (regel 2):** vilka tester finns i dag, vilka nivåer berörs?
 - **CI (regel 5):** nytt beroende eller nytt steg? Byggtidseffekt?

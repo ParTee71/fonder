@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupRecord
+import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.RiskProfile
 import java.io.IOException
@@ -52,7 +55,12 @@ class PreferencesRepository @Inject constructor(
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
     private val benchmarkKey = stringPreferencesKey("benchmark_components")
     private val chosenBenchmarkKey = stringPreferencesKey("chosen_benchmark_isin")
-    private val lastDriveBackupKey = longPreferencesKey("last_drive_backup_epoch_millis")
+    /** Före HEM-12: bara tidsstämpeln för den dygnsvisa molnbackupen. Läses som reserv, skrivs aldrig mer. Se [lastBackup]. */
+    private val legacyLastDriveBackupKey = longPreferencesKey("last_drive_backup_epoch_millis")
+    private val lastBackupEpochKey = longPreferencesKey("last_backup_epoch_millis")
+    private val lastBackupTargetKey = stringPreferencesKey("last_backup_target")
+    private val lastBackupFingerprintKey = stringPreferencesKey("last_backup_fingerprint")
+    private val lastBackupTransactionCountKey = intPreferencesKey("last_backup_transaction_count")
     private val driveBackupNeedsAuthKey = booleanPreferencesKey("drive_backup_needs_auth")
 
     val themeMode: Flow<ThemeMode> = preferences.map { prefs ->
@@ -76,21 +84,46 @@ class PreferencesRepository @Inject constructor(
     }
 
     /**
-     * Tidpunkten för senaste lyckade molnbackup till Drive (SET-7), null om ingen körts än.
-     * Ren cache-metadata som hör till **enheten**, inte till portföljen — ingår därför medvetet
-     * inte i backup-kontraktet (NFR-1), av samma skäl som [lastPriceSyncEpochMillis]. Att
-     * återställa en tidsstämpel för en kopia tagen på en annan telefon vore missvisande.
+     * Senaste lyckade säkerhetskopia eller återställning på den här enheten (SET-7, HEM-12), null
+     * om ingen gjorts. Hem jämför fingeravtrycket med dagens innehåll och påminner vid skillnad.
+     *
+     * **Enhetsmetadata, inte användardata** — ingår medvetet inte i backup-kontraktet (NFR-1),
+     * av samma skäl som [lastPriceSyncEpochMillis]: att återställa "senast säkerhetskopierad" från
+     * en annan telefon vore missvisande.
+     *
+     * Bakåtkompatibilitet: före HEM-12 sparades bara den dygnsvisa molnbackupens tidsstämpel. Den
+     * läses som en Drive-kopia utan fingeravtryck — datumet visas, och Hem påminner tills en ny
+     * kopia tagits (vilket är rätt: den automatiska kopian finns inte längre).
      */
-    val lastDriveBackupEpochMillis: Flow<Long?> = preferences.map { prefs -> prefs[lastDriveBackupKey] }
+    val lastBackup: Flow<BackupRecord?> = preferences.map { prefs ->
+        prefs[lastBackupEpochKey]?.let { epoch ->
+            BackupRecord(
+                epochMillis = epoch,
+                target = prefs[lastBackupTargetKey]?.let { runCatching { BackupTarget.valueOf(it) }.getOrNull() },
+                fingerprint = prefs[lastBackupFingerprintKey],
+                transactionCount = prefs[lastBackupTransactionCountKey],
+            )
+        } ?: prefs[legacyLastDriveBackupKey]?.let { epoch ->
+            BackupRecord(epochMillis = epoch, target = BackupTarget.DRIVE, fingerprint = null, transactionCount = null)
+        }
+    }
 
-    suspend fun setLastDriveBackupEpochMillis(epochMillis: Long) {
-        dataStore.edit { it[lastDriveBackupKey] = epochMillis }
+    /** Sparar [record] i **en** skrivning, så Hem aldrig ser ett nytt datum med ett gammalt fingeravtryck. */
+    suspend fun setLastBackup(record: BackupRecord) {
+        dataStore.edit { prefs ->
+            prefs[lastBackupEpochKey] = record.epochMillis
+            record.target?.let { prefs[lastBackupTargetKey] = it.name } ?: prefs.remove(lastBackupTargetKey)
+            record.fingerprint?.let { prefs[lastBackupFingerprintKey] = it } ?: prefs.remove(lastBackupFingerprintKey)
+            record.transactionCount?.let { prefs[lastBackupTransactionCountKey] = it }
+                ?: prefs.remove(lastBackupTransactionCountKey)
+            prefs.remove(legacyLastDriveBackupKey)
+        }
     }
 
     /**
      * Sant när Drive-scopet (`drive.appdata`) inte är beviljat, så Inställningar kan erbjuda
-     * knappen som löser det. Sätts av [se.partee71.fonder.worker.DriveBackupWorker] när en
-     * bakgrundskörning stoppats av just det — en retry kan inte lösa saken, bara användaren.
+     * knappen som löser det. Sätts när en säkerhetskopiering eller återställning mot Drive
+     * stoppats av just det — bara användaren kan lösa saken, i Googles egen ruta.
      * Cache-metadata, utanför backup-kontraktet (samma skäl som ovan).
      */
     val driveBackupNeedsAuth: Flow<Boolean> =

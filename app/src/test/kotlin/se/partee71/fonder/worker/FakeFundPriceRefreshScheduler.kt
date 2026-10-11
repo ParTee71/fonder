@@ -26,9 +26,7 @@ class FakeFundPriceRefreshScheduler : FundPriceRefreshScheduler {
         private set
     var benchmarkScans = 0
         private set
-    var driveBackupsScheduled = 0
-        private set
-    var driveBackupsNow = 0
+    var retiredWorkCancellations = 0
         private set
 
     override fun scheduleOnLaunch() {
@@ -51,12 +49,8 @@ class FakeFundPriceRefreshScheduler : FundPriceRefreshScheduler {
         benchmarkScans++
     }
 
-    override fun scheduleDriveBackup() {
-        driveBackupsScheduled++
-    }
-
-    override fun triggerDriveBackupNow() {
-        driveBackupsNow++
+    override fun cancelRetiredWork() {
+        retiredWorkCancellations++
     }
 
     override fun observeRunningWork(): Flow<Set<BackgroundWork>> = runningWork

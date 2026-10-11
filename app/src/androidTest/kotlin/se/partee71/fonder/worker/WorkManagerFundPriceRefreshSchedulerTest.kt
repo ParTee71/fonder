@@ -148,44 +148,35 @@ class WorkManagerFundPriceRefreshSchedulerTest {
     }
 
     @Test
-    fun scheduleDriveBackup_koar_ett_periodiskt_arbete_under_eget_namn() {
-        // Eget namn, inte kursuppdateringens: den manuella "Uppdatera nu" (SET-2) ersätter
-        // (REPLACE) allt som väntar under sitt namn och får inte kunna avbryta en
-        // säkerhetskopiering (SET-7).
-        scheduler.scheduleDriveBackup()
+    fun cancelRetiredWork_avregistrerar_den_gamla_dygnsvisa_molnbackupen() {
+        // En uppgraderad installation har kvar det periodiska jobbet från före HEM-12. Workern
+        // spelar ingen roll för avregistreringen — det är det unika namnet som avgör. Initial
+        // fördröjning: utan den kör SynchronousExecutor jobbet direkt vid enqueue, och ett jobb
+        // som redan körts klart (eller fallerat) blir aldrig CANCELLED.
+        val legacy = androidx.work.PeriodicWorkRequestBuilder<FundPriceUpdateWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+            .setInitialDelay(1, java.util.concurrent.TimeUnit.DAYS)
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME,
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            legacy,
+        ).result.get()
+
+        scheduler.cancelRetiredWork()
 
         val infos = workManager.getWorkInfosForUniqueWork(
-            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_WORK_NAME,
+            WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME,
         ).get()
-
-        assertEquals(1, infos.size)
+        assertTrue(infos.all { it.state == WorkInfo.State.CANCELLED })
     }
 
     @Test
-    fun triggerDriveBackupNow_ror_inte_den_periodiska_korningen() {
-        scheduler.scheduleDriveBackup()
-        scheduler.triggerDriveBackupNow()
+    fun cancelRetiredWork_ror_inte_kursuppdateringen() {
+        scheduler.scheduleBackstop()
 
-        val periodic = workManager.getWorkInfosForUniqueWork(
-            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_WORK_NAME,
-        ).get()
-        val now = workManager.getWorkInfosForUniqueWork(
-            WorkManagerFundPriceRefreshScheduler.DRIVE_BACKUP_NOW_WORK_NAME,
-        ).get()
+        scheduler.cancelRetiredWork()
 
-        assertEquals(1, periodic.size)
-        assertEquals(1, now.size)
-    }
-
-    @Test
-    fun drive_backup_avbryter_inte_den_manuella_kursuppdateringen() {
-        scheduler.triggerManualRefresh()
-        scheduler.triggerDriveBackupNow()
-
-        val priceRefresh = workManager.getWorkInfosForUniqueWork(
-            WorkManagerFundPriceRefreshScheduler.ONE_TIME_WORK_NAME,
-        ).get()
-
-        assertEquals(1, priceRefresh.size)
+        val infos = workManager.getWorkInfosForUniqueWork(WorkManagerFundPriceRefreshScheduler.PERIODIC_WORK_NAME).get()
+        assertEquals(WorkInfo.State.ENQUEUED, infos.single().state)
     }
 }

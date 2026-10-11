@@ -1,6 +1,6 @@
 ---
 name: data-safety-backup
-description: 'Fonders datasäkerhetsregel (regel 1) — backup och restore får ALDRIG tappa användardata. Ladda denna ALLTID när du lägger till, ändrar eller tar bort persisterad data: en Room-entitet eller -kolumn, ett DataStore-värde, en domänmodell som sparas, eller något som rör backup/restore/export/import/JSON. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, LocalBackupRepository, BackupRoundTripTest, fältvakt, formatVersion, DataStore, PreferencesRepository, SAF, rundtur, round-trip, Drive, appDataFolder, molnbackup, DriveBackupRepository, DriveBackupWorker, DriveBackupFiles, fonder-backup-, gallring.'
+description: 'Fonders datasäkerhetsregel (regel 1) — backup och restore får ALDRIG tappa användardata. Ladda denna ALLTID när du lägger till, ändrar eller tar bort persisterad data: en Room-entitet eller -kolumn, ett DataStore-värde, en domänmodell som sparas, eller något som rör backup/restore/export/import/JSON. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, LocalBackupRepository, BackupRoundTripTest, fältvakt, formatVersion, DataStore, PreferencesRepository, SAF, rundtur, round-trip, Drive, appDataFolder, molnbackup, DriveBackupRepository, DriveBackupFiles, BackupStatusRepository, BackupFingerprint, påminnelse, fonder-backup-, gallring.'
 ---
 
 # Datasäkerhet: backup & restore
@@ -10,7 +10,7 @@ med identiskt innehåll. Ett fält som läggs till utan att komma med i backup-k
 regression även om appen kompilerar och alla gamla tester är gröna — datan faller tyst ur
 varje framtida säkerhetskopia och märks först när någon behöver den.
 
-Relaterade krav: **NFR-1**, **NFR-3**, **TP-7**, **SET-6**, **SET-7**.
+Relaterade krav: **NFR-1**, **NFR-3**, **TP-7**, **SET-6**, **SET-7**, **HEM-12**.
 
 ## Kedjan (var datan passerar)
 
@@ -27,7 +27,11 @@ Filer under `data/repository/`:
 - **`BackupSerializer.kt`** — *formatet*. Äger `formatVersion` och kastar
   `BackupFormatException` med `Reason.UNSUPPORTED_VERSION` / `Reason.UNREADABLE`.
 - **`BackupRepository.kt`** — interfacet (`export(): Result<String>`,
-  `restore(json): Result<RestoreSummary>`) och `LocalBackupRepository`.
+  `restore(json): Result<RestoreSummary>`, `snapshot(): BackupPayload`, `observeChanges()`) och
+  `LocalBackupRepository`. `snapshot` är samma läsning som `export` gör, oserialiserad;
+  `observeChanges` signalerar (grovt, via Room-`InvalidationTracker` på kontraktets tabeller och
+  kontraktets DataStore-värden) att något kan ha ändrats. Ny tabell i kontraktet → lägg entitetens `TABLE_NAME` i
+  `CONTRACT_TABLES` också, annars missar Hems påminnelse (HEM-12) ändringar i den.
 
 **Kontraktet är en `String`, inte en `Uri` eller en fil.** Transporten hör inte hemma i
 repositoryt: SAF skriver strängen (SET-6) och Drive `appDataFolder` skriver samma sträng
@@ -48,8 +52,12 @@ hämtas om från källan och som skulle mångdubbla filen utan att skydda något
 De **töms heller inte** av en återställning, så lokal kurshistorik behålls.
 
 Samma gräns gäller cache och driftstatus i DataStore: `lastPriceSyncEpochMillis`,
-`fundFilterVocabulary`, den automatiskt valda jämförelseblandningen (`benchmark`) och
-Drive-statusen (senaste lyckade körning, "behöver auktorisering") är inte användardata.
+`fundFilterVocabulary`, den automatiskt valda jämförelseblandningen (`benchmark`), Drive-flaggan
+"behöver auktorisering" och **senaste säkerhetskopia** (`lastBackup`: datum, mål, fingeravtryck,
+antal transaktioner – nycklarna `last_backup_*`, med reserven `last_drive_backup_epoch_millis`
+från före HEM-12) är **enhetsmetadata**, inte användardata, och ska aldrig in i `BackupPayload`:
+en återställd kopia från en annan telefon får inte ta med sig den telefonens "senast
+säkerhetskopierad".
 Riskprofilen, kontotypen och den egenvalda referensfonden **är** det.
 
 `formatVersion` höjs **bara** när ett fält tas bort eller byter betydelse – ett tillagt fält med
@@ -113,6 +121,18 @@ det fältet**. Ett fält som bara finns i `BackupPayload` men aldrig assertas ä
 - **En migrering som gallrar data** (t.ex. retention på inspelade förslag) tar bort något som
   ingår i kontraktet. Det kräver ett uttryckligt krav i KRAVLISTA, inte bara en kodrad.
 
+## Manuell kopia och påminnelsen (SET-7, HEM-12)
+
+Ingen säkerhetskopia tas automatiskt. Den dygnsvisa `DriveBackupWorker` är borttagen; dess unika
+arbetsnamn `fonder_drive_backup` och `fonder_drive_backup_now` avregistreras vid varje appstart
+(`FundPriceRefreshScheduler.cancelRetiredWork`) och får aldrig återanvändas.
+
+| Del | Var | Vad |
+|---|---|---|
+| `BackupFingerprint` | `data/repository/BackupFingerprint.kt` | SHA-256 över `BackupSerializer.encode` av en normaliserad payload: `exportedAtEpochMillis = 0`, `Fund.fondlistaFundId` bortplockad, bara kvitterade förslag (`followed != null`), av bevakningarnas kandidater bara de användaren lagt till (`MANUELL`, utan id/position/nollpunkt), utgångna bevakningar (`UTGANGEN`) räknade som öppna, listor sorterade. Det som bakgrunden själv skriver ska inte ge en påminnelse. Nytt fält i kontraktet följer med automatiskt – är det något bakgrunden skriver, normalisera bort det här och i `BackupFingerprintTest`. |
+| `BackupStatusRepository` | `data/repository/BackupStatusRepository.kt` | `recordBackup(json, target)` efter varje lyckad kopia **och** återställning – fingeravtryck och antal ur **exakt** den sträng som skrevs eller lästes, aldrig ur en ny läsning; `reminder` = `observeChanges` → debounce → `snapshot` → `BackupReminderCalc`. Ingen skrivväg behöver flagga ändringar. |
+| `BackupReminderCalc` | `domain/usecase/BackupReminderCalc.kt` | Ren regel: ingen data → ingen påminnelse; ingen kopia → påminnelse; annat fingeravtryck → påminnelse med antal nya transaktioner. |
+
 ## Drive-backupen (TP-7 steg 2, SET-7) — byggd
 
 En ren **transport** bakom samma sträng, inte en andra `BackupRepository`. Anroparen komponerar:
@@ -123,7 +143,6 @@ En ren **transport** bakom samma sträng, inte en andra `BackupRepository`. Anro
 |---|---|---|
 | `DriveBackupRepository` / `GoogleDriveBackupRepository` | `data/repository/DriveBackupRepository.kt` | `upload`, `downloadLatest`, `list` mot `appDataFolder`; utfallet som `DriveResult` (`Success`, `Error`, `NoAccount`, `NoBackupFound`, `NeedsAuthorization`). Scopet `drive.appdata` begärs separat från inloggningen (TP-6), först när backupen används. |
 | `DriveBackupFiles` | `domain/usecase/DriveBackupFiles.kt` | Ren Kotlin: prefixet `fonder-backup-`, filnamn `fonder-backup-ÅÅÅÅMMDD-HHMM.json`, frågan `name contains 'fonder-backup-' and trashed = false`, och gallringen `staleFileIds` som behåller de **5** senaste (`KEEP_COUNT`). |
-| `DriveBackupWorker` | `worker/DriveBackupWorker.kt` | Dygnsvis körning under eget unikt arbetsnamn `fonder_drive_backup` (`KEEP`, kräver nätverk); "Säkerhetskopiera nu" under `fonder_drive_backup_now`. `outcomeFor` mappar utfallet: utloggad = tyst klart, saknad auktorisering = flagga utan retry, fel = retry. Misslyckas exporten laddas ingenting upp. |
 
 Regler som inte får brytas:
 
@@ -131,9 +150,7 @@ Regler som inte får brytas:
   använder `DriveBackupFiles.QUERY`, och gallringen filtrerar om på `isOurs` – en ofiltrerad
   gallring skulle radera Dagbokens säkerhetskopior. Ändras prefix, fråga eller `KEEP_COUNT`:
   uppdatera `DriveBackupFilesTest` och SET-7 i samma PR.
-- Kursuppdateringens "Uppdatera nu" ersätter (`REPLACE`) sitt eget arbete – därför har backupen
-  ett eget arbetsnamn. Häng aldrig på den på `FundPriceUpdateWorker`.
 - Inloggningen (TP-6) bär ingen användardata och ingår inte i kontraktet.
 - Drive-anropen testas aldrig mot riktig Drive: logiken ligger i `DriveBackupFiles`
-  (`DriveBackupFilesTest`) och `outcomeFor` (`DriveBackupOutcomeTest`).
+  (`DriveBackupFilesTest`), och Inställningars utfall testas mot en fake i `SettingsViewModelTest`.
 - Konsolstegen (OAuth-klient, Drive API, SHA-1) står i [docs/GOOGLE-SETUP.md](../../../docs/GOOGLE-SETUP.md).
