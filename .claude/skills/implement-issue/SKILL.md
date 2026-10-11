@@ -11,8 +11,8 @@ av klart.
 
 > **Tester körs lokalt före push när Android SDK finns, CI bekräftar** (skill
 > `testing-strategy`, "Innan du anser dig klar"). Saknas SDK får CI testa – säg det i PR:en.
-> `android.yml` (kompilering + enhetstester) körs på push och PR; `instrumented.yml`
-> (emulator) **bara på PR**.
+> `android.yml` kör kompilering + enhetstester på push och i PR som rör koden, och
+> emulatorjobbet `instrumented-tests` **bara i PR** som rör koden det testar (skill `ci-budget`).
 
 ## Steg 0 – Föregående PR och branch (alltid först)
 

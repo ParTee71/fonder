@@ -1,17 +1,41 @@
+# PR-flödet (regel 5, skill ci-budget – tabellen där beskriver det här flödet och ändras i
+# samma PR). Jobbet `changes` startar alltid och avgör vad som körs; `ci-ok` är det enda
+# obligatoriska statuskravet (ett hoppat jobb rapporterar ingen egen status att lita på).
+#
+# Release-bygget (R8) och lint körs inte här utan i quality.yml (veckovis, på begäran) och i
+# release.yml (NFR-2, NFR-4).
 name: Android CI
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
+  push:
+    branches: [ master ]
   workflow_dispatch:
+    inputs:
+      instrumented:
+        description: 'Kör även instrumenttesterna på emulator'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read # dorny/paths-filter läser PR:ens ändrade filer
+
+# En ny push till samma PR avbryter den förra körningen; master avbryts aldrig.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-and-test:
+  changes:
+    name: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-
+    timeout-minutes: 5
+    outputs:
+      run_app: ${{ steps.decide.outputs.run_app }}
+      run_instrumented: ${{ steps.decide.outputs.run_instrumented }}
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +43,8 @@ jobs:
       # `git add -f` — så release-nyckeln checkades in en gång (commit 9403cf5) och låg
       # publikt tills den upptäcktes. Den här grinden fäller bygget i stället, för alla
       # nyckelfiler utom den avsiktligt incheckade debug-nyckeln (vars lösenord är Androids
-      # kända standardvärden och därför inte är en hemlighet).
+      # kända standardvärden och därför inte är en hemlighet). Den ligger här, inte i
+      # build-and-test, så att den körs i varje PR – även en som hoppar över bygget.
       - name: Ingen signeringsnyckel i repot
         run: |
           set -euo pipefail
@@ -30,47 +55,71 @@ jobs:
             exit 1
           fi
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Ändrade sökvägar
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
+          filters: |
+            app:
+              - 'app/src/**'
+              - 'app/build.gradle.kts'
+              - 'build.gradle.kts'
+              - 'settings.gradle.kts'
+              - 'gradle/**'
+              - 'gradle.properties'
+              - '.github/workflows/android.yml'
+            instrumented:
+              - 'app/src/main/**'
+              - 'app/src/androidTest/**'
+              - 'app/build.gradle.kts'
+              - 'build.gradle.kts'
+              - 'settings.gradle.kts'
+              - 'gradle/**'
+              - 'gradle.properties'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Vad körs
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          APP: ${{ steps.filter.outputs.app }}
+          INSTRUMENTED: ${{ steps.filter.outputs.instrumented }}
+          DISPATCH_INSTRUMENTED: ${{ inputs.instrumented }}
+        run: |
+          set -euo pipefail
+          # Instrumenttesterna (emulator) bara i PR:er som rör koden de testar, eller på begäran –
+          # inte på master: PR:en har redan kört dem.
+          if [ "$EVENT" = "pull_request" ]; then
+            app=false; instrumented=false
+            if [ "$APP" = true ]; then app=true; fi
+            if [ "$INSTRUMENTED" = true ]; then instrumented=true; fi
+            why="PR – filter: app=$APP instrumented=$INSTRUMENTED"
+          else
+            app=true; instrumented=false
+            if [ "$DISPATCH_INSTRUMENTED" = true ]; then instrumented=true; fi
+            why="$EVENT – bygg och enhetstester alltid (baslinje och cache), instrumenttester=$instrumented"
+          fi
+          {
+            echo "run_app=$app"
+            echo "run_instrumented=$instrumented"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Vad körs"
+            echo "$why"
+            echo ""
+            echo "| Del | Körs |"
+            echo "|---|---|"
+            echo "| nyckelgrind | true |"
+            echo "| kompilering och enhetstester (\`build-and-test\`) | $app |"
+            echo "| instrumenttester på emulator (\`instrumented-tests\`) | $instrumented |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Compile debug Kotlin
-        run: ./gradlew :app:compileDebugKotlin
-
-      - name: Compile debug unit test Kotlin
-        run: ./gradlew :app:compileDebugUnitTestKotlin
-
-      - name: Compile debug Android test Kotlin
-        run: ./gradlew :app:compileDebugAndroidTestKotlin
-
-      - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: app/build/reports/tests/testDebugUnitTest/
-
-  # Sidoordnat build-and-test (inget needs:) — jobben kör samtidigt på var sin runner,
-  # så grinden kostar en extra runner men ingen extra väntetid.
-  #
-  # Skälet: CI byggde bara debug, som inte kör R8. Minifiering, resursskrympning och
-  # proguard-reglerna rördes därför av ingen automatik alls — de prövades först när
-  # någon försökte släppa. Det brast två gånger: pdfbox saknade JPEG-2000-avkodare låg
-  # latent i månader (#108), och Google API-klienten (#111) avvärjdes bara av ett
-  # manuellt releasebygge någon råkade tänka på. Varje nytt beroende var en obevakad
-  # R8-risk fram tills nästa släpp.
-  release-build:
+  build-and-test:
+    name: build-and-test
+    needs: changes
+    if: needs.changes.outputs.run_app == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
 
     steps:
       - uses: actions/checkout@v4
@@ -80,42 +129,104 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+
+      # Beroende- och build cache skrivs bara från master och läses i PR.
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Osignerat med flit: build.gradle.kts sätter bara signingConfig när SIGNING_*
-      # finns, så jobbet behöver varken keystore eller secrets — och fungerar därmed
-      # även från en fork. APK:n slängs; det är R8 vi är ute efter, inget installerbart
-      # (att publicera en APK är release.yml:s uppgift).
-      - name: Bygg release (R8 + resursskrympning)
-        run: ./gradlew :app:assembleRelease
+      # Ett enda Gradle-anrop (projektet konfigureras en gång). testDebugUnitTest kompilerar
+      # enhetstesterna; androidTest-koden kompileras här så att ett kompileringsfel syns innan
+      # emulatorn startar.
+      - name: Kompilera och kör enhetstester
+        env:
+          LC_ALL: C.UTF-8
+          LANG: C.UTF-8
+        run: ./gradlew --continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin
 
-  cancel-instrumented-on-failure:
-    # Båda jobben, inte bara build-and-test: ett R8-fel ska också avbryta emulatorn,
-    # annars betalas 18 minuter för ett bygge som redan är dömt.
-    needs: [build-and-test, release-build]
-    if: failure() || cancelled()
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel in-progress Instrumented Tests run
-        uses: actions/github-script@v7
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const { data } = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head_sha: context.sha,
-            });
-            for (const run of data.workflow_runs) {
-              if (run.name === 'Instrumented Tests' && ['queued', 'in_progress'].includes(run.status)) {
-                await github.rest.actions.cancelWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: run.id,
-                });
-              }
-            }
+          name: test-results
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+
+  # Emulatorkonfigurationen är oförändrad från den tidigare instrumented.yml. `needs` på
+  # build-and-test: ett rött bygge startar aldrig emulatorn (ersätter
+  # cancel-instrumented-on-failure).
+  instrumented-tests:
+    name: instrumented-tests
+    needs: [changes, build-and-test]
+    if: needs.changes.outputs.run_instrumented == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          device: pixel_6
+          script: ./gradlew :app:connectedDebugAndroidTest
+
+      - name: Print failure stack traces
+        if: failure()
+        run: |
+          find app/build/outputs/androidTest-results app/build/reports/androidTests \
+            -name '*.xml' -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-results
+          path: app/build/reports/androidTests/connected/
+          if-no-files-found: ignore
+
+  ci-ok:
+    name: ci-ok
+    needs: [changes, build-and-test, instrumented-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Alla körda jobb gröna
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultat: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::Ett jobb blev $r"; exit 1 ;;
+            esac
+          done

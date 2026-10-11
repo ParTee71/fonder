@@ -262,4 +262,4 @@ staleness-gaten (`isPriceStale`) falskt negativ.
 > via Rooms identity-hash-validering. Framtida schemaändringar bör helst testas med
 > `MigrationTestHelper` mot committade `app/schemas/*.json`.
 
-Kör i **GitHub Actions** (`.github/workflows/android.yml`) vid PR/push mot `master`.
+Kör i **GitHub Actions** (`.github/workflows/android.yml`) vid PR/push mot `master` – enhets- och instrumenttester bara när koden de testar ändrats; lint och release-bygget (R8) veckovis i `quality.yml` och vid release (NFR-2, NFR-4, skill `ci-budget`).
