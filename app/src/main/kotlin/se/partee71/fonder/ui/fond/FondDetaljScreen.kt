@@ -6,12 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +30,9 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
@@ -426,9 +426,11 @@ private fun SwitchPlanRow(
         // bevakningen gäller perioden **efter** säljet, och en öppen bevakning för säljfonden
         // ska inte kunna startas en gång till.
         if (suggestion.followed && !watched) {
-            TextButton(onClick = { onStartSwitchWatch(suggestion) }) {
-                Text(stringResource(R.string.switch_watch_start))
-            }
+            AppButton(
+                text = stringResource(R.string.switch_watch_start),
+                onClick = { onStartSwitchWatch(suggestion) },
+                variant = AppButtonVariant.Text,
+            )
         }
     }
 }
@@ -690,19 +692,17 @@ private fun IsinInput(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedTextField(
+        AppTextField(
             value = text,
             onValueChange = { text = it },
-            label = { Text(stringResource(R.string.fond_isin_label)) },
-            singleLine = true,
+            label = stringResource(R.string.fond_isin_label),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
-        Button(
+        AppButton(
+            text = stringResource(R.string.save),
             onClick = { onConfirm(text) },
             enabled = text.isNotBlank(),
             modifier = Modifier.padding(top = 8.dp),
-        ) {
-            Text(stringResource(R.string.save))
-        }
+        )
     }
 }

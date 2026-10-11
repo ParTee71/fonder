@@ -9,8 +9,8 @@
 # Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
 # padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
 # kontrolleras därför inte (skill shared-ui-components → Förbjudet).
-# Komponenter som står som "planerad" finns inte än: bygg den delade delen först (med mockup), eller
-# be om ett undantag i ui-allowlist.txt.
+# Toppraden, Scaffold, plusknappen och navigeringsraden (AppNavigation) byggs om i M3 Expressive-steg 3
+# och står därför inte här än.
 # Importrader och kommentarer kontrolleras inte.
 # Regexarna ska fungera både i JavaScript och Kotlin (ingen lookbehind).
 
@@ -21,18 +21,22 @@
 \bCutCornerShape\(	MaterialTheme.shapes (FonderShapes)
 \bTextStyle\(	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
 \b(fontSize|lineHeight|letterSpacing)\s*=	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
-\.shadow\(	AppCard (planerad)
+\.shadow\(	AppCard
 \.(height|requiredHeight|heightIn)\(\s*[0-9]+(\.[0-9]+)?\.dp	komponentens parametrar (ingen literal höjd i feature-kod)
-\bSurface\s*[({]	AppCard (planerad)
-\b(Elevated|Outlined)?Card\s*[({]	AppCard (planerad)
-\bListItem\s*[({]	ItemRow (planerad)
-\bAlertDialog\s*[({]	ConfirmDialog (planerad) / ImportCompleteDialog
+\bSurface\s*[({]	AppCard
+\b(Elevated|Outlined)?Card\s*[({]	AppCard (AppCardVariant)
+\bListItem\s*[({]	ItemRow
+\b(Basic)?AlertDialog\s*[({]	ConfirmDialog / AppDialog / ImportCompleteDialog
 \b[A-Za-z]*DatePicker[A-Za-z]*\s*[({]	DateField
 \bDropdownMenu(Item)?\s*[({]	SelectField
 \b(Filter|Assist|Suggestion|Input)Chip\s*[({]	ChoiceChipRow
-\b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow
+\b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow / ProgressBar / LoadingDialog
 \bBadge\s*[({]	RiskBadge / ProfitTakeBadge / StatusDot
-\bCheckbox\s*[({]	FollowedToggleRow
+\bCheckbox\s*[({]	CheckRow / FollowedToggleRow
+\b(Text|Outlined|Elevated|Filled|FilledTonal)?Button\s*[({]	AppButton (AppButtonVariant)
+\b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton
+\b(Outlined|Basic)?TextField\s*[({]	AppTextField
+\bDialog\s*[({]	AppDialog / ConfirmDialog / LoadingDialog
 
 [component-only]
 \bPullToRefreshBox\b	PullToRefreshContainer

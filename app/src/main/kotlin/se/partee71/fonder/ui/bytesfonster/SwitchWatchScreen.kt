@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +24,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
@@ -147,9 +148,12 @@ fun SwitchWatchContent(
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (state.canAddCandidate) {
-                        TextButton(onClick = onAddCandidate, modifier = Modifier.padding(top = 4.dp)) {
-                            Text(stringResource(R.string.switch_watch_add_candidate))
-                        }
+                        AppButton(
+                            text = stringResource(R.string.switch_watch_add_candidate),
+                            onClick = onAddCandidate,
+                            modifier = Modifier.padding(top = 4.dp),
+                            variant = AppButtonVariant.Text,
+                        )
                     }
                     state.message?.let { message ->
                         Text(
@@ -166,9 +170,11 @@ fun SwitchWatchContent(
                         LaunchedEffect(message) { onMessageShown() }
                     }
                     if (!state.closed) {
-                        TextButton(onClick = onCancel) {
-                            Text(stringResource(R.string.switch_watch_cancel))
-                        }
+                        AppButton(
+                            text = stringResource(R.string.switch_watch_cancel),
+                            onClick = onCancel,
+                            variant = AppButtonVariant.Text,
+                        )
                     }
                     Text(
                         stringResource(R.string.switch_watch_disclaimer),
@@ -185,42 +191,40 @@ fun SwitchWatchContent(
 /** Vad som såldes, för hur mycket och hur länge sedan — sammanhanget varje rad under läses i. */
 @Composable
 private fun HeaderCard(state: SwitchWatchUiState) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CardTitleRow(
-                title = stringResource(
-                    R.string.format_switch_watch_sold,
-                    state.sellFundName,
-                    LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter),
-                ),
-                working = state.headerWorking,
-                style = MaterialTheme.typography.titleSmall,
-            )
-            state.proceedsKr?.let { amount ->
-                Text(
-                    stringResource(R.string.format_switch_watch_amount, MoneyFormat.kr(amount)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            val status = when {
-                state.closed && state.boughtFundName != null ->
-                    stringResource(R.string.format_switch_watch_bought, state.boughtFundName)
-                state.closed -> stringResource(R.string.switch_watch_closed)
-                state.expired -> stringResource(R.string.format_switch_watch_expired, state.ttlDays)
-                else -> stringResource(R.string.format_switch_watch_day, state.daysWaiting, state.ttlDays)
-            }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        CardTitleRow(
+            title = stringResource(
+                R.string.format_switch_watch_sold,
+                state.sellFundName,
+                LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter),
+            ),
+            working = state.headerWorking,
+            style = MaterialTheme.typography.titleSmall,
+        )
+        state.proceedsKr?.let { amount ->
             Text(
-                status,
+                stringResource(R.string.format_switch_watch_amount, MoneyFormat.kr(amount)),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state.expired && !state.closed) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.padding(top = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        val status = when {
+            state.closed && state.boughtFundName != null ->
+                stringResource(R.string.format_switch_watch_bought, state.boughtFundName)
+            state.closed -> stringResource(R.string.switch_watch_closed)
+            state.expired -> stringResource(R.string.format_switch_watch_expired, state.ttlDays)
+            else -> stringResource(R.string.format_switch_watch_day, state.daysWaiting, state.ttlDays)
+        }
+        Text(
+            status,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.expired && !state.closed) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -261,60 +265,62 @@ private fun CandidateCard(
     onBought: (String) -> Unit,
     onRemoveCandidate: (Long) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    row.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
-                )
-                RiskBadge(level = row.riskLevel)
-                // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet
-                // beslutet hänger på, och den kan inte visas förrän kandidatens historik landat.
-                WorkingIndicator(
-                    working = row.historyLoading,
-                    contentDescription = stringResource(R.string.format_card_working, row.name),
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-            PeriodRow(
-                label = stringResource(R.string.switch_watch_change_label),
-                amount = row.changeKr,
-                fraction = row.changeFraction,
-                partial = row.partial,
-                stackValue = true,
-                modifier = Modifier.padding(top = 8.dp),
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                row.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
-            row.feePercent?.let { fee ->
-                Text(
-                    stringResource(R.string.format_switch_watch_fee, MoneyFormat.feePercent(fee)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            RiskBadge(level = row.riskLevel)
+            // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet
+            // beslutet hänger på, och den kan inte visas förrän kandidatens historik landat.
+            WorkingIndicator(
+                working = row.historyLoading,
+                contentDescription = stringResource(R.string.format_card_working, row.name),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        PeriodRow(
+            label = stringResource(R.string.switch_watch_change_label),
+            amount = row.changeKr,
+            fraction = row.changeFraction,
+            partial = row.partial,
+            stackValue = true,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        row.feePercent?.let { fee ->
+            Text(
+                stringResource(R.string.format_switch_watch_fee, MoneyFormat.feePercent(fee)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (row.historyUnavailable) {
+            Text(
+                stringResource(R.string.switch_watch_history_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!closed) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                AppButton(
+                    text = stringResource(R.string.switch_watch_bought_action),
+                    onClick = { onBought(row.isin) },
+                    variant = AppButtonVariant.Text,
                 )
-            }
-            if (row.historyUnavailable) {
-                Text(
-                    stringResource(R.string.switch_watch_history_unavailable),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!closed) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { onBought(row.isin) }) {
-                        Text(stringResource(R.string.switch_watch_bought_action))
-                    }
-                    // Bara handplockade alternativ går att ta bort: de automatiska är appens
-                    // förslag för nivån, och att plocka bort ett av dem hade sett ut som ett val
-                    // men bara dolt vad planen faktiskt föreslår.
-                    if (row.manual) {
-                        TextButton(onClick = { onRemoveCandidate(row.candidateId) }) {
-                            Text(stringResource(R.string.switch_watch_remove_candidate))
-                        }
-                    }
+                // Bara handplockade alternativ går att ta bort: de automatiska är appens
+                // förslag för nivån, och att plocka bort ett av dem hade sett ut som ett val
+                // men bara dolt vad planen faktiskt föreslår.
+                if (row.manual) {
+                    AppButton(
+                        text = stringResource(R.string.switch_watch_remove_candidate),
+                        onClick = { onRemoveCandidate(row.candidateId) },
+                        variant = AppButtonVariant.Text,
+                    )
                 }
             }
         }

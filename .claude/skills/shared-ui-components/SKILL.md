@@ -26,6 +26,13 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 
 | Elementtyp | Komponent | Används i · det som gör den speciell |
 |---|---|---|
+| Kort | `AppCard` | Varje kort på varje skärm. `AppCardVariant.Outlined` (yta + svag kontur, standard), `Filled` (tonad, för rader inne i ett kort – Hems avgifts- och analysrader), `Error` (farozonen). 16 dp inre marginal (`contentPadding`; 0 för ett utfällbart kort vars klickyta går ut i kanten, Facit och Sålda). Med `onClick` en klickbar nod (UI-13). |
+| Knapp | `AppButton`, `AppIconButton` | Varje knapp. `AppButtonVariant.Primary`/`Tonal`/`Outlined`/`Text`/`Danger`; M3E-formmorf (`ButtonDefaults.shapes()`). Ikonknappen kräver `contentDescription` (UI-3, UI-13). |
+| Textfält | `AppTextField` | Transaktionsformuläret, importerna, fondsök, ISIN-fältet, riskprofilens andelar. Konturerat, `shapes.extraSmall`; `label`, `keyboardOptions`, `suffix`, `supportingText`, `isError` (UI-13). |
+| Dialog | `AppDialog`, `ConfirmDialog`, `LoadingDialog` | `ConfirmDialog` före varje åtgärd som raderar eller ersätter data (Transaktioner, Inställningar) – `destructive` ger bekräftelseknappen i felfärgen; `AppDialog` för en enda åtgärd (`ImportCompleteDialog`); `LoadingDialog` för importernas blockerande väntan. 28 dp (UI-13). |
+| Kryssrad | `CheckRow` | Importernas rader, och via `FollowedToggleRow` "Genomförd". `toggleable` på hela raden, en nod med rollen kryssruta, ≥ 48 dp; `supportingText`, `labelStyle` (UI-3, UI-13). |
+| Listrad | `ItemRow` | Fondsök. Rubrik, `supporting`, `trailing`; ≥ 56 dp, rubrik och undertext i en nod. De övriga egna raderna flyttas hit (se *Kända dubbletter*). |
+| Förloppsstapel | `ProgressBar` | Fondsökens katalogladdning. M3E:s vågiga stapel, obestämd utan `progress` (UI-13). |
 | Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
 | Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Sålda, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
 | Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i toppradens `actions` (`AppNavigation`) och renderar ingenting i vila. |
@@ -38,12 +45,12 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
 | Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit, Sålda. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
-| "Genomförd"-kvittering | `FollowedToggleRow` | Hem, Fonddetalj, Facit. `toggleable` på hela raden, en nod med rollen kryssruta; skriver mot det inspelade förslaget (SET-5). |
+| "Genomförd"-kvittering | `FollowedToggleRow` | Hem, Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). Rundad rektangel (`shapes.small`), som `ProfitTakeBadge`. |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
 | Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Tonad i ytvariant (`surfaceVariant`, kortens rundning), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
-| Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar dialog, inte en fullskärmsvy. |
+| Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar `AppDialog`, inte en fullskärmsvy. |
 
 ## Diagram (`ui/diagram/`)
 
@@ -62,9 +69,7 @@ raden här. Bygg aldrig en tredje kopia.
 |---|---|---|
 | `TotalCard` | `hem/HemScreen.kt` och `portfolj/PortfoljScreen.kt` – identisk kod, olika `UiState` | en delad komponent som tar primitiver (värde, vinst, andel, `working`) |
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
-| `ImportLoadingDialog` / `ImportOrdersLoadingDialog` | `imports/ImportHoldingsScreen.kt`, `imports/ImportOrdersScreen.kt` – samma dialog, olika strängar | en delad laddningsdialog med `title`/`body` |
-| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow`, `SwitchSuggestionRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | en delad listrad (`ItemRow`, planerad) med parametrar för undertext, badge, belopp och pil |
-| Kort | drygt 30 råa `Card(...)` med egen `padding(16.dp)` i feature-koden (flest i Hem och Inställningar) | ett delat kort (`AppCard`, planerat) |
+| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow`, `SwitchSuggestionRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
 | Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) och motsvarande kort i `transaktioner/SoldFundsScreen.kt` | `ExpandableInfoRow` i ett `AppCard` |
 | Starta bytesbevakning | `startSwitchWatch` i `fond/FondDetaljViewModel.kt` och `hem/HemViewModel.kt` | en metod på `SwitchWatchRepository` (eller ett use case) som båda anropar |
 | Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
@@ -81,9 +86,6 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 
 | Del | Vad |
 |---|---|
-| `AppCard` | enda kortet; ersätter råa `Card` |
-| `ItemRow` | enda listraden; ersätter de egna raderna ovan |
-| `ConfirmDialog` | enda bekräftelsen vid permanent radering |
 | `EntityListScreen` | listskärmens ram: laddning, tomt, fel med "Försök igen", lista, lägg till |
 | `EntityEditScreen` + `EditorState` | redigering: Spara aktiv först när giltigt **och** ändrat, "Släng ändringar?" vid bakåt, sparfel som snackbar |
 | `ComponentGallery` | debug-skärm med alla komponenter i alla tillstånd |
@@ -116,7 +118,9 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 
 - **Feature-kod** (ui-paket utom `ui/components`, `ui/diagram`, `ui/theme`): nya råa
   Material 3-komponenter som har en delad motsvarighet ovan (`Card`/`Surface`, `ListItem`,
-  `AlertDialog`, datumväljare, `DropdownMenu`, chips, progressindikatorer, `Badge`, `Checkbox`);
+  `AlertDialog`/`Dialog`, knappar och ikonknappar, textfält, datumväljare, `DropdownMenu`, chips,
+  progressindikatorer, `Badge`, `Checkbox`). Kvar till M3 Expressive steg 3: `TopAppBar`, `Scaffold`,
+  `FloatingActionButton` och `NavigationBar` i `AppNavigation`, samt `HorizontalDivider`;
   hårdkodade `Color(…)`, `RoundedCornerShape(…)`, `fontSize`/`lineHeight`/`letterSpacing`,
   `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.
 - **All kod utom `ui/diagram/`:** Vico.
@@ -133,7 +137,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 
 **Baslinjerna** (skuld från före kontrollerna, får bara krympa):
 
-- `ui-allowlist.txt`: rader med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" (19 rader)
+- `ui-allowlist.txt`: rader med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" (19 när kontrollen infördes, 0 sedan M3 Expressive steg 2b)
   genereras av `node tools/regel4-baseline.mjs` – kör det när en skärm rättats. Ett undantag gäller
   fil + symbol, så en baslinjerad för `Card(` i `HemScreen.kt` släpper igenom *alla* `Card(` i den
   filen tills den rättats. Hooktestet fäller en inaktuell baslinje. Handskrivna undantag står kvar.

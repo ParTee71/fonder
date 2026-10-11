@@ -13,17 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -33,8 +24,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -43,11 +32,20 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.ui.components.AppButton
+import se.partee71.fonder.ui.components.AppButtonVariant
+import se.partee71.fonder.ui.components.AppCard
+import se.partee71.fonder.ui.components.AppIconButton
+import se.partee71.fonder.ui.components.AppTextField
+import se.partee71.fonder.ui.components.CheckRow
+import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
+import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.transaktioner.labelRes
 import java.time.LocalDate
 
 // Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
@@ -91,10 +89,11 @@ fun ImportHoldingsScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(stringResource(R.string.import_pick_file_body), style = MaterialTheme.typography.bodyMedium)
-            Button(
+            AppButton(
+                text = stringResource(R.string.import_pick_file),
                 onClick = { filePicker.launch(IMPORT_MIME_TYPES) },
                 modifier = Modifier.padding(top = 16.dp),
-            ) { Text(stringResource(R.string.import_pick_file)) }
+            )
         }
 
         state.error != null -> EmptyState(
@@ -121,47 +120,22 @@ fun ImportHoldingsScreen(
                     )
                 }
             }
-            Button(
+            AppButton(
+                text = stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }),
                 onClick = viewModel::import,
                 enabled = state.canImport,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-            ) {
-                Text(stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }))
-            }
+            )
         }
     }
 
     // Fondmatchning + kursuppdatering (5 års historik per fond) tar en stund — en
     // overlay-modal gör väntan tydlig i stället för att visa en tom, ointeraktiv lista.
     if (state.loading) {
-        ImportLoadingDialog()
-    }
-}
-
-@Composable
-private fun ImportLoadingDialog() {
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-    ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                CircularProgressIndicator()
-                Text(
-                    stringResource(R.string.import_loading_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                Text(
-                    stringResource(R.string.import_loading_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
+        LoadingDialog(
+            title = stringResource(R.string.import_loading_title),
+            body = stringResource(R.string.import_loading_body),
+        )
     }
 }
 
@@ -178,115 +152,107 @@ private fun ImportRowCard(
     onRemoveOccasion: (Int) -> Unit,
 ) {
     val row = rowState.row
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = rowState.included, onCheckedChange = onIncludedChange)
-                Column {
-                    Text(row.fundName, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.format_import_row_isin, row.isin),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        CheckRow(
+            checked = rowState.included,
+            onCheckedChange = onIncludedChange,
+            label = row.fundName,
+            supportingText = stringResource(R.string.format_import_row_isin, row.isin),
+            labelStyle = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
+            style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SelectField(
+            label = stringResource(R.string.import_match_label),
+            options = catalogFunds,
+            selected = rowState.matchedFund,
+            optionLabel = { it.name },
+            onSelect = onFundOverride,
+            placeholder = stringResource(R.string.import_match_none),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
+            Text(
+                stringResource(R.string.import_match_uncertain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (rowState.priceFetchFailed) {
+            Text(
+                stringResource(R.string.import_price_fetch_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Text(
+            stringResource(R.string.import_occasions_label),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        rowState.occasions.forEachIndexed { index, occasion ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    ChoiceChipRow(
+                        options = TransactionType.entries,
+                        selected = occasion.type,
+                        optionLabel = { type -> stringResource(type.labelRes()) },
+                        onSelect = { type -> onOccasionTypeChange(index, type) },
+                    )
+                    DateField(
+                        label = stringResource(R.string.import_date_label),
+                        date = occasion.date,
+                        onDateChange = { date -> onOccasionDateChange(index, date) },
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    AppTextField(
+                        value = occasion.sharesText,
+                        onValueChange = { text -> onOccasionSharesChange(index, text) },
+                        label = stringResource(R.string.import_occasion_shares_label),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
+                    if (!occasion.dateConfident) {
+                        Text(
+                            stringResource(R.string.import_date_uncertain),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                if (rowState.occasions.size > 1) {
+                    AppIconButton(
+                        icon = Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.import_remove_occasion),
+                        onClick = { onRemoveOccasion(index) },
                     )
                 }
             }
+        }
+        AppButton(
+            text = stringResource(R.string.import_add_occasion),
+            onClick = onAddOccasion,
+            modifier = Modifier.padding(top = 4.dp),
+            variant = AppButtonVariant.Text,
+        )
+        if (rowState.sharesMismatch) {
             Text(
-                stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                modifier = Modifier.padding(top = 8.dp),
+                stringResource(
+                    R.string.format_import_shares_mismatch,
+                    rowState.occasionSharesTotal.toString(),
+                    row.shares.toString(),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
-
-            SelectField(
-                label = stringResource(R.string.import_match_label),
-                options = catalogFunds,
-                selected = rowState.matchedFund,
-                optionLabel = { it.name },
-                onSelect = onFundOverride,
-                placeholder = stringResource(R.string.import_match_none),
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
-                Text(
-                    stringResource(R.string.import_match_uncertain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (rowState.priceFetchFailed) {
-                Text(
-                    stringResource(R.string.import_price_fetch_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Text(
-                stringResource(R.string.import_occasions_label),
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            rowState.occasions.forEachIndexed { index, occasion ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = occasion.type == TransactionType.KOP,
-                                onClick = { onOccasionTypeChange(index, TransactionType.KOP) },
-                                label = { Text(stringResource(R.string.transaktion_kop)) },
-                            )
-                            FilterChip(
-                                selected = occasion.type == TransactionType.SALJ,
-                                onClick = { onOccasionTypeChange(index, TransactionType.SALJ) },
-                                label = { Text(stringResource(R.string.transaktion_salj)) },
-                            )
-                        }
-                        DateField(
-                            label = stringResource(R.string.import_date_label),
-                            date = occasion.date,
-                            onDateChange = { date -> onOccasionDateChange(index, date) },
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                        OutlinedTextField(
-                            value = occasion.sharesText,
-                            onValueChange = { text -> onOccasionSharesChange(index, text) },
-                            label = { Text(stringResource(R.string.import_occasion_shares_label)) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        )
-                        if (!occasion.dateConfident) {
-                            Text(
-                                stringResource(R.string.import_date_uncertain),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                    if (rowState.occasions.size > 1) {
-                        IconButton(onClick = { onRemoveOccasion(index) }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.import_remove_occasion))
-                        }
-                    }
-                }
-            }
-            TextButton(onClick = onAddOccasion, modifier = Modifier.padding(top = 4.dp)) {
-                Text(stringResource(R.string.import_add_occasion))
-            }
-            if (rowState.sharesMismatch) {
-                Text(
-                    stringResource(
-                        R.string.format_import_shares_mismatch,
-                        rowState.occasionSharesTotal.toString(),
-                        row.shares.toString(),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
         }
     }
 }
