@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -30,42 +30,38 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
-import com.patrykandpatrick.vico.compose.cartesian.layer.dashed
+import com.patrykandpatrick.vico.compose.cartesian.CartesianDrawingContext
+import com.patrykandpatrick.vico.compose.cartesian.CartesianMeasuringContext
+import com.patrykandpatrick.vico.compose.cartesian.Scroll
+import com.patrykandpatrick.vico.compose.cartesian.Zoom
+import com.patrykandpatrick.vico.compose.cartesian.axis.Axis
+import com.patrykandpatrick.vico.compose.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.compose.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModel
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianLayerRangeProvider
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianValueFormatter
+import com.patrykandpatrick.vico.compose.cartesian.data.LineCartesianLayerModel
+import com.patrykandpatrick.vico.compose.cartesian.layer.LineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.marker.CartesianMarker
+import com.patrykandpatrick.vico.compose.cartesian.marker.DefaultCartesianMarker
 import com.patrykandpatrick.vico.compose.cartesian.marker.rememberDefaultCartesianMarker
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
+import com.patrykandpatrick.vico.compose.common.Fill
+import com.patrykandpatrick.vico.compose.common.Insets
+import com.patrykandpatrick.vico.compose.common.ProvideVicoTheme
 import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
-import com.patrykandpatrick.vico.compose.common.ProvideVicoTheme
-import com.patrykandpatrick.vico.compose.common.fill
+import com.patrykandpatrick.vico.compose.common.data.ExtraStore
 import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
-import com.patrykandpatrick.vico.compose.common.shape.rounded
-import com.patrykandpatrick.vico.core.cartesian.CartesianDrawingContext
-import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
-import com.patrykandpatrick.vico.core.cartesian.Scroll
-import com.patrykandpatrick.vico.core.cartesian.Zoom
-import com.patrykandpatrick.vico.core.cartesian.axis.Axis
-import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianLayerRangeProvider
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
-import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
-import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
-import com.patrykandpatrick.vico.core.cartesian.marker.CartesianMarker
-import com.patrykandpatrick.vico.core.cartesian.marker.DefaultCartesianMarker
-import com.patrykandpatrick.vico.core.common.Insets
-import com.patrykandpatrick.vico.core.common.data.ExtraStore
-import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
@@ -186,16 +182,16 @@ fun FundLineChart(
     // Tomma serier tas bort **tillsammans med sin etikett**, så teckenförklaringens färger
     // fortsätter peka på rätt kurva även om en kandidats historik saknas.
     val visibleSeries = normalized.series.zip(labels).filter { (series, _) -> series.isNotEmpty() }
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    LaunchedEffect(visibleSeries) {
-        if (visibleSeries.isEmpty()) return@LaunchedEffect
-        modelProducer.runTransaction {
-            lineSeries {
-                visibleSeries.forEach { (points, _) ->
-                    series(x = points.map { it.first }, y = points.map { it.second })
-                }
-            }
+    // Modellen byggs synkront i kompositionen (som i Dagboken) i stället för via
+    // CartesianChartModelProducer, som räknar på en annan tråd: diagrammet ritas då i samma
+    // bildruta som datan kommer, och skärmdumpstesterna slipper vänta på en bakgrundstråd.
+    val model = remember(visibleSeries) {
+        visibleSeries.takeIf { it.isNotEmpty() }?.let { lines ->
+            CartesianChartModel(
+                LineCartesianLayerModel.build {
+                    lines.forEach { (points, _) -> series(x = points.map { it.first }, y = points.map { it.second }) }
+                },
+            )
         }
     }
 
@@ -260,7 +256,13 @@ fun FundLineChart(
         // (helt andra) datavolym.
         // Vicos standardtema har svarta axeletiketter oavsett tema; M3-temat tar etiketter,
         // axlar och rutnät ur MaterialTheme så de syns i mörkt läge.
-        key(period) { ProvideVicoTheme(rememberM3VicoTheme()) {
+        val chartModifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .semantics { contentDescription = chartDescription }
+        if (model == null) {
+            Box(modifier = chartModifier)
+        } else key(period) { ProvideVicoTheme(rememberM3VicoTheme()) {
             CartesianChartHost(
                 chart = rememberCartesianChart(
                     rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
@@ -271,7 +273,7 @@ fun FundLineChart(
                     bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
                     persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } },
                 ),
-                modelProducer = modelProducer,
+                model = model,
                 scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
                 // Vicos standardzoom (`Zoom.max(Zoom.fixed(), Zoom.Content)`) tillåter aldrig
                 // mer utzoomat än "naturligt" punktavstånd — för en period med fler punkter än
@@ -279,10 +281,7 @@ fun FundLineChart(
                 // närmast slutet i stället för hela den valda perioden. `Zoom.Content` ensamt
                 // visar alltid ALLA punkter som skickats in, oavsett antal.
                 zoomState = rememberVicoZoomState(initialZoom = Zoom.Content),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .semantics { contentDescription = chartDescription },
+                modifier = chartModifier,
             )
         } }
         if (visibleSeries.size > 1) {
@@ -339,13 +338,13 @@ private fun seriesColors(): List<Color> =
 private fun rememberSeriesLineProvider(colors: List<Color>, areaUnderPrimary: Boolean): LineCartesianLayer.LineProvider {
     val areaColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = AREA_ALPHA)
     val primary = LineCartesianLayer.rememberLine(
-        fill = LineCartesianLayer.LineFill.single(fill(colors[0])),
-        areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(fill(areaColor)) else null,
+        fill = LineCartesianLayer.LineFill.single(Fill(colors[0])),
+        areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(Fill(areaColor)) else null,
     )
     // Referensen/jämförelsen är streckad och i koppar så den skiljs från innehavet både i färg och form.
     val comparison = LineCartesianLayer.rememberLine(
-        fill = LineCartesianLayer.LineFill.single(fill(colors[1])),
-        stroke = LineCartesianLayer.LineStroke.dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP),
+        fill = LineCartesianLayer.LineFill.single(Fill(colors[1])),
+        stroke = LineCartesianLayer.LineStroke.Dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP),
     )
     return LineCartesianLayer.LineProvider.series(primary, comparison)
 }
@@ -415,16 +414,15 @@ private const val AREA_ALPHA = 0.5f
 @Composable
 private fun rememberPurchaseMarker(): CartesianMarker {
     val label = rememberTextComponent(
-        color = MaterialTheme.colorScheme.onSecondaryContainer,
-        textSize = 11.sp,
-        padding = Insets(horizontalDp = 6f, verticalDp = 3f),
+        style = TextStyle(color = MaterialTheme.colorScheme.onSecondaryContainer, fontSize = 11.sp),
+        padding = Insets(horizontal = 6.dp, vertical = 3.dp),
         background = rememberShapeComponent(
-            fill = fill(MaterialTheme.colorScheme.secondaryContainer),
-            shape = CorneredShape.rounded(4.dp),
+            fill = Fill(MaterialTheme.colorScheme.secondaryContainer),
+            shape = RoundedCornerShape(4.dp),
         ),
     )
     val guideline = rememberLineComponent(
-        fill = fill(MaterialTheme.colorScheme.secondary),
+        fill = Fill(MaterialTheme.colorScheme.secondary),
         thickness = 1.dp,
     )
     return rememberDefaultCartesianMarker(

@@ -212,7 +212,7 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 | `mockup` | Ny skärm, komponent eller ändrat utseende: mockup före kod. |
 | `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
 | `accessibility-compose` | TalkBack, belopp och procent som läses begripligt, tryckytor, dynamisk text. |
-| `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 2.0.3). |
+| `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
 
 > Reglerna gäller både i Claude Android-appen och i Claude inuti Android Studio —

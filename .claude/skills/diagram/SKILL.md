@@ -1,6 +1,6 @@
 ---
 name: diagram
-description: 'Fonders diagram — det delade linjediagrammet FundLineChart i ui/diagram (Vico 2.0.3) och diagrammatematiken i domain/usecase (ChartPeriodFilter, ChartSeriesNormalizer, PortfolioReturnSeriesCalc, PurchaseMarkerFilter). Ladda denna när du ritar, ändrar eller använder ett diagram, en kurva, en period, en jämförelse, köpmarkörer, en axel eller avkastning över tid, och tillsammans med shared-ui-components. Trigger-ord: diagram, graf, kurva, linjediagram, kurshistorik, avkastningskurva, period, periodväljare, 1 mån, Allt, jämförelse, index, indexera, nollställ, referensfond, benchmark, köpmarkör, y-axel, axel, zoom, Vico, teckenförklaring, legend, ComparisonChart, FundLineChart.'
+description: 'Fonders diagram — det delade linjediagrammet FundLineChart i ui/diagram (Vico 3.3.1) och diagrammatematiken i domain/usecase (ChartPeriodFilter, ChartSeriesNormalizer, PortfolioReturnSeriesCalc, PurchaseMarkerFilter). Ladda denna när du ritar, ändrar eller använder ett diagram, en kurva, en period, en jämförelse, köpmarkörer, en axel eller avkastning över tid, och tillsammans med shared-ui-components. Trigger-ord: diagram, graf, kurva, linjediagram, kurshistorik, avkastningskurva, period, periodväljare, 1 mån, Allt, jämförelse, index, indexera, nollställ, referensfond, benchmark, köpmarkör, y-axel, axel, zoom, Vico, teckenförklaring, legend, ComparisonChart, FundLineChart.'
 ---
 
 # Diagram
@@ -51,10 +51,16 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   diagramtyp (staplar, sparkline) blir en ny komponent i `ui/diagram/` med test.
 - **Vico bara i `ui/diagram/`.** Ingen `com.patrykandpatrick.vico`-import utanför. Kontrolleras
   automatiskt: scope `vico` i `ui-forbidden.txt` (hooken `regel4-check` och `UiConsistencyTest`).
-- **Vico är 2.0.3** (`gradle/libs.versions.toml`, artefakten `compose-m3`). Låset mot Kotlin 2.1.0
-  är borta sedan den tekniska uppgraderingen (Kotlin 2.4), men en höjning är ett eget steg med
-  egen skärmdumpsdiff. Läs Vico 2.0.3-API:t i den befintliga filen – gissa inte efter nyare
-  dokumentation.
+- **Vico är 3.3.1** (`gradle/libs.versions.toml`, artefakten `compose-m3`, API:t under
+  `vico.compose.*`). Höjningen från 2.5.2 ändrade y-axelns steg och etiketter (t.ex. +0,8 % →
+  +0,9 %) – godkänt, och skärmdumparna spelades in på nytt. Läs Vico 3-API:t i den befintliga
+  filen.
+- **Modellen byggs synkront**: `FundLineChart` bygger en `CartesianChartModel` direkt i
+  kompositionen (`remember` på serierna) och skickar den till `CartesianChartHost` – inte via
+  `CartesianChartModelProducer` i en `LaunchedEffect`. Producenten bygger modellen asynkront på en
+  annan tråd än compose-klockan, så en skärmdump kunde tas före första ritningen; den synkrona
+  modellen gör skärmdumparna (`FundLineChartScreenshotTest`, `HemScreen_oversikt`) deterministiska.
+  Byt inte tillbaka till `modelProducer`.
 - **Färger bara ur temat:** `ChartSeriesColors.holding` (blå, heldragen) och `candidate` (koppar,
   streckad – jämförelser och referens), koppar (`secondary`) även för de lodräta köpmarkörerna. Paletten har bara två färger och cyklar (`colors[index % colors.size]`, Vicos
   `LineProvider.series`): i `SwitchWatchScreen` med två eller fler alternativ får den tredje kurvan
@@ -72,10 +78,7 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
 - **Axelmatematik i UI-lagret:** `PriceRangeProvider` och värdeformatterarna ligger `internal` i
   `FundLineChart.kt` och testas där (`app/src/test/.../ui/diagram/FundLineChartTest.kt`), inte i
   `domain/usecase/`. Paddningsberäkningen bör flyttas till ett rent objekt i `domain/usecase/`.
-- `FundLineChart` matar Vico via `CartesianChartModelProducer` i en `LaunchedEffect`
-  (asynkront) och anropar M3 (`Text`) och literala `dp`/`sp` direkt. Modellen byggs på en
-  annan tråd än compose-klockan, så `FundLineChartScreenshotTest` väntar inte uttryckligen på den –
-  bekräfta att skärmdumpen är stabil innan `verifyRoborazziDebug` läggs i CI (skill `ci-budget`).
+- `FundLineChart` anropar M3 (`Text`) och literala `dp`/`sp` direkt.
 
 ## Tester
 
