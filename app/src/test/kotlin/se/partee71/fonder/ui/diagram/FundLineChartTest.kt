@@ -1,6 +1,6 @@
 package se.partee71.fonder.ui.diagram
 
-import com.patrykandpatrick.vico.core.common.data.MutableExtraStore
+import com.patrykandpatrick.vico.compose.common.data.MutableExtraStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
