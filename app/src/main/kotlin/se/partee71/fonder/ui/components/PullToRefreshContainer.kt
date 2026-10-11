@@ -2,8 +2,12 @@ package se.partee71.fonder.ui.components
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 
@@ -23,8 +27,11 @@ const val PULL_TO_REFRESH_TEST_TAG = "pull_to_refresh"
  *
  * Skärmar utan hämtad data (Transaktioner, Sålda fonder, Riskprofil, Inställningar,
  * importflödena) använder den **inte** — en gest som inte gör något är värre än ingen gest.
+ *
+ * Indikatorn är M3 Expressives formskiftande laddningsindikator i en primärbehållare (UI-12),
+ * samma formspråk som kortens [WorkingIndicator].
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PullToRefreshContainer(
     refreshing: Boolean,
@@ -32,10 +39,19 @@ fun PullToRefreshContainer(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val state = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize().testTag(PULL_TO_REFRESH_TEST_TAG),
+        state = state,
+        indicator = {
+            PullToRefreshDefaults.LoadingIndicator(
+                state = state,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
     ) {
         content()
     }

@@ -22,8 +22,9 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Påminnelserad överst på en skärm — en lugn uppmaning om något användaren bör göra, med en
- * åtgärd (HEM-12: "Ändringar sedan senaste säkerhetskopian"). Mässingstonad
- * (`secondaryContainer`) så den skiljer sig från korten utan att se ut som ett fel.
+ * åtgärd (HEM-12: "Ändringar sedan senaste säkerhetskopian"). Tonad i ytvariant
+ * (`surfaceVariant`) med kortens rundning så den skiljer sig från korten utan att se ut som ett
+ * fel eller konkurrera med kopparaccenten (UI-12).
  *
  * **En** klickbar nod: hela raden utför [onAction], och åtgärdens etikett ritas som en
  * textknapp i raden i stället för att vara en egen knapp. Skärmläsaren får därmed en
@@ -41,9 +42,9 @@ fun ReminderRow(
     icon: ImageVector = Icons.Outlined.Backup,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.medium,
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(

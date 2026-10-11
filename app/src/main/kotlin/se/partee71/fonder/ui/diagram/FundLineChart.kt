@@ -10,9 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,7 +44,9 @@ import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
+import com.patrykandpatrick.vico.compose.common.ProvideVicoTheme
 import com.patrykandpatrick.vico.compose.common.fill
+import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
 import com.patrykandpatrick.vico.compose.common.shape.rounded
 import com.patrykandpatrick.vico.core.cartesian.CartesianDrawingContext
 import com.patrykandpatrick.vico.core.cartesian.CartesianMeasuringContext
@@ -69,6 +70,8 @@ import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PurchaseMarkerFilter
+import se.partee71.fonder.ui.components.ConnectedChoiceButton
+import se.partee71.fonder.ui.components.ConnectedChoiceSpacing
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.ChartSeriesColors
 import java.time.LocalDate
@@ -250,11 +253,13 @@ fun FundLineChart(
             }
         }
         val purchaseMarker = rememberPurchaseMarker()
-        val lineProvider = rememberSeriesLineProvider(seriesColors)
+        val lineProvider = rememberSeriesLineProvider(seriesColors, areaUnderPrimary = visibleSeries.size == 1)
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
         // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
         // (helt andra) datavolym.
-        key(period) {
+        // Vicos standardtema har svarta axeletiketter oavsett tema; M3-temat tar etiketter,
+        // axlar och rutnät ur MaterialTheme så de syns i mörkt läge.
+        key(period) { ProvideVicoTheme(rememberM3VicoTheme()) {
             CartesianChartHost(
                 chart = rememberCartesianChart(
                     rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
@@ -278,7 +283,7 @@ fun FundLineChart(
                     .height(220.dp)
                     .semantics { contentDescription = chartDescription },
             )
-        }
+        } }
         if (visibleSeries.size > 1) {
             ChartLegend(
                 labels = visibleSeries.map { (_, label) -> label },
@@ -290,12 +295,21 @@ fun FundLineChart(
         }
         // Skrollbar rad, inte en vanlig Row: sex perioder får inte plats på en telefonskärm,
         // och en fast rad hade tyst klippt bort "Allt" i stället för att göra den nåbar (UI-5).
+        // Knapparna är samma sammanhängande knappgrupp som ChoiceChipRow (UI-12), men i en
+        // LazyRow så instrumenttesterna kan nå sista perioden med performScrollToIndex.
+        val periods = ChartPeriodFilter.Period.entries
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(ConnectedChoiceSpacing),
             modifier = Modifier.padding(top = 8.dp).testTag(CHART_PERIOD_ROW_TEST_TAG),
         ) {
-            items(ChartPeriodFilter.Period.entries) { option ->
-                PeriodChip(option, period, periodLabelRes(option)) { period = it }
+            itemsIndexed(periods) { index, option ->
+                ConnectedChoiceButton(
+                    label = stringResource(periodLabelRes(option)),
+                    selected = option == period,
+                    index = index,
+                    count = periods.size,
+                    onClick = { period = option },
+                )
             }
         }
     }
@@ -315,10 +329,18 @@ private fun seriesColors(): List<Color> =
  * Linjerna Vico ritar serierna med, i samma ordning som [seriesColors]. Båda skapas alltid,
  * även när bara en serie visas: en `remember`-baserad fabrik som ibland anropas och ibland inte
  * gör kompositionen instabil, och en oanvänd linje kostar ingenting.
+ *
+ * @param areaUnderPrimary tonar ytan under en ensam kurva i `primaryContainer` (UI-12). I en
+ *   jämförelse utelämnas ytan: den skulle skugga den andra kurvan och få serierna att se olika
+ *   viktiga ut.
  */
 @Composable
-private fun rememberSeriesLineProvider(colors: List<Color>): LineCartesianLayer.LineProvider {
-    val primary = LineCartesianLayer.rememberLine(LineCartesianLayer.LineFill.single(fill(colors[0])))
+private fun rememberSeriesLineProvider(colors: List<Color>, areaUnderPrimary: Boolean): LineCartesianLayer.LineProvider {
+    val areaColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = AREA_ALPHA)
+    val primary = LineCartesianLayer.rememberLine(
+        fill = LineCartesianLayer.LineFill.single(fill(colors[0])),
+        areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(fill(areaColor)) else null,
+    )
     val comparison = LineCartesianLayer.rememberLine(LineCartesianLayer.LineFill.single(fill(colors[1])))
     return LineCartesianLayer.LineProvider.series(primary, comparison)
 }
@@ -377,23 +399,12 @@ private fun periodLabelRes(period: ChartPeriodFilter.Period): Int = when (period
     ChartPeriodFilter.Period.ALLT -> R.string.fond_chart_period_allt
 }
 
-@Composable
-private fun PeriodChip(
-    value: ChartPeriodFilter.Period,
-    selected: ChartPeriodFilter.Period,
-    labelRes: Int,
-    onSelect: (ChartPeriodFilter.Period) -> Unit,
-) {
-    FilterChip(
-        selected = value == selected,
-        onClick = { onSelect(value) },
-        label = { Text(stringResource(labelRes)) },
-    )
-}
+/** Täckningen för den tonade ytan under en ensam kurva — tonad, inte fylld. */
+private const val AREA_ALPHA = 0.5f
 
 /**
  * Persistent markör (issue #55) för ett köptillfälle — en vertikal linje och en etikett med
- * köpdagens datum, i appens mässingsaccent (`secondary`) så den syns tydligt mot kurslinjen
+ * köpdagens datum, i appens kopparaccent (`secondary`) så den syns tydligt mot kurslinjen
  * utan att kunna förväxlas med den.
  */
 @Composable

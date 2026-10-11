@@ -25,7 +25,7 @@ gäller kravlistan. Vilken komponent som är vilken elementtyp står i skill `sh
 
 Inbyggt: periodväljaren (`ChartPeriodFilter.Period`, skrollbar `LazyRow`,
 `CHART_PERIOD_ROW_TEST_TAG`, vald period i `rememberSaveable`), `Zoom.Content` + scroll till slutet,
-y-axel padd runt datans min/max (`PriceRangeProvider`, aldrig tvingad nolla), köpmarkörer i mässing,
+y-axel padd runt datans min/max (`PriceRangeProvider`, aldrig tvingad nolla), köpmarkörer i koppar, tonad yta under en ensam kurva, periodväljaren som sammanhängande knappgrupp (`ConnectedChoiceButton`),
 seriefärger ur `ChartSeriesColors`, och en talbar `contentDescription` (skill `accessibility-compose`).
 
 Används i dag i `HemScreen` (avkastningskurva mot referens, `PROCENT`), `FondDetaljScreen`
@@ -55,7 +55,7 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   är borta sedan den tekniska uppgraderingen (Kotlin 2.4), men en höjning är ett eget steg med
   egen skärmdumpsdiff. Läs Vico 2.0.3-API:t i den befintliga filen – gissa inte efter nyare
   dokumentation.
-- **Färger bara ur temat:** `ChartSeriesColors.holding`/`candidate`, mässing (`secondary`) för
+- **Färger bara ur temat:** `ChartSeriesColors.holding`/`candidate`, koppar (`secondary`) för
   köpmarkörer. Paletten har bara två färger och cyklar (`colors[index % colors.size]`, Vicos
   `LineProvider.series`): i `SwitchWatchScreen` med två eller fler alternativ får den tredje kurvan
   samma färg som säljfonden. En utökad seriepalett hör hemma i `ChartSeriesColors` (skill `ui-style`).
@@ -73,14 +73,14 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   `FundLineChart.kt` och testas där (`app/src/test/.../ui/diagram/FundLineChartTest.kt`), inte i
   `domain/usecase/`. Paddningsberäkningen bör flyttas till ett rent objekt i `domain/usecase/`.
 - `FundLineChart` matar Vico via `CartesianChartModelProducer` i en `LaunchedEffect`
-  (asynkront) och anropar M3 (`FilterChip`, `Text`) och literala `dp`/`sp` direkt.
-  Skärmdumpstester (Roborazzi) som kräver samma bild varje gång väntar på inspelade referenser
-  (skill `ci-budget` → Skärmdumpar).
+  (asynkront) och anropar M3 (`Text`) och literala `dp`/`sp` direkt. Modellen byggs på en
+  annan tråd än compose-klockan, så `FundLineChartScreenshotTest` väntar inte uttryckligen på den –
+  bekräfta att skärmdumpen är stabil innan `verifyRoborazziDebug` läggs i CI (skill `ci-budget`).
 
 ## Tester
 
 - JVM: tabellen ovan + `FundLineChartTest` (y-intervallet).
 - Instrument: `HemScreenTest` och `SwitchWatchScreenTest` (periodraden via
   `CHART_PERIOD_ROW_TEST_TAG` och `performScrollToIndex`, UI-5).
-- Roborazzi ljust + mörkt per diagramläge med `captureLightAndDark` *(planerat – referenserna
-  spelas in när inspelnings-workflowen finns, skill `ci-budget`)*.
+- Roborazzi ljust + mörkt per diagramläge med `captureLightAndDark` (`FundLineChartScreenshotTest`:
+  ensam kurva med yta och köpmarkör, jämförelse); verifieras ännu inte i CI (skill `ci-budget`).

@@ -12,7 +12,7 @@ Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, fö
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
 skrivs normalt.
 
-Visuell identitet: **grön petrol** (petrol #167C6E, mässingsaccent #B8862F ljust / #E3C05A mörkt), rubriker i
+Visuell identitet: **Nordisk blå** (#1F4E79) med **kopparaccent** (#B4552F ljust / #FFB59A mörkt), M3 Expressive, rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
 ---
@@ -75,7 +75,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - Ny skärm, ny delad komponent eller tydligt ändrat utseende/beteende → visa först en
   **mockup** för användaren (Design-canvas-artifact) och vänta på ok innan koden skrivs.
 - Mockupen byggs av befintliga komponenter i `ui/components/` och `ui/diagram/`, i Fonders
-  designspråk (grön petrol, mässing, Space Grotesk, tabulära siffror), med riktiga svenska
+  designspråk (nordisk blå, koppar, Space Grotesk, tabulära siffror), med riktiga svenska
   texter och påhittad data – aldrig användarens riktiga innehav. Något som saknas i
   katalogen märks "NY KOMPONENT".
 - Länken läggs i issuet under rubriken **Design**.
@@ -210,7 +210,7 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 | `release` | Endast vid uttrycklig release. |
 | `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
 | `mockup` | Ny skärm, komponent eller ändrat utseende: mockup före kod. |
-| `ui-style` | Designspråket — petrol, mässing, vinst/förlust, Space Grotesk, tabulära siffror, former. |
+| `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
 | `accessibility-compose` | TalkBack, belopp och procent som läses begripligt, tryckytor, dynamisk text. |
 | `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 2.0.3). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |

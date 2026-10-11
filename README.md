@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.56.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.58.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -60,8 +60,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 
 ## Design
 
-Visuell identitet **grön petrol** (kärna `#167C6E`, primär `#0E5249`) med
-mässings-/guldaccent (`#B8862F` ljust, `#E3C05A` mörkt), **fast palett** (ingen dynamisk färg), ljust + mörkt
+Visuell identitet **Nordisk blå** (primär `#1F4E79` ljust, `#9CC4F0` mörkt) med
+kopparaccent (`#B4552F` ljust, `#FFB59A` mörkt) i **Material 3 Expressive**, **fast palett** (ingen dynamisk färg), ljust + mörkt
 tema. Rubriker i **Space Grotesk**; belopp med **tabulära siffror**. Avkastning visas med
 semantisk färg **och** tecken/pil (aldrig färg ensam).
 
@@ -128,6 +128,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.58.0 | **Nytt utseende: Nordisk blå och koppar i Material 3 Expressive** (UI-1, UI-12): ny fast palett i blått med kopparaccent i ljust och mörkt läge, mjukare former (kort 18 dp, dialoger 28 dp, fält 12 dp), valrader som sammanhängande knappgrupper, en formskiftande laddningsindikator i stället för snurran, tjockare exponeringsstaplar och en tonad yta under kurskurvan. Påminnelseraden om säkerhetskopian är nu neutralt tonad. Vinst- och förlustfärgerna är oförändrade. |
 | 0.57.0 | **Säkerhetskopia med påminnelse** (HEM-12, SET-7): den automatiska dygnsvisa molnbackupen är borttagen — du säkerhetskopierar till Google Drive eller fil när du vill, och Hem visar överst en rad när något ändrats sedan senaste kopian ("3 nya transaktioner · senast …"), med en knapp som leder rakt till säkerhetskopieringen. Inställningar visar när och vart den senaste kopian togs. Det gamla bakgrundsjobbet avregistreras vid uppgradering. |
 | 0.56.0 | **Dra ned för att uppdatera** (UI-11, #119): Hem, Portfölj, Fonddetalj, Pågående byte, Facit och Fondsök uppdateras nu med en dragning — där datan faktiskt visas. Knappen "Uppdatera nu" i Inställningar är borttagen; vägen dit var lämna skärmen, skrolla till kortet, trycka och gå tillbaka, medan gesten alla andra appar har inte gjorde något. Varje skärm hämtar det just den visar: Hem och Portfölj forcerar en kursuppdatering, Fonddetalj fondens historik, Pågående byte kandidaternas kurvor, Facit bytesplansskanningen och Fondsök fondkatalogen. "Senast uppdaterad" står kvar i Inställningar. Snurran är samma signal som korten använder, så den slutar när datan faktiskt landat |
 | 0.55.0 | **Väntesnurra på korten** (NAV-6, #118): varje kort och varje diagram visar nu en liten snurra i rubriken medan just dess data hämtas eller räknas om — totalen och innehavsraderna när kurserna uppdateras, exponeringskartan och avgiftskortet när fondmetadatan slås upp, riskkortet när bytesplanen skannas, avkastningskurvan när referensfonden hämtas, backup-kortet när molnkopian körs. Tidigare fanns bara en indikator högst upp i appen, som sa att *något* pågick men inte vad; ett kort med nollor gick därför inte att skilja från ett kort där appen faktiskt inte vet. Snurran är bunden till just de jobb som skriver kortets data, så en molnbackup inte får fondkorten att snurra |
@@ -204,7 +205,7 @@ ui/
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
 │                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
 ├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
-└── theme/        Grön petrol-tema, Space Grotesk-typografi (inkl. StatusColors, #16)
+└── theme/        Nordisk blå-tema (M3 Expressive), Space Grotesk-typografi (inkl. StatusColors, #16)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61 ·
                   kandidatkurser för pågående byten, HEM-11/#114)
 ```
