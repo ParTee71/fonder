@@ -48,8 +48,8 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 const val FACIT_LIST_TEST_TAG = "facit_list"
 
 /**
- * Facit för bytesplanen (SET-5, issue #80) — egen undersida från Inställningar, samma mönster
- * som Riskprofil (SET-3).
+ * Facit för bytesplanen (SET-5, issue #80) — en skärm i stacken med bakåtpil, från Beslut
+ * ("Hur gick det?", NAV-9) och från Inställningar.
  */
 @Composable
 fun FacitScreen(
@@ -228,7 +228,7 @@ private fun SummaryRow(label: String, summary: SwitchOutcomeCalc.Summary, modifi
  * komponenten fäller ut en förklarande klartext, här är det radens egna detaljer som ska
  * döljas. Interaktionsmönstret (pil, ≥48 dp träffyta, `rememberSaveable`) återanvänds ändå.
  *
- * "Genomförd" ligger här *och* på Hem (HEM-8): planen på Hem försvinner efter
+ * "Genomförd" ligger här *och* på Beslut (HEM-8): planen på Beslut försvinner efter
  * `SwitchPlanCalc.PLAN_TTL_DAYS`, så utan kryssrutan här gick ett äldre förslag aldrig att
  * markera i efterhand — och då hade det följda måttet aldrig kunnat bli komplett.
  */

@@ -286,7 +286,7 @@
     <string name="sign_in_failed_no_credential">Inget Google-konto hittades på enheten. Lägg till ett konto i Androids inställningar och försök igen.</string>
     <!-- Kursuppdatering (SET-2, issue #27) -->
     <string name="settings_price_update_section">Kursuppdatering</string>
-    <string name="settings_price_update_body">Kurser uppdateras automatiskt i bakgrunden. Vill du inte vänta: dra ned på Hem eller Portfölj.</string>
+    <string name="settings_price_update_body">Kurser uppdateras automatiskt i bakgrunden. Vill du inte vänta: dra ned på Översikt eller Innehav.</string>
     <string name="format_settings_last_price_sync">Senast uppdaterad: %1$s</string>
     <string name="settings_last_price_sync_never">Aldrig uppdaterad</string>
     <string name="settings_import_section">Importera innehav</string>
@@ -299,7 +299,7 @@
     <string name="settings_riskprofile_button">Öppna riskprofil</string>
     <!-- Kontotyp (SET-4, issue #70) -->
     <string name="settings_account_type_section">Kontotyp</string>
-    <string name="settings_account_type_body" formatted="false">Styr om Hem föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
+    <string name="settings_account_type_body" formatted="false">Styr om Beslut föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
     <string name="account_type_isk_kf">ISK/KF</string>
     <string name="account_type_depa_af">Depå/AF</string>
     <!-- Facit för bytesplanen (SET-5, issue #80) -->
@@ -314,10 +314,10 @@
     <string name="settings_benchmark_pick_failed">Fonden saknar ISIN och går inte att jämföra mot — välj en annan.</string>
 
     <string name="settings_facit_section">Facit</string>
-    <string name="settings_facit_body">Se hur bytesförslagen på Hem gick jämfört med att ha behållit innehavet.</string>
+    <string name="settings_facit_body">Se hur bytesförslagen på Beslut gick jämfört med att ha behållit innehavet.</string>
     <string name="settings_facit_button">Öppna facit</string>
     <string name="facit_empty_title">Inget facit än</string>
-    <string name="facit_empty_body">Här visas utfallet av bytesförslagen från Hem. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
+    <string name="facit_empty_body">Här visas utfallet av bytesförslagen på Beslut. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
     <string name="facit_summary_title">Meravkastning mot att ha behållit</string>
     <string name="facit_summary_plan_title">Bytesplanen</string>
     <string name="facit_summary_fee_title">Billigare alternativ</string>
@@ -408,15 +408,15 @@
     <string name="hem_risk_target_bar_label">Mål</string>
     <string name="hem_risk_actual_bar_label">Faktisk</string>
 
-    <!-- Bytesplan på Hem (HEM-8, issue #70) -->
-    <string name="hem_switch_plan_title">Bytesplan</string>
-    <string name="format_hem_switch_plan_row">%1$d. Sälj %2$s (nivå %3$d) → Köp %4$s (nivå %5$d)</string>
-    <string name="format_hem_switch_plan_amount">Belopp: %1$s</string>
-    <string name="format_hem_switch_plan_fee_delta">Avgiftsskillnad: %1$s</string>
-    <string name="hem_switch_plan_recompute">Räkna om bytesplanen</string>
-    <string name="hem_switch_plan_recompute_running">Räknar om …</string>
-    <string name="hem_switch_plan_recompute_explain">Planen räknas normalt om automatiskt några gånger per dygn, och direkt när du ändrar riskprofil eller kontotyp. Avviker ingen risknivå tillräckligt mycket från ditt mål ges inget förslag — då ändras ingenting här.</string>
-    <string name="hem_switch_plan_disclaimer">Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria.</string>
+    <!-- Bytesplan på Beslut (HEM-8, NAV-9) -->
+    <string name="switch_plan_title">Bytesplan</string>
+    <string name="format_switch_plan_row">%1$d. Sälj %2$s (nivå %3$d) → Köp %4$s (nivå %5$d)</string>
+    <string name="format_switch_plan_amount">Belopp: %1$s</string>
+    <string name="format_switch_plan_fee_delta">Avgiftsskillnad: %1$s</string>
+    <string name="switch_plan_recompute">Räkna om bytesplanen</string>
+    <string name="switch_plan_recompute_running">Räknar om …</string>
+    <string name="switch_plan_recompute_explain">Planen räknas normalt om automatiskt några gånger per dygn, och direkt när du ändrar riskprofil eller kontotyp. Avviker ingen risknivå tillräckligt mycket från ditt mål ges inget förslag — då ändras ingenting här.</string>
+    <string name="switch_plan_disclaimer">Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria.</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>
     <string name="import_orders_pick_files_body">Välj en eller flera PDF-avräkningsnotor från Handelsbankens internetbank.</string>
@@ -433,7 +433,7 @@
     <!-- Töm databas (farozon i Inställningar) -->
     <string name="settings_danger_section">Farozon</string>
     <string name="settings_backup_section">Säkerhetskopiering</string>
-    <string name="settings_backup_body">Spara alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till Google Drive eller till en fil. Inget sparas automatiskt — Hem påminner när något har ändrats sedan senaste kopian. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
+    <string name="settings_backup_body">Spara alla fonder, transaktioner, riskprofil, kontotyp och inspelade bytesförslag till Google Drive eller till en fil. Inget sparas automatiskt — Översikten påminner när något har ändrats sedan senaste kopian. Cachade kurser och fondfakta ingår inte — de hämtas om automatiskt. Filen är oskyddad text: spara den någonstans du litar på.</string>
     <string name="settings_backup_never">Ingen säkerhetskopia har gjorts än.</string>
     <string name="format_settings_backup_last">Senaste säkerhetskopia: %1$s, %2$s</string>
     <string name="format_settings_backup_last_date_only">Senaste säkerhetskopia: %1$s</string>
@@ -487,9 +487,31 @@
     <string name="format_switch_watch_limit">Du kan bevaka högst %1$d alternativ åt gången.</string>
     <string name="switch_watch_cancel">Avbryt bevakningen</string>
     <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. Kvitteringen registrerar bara vad du gjort — köpet lägger du in som en vanlig transaktion.</string>
-    <string name="hem_switch_watch_title">Pågående byte</string>
-    <string name="format_hem_switch_watch">Sålt %1$s · dag %2$d · %3$d alternativ bevakas</string>
-    <string name="format_hem_switch_watch_leader">Bäst sedan säljdagen: %1$s (%2$s)</string>
-    <string name="hem_switch_watch_open">Visa bevakningen</string>
-    <string name="hem_switch_watch_no_leader">Ingen utveckling uppmätt än — kurserna fylls på i bakgrunden.</string>
+    <string name="beslut_switch_watch_title">Pågående byte</string>
+    <string name="format_beslut_switch_watch_title">%1$s → %2$s</string>
+    <string name="format_beslut_switch_watch_candidates">%1$d alternativ bevakas</string>
+    <string name="format_beslut_switch_watch_leader">Bäst sedan säljdagen: %1$s (%2$s)</string>
+    <string name="beslut_switch_watch_open">Registrera köpet</string>
+    <string name="beslut_switch_watch_no_leader">Ingen utveckling uppmätt än — kurserna fylls på i bakgrunden.</string>
+    <string name="format_beslut_risk_profile">Mot riskprofil %1$s</string>
+    <string name="beslut_no_risk_profile">Ingen riskprofil satt</string>
+    <string name="beslut_change_risk_profile">Ändra</string>
+    <string name="beslut_suggestions_title">Förslag</string>
+    <string name="beslut_outcome_title">Hur gick det?</string>
+    <plurals name="format_beslut_facit_row">
+        <item quantity="one">Facit · %1$d följt förslag</item>
+        <item quantity="other">Facit · %1$d följda förslag</item>
+    </plurals>
+    <string name="beslut_empty_title">Inget att besluta just nu</string>
+    <string name="beslut_empty_body">Här samlas bytesförslag mot din riskprofil och pågående byten. Förslagen skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
+    <string name="hem_decisions_title">Att besluta</string>
+    <string name="hem_decisions_action">Visa beslut</string>
+    <plurals name="format_hem_decisions_suggestions">
+        <item quantity="one">%1$d bytesförslag</item>
+        <item quantity="other">%1$d bytesförslag</item>
+    </plurals>
+    <plurals name="format_hem_decisions_watches">
+        <item quantity="one">%1$d pågående byte</item>
+        <item quantity="other">%1$d pågående byten</item>
+    </plurals>
 </resources>

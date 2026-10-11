@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -130,26 +129,5 @@ private fun ToolbarTab(tab: AppToolbarTab, selected: Boolean, onClick: () -> Uni
             )
         }
         if (badge != null) CountBadge(badge)
-    }
-}
-
-/** Kopparmärket med antal — dekorativt för skärmläsaren, som får antalet i flikens beskrivning. */
-@Composable
-private fun CountBadge(count: Int) {
-    Box(
-        modifier = Modifier
-            .clearAndSetSemantics {}
-            .heightIn(min = 18.dp)
-            .widthIn(min = 18.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.secondary)
-            .padding(horizontal = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            count.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSecondary,
-        )
     }
 }

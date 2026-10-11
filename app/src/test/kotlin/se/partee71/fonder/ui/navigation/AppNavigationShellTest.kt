@@ -9,7 +9,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +35,7 @@ class AppNavigationShellTest {
 
     private val stubRoutes = Screen.entries.map { it.route } + listOf(
         Routes.SETTINGS,
+        Routes.FACIT,
         Routes.SOLD,
         Routes.TRANSACTION_FORM,
         Routes.IMPORT_ORDERS,
@@ -40,9 +43,12 @@ class AppNavigationShellTest {
         Routes.FUND_SEARCH,
     )
 
-    private fun setShell() = composeRule.setContent {
+    private lateinit var navController: NavHostController
+
+    private fun setShell(beslutBadgeCount: Int = 0) = composeRule.setContent {
         FonderTheme {
-            AppNavigationShell(isWorkerRunning = false) {
+            navController = rememberNavController()
+            AppNavigationShell(isWorkerRunning = false, beslutBadgeCount = beslutBadgeCount, navController = navController) {
                 stubRoutes.forEach { route -> composable(route) { Text("skärm:$route") } }
             }
         }
@@ -68,7 +74,7 @@ class AppNavigationShellTest {
         composeRule.onNodeWithContentDescription("Översikt").assertIsSelected()
         listOf(
             "Innehav" to "portfolj",
-            "Beslut" to Routes.FACIT,
+            "Beslut" to "beslut",
             "Händelser" to "transaktioner",
             "Översikt" to "hem",
         ).forEach { (label, route) ->
@@ -127,6 +133,36 @@ class AppNavigationShellTest {
         assertTabChrome(visible = false)
         composeRule.onNodeWithContentDescription("Tillbaka").performClick()
         assertOnScreen("transaktioner")
+    }
+
+    @Test
+    fun `Beslut bär kopparmärket med antalet och läser upp det`() {
+        setShell(beslutBadgeCount = 3)
+
+        composeRule.onNodeWithContentDescription("Beslut, 3 nya").assertIsDisplayed()
+    }
+
+    @Test
+    fun `utan något att besluta ritas inget märke`() {
+        setShell(beslutBadgeCount = 0)
+
+        composeRule.onNodeWithContentDescription("Beslut").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Beslut, 0 nya").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Facit är en skärm i stacken under Beslut med bakåtpil`() {
+        setShell()
+        composeRule.onNodeWithContentDescription("Beslut").performClick()
+
+        composeRule.runOnUiThread { navController.navigate(Routes.FACIT) }
+
+        assertOnScreen(Routes.FACIT)
+        composeRule.onNodeWithText("Facit").assertIsDisplayed()
+        assertTabChrome(visible = false)
+        composeRule.onNodeWithContentDescription("Tillbaka").performClick()
+        assertOnScreen("beslut")
+        assertTabChrome(visible = true)
     }
 
     @Test

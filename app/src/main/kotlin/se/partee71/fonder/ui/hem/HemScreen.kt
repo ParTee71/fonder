@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,20 +24,19 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
+import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExposureBar
-import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.ReminderRow
+import se.partee71.fonder.ui.components.ReminderRowTone
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
@@ -51,30 +49,18 @@ import se.partee71.fonder.ui.theme.ReturnColors
 @Composable
 fun HemScreen(
     onFundClick: (String) -> Unit,
-    onOpenSwitchWatch: (Long) -> Unit,
+    onOpenBeslut: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenBackup: () -> Unit = {},
     viewModel: HemViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // En nystartad bevakning öppnas direkt: den är tom tills kandidaterna hämtats, och att
-    // lämna användaren kvar på Hem hade sett ut som att knappen inte gjorde något.
-    LaunchedEffect(state.startedSwitchWatchId) {
-        state.startedSwitchWatchId?.let { watchId ->
-            onOpenSwitchWatch(watchId)
-            viewModel.onSwitchWatchOpened()
-        }
-    }
-
     HemContent(
         state = state,
         onRefresh = viewModel::refresh,
         onFundClick = onFundClick,
-        onSwitchFollowedChange = viewModel::setSwitchFollowed,
-        onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
-        onStartSwitchWatch = viewModel::startSwitchWatch,
-        onOpenSwitchWatch = onOpenSwitchWatch,
+        onOpenBeslut = onOpenBeslut,
         onOpenBackup = onOpenBackup,
         modifier = modifier,
     )
@@ -101,10 +87,7 @@ fun HemContent(
     state: HemUiState,
     onRefresh: () -> Unit = {},
     onFundClick: (String) -> Unit = {},
-    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
-    onRecomputeSwitchPlan: () -> Unit = {},
-    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit = {},
-    onOpenSwitchWatch: (Long) -> Unit = {},
+    onOpenBeslut: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -112,7 +95,7 @@ fun HemContent(
         // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
         // fortfarande transaktioner att förlora.
         state.isEmpty -> Column(modifier = modifier) {
-            state.backupReminder?.let { BackupReminderRow(it, onOpenBackup) }
+            state.backupReminder?.let { BackupReminderRow(it, onOpenBackup, Modifier.padding(16.dp)) }
             EmptyState(
                 title = stringResource(R.string.hem_empty_title),
                 body = stringResource(R.string.hem_empty_body),
@@ -126,22 +109,18 @@ fun HemContent(
             onRefresh = onRefresh,
             modifier = modifier,
         ) {
+            // Ordningen enligt Översiktens mockup: värdet, det som väntar på beslut, jämförelsen
+            // mot index och påminnelsen om säkerhetskopia; resten av Hems kort under dem.
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
-                state.backupReminder?.let { reminder ->
-                    item { BackupReminderRow(reminder, onOpenBackup) }
-                }
                 item { TotalCard(state = state) }
-                state.openSwitchWatch?.let { watch ->
-                    item {
-                        SwitchWatchCard(
-                            watch = watch,
-                            working = state.switchWatchWorking,
-                            onOpen = onOpenSwitchWatch,
-                        )
-                    }
+                if (state.decisions.count > 0) {
+                    item { DecisionsRow(decisions = state.decisions, onOpen = onOpenBeslut) }
+                }
+                item { ReturnChartCard(state = state) }
+                state.backupReminder?.let { reminder ->
+                    item { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) }
                 }
                 item { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
-                item { ReturnChartCard(state = state) }
                 item {
                     AnalysisSummaryCard(
                         summary = state.analysisSummary,
@@ -162,14 +141,7 @@ fun HemContent(
                             riskProfile = riskProfile,
                             portfolioRisk = state.portfolioRisk,
                             levelDeviations = state.riskLevelDeviations,
-                            switchPlan = state.switchPlan,
-                            canRecomputeSwitchPlan = state.canRecomputeSwitchPlan,
-                            recomputeRunning = state.backgroundWorkRunning,
                             working = state.riskWorking,
-                            watchedSellIsins = state.watchedSellIsins,
-                            onSwitchFollowedChange = onSwitchFollowedChange,
-                            onRecomputeSwitchPlan = onRecomputeSwitchPlan,
-                            onStartSwitchWatch = onStartSwitchWatch,
                         )
                     }
                 }
@@ -500,23 +472,14 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
  * [se.partee71.fonder.ui.components.ExposureBar] (regel 4) — här är den rätt komponenten,
  * till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel.
  *
- * [switchPlan] (HEM-8, issue #70) visas längst ned, bara i ISK/KF med en avvikelse stor nog
- * att motivera ett förslag — läst ur den senast inspelade facit-batchen
- * ([se.partee71.fonder.ui.hem.HemViewModel.buildSwitchPlan]), inte omräknad live.
+ * Bytesplanen som konsumerar avvikelsen (HEM-8) visas sedan 0.61.0 på fliken Beslut (NAV-9).
  */
 @Composable
 private fun RiskCard(
     riskProfile: RiskProfile,
     portfolioRisk: PortfolioRiskCalc.Result,
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
-    switchPlan: List<SwitchSuggestionUi>,
-    canRecomputeSwitchPlan: Boolean,
-    recomputeRunning: Boolean,
     working: Boolean,
-    watchedSellIsins: Set<String>,
-    onSwitchFollowedChange: (Long, Boolean) -> Unit,
-    onRecomputeSwitchPlan: () -> Unit,
-    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit,
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
@@ -568,152 +531,6 @@ private fun RiskCard(
                 )
             }
         }
-        if (switchPlan.isNotEmpty()) {
-            Text(
-                stringResource(R.string.hem_switch_plan_title),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            switchPlan.forEach { switch ->
-                SwitchSuggestionRow(
-                    switch = switch,
-                    watched = switch.sellIsin in watchedSellIsins,
-                    onFollowedChange = onSwitchFollowedChange,
-                    onStartSwitchWatch = onStartSwitchWatch,
-                )
-            }
-            Text(
-                stringResource(R.string.hem_switch_plan_disclaimer),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        // Omräkning på begäran (issue #88) — visas bara när en plan alls kan ges (ISK/KF +
-        // satt profil, SET-3/SET-4), annars vore knappen ett löfte SET-4-gaten vägrar
-        // infria. Släckt medan något jobb kör, samma signal som bakgrundsindikatorn (NAV-6).
-        if (canRecomputeSwitchPlan) {
-            AppButton(
-                text = stringResource(
-                    if (recomputeRunning) R.string.hem_switch_plan_recompute_running else R.string.hem_switch_plan_recompute,
-                ),
-                onClick = onRecomputeSwitchPlan,
-                enabled = !recomputeRunning,
-                modifier = Modifier.padding(top = 8.dp),
-                variant = AppButtonVariant.Text,
-            )
-            Text(
-                stringResource(R.string.hem_switch_plan_recompute_explain),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * En rad i bytesplanen (HEM-8, issue #70) — "1. Sälj X (nivå N) → Köp Y (nivå M)" plus belopp
- * och avgiftsskillnad. Ren läsvy, ingen åtgärdsknapp (samma princip som resten av kortet):
- * planen är ett rangordnat förslag, inte en knapp att trycka på.
- *
- * Beloppsraden är inte kosmetisk: bytet storleksbestäms till gapet, inte till hela positionen
- * (issue #75), så "Sälj X" utan belopp vore ett annat — och sämre — råd än det planen räknat
- * fram. Saknas beloppet (rad inspelad före #75) utelämnas raden hellre än att gissa.
- *
- * Rangordningen kommer ur [SwitchSuggestionUi.planIndex], aldrig ur listpositionen — planen är
- * girig och sekventiell, så numret är en del av rådet.
- *
- * "Genomförd" är den enda interaktionen (SET-5, issue #80) och är fortfarande inte en
- * åtgärdsknapp: den utför inget byte, den **registrerar** att användaren gjorde det, så facit
- * kan mäta följda råd separat från alla givna råd. Utan den skillnaden vore ett hypotetiskt och
- * ett verkligt utfall samma siffra.
- */
-@Composable
-private fun SwitchSuggestionRow(
-    switch: SwitchSuggestionUi,
-    watched: Boolean,
-    onFollowedChange: (Long, Boolean) -> Unit,
-    onStartSwitchWatch: (SwitchSuggestionUi) -> Unit,
-) {
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        Text(
-            stringResource(
-                R.string.format_hem_switch_plan_row,
-                switch.planIndex + 1,
-                switch.sellFundName,
-                switch.fromLevel,
-                switch.buyFundName,
-                switch.toLevel,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        switch.switchValueKr?.let { valueKr ->
-            Text(
-                stringResource(R.string.format_hem_switch_plan_amount, MoneyFormat.kr(valueKr)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Text(
-            stringResource(R.string.format_hem_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FollowedToggleRow(
-            followed = switch.followed,
-            onFollowedChange = { checked -> onFollowedChange(switch.recordId, checked) },
-        )
-        // Först efter kvitteringen: bevakningen handlar om perioden **efter** säljet (ANA-12),
-        // och erbjuds den innan bytet gjorts mäter den dagar då pengarna fortfarande låg kvar.
-        // Finns redan en öppen bevakning för säljfonden erbjuds ingen ny — annars hade varje
-        // tryck startat ytterligare en bevakning av samma byte.
-        if (switch.followed && !watched) {
-            AppButton(
-                text = stringResource(R.string.switch_watch_start),
-                onClick = { onStartSwitchWatch(switch) },
-                variant = AppButtonVariant.Text,
-            )
-        }
-    }
-}
-
-/**
- * Pågående byte (HEM-11, issue #114) — den enda vägen tillbaka till bevakningen när man lämnat
- * skärmen, och därför inte bara dekoration. Visar ledaren bland alternativen ur **cachade**
- * kurser: kortet ska rendera direkt, den dyra hämtningen hör hemma på bevakningens egen skärm.
- */
-@Composable
-private fun SwitchWatchCard(watch: OpenSwitchWatchUi, working: Boolean, onOpen: (Long) -> Unit) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        CardTitleRow(title = stringResource(R.string.hem_switch_watch_title), working = working)
-        Text(
-            stringResource(
-                R.string.format_hem_switch_watch,
-                watch.sellFundName,
-                watch.daysWaiting,
-                watch.candidateCount,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Text(
-            text = if (watch.leaderName != null && watch.leaderChangeFraction != null) {
-                stringResource(
-                    R.string.format_hem_switch_watch_leader,
-                    watch.leaderName,
-                    MoneyFormat.percentSigned(watch.leaderChangeFraction),
-                )
-            } else {
-                stringResource(R.string.hem_switch_watch_no_leader)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        AppButton(
-            text = stringResource(R.string.hem_switch_watch_open),
-            onClick = { onOpen(watch.watchId) },
-            variant = AppButtonVariant.Text,
-        )
     }
 }
 
@@ -723,7 +540,7 @@ private fun SwitchWatchCard(watch: OpenSwitchWatchUi, working: Boolean, onOpen: 
  * Inställningars säkerhetskopiering; själva kopian tas där (SET-6, SET-7).
  */
 @Composable
-private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit) {
+private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit, modifier: Modifier) {
     val body = when {
         reminder.lastBackupEpochMillis == null -> stringResource(R.string.hem_backup_reminder_never)
         reminder.newTransactions > 0 -> pluralStringResource(
@@ -742,7 +559,32 @@ private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit
         body = body,
         actionLabel = stringResource(R.string.hem_backup_reminder_action),
         onAction = onOpenBackup,
-        // Samma ytterkant som korten under; kortets egen toppmarginal ger mellanrummet.
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+        // Samma ytterkant som korten; marginalen väljs av platsen (överst i tomt läge, under diagrammet annars).
+        modifier = modifier,
+    )
+}
+
+/**
+ * "Att besluta" (HEM-13): antalet öppna bytesförslag och pågående byten i kopparens ton, och vägen
+ * till fliken Beslut. Visas bara när något väntar — samma antal som flikradens märke, ur samma
+ * källa. Undertexten nämner bara de slag som finns.
+ */
+@Composable
+private fun DecisionsRow(decisions: PendingDecisions, onOpen: () -> Unit) {
+    val suggestions = decisions.openSuggestionCount
+    val watches = decisions.openWatches.size
+    val body = listOfNotNull(
+        suggestions.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.format_hem_decisions_suggestions, it, it) },
+        watches.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.format_hem_decisions_watches, it, it) },
+    ).joinToString(" · ")
+    ReminderRow(
+        title = stringResource(R.string.hem_decisions_title),
+        body = body,
+        actionLabel = stringResource(R.string.hem_decisions_action),
+        onAction = onOpen,
+        count = decisions.count,
+        tone = ReminderRowTone.Accent,
+        chevron = true,
+        modifier = Modifier.padding(horizontal = 16.dp),
     )
 }

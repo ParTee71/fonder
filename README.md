@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.60.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.61.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -55,6 +55,8 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (TP-7 steg 2 / SET-7, #110)
 - [x] Påminnelse på Hem när data ändrats sedan senaste säkerhetskopian — ingen automatisk kopia
       (HEM-12)
+- [x] Fliken Beslut — pågående byten, bytesplanen och vägen till Facit på ett ställe, med antal
+      på flikens kopparmärke och i Översiktens "Att besluta" (NAV-9, HEM-13)
 
 ---
 
@@ -128,6 +130,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.61.0 | **Fliken Beslut** (NAV-9, HEM-13): det som väntar på dig samlas på en egen flik – pågående byten med det alternativ som gått bäst sedan säljdagen, bytesplanens förslag mot din riskprofil med "Genomförd" och "Bevaka alternativ" som förut, knappen "Räkna om bytesplanen" och raden "Hur gick det?" till Facit, som nu öppnas som en egen skärm med bakåtpil. Raden överst visar vilken riskprofil och kontotyp förslagen räknas mot, med en genväg till riskprofilen. Fliken bär ett kopparmärke med antalet öppna förslag och pågående byten, och Översikten visar samma antal i raden "Att besluta" under värdet. Översikten visar därefter jämförelsen mot index och påminnelsen om säkerhetskopia; bytesplanen och kortet för pågående byte har flyttat till Beslut. |
 | 0.60.0 | **Ny navigering: fyra flikar och en plusmeny** (NAV-1, NAV-7, NAV-8, UI-14): flikarna heter nu Översikt, Innehav, Beslut och Händelser och ligger i en flytande flikrad längs nederkanten, där den valda fliken visar sitt namn. Plusknappen bredvid fäller ut Ny transaktion, Importera avräkningsnota, Importera innehav och Bevaka ny fond – samma knapp på alla flikar i stället för en egen på Portfölj och Transaktioner. Inställningar öppnas med kugghjulet på Översikt och Sålda fonder med länken på Händelser. Beslut visar tills vidare Facit. Bakåt från en flik går till Översikt. |
 | 0.59.0 | **Samma knappar, kort, fält och dialoger överallt** (UI-13): alla skärmar använder appens delade komponenter i stället för egna – knappar som byter form när de trycks ned, kort med svag kontur, konturerade fält med 12 dp hörn och dialoger där en radering bekräftas med en knapp i felfärgen. Köp/Sälj väljs i samma knappgrupp som övriga val, kryssraderna i importen är klickbara på hela raden, och importens väntan visas i en gemensam dialog med den formskiftande laddningsindikatorn. |
 | 0.58.0 | **Nytt utseende: Nordisk blå och koppar i Material 3 Expressive** (UI-1, UI-12): ny fast palett i blått med kopparaccent i ljust och mörkt läge, mjukare former (kort 18 dp, dialoger 28 dp, fält 12 dp), valrader som sammanhängande knappgrupper, en formskiftande laddningsindikator i stället för snurran, tjockare exponeringsstaplar och en tonad yta under kurskurvan. Påminnelseraden om säkerhetskopian är nu neutralt tonad. Vinst- och förlustfärgerna är oförändrade. |
@@ -184,11 +187,15 @@ domain/
                   PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66) ·
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
-                  SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114)
+                  SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
+                  PendingDecisionsSource (bytesplan + pågående byten och deras antal, en källa för Beslut,
+                  Översikten och flikmärket, NAV-9/HEM-13)
 ui/
-├── hem/          HemScreen + ViewModel (startskärm, dag/vecka/månadsresultat, analys-summeringskort #16,
-│                 fondavgiftskort med samlad besparingspotential HEM-5/HEM-6, #60/#61,
-│                 riskrad mot riskprofilens målnivå HEM-7/#68)
+├── hem/          HemScreen + ViewModel (Översikt: värde, "Att besluta" HEM-13, avkastning mot index,
+│                 dag/vecka/månadsresultat, analys-summeringskort #16, fondavgiftskort HEM-5/HEM-6,
+│                 riskkort mot riskprofilens målfördelning HEM-7)
+├── beslut/       BeslutScreen + ViewModel (fliken Beslut: pågående byten, bytesplanen, vägen till Facit, NAV-9)
+├── facit/        FacitScreen + ViewModel (utfallet av inspelade förslag, skärm i stacken under Beslut, SET-5)
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift) ·
 │                 SoldFundsScreen + ViewModel (realiserat resultat per sälj, #10)
@@ -202,7 +209,7 @@ ui/
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
 │                 sälj och köp, ANA-12/ANA-13, #114)
-├── navigation/   AppNavigation · Screen
+├── navigation/   AppNavigation · Screen · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
 │                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)

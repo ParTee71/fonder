@@ -12,8 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -81,4 +86,18 @@ fun ComposeContentTestRule.captureLightAndDark(
         val file = "${name}_$suffix.png"
         if (screen) captureScreenRoboImage(file) else onNodeWithTag(SCREENSHOT_TAG).captureRoboImage(file)
     }
+}
+
+/**
+ * Sant när den första noden som [matcher] pekar ut innehåller annat än en enda färg — för
+ * [captureLightAndDark]s `ready`. Vico bygger diagrammets modell på en annan tråd än
+ * compose-klockan; utan väntan fångade bilden ibland bara periodknapparna. Standard är första
+ * noden med en `contentDescription`, vilket i ett ensamt diagram är diagrammet självt.
+ */
+fun ComposeContentTestRule.isDrawn(
+    matcher: SemanticsMatcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription),
+): Boolean {
+    val pixels = onAllNodes(matcher).onFirst().captureToImage().toPixelMap()
+    val first = pixels[0, 0]
+    return (0 until pixels.height step 4).any { y -> (0 until pixels.width step 4).any { x -> pixels[x, y] != first } }
 }

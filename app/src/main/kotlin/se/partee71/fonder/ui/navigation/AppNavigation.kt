@@ -30,6 +30,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import se.partee71.fonder.R
+import se.partee71.fonder.ui.beslut.BeslutScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchViewModel
 import se.partee71.fonder.ui.components.AppButton
@@ -66,12 +67,14 @@ import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 fun AppNavigation() {
     val workerStatusViewModel: WorkerStatusViewModel = hiltViewModel()
     val isRunning by workerStatusViewModel.isRunning.collectAsStateWithLifecycle()
+    val decisionBadgeViewModel: DecisionBadgeViewModel = hiltViewModel()
+    val beslutBadgeCount by decisionBadgeViewModel.count.collectAsStateWithLifecycle()
 
     // Engångsbegäran från Översiktens påminnelse: Inställningar skrollar fram säkerhetskopieringen
     // och kvitterar. Sparad så den överlever rotation mellan trycket och skrollningen.
     var scrollSettingsToBackup by rememberSaveable { mutableStateOf(false) }
 
-    AppNavigationShell(isWorkerRunning = isRunning) { navController ->
+    AppNavigationShell(isWorkerRunning = isRunning, beslutBadgeCount = beslutBadgeCount) { navController ->
         fonderDestinations(
             navController = navController,
             scrollSettingsToBackup = scrollSettingsToBackup,
@@ -81,8 +84,7 @@ fun AppNavigation() {
 }
 
 /**
- * Hur en flik öppnas (NAV-7) — flikraden och Inställningars väg till Facit landar i samma
- * flikstack. Översikt ligger alltid underst, så bakåt från en annan flik går till Översikt, och
+ * Hur en flik öppnas (NAV-7) — flikraden och Översiktens "Att besluta" landar i samma flikstack. Översikt ligger alltid underst, så bakåt från en annan flik går till Översikt, och
  * varje fliks stack sparas och återställs när man byter flik.
  */
 fun NavHostController.navigateToTab(screen: Screen) {
@@ -102,12 +104,14 @@ fun NavHostController.navigateToSettings() {
  * Skalet runt [NavHost] (NAV-7, NAV-8, UI-14): på en flik en stor rubrik överst
  * ([AppTabHeading]), den flytande flikraden ([AppFloatingToolbar]) och plusmenyn ([AppFabMenu])
  * längs nederkanten; på en skärm djupare i stacken i stället en topprad med bakåtpil
- * ([AppTopBar]) och varken flikrad eller plusmeny. [destinations] bygger grafen – i appen
- * [fonderDestinations], i testerna enkla ersättare.
+ * ([AppTopBar]) och varken flikrad eller plusmeny. [beslutBadgeCount] är kopparmärket på Beslut
+ * (NAV-9) – 0 ritar inget. [destinations] bygger grafen – i appen [fonderDestinations], i
+ * testerna enkla ersättare.
  */
 @Composable
 fun AppNavigationShell(
     isWorkerRunning: Boolean,
+    beslutBadgeCount: Int = 0,
     navController: NavHostController = rememberNavController(),
     destinations: NavGraphBuilder.(NavHostController) -> Unit,
 ) {
@@ -150,7 +154,13 @@ fun AppNavigationShell(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        val tabs = Screen.entries.map { AppToolbarTab(label = stringResource(it.labelRes), icon = it.icon) }
+                        val tabs = Screen.entries.map { tab ->
+                            AppToolbarTab(
+                                label = stringResource(tab.labelRes),
+                                icon = tab.icon,
+                                badgeCount = beslutBadgeCount.takeIf { tab == Screen.Beslut },
+                            )
+                        }
                         AppFloatingToolbar(
                             tabs = tabs,
                             selectedIndex = Screen.entries.indexOf(currentTab),
@@ -229,7 +239,7 @@ fun NavGraphBuilder.fonderDestinations(
     composable(Screen.Oversikt.route) {
         HemScreen(
             onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) },
-            onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+            onOpenBeslut = { navController.navigateToTab(Screen.Beslut) },
             onOpenBackup = {
                 onScrollSettingsToBackupChange(true)
                 navController.navigateToSettings()
@@ -239,8 +249,15 @@ fun NavGraphBuilder.fonderDestinations(
     composable(Screen.Innehav.route) {
         PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
     }
-    // Beslut är tills vidare Facit (steg 3b bygger skärmen med förslag och pågående byten).
     composable(Screen.Beslut.route) {
+        BeslutScreen(
+            onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+            onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) { launchSingleTop = true } },
+            onOpenFacit = { navController.navigate(Routes.FACIT) { launchSingleTop = true } },
+        )
+    }
+    // Facit (SET-5) — en skärm i stacken med bakåtpil, från Beslut och från Inställningar (NAV-9).
+    composable(Routes.FACIT) {
         FacitScreen()
     }
     composable(Screen.Handelser.route) {
@@ -256,7 +273,7 @@ fun NavGraphBuilder.fonderDestinations(
             onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
             onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
             onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
-            onOpenFacit = { navController.navigateToTab(Screen.Beslut) },
+            onOpenFacit = { navController.navigate(Routes.FACIT) { launchSingleTop = true } },
             onOpenBenchmarkPicker = { navController.navigate(Routes.BENCHMARK_PICKER) },
             scrollToBackup = scrollSettingsToBackup,
             onScrolledToBackup = { onScrollSettingsToBackupChange(false) },

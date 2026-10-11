@@ -9,14 +9,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import se.partee71.fonder.R
 
 /**
- * Flikarna i den flytande flikraden (NAV-1, NAV-7), i ordning. Rutterna är desamma som före
- * flikbytet – Beslut är tills vidare Facit-skärmen och bär därför [Routes.FACIT] (steg 3b bygger
- * den riktiga Beslut-skärmen).
+ * Flikarna i den flytande flikraden (NAV-1, NAV-7), i ordning. Översikt, Innehav och Händelser har
+ * samma rutter som före flikbytet; Beslut (NAV-9) är en egen skärm, och Facit en skärm i stacken
+ * under den ([Routes.FACIT]).
  */
 enum class Screen(val route: String, val icon: ImageVector, val labelRes: Int) {
     Oversikt("hem", Icons.Outlined.Home, R.string.nav_oversikt),
     Innehav("portfolj", Icons.Outlined.PieChart, R.string.nav_innehav),
-    Beslut(Routes.FACIT, Icons.Outlined.TaskAlt, R.string.nav_beslut),
+    Beslut("beslut", Icons.Outlined.TaskAlt, R.string.nav_beslut),
     Handelser("transaktioner", Icons.AutoMirrored.Outlined.List, R.string.nav_handelser);
 
     companion object {
@@ -40,6 +40,7 @@ fun titleResFor(route: String?): Int? = when (route) {
     Routes.IMPORT_HOLDINGS -> R.string.import_title
     Routes.IMPORT_ORDERS -> R.string.import_orders_title
     Routes.RISK_PROFILE -> R.string.riskprofil_title
+    Routes.FACIT -> R.string.facit_title
     Routes.BENCHMARK_PICKER -> R.string.settings_benchmark_section
     Routes.SWITCH_WATCH -> R.string.switch_watch_title
     Routes.SWITCH_WATCH_PICKER -> R.string.switch_watch_add_candidate
@@ -75,7 +76,7 @@ object Routes {
     /** Fondsök i valläge för jämförelsefonden (HEM-10). */
     const val BENCHMARK_PICKER = "benchmark_picker"
 
-    /** Facit — utfallet av bytesplanens inspelade förslag (SET-5, issue #80); tills vidare fliken Beslut (NAV-7). */
+    /** Facit — utfallet av bytesplanens inspelade förslag (SET-5); en skärm i stacken från Beslut och Inställningar (NAV-9). */
     const val FACIT = "facit"
 
     /** Pågående byte — perioden mellan sälj och köp med de bevakade alternativen (ANA-12, issue #114). */

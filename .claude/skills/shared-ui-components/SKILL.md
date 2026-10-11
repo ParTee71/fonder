@@ -33,7 +33,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Kryssrad | `CheckRow` | Importernas rader, och via `FollowedToggleRow` "Genomförd". `toggleable` på hela raden, en nod med rollen kryssruta, ≥ 48 dp; `supportingText`, `labelStyle` (UI-3, UI-13). |
 | Listrad | `ItemRow` | Fondsök. Rubrik, `supporting`, `trailing`; ≥ 56 dp, rubrik och undertext i en nod. De övriga egna raderna flyttas hit (se *Kända dubbletter*). |
 | Förloppsstapel | `ProgressBar` | Fondsökens katalogladdning. M3E:s vågiga stapel, obestämd utan `progress` (UI-13). |
-| Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
+| Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster, Beslut. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
 | Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Sålda, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
 | Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i flikrubrikens och topprads åtgärder (`AppNavigation`) och renderar ingenting i vila. |
 | Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). Indikatorn är `PullToRefreshDefaults.LoadingIndicator`. |
@@ -45,13 +45,14 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
 | Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit, Sålda. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
-| "Genomförd"-kvittering | `FollowedToggleRow` | Hem, Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
+| "Genomförd"-kvittering | `FollowedToggleRow` | Beslut, Fonddetalj, Facit. En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). Rundad rektangel (`shapes.small`), som `ProfitTakeBadge`. |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
-| Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Tonad i ytvariant (`surfaceVariant`, kortens rundning), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
+| Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia; HEM-13, "Att besluta"). Tonad i ytvariant (`surfaceVariant`, kortens rundning), ikon + rubrik + undertext + åtgärdsetikett; `tone = Accent` (sekundärbehållaren, koppar), `count` (stort `CountBadge` i stället för ikonen) och `chevron` (pil i stället för etiketten, som blir klickåtgärdens namn); **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
 | Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar `AppDialog`, inte en fullskärmsvy. |
-| Flikrad | `AppFloatingToolbar` (+ `AppToolbarTab`) | `AppNavigation`. M3E `HorizontalFloatingToolbar`, yta med svag kontur och full rundning; vald flik = primärbehållare med ikon + namn, ovalda bara ikon; valfritt kopparmärke (`badgeCount`). `Role.Tab` + valt-läge, ≥ 48 dp (NAV-7, UI-14). |
+| Kopparmärke med antal | `CountBadge` | Flikraden (Beslut, NAV-9) och `ReminderRow` med `count` (HEM-13). Rund i `secondary`, `CountBadgeSize.Small` 18 dp / `Large` 28 dp; dekorativt för skärmläsaren – antalet står alltid i omgivande text eller beskrivning. |
+| Flikrad | `AppFloatingToolbar` (+ `AppToolbarTab`) | `AppNavigation`. M3E `HorizontalFloatingToolbar`, yta med svag kontur och full rundning; vald flik = primärbehållare med ikon + namn, ovalda bara ikon; valfritt kopparmärke (`badgeCount`, ritat med `CountBadge`). `Role.Tab` + valt-läge, ≥ 48 dp (NAV-7, UI-14). |
 | Plusknapp med meny | `AppFabMenu` (+ `AppFabMenuItem`, `AppFabMenuDefaults`) | `AppNavigation`. M3E `FloatingActionButtonMenu` + `ToggleFloatingActionButton`, primär, "+" fyrkantigt rundad → "×" rund; val som pills i primärbehållaren; bakåt stänger (NAV-8, UI-14). |
 | Topprad / flikrubrik | `AppTopBar`, `AppTabHeading` | `AppNavigation`. `AppTopBar` = bakåtpil + rubrik på skärmar djupare i stacken (UI-8); `AppTabHeading` = flikens stora rubrik med åtgärder, läses som rubrik (NAV-7). |
 
@@ -72,14 +73,13 @@ raden här. Bygg aldrig en tredje kopia.
 |---|---|---|
 | `TotalCard` | `hem/HemScreen.kt` och `portfolj/PortfoljScreen.kt` – identisk kod, olika `UiState` | en delad komponent som tar primitiver (värde, vinst, andel, `working`) |
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
-| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow`, `SwitchSuggestionRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
+| Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `TransactionRow` (Transaktioner), `SoldFundRow` (Sålda), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchSuggestionCard`, `SwitchWatchCard` (Beslut), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | den delade `ItemRow` (finns, används i Fondsök) – utöka med parametrar för belopp och pil |
 | Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) och motsvarande kort i `transaktioner/SoldFundsScreen.kt` | `ExpandableInfoRow` i ett `AppCard` |
-| Starta bytesbevakning | `startSwitchWatch` i `fond/FondDetaljViewModel.kt` och `hem/HemViewModel.kt` | en metod på `SwitchWatchRepository` (eller ett use case) som båda anropar |
 | Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
 | Testuppställning | ~40 testfiler med kopierade fakes och fixturer – flest `HemViewModelTest`/`PortfoljViewModelTest`, sedan `SettingsViewModelTest`, `FacitViewModelTest`, migreringstesterna | delade fakes och fixturer (skill `testing-strategy` → DRY i tester) |
 
 Alla kopior som fanns när `cpdCheck` infördes står i `config/cpd-baseline.txt` (en rad per
-uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`). Raderna ovan är
+uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`, när kontrollen infördes – 59 respektive 4 sedan 0.61.0). Raderna ovan är
 produktionskoden bland dem. Baslinjen ska bara krympa – se *Kontroller*.
 
 ## Planerade delade delar
@@ -99,7 +99,8 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 |---|---|
 | Portföljberäkningar, avgifter, risk, avkastningsserier | `PortfolioCalc`, `PortfolioFeeCalc`, `PortfolioRiskCalc`, `PortfolioPerformanceCalc`, `PortfolioReturnSeriesCalc`, `PortfolioExposureCalc` i `domain/usecase/` |
 | Analys och säljsignaler | `FundAnalysisCalc`, `AnalysisGuidance` |
-| Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc` |
+| Byten | `SwitchPlanCalc`, `SwitchPlanResolver`, `SwitchOutcomeCalc`, `SwitchWatchCalc`; `SwitchWatchRepository.startFromSuggestion` (bevakning ur ett kvitterat förslag – Beslut och Fonddetalj) |
+| Det som väntar på beslut och dess antal | `PendingDecisionsSource` → `PendingDecisions` (bytesplan + pågående byten, `count`) – Beslut, Översiktens "Att besluta" och flikmärket läser samma källa |
 | Diagrammets data | `ChartPeriodFilter`, `ChartSeriesNormalizer`, `PurchaseMarkerFilter`, `IndexBenchmarkSelector` |
 | Belopp och tal i text | `MoneyFormat`, `SwedishNumberFormat` |
 | Fondnamn och matchning | `FundNameKey`, `FundNameMatcher`, `FundCompanyMatcher`, `ImportFundMatcher` |

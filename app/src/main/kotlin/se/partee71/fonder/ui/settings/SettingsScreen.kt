@@ -219,7 +219,7 @@ fun SettingsContent(
             ChoiceChipRow(
                 options = AccountType.entries,
                 selected = state.accountType,
-                optionLabel = { type -> stringResource(accountTypeLabelRes(type)) },
+                optionLabel = { type -> stringResource(type.labelRes()) },
                 onSelect = onAccountTypeSelected,
             )
         }
@@ -610,9 +610,4 @@ private fun themeModeLabelRes(mode: ThemeMode): Int = when (mode) {
     ThemeMode.LIGHT -> R.string.theme_light
     ThemeMode.DARK -> R.string.theme_dark
     ThemeMode.AUTO -> R.string.theme_auto
-}
-
-private fun accountTypeLabelRes(type: AccountType): Int = when (type) {
-    AccountType.ISK_KF -> R.string.account_type_isk_kf
-    AccountType.DEPA_AF -> R.string.account_type_depa_af
 }
