@@ -32,8 +32,8 @@
     <string name="format_toolbar_tab_badge">%1$s, %2$d nya</string>
     <string name="fab_menu_open">Lägg till</string>
     <string name="fab_menu_close">Stäng meny</string>
-    <string name="fab_menu_expanded">Utfälld</string>
-    <string name="fab_menu_collapsed">Ihopfälld</string>
+    <string name="state_expanded">Utfälld</string>
+    <string name="state_collapsed">Ihopfälld</string>
     <string name="fab_import_orders">Importera avräkningsnota</string>
     <string name="fab_import_holdings">Importera innehav</string>
     <string name="fab_watch_fund">Bevaka ny fond</string>

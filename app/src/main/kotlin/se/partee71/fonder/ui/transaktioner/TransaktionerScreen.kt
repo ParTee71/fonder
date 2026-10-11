@@ -22,9 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -40,8 +44,6 @@ import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -224,16 +226,20 @@ private fun HandelseRow(
     val tx = row.transaction
     val sale = row.sale
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val stateText = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
     Column {
         ItemRow(
             headline = row.fundName,
             headlineStyle = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.combinedClickable(
-                onClickLabel = stringResource(if (expanded) R.string.sold_fund_collapse else R.string.sold_fund_expand),
-                onClick = { expanded = !expanded },
-                onLongClickLabel = stringResource(R.string.delete),
-                onLongClick = onLongPress,
-            ),
+            modifier = Modifier
+                .combinedClickable(
+                    onClickLabel = stringResource(if (expanded) R.string.sold_fund_collapse else R.string.sold_fund_expand),
+                    onClick = { expanded = !expanded },
+                    onLongClickLabel = stringResource(R.string.delete),
+                    onLongClick = onLongPress,
+                )
+                // Raden saknar pil (mockupen); läget läses i stället upp av TalkBack.
+                .semantics { stateDescription = stateText },
             leading = {
                 Text(
                     LocalDate.ofEpochDay(tx.epochDay).format(dateFormatter),

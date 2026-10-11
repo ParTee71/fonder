@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToNode
@@ -91,6 +92,15 @@ class TransaktionerScreenTest {
         composeRule.onNodeWithText("Osäkert — något sälj saknar matchande köp i historiken.").assertIsDisplayed()
         // Totalen sedan start står bara i säljfiltret.
         composeRule.onNodeWithText("Totalt realiserat resultat").assertDoesNotExist()
+    }
+
+    @Test
+    fun `en saljrad laser upp om den ar ihopfalld eller utfalld`() {
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = state(HandelseFilter.SALJ)) } }
+
+        val row = composeRule.onNode(hasText("Sälj · förlust −520,00 kr", substring = true).and(hasStateDescription("Ihopfälld")), useUnmergedTree = false)
+        row.assertExists().performClick()
+        composeRule.onNode(hasText("Sälj · förlust −520,00 kr", substring = true).and(hasStateDescription("Utfälld"))).assertExists()
     }
 
     @Test
