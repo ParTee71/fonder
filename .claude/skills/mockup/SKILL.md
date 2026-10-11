@@ -31,9 +31,9 @@ approximation – koden i `ui/theme` och de byggda komponenterna är facit.
 1. Skapa en Design-canvas (Artifact-typen "Design") – en per issue, eller nya artboards i
    issuets befintliga canvas.
 2. Telefonyta 390 × 844 eller högre; ljust tema först, mörkt när det spelar roll (vinst/förlust,
-   diagramkurvor och mässing ändrar ton mellan temana).
+   diagramkurvor och koppar ändrar ton mellan temana).
 3. Bygg av **befintliga komponenter** (`CardTitleRow`, `PeriodRow`, `RiskBadge`, `EmptyState`,
-   `FundLineChart` …) i Fonders designspråk (skill `ui-style`): grön petrol, sparsam mässing,
+   `FundLineChart` …) i Fonders designspråk (skill `ui-style`): nordisk blå, sparsam koppar, M3 Expressive,
    Space Grotesk, belopp med tabulära siffror, vinst/förlust med tecken och färg.
 4. Riktiga svenska texter och **påhittad men realistisk portföljdata**: fem–sju fonder med
    trovärdiga namn och fondbolag, risknivå 1–7, innehav på några tusen till några hundra tusen

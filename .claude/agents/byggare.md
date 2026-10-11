@@ -27,7 +27,7 @@ granskar och committar; du skriver koden och testerna och rapporterar ärligt va
   Processregel). Finns ingen länk i uppdraget: stanna och säg det i rapporten i stället för
   att gissa ett utseende.
 - Feature-kod använder delade komponenter i `ui/components/` och `ui/diagram/` och färger,
-  typografi och former ur `ui/theme` (grön petrol, mässing, Space Grotesk, tabulära siffror).
+  typografi och former ur `ui/theme` (nordisk blå, koppar, Space Grotesk, tabulära siffror).
   Behövs en variant: utöka den delade delen med en parameter vars default bevarar nuvarande
   utseende – aldrig en lokal kopia.
 - Arkitekturen: MVVM, `StateFlow<UiState>`, repository som single source of truth, Hilt-DI,

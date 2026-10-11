@@ -37,7 +37,7 @@ class EmptyStateTest {
 
     @Test
     fun `skärmdump ljust och mörkt`() {
-        captureLightAndDark("EmptyState_default") {
+        composeRule.captureLightAndDark("EmptyState_default") {
             EmptyState(
                 title = "Inga innehav ännu",
                 body = "Lägg till din första fondtransaktion för att se värde och utveckling.",

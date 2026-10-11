@@ -45,8 +45,8 @@ motsvarande sammanfattning; serierna namnges i teckenförklaringen, inte bara i 
 ### 5. Tryckytor minst 48 dp
 Alla klickbara element ska ha minst **48 × 48 dp**. Använd M3:s `IconButton` eller, inne i
 `ui/components`, `Modifier.minimumInteractiveComponentSize()` – aldrig en naken ikon med
-`clickable`. Periodchipsen i `FundLineChart` och chipraderna (`ChoiceChipRow`) följer M3:s
-chipstorlek; en egen chip ska inte vara mindre.
+`clickable`. Periodknapparna i `FundLineChart` och knappgrupperna (`ChoiceChipRow`) följer M3:s
+knappstorlek och läses som radioval (`Role.RadioButton` + vald); ett eget val ska inte vara mindre.
 
 ### 6. Dynamisk text och tabulära siffror
 - Text i `sp`, aldrig låsta höjder som klipper förstorad text.

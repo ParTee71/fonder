@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
@@ -26,7 +25,7 @@ import se.partee71.fonder.ui.theme.ReturnColors
  * Liten, fristående markering för vinstsignalen (S4, `FundAnalysisCalc.ProfitTakeSignal`,
  * ANA-8, issue #26) — medvetet skild från [StatusDot]/risktrafikljuset (grön/gul/röd)
  * eftersom en stor orealiserad vinst är en möjlighet, inte en risk. Den fasta paletten
- * (UI-1) har redan både mässingsaccenten (risksignalens gula, `StatusColors.gul`) och
+ * (UI-1) har redan både kopparaccenten (risksignalens gula, `StatusColors.gul`) och
  * [ReturnColors.gain] (risksignalens gröna, `StatusColors.gron`) upptagna av risknivåerna
  * — en ren färgad prick i endera färgen skulle se ut som en befintlig risknivå och
  * förvirra. Ikon + kort textetikett gör den visuellt skild utan att kräva en ny
@@ -39,9 +38,9 @@ fun ProfitTakeBadge(gainFraction: Double, modifier: Modifier = Modifier) {
     val description = stringResource(R.string.format_analys_profit_take_description, MoneyFormat.percentSigned(gainFraction))
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(MaterialTheme.shapes.small)
             .background(ReturnColors.gain.copy(alpha = 0.16f))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
             .semantics { contentDescription = description },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -49,11 +48,11 @@ fun ProfitTakeBadge(gainFraction: Double, modifier: Modifier = Modifier) {
             imageVector = Icons.Filled.TrendingUp,
             contentDescription = null,
             tint = ReturnColors.gain,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(16.dp),
         )
         Text(
             label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = ReturnColors.gain,
             modifier = Modifier.padding(start = 4.dp),
         )

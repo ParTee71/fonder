@@ -17,7 +17,7 @@ länkar hit – de kopierar dem inte. Komponenter som inte är byggda står **ba
 Grep i app/src/main/kotlin/se/partee71/fonder/ui/components/ och ui/diagram/ först
 ```
 
-Utseendet följer Fonders designspråk – grön petrol, mässingsaccent, Space Grotesk, tabulära
+Utseendet följer Fonders designspråk – nordisk blå, kopparaccent, M3 Expressive, Space Grotesk, tabulära
 siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/theme`
 (`FonderLightColorScheme`/`FonderDarkColorScheme`, `ReturnColors`, `StatusColors`,
 `ChartSeriesColors`, `FonderShapes`, `FonderTypography`, `MonoAmountStyle`).
@@ -26,23 +26,23 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 
 | Elementtyp | Komponent | Används i · det som gör den speciell |
 |---|---|---|
-| Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster. `title` + `body`. Rita aldrig en egen tom-vy. |
+| Tomt tillstånd | `EmptyState` | Alla listskärmar, importerna, Fonddetalj, Facit, Bytesfönster. `title` + `body`, valfri dekorativ `icon` i en rundad primärbehållare. Rita aldrig en egen tom-vy. |
 | Kortets rubrikrad med väntesnurra | `CardTitleRow` | Varje kort som väntar på data (Hem, Portfölj, Sålda, Inställningar, Facit, Bytesfönster). Snurran i raden, aldrig som hörnöverlägg (NAV-6, UI-6); rubriken kapas, snurran aldrig. |
-| Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är snurran i kort och diagram; `WorkerStatusIcon` sitter i toppradens `actions` (`AppNavigation`) och renderar ingenting i vila. |
-| Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). |
-| Ett val bland några (chips) | `ChoiceChipRow` | Tema, kontotyp (Inställningar), riskenkäten. `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
+| Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i toppradens `actions` (`AppNavigation`) och renderar ingenting i vila. |
+| Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). Indikatorn är `PullToRefreshDefaults.LoadingIndicator`. |
+| Ett val bland några (knappgrupp) | `ChoiceChipRow`, `ConnectedChoiceButton` | Tema, kontotyp (Inställningar), riskenkäten; `ConnectedChoiceButton` även i `FundLineChart`s periodrad. Sammanhängande M3E-knappgrupp (`ToggleButton` med `ButtonGroupDefaults`-former), läses som radioval (UI-12). `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
 | Dropdown | `SelectField` | Fondsök, transaktionsformuläret, importerna. `clearOptionLabel` ger ett "alla/inget"-val överst. |
 | Datumfält | `DateField` | Transaktionsformuläret, importerna. Plattformens `DatePickerDialog` med livscykel via `DisposableEffect`; läses som **en** knapp med etikett och värde. |
 | Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster. kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4). |
 | "Värde per <datum>" | `ValueAsOfRow` | Hem och Portfölj. Renderar ingenting utan datum (POR-7). |
-| Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). |
+| Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
 | Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit, Sålda. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
 | "Genomförd"-kvittering | `FollowedToggleRow` | Hem, Fonddetalj, Facit. `toggleable` på hela raden, en nod med rollen kryssruta; skriver mot det inspelade förslaget (SET-5). |
-| Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). |
+| Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). Rundad rektangel (`shapes.small`), som `ProfitTakeBadge`. |
 | Vinsthemtagningsläge | `ProfitTakeBadge` | Portfölj. Ikon + text, medvetet skild från trafikljuset; aldrig ett köp-/säljråd (ANA-8). |
 | Säljsignalens status | `StatusDot`, `AnalysisStatusBanner`, `AnalysisGuidanceCard` (`AnalysisStatus.kt`) | Fonddetalj och Hem (`StatusDot` även i Portfölj). Samma titel och triggertexter för samma status (ANA-3, HEM-4). |
-| Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Mässingstonad (`secondaryContainer`), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
+| Påminnelserad med åtgärd | `ReminderRow` | Hem (HEM-12, säkerhetskopia). Tonad i ytvariant (`surfaceVariant`, kortens rundning), ikon + rubrik + undertext + åtgärdsetikett; **en** klickbar nod ≥ 48 dp som skärmläsaren läser i ett svep (UI-3). Ingen stängknapp – raden försvinner med orsaken. |
 | Import klar | `ImportCompleteDialog` | Excel- och PDF-importen. Stängbar dialog, inte en fullskärmsvy. |
 
 ## Diagram (`ui/diagram/`)

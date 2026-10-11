@@ -67,7 +67,7 @@ class ReminderRowTest {
 
     @Test
     fun `skärmdump ljust och mörkt`() {
-        captureLightAndDark("ReminderRow_backup") {
+        composeRule.captureLightAndDark("ReminderRow_backup") {
             ReminderRow(
                 title = "Ändringar sedan senaste säkerhetskopian",
                 body = "3 nya transaktioner · senast 2026-10-03",

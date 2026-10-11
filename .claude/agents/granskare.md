@@ -38,7 +38,7 @@ Du granskar ändringar i Fonder. Du ändrar aldrig filer och kör bara läsande 
   ur takt vid release?
 - **Regel 4 Återbruk:** ny komponent som dubblerar en i `ui/components/` eller `ui/diagram/`?
   Hårdkodade färger, former eller typsnitt i `ui/<feature>/` i stället för `ui/theme`?
-  Avvikelse från grön petrol/mässing, Space Grotesk eller tabulära siffror för belopp?
+  Avvikelse från nordisk blå/koppar, Space Grotesk eller tabulära siffror för belopp?
   Beräkning i ViewModel/UI som hör hemma i `domain/usecase`? Två liknande block som borde
   brytas ut?
 - **Regel 5 CI-budget:** nytt steg eller jobb i PR-flödet, nytt beroende eller plugin utan

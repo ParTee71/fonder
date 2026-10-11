@@ -2,8 +2,9 @@ package se.partee71.fonder.ui.components
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -27,13 +28,13 @@ fun WorkerStatusIcon(isRunning: Boolean, modifier: Modifier = Modifier) {
     WorkingIndicator(
         working = isRunning,
         contentDescription = stringResource(R.string.worker_status_running),
-        size = 20.dp,
+        size = 24.dp,
         modifier = modifier.padding(horizontal = 12.dp),
     )
 }
 
-/** Storleken på kortens snurra — ska läsa som en del av rubrikraden, inte som ett eget element. */
-private val CARD_INDICATOR_SIZE = 16.dp
+/** Storleken på kortens indikator — ska läsa som en del av rubrikraden, inte som ett eget element. */
+private val CARD_INDICATOR_SIZE = 18.dp
 
 /**
  * Snurran som säger att datan bakom just den här ytan håller på att bearbetas (NAV-6) — samma
@@ -47,7 +48,10 @@ private val CARD_INDICATOR_SIZE = 16.dp
  * [contentDescription] är obligatorisk och skärmspecifik — "Uppdaterar" utan att säga *vad* är
  * värdelöst för en skärmläsare när flera kort snurrar samtidigt. Använd [CardTitleRow], som
  * formulerar den ur kortets egen rubrik.
+ *
+ * Ritas som M3 Expressives formskiftande [LoadingIndicator] (UI-12) i stället för en snurrande ring.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WorkingIndicator(
     working: Boolean,
@@ -59,11 +63,10 @@ fun WorkingIndicator(
     // Lokal kopia: inne i `semantics`-lambdan skuggar mottagarens (write-only)
     // `contentDescription` parameternamnet, och en läsning av den kompilerar inte.
     val description = contentDescription
-    CircularProgressIndicator(
+    LoadingIndicator(
         modifier = modifier
             .size(size)
             .semantics { this.contentDescription = description },
-        strokeWidth = 2.dp,
-        color = LocalContentColor.current,
+        color = MaterialTheme.colorScheme.primary,
     )
 }

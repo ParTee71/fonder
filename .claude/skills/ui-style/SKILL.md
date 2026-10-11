@@ -1,13 +1,13 @@
 ---
 name: ui-style
-description: 'Fonders designspråk — grön petrol med sparsam mässingsaccent, rubriker och UI i Space Grotesk, belopp med tabulära siffror, fast palett utan dynamisk färg, ljust/mörkt/auto. Ladda denna när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill mockup. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, petrol, mässing, guld, vinst, förlust, grön, röd, typsnitt, font, Space Grotesk, tabulära siffror, tnum, belopp, hörn, rundad, form, kort, ikon, text, formulering, tomt tillstånd, kontrast, snyggt.'
+description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i Material 3 Expressive, rubriker och UI i Space Grotesk, belopp med tabulära siffror, fast palett utan dynamisk färg, ljust/mörkt/auto. Ladda denna när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill mockup. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, blå, koppar, M3 Expressive, vinst, förlust, grön, röd, typsnitt, font, Space Grotesk, tabulära siffror, tnum, belopp, hörn, rundad, form, kort, ikon, text, formulering, tomt tillstånd, kontrast, snyggt.'
 ---
 
-# Designspråket · grön petrol
+# Designspråket · nordisk blå och koppar
 
-**Känsla:** lugn, saklig ekonomi. Petrol bär identiteten, mässing används sparsamt som accent,
+**Känsla:** lugn, saklig ekonomi. Blått bär identiteten, koppar används sparsamt som accent,
 siffror radar upp sig i kolumner. Krav: UI-1 (identitet, fast palett, ljust + mörkt), UI-2
-(Space Grotesk, tabulära siffror), UI-3 (vinst/förlust aldrig enbart färg), UI-4 (Ljust/Mörkt/Auto).
+(Space Grotesk, tabulära siffror), UI-3 (vinst/förlust aldrig enbart färg), UI-4 (Ljust/Mörkt/Auto), UI-12 (M3 Expressive: former, knappgrupper, laddningsindikator).
 
 **Var saker står (enda källor):** värdena i `ui/theme/` – `Color.kt` (paletten och
 färgscheman), `Theme.kt` (`FonderTheme`, `ReturnColors`, `StatusColors`, `ChartSeriesColors`),
@@ -16,8 +16,8 @@ används för vad → skill `shared-ui-components`. Koden är facit; tabellerna 
 
 ## Tema
 
-- `FonderTheme` → `MaterialTheme` med `FonderLightColorScheme`/`FonderDarkColorScheme`,
-  `FonderTypography`, `FonderShapes`. **Ingen dynamisk färg** – identiteten ska vara konsekvent.
+- `FonderTheme` → `MaterialExpressiveTheme` (`MotionScheme.expressive()`) med
+  `FonderLightColorScheme`/`FonderDarkColorScheme`, `FonderTypography`, `FonderShapes`. **Ingen dynamisk färg** – identiteten ska vara konsekvent.
 - `LocalDarkTheme` bär det läge appen **faktiskt** valt (Inställningar, UI-4), inte systemets.
   Semantiska färger utanför `MaterialTheme.colorScheme` läser alltid den – aldrig
   `isSystemInDarkTheme()` direkt i en komponent.
@@ -26,29 +26,30 @@ används för vad → skill `shared-ui-components`. Koden är facit; tabellerna 
 
 | Token | Värde | Roll |
 |---|---|---|
-| `Petrol900`…`Petrol300` | `#06302B` · `#0A403A` · `#0E5249` · `#12655A` · `#167C6E` · `#2E9B8A` · `#5FBDAE` | skalan; `Petrol500` är kärnan |
-| primär | ljust `Petrol700` `#0E5249` · mörkt `Petrol300` `#5FBDAE` | knappar, valt, aktiv flik |
-| tertiär | ljust `Petrol500` · mörkt `Petrol400` | |
-| sekundär (mässing) | ljust `Brass` `#B8862F` · mörkt `BrassBright` `#E3C05A` | sparsam accent, köpmarkörer, gul status |
+| `Blue900`…`Blue100` | `#001D36` · `#00315A` · `#1F4E79` · `#2B5A87` · `#3F6E9C` · `#5A8BBE` · `#9CC4F0` · `#D2E4FF` | skalan; `Blue700` är kärnan |
+| primär | ljust `Blue700` `#1F4E79` · mörkt `Blue300` `#9CC4F0` | knappar, valt, aktiv flik, laddningsindikatorn |
+| primärbehållare | ljust `Blue100` `#D2E4FF` · mörkt `Blue600` `#2B5A87` | tonad yta under diagramkurvan, tomt tillstånds ikonruta, dra-för-att-uppdatera |
+| tertiär | ljust `Blue500` · mörkt `Blue400` | |
+| sekundär (koppar) | ljust `Copper` `#B4552F` · mörkt `CopperBright` `#FFB59A`; behållare `#FFDBCE` / `#713518` | sparsam accent, köpmarkörer, gul status |
 | vinst | `GainLight` `#2FA36B` · `GainDark` `#5FD39B` | via `ReturnColors.gain` |
 | förlust | `LossLight` `#C0574E` · `LossDark` `#E58C82` | via `ReturnColors.loss`; mörkt temas `error` = `LossDark` |
-| bakgrund / yta | ljust `#F6F9F8` / `#FBFDFC` · mörkt `#0F1513` / `#121A18` | |
-| text / dämpad | ljust `#0F1513` / `#3F4B48` · mörkt `#DDE4E1` / `#BFC9C5` | `onSurface` / `onSurfaceVariant` |
+| bakgrund / yta | ljust `#F7F9FC` / `#FDFDFF` · mörkt `#101418` / `#151A1F` | ytbehållarna (`surfaceContainer*`) är satta i samma blågrå ton |
+| ytvariant | ljust `#DEE3EB` · mörkt `#42474E` | knappgruppens ovalda knappar, märken, påminnelseraden |
+| text / dämpad | ljust `#181C20` / `#42474E` · mörkt `#E0E2E8` / `#C2C7CF` | `onSurface` / `onSurfaceVariant` |
+| kontur / svag kontur | ljust `#72777F` / `#C2C7CF` · mörkt `#8C9199` / `#42474E` | |
+| invers | ljust `#2D3135` på `#EEF0F6` · mörkt `#E0E2E8` på `#2D3135` | snackbar |
 
-> **Mässingens värde är avgjort:** kodens `Brass = #B8862F` (ljust) och `BrassBright = #E3C05A`
-> (mörkt) gäller (beslut 2026-10-11, mockup i
-> https://claude.ai/artifact/XJoun6DFZqTdKTRF9gmYWB). `#C9A227` valdes bort: vit text på den når
-> bara 2,4:1 och markörerna syns sämre mot ljus yta. Vit text på `#B8862F` når 3,2:1 – räcker för
-> stor text och ikoner, inte för brödtext; mörkt tema har `onSecondary` `#3A2E00` (7,6:1).
-> Petrol `#167C6E` är `Petrol500`; primärfärgen i ljust tema är `Petrol700` `#0E5249`.
+> **Paletten "Nordisk blå och koppar" är avgjord** (M3 Expressive-mockupen, palett `bla`, beslut
+> 2026-10-11). Vit text på `Copper` `#B4552F` når 4,9:1 och `onSecondary` `#5A1B00` på
+> `CopperBright` 7,7:1. Vinst- och förlustfärgerna är oförändrade från den tidigare petrolpaletten.
 
 ### Semantiska färger (`Theme.kt`)
 
 | Objekt | Medlemmar | Regel |
 |---|---|---|
 | `ReturnColors` | `gain`, `loss`, `forAmount(amount)` (≥ 0 → vinst) | alltid tillsammans med tecken eller pil (UI-3); belopp med `MoneyFormat.percentSigned` ger äkta minustecken |
-| `StatusColors` | `gron`, `gul`, `rod` | säljsignaler (ANA-3); grön/röd återanvänder `ReturnColors`, gul är mässingen – ingen egen trafikljuspalett |
-| `ChartSeriesColors` | `holding` (= `onSurface`, "bläck"), `candidate` (ljust `Petrol400`, mörkt `Petrol300`) | serierna skiljs på **ljushet**, inte bara kulör; mässing är reserverad för köpmarkörer |
+| `StatusColors` | `gron`, `gul`, `rod` | säljsignaler (ANA-3); grön/röd återanvänder `ReturnColors`, gul är kopparen – ingen egen trafikljuspalett |
+| `ChartSeriesColors` | `holding` (= `primary`), `candidate` (= `onSurfaceVariant`, grå) | serierna skiljs på **ljushet**, inte bara kulör; koppar är reserverad för köpmarkörer |
 
 En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett nytt objekt i
 `Theme.kt`) med värden för båda temana – aldrig `Color(…)` i feature-kod.
@@ -67,14 +68,14 @@ En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett
 
 ## Former (`Shape.kt`)
 
-`FonderShapes`: `extraSmall` 6 dp · `small` 12 dp · `medium` 18 dp · `large` 26 dp ·
-`extraLarge` 26 dp. Hämtas via `MaterialTheme.shapes`, aldrig `RoundedCornerShape(…)` i feature-kod.
+`FonderShapes`: `extraSmall` 12 dp (textfält, menyer) · `small` 8 dp (chips, märken) · `medium` 18 dp
+(kort, påminnelserad, tomt tillstånds ikonruta) · `large` 26 dp · `extraLarge` 28 dp (dialoger). Hämtas via `MaterialTheme.shapes`, aldrig `RoundedCornerShape(…)` i feature-kod.
 
 ## Layout
 
 - Tryckytor minst 48 dp (skill `accessibility-compose`).
 - Etiketten kapas, aldrig värdet (UI-6); allt som kan växa skrollar (UI-5).
-- Bakgrundsarbete visas med den delade väntesnurran i rubrikraden (`CardTitleRow`/`WorkingIndicator`,
+- Bakgrundsarbete visas med den delade formskiftande laddningsindikatorn i rubrikraden (`CardTitleRow`/`WorkingIndicator`,
   NAV-6), aldrig som ett blockerande överlägg.
 
 ## Texter

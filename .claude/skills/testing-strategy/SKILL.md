@@ -26,7 +26,7 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Compose-UI (skärmar och komponenter) | `app/src/androidTest/…/ui/**` | `createComposeRule` mot `*Content` | `instrumented-tests` |
 | WorkManager-schemaläggning | `app/src/androidTest/…/worker/` | `work-testing` | `instrumented-tests` |
 | Compose-UI i JVM | `app/src/test/…/ui/**` (först: `ui/components/EmptyStateTest.kt`) | Robolectric (`@RunWith(RobolectricTestRunner::class)`) + `createComposeRule`; SDK, mått och `Application` i `app/src/test/resources/robolectric.properties` | `android.yml` (`build-and-test`) |
-| Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `captureLightAndDark`, ljust + mörkt | inte än: referenserna är inte inspelade (`recordRoborazziDebug`, skill `ci-budget`) – anropen är verkningslösa i en vanlig testkörning |
+| Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `composeRule.captureLightAndDark(name) { … }`, ljust + mörkt – en per komponent i `ComponentScreenshotTest` och `FundLineChartScreenshotTest` | inte än: referenserna spelas in lokalt med `recordRoborazziDebug`, men `verifyRoborazziDebug` körs inte i CI (skill `ci-budget`) – anropen skriver inga bilder i en vanlig testkörning |
 | Konsistens (regel 4) | `app/src/test/…/consistency/UiConsistencyTest.kt` mot hela `app/src/main` | Konsist + `ui-forbidden.txt`/`ui-allowlist.txt` | `android.yml` (`build-and-test`) |
 | Dubbelkod (regel 4) | hela `app/src` (`main`, `test`, `androidTest`) mot `config/cpd-baseline.txt` | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
 | Hooken `regel4-check` och baslinjeskriptet | `.claude/hooks/test/regel4-check.test.mjs` | `node --test` | `android.yml` (`changes`, varje PR) |
@@ -59,7 +59,7 @@ Testernas paketstruktur **speglar** `main`: en ViewModel i `ui/settings/` testas
 |---|---|---|
 | `FakeFundMetadataRepository`, `FakeSwitchWatchRepository` | `app/src/test/…/data/repository/` | egna fakes per test |
 | `FakeFundPriceRefreshScheduler` | `app/src/test/…/worker/` | egen schemaläggare i ViewModel-tester |
-| `captureLightAndDark` | `app/src/test/…/testing/Screenshots.kt` | egna Roborazzi-anrop och egen temaväxling |
+| `captureLightAndDark` (extension på compose-regeln; `animated` för oändliga animationer, `screen` för dialoger) | `app/src/test/…/testing/Screenshots.kt` | egna Roborazzi-anrop och egen temaväxling. Anropa aldrig `captureRoboImage(path) { … }` bredvid en `createComposeRule` – det startar ett andra fönster och bilden blir tom |
 | `MainDispatcherRule`, delade skärmkontrakt (`runListScreenContract`/`runEditScreenContract`) *(planerade)* | `app/src/test/…/testing/` | `Dispatchers.setMain` i varje test; tomt/fel/laddar och spara-aktivering per skärm |
 
 Behövs samma uppställning på två ställen → gör en hjälpare innan det tredje. Lägger du en

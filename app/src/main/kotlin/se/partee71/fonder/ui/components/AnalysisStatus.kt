@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -91,7 +92,7 @@ fun StatusDot(level: FundAnalysisCalc.SignalLevel, modifier: Modifier = Modifier
 fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifier = Modifier) {
     val level = analysis?.status
     if (analysis == null || level == null) {
-        Card(modifier = modifier.fillMaxWidth()) {
+        OutlinedCard(modifier = modifier.fillMaxWidth()) {
             Text(
                 stringResource(R.string.analys_status_insufficient),
                 modifier = Modifier.padding(16.dp),
@@ -105,8 +106,8 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = statusColor(level).copy(alpha = 0.14f)),
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(level, modifier = Modifier.padding(end = 12.dp))
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+            StatusDot(level, modifier = Modifier.padding(top = 6.dp, end = 12.dp))
             Column {
                 Text(statusTitle(level), style = MaterialTheme.typography.titleMedium)
                 val messages = statusTriggerMessages(analysis)
@@ -132,7 +133,7 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
 fun AnalysisGuidanceCard(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
     val messages = guidanceMessages(analysis)
     if (messages.isEmpty()) return
-    Card(modifier = modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             messages.forEachIndexed { index, message ->
                 Text(

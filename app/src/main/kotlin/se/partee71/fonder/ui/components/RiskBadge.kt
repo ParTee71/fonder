@@ -3,7 +3,6 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,15 +50,15 @@ fun RiskBadge(level: Int?, modifier: Modifier = Modifier, toLevel: Int? = null) 
     }
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
             .semantics { contentDescription = description },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

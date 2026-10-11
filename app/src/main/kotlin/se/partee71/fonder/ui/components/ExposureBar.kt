@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +31,9 @@ import se.partee71.fonder.ui.theme.MonoAmountStyle
  *   färg (`MaterialTheme.colorScheme.outline`) så de syns som skilda från de riktiga
  *   kategorierna även rent visuellt, inte bara i sin plats sist i listan.
  */
+/** Stapelns tjocklek — 10 dp med helt rundade ändar (M3 Expressive, UI-12). */
+private val BAR_HEIGHT = 10.dp
+
 @Composable
 fun ExposureBar(
     label: String,
@@ -57,15 +60,15 @@ fun ExposureBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp)
-                .height(6.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(3.dp)),
+                .padding(top = 6.dp)
+                .height(BAR_HEIGHT)
+                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(fraction.toFloat().coerceIn(0f, 1f))
-                    .background(color, RoundedCornerShape(3.dp)),
+                    .background(color, CircleShape),
             )
         }
     }
