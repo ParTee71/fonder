@@ -1002,7 +1002,7 @@ fäller bygget så länge `app/google-services.json` saknas.
   importerade poster + en **Stäng**-knapp) i stället för en fullskärms tom-tillståndsvy vars
   enda väg ut var systemets bakåtknapp (IMP-9) — `AppNavigation.kt` trådar in
   `onDone = { navController.popBackStack() }` till båda importskärmarna, samma mönster som
-  `TransactionFormScreen(onSaved = ...)`. Ingen ny/ändrad persisterad data.
+  `TransactionFormScreen(onSaved = ...)` (sedan Navigation 3, #139: `backStack.popIfTop(key)`). Ingen ny/ändrad persisterad data.
 - **Sålda: totalt realiserat resultat + hopfällbara kort (#21):** Sålda-skärmen visade
   tidigare bara enskilda sälj-rader utan någon summering, och varje kort visade alltid all
   detalj oavsett hur många säljtransaktioner som fanns. `SoldFundsUiState` har fått
