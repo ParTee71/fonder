@@ -27,7 +27,7 @@ object FundAnalysisCalc {
 
     /** ~52 veckor. */
     private const val HIGH_WINDOW_DAYS = 364L
-    private const val SMA_WINDOW_DAYS = 200L
+    private const val SMA_WINDOW_DAYS = MovingAverageCalc.WINDOW_DAYS
     private const val CAGR_MIN_DAYS = 365L
     private const val DAYS_PER_YEAR = 365.2425
 
@@ -265,14 +265,17 @@ object FundAnalysisCalc {
         return DistanceFromHighSignal(level, distanceFraction)
     }
 
-    /** S2 — NAV under 200-dagars glidande medelvärde. Null om historiken inte når 200 dagar tillbaka. */
+    /**
+     * S2 — NAV under 200-dagars glidande medelvärde. Null om historiken inte når 200 dagar
+     * tillbaka. Snittet räknas av [MovingAverageCalc] — samma implementering som snittlinjen i
+     * kursdiagrammet (ANA-14), så signalen och linjen aldrig kan ge olika besked.
+     */
     private fun trendSignal(today: LocalDate, priceHistory: List<FundPrice>, currentNav: Double): TrendSignal? {
-        val cutoffEpochDay = today.minusDays(SMA_WINDOW_DAYS).toEpochDay()
-        if (priceHistory.none { it.epochDay <= cutoffEpochDay }) return null
-        val windowPrices = priceHistory.filter { it.epochDay in cutoffEpochDay..today.toEpochDay() }
-        if (windowPrices.isEmpty()) return null
-
-        val sma = windowPrices.map { it.nav }.average()
+        val sma = MovingAverageCalc.averageAt(
+            points = priceHistory.map { it.epochDay to it.nav },
+            epochDay = today.toEpochDay(),
+            windowDays = SMA_WINDOW_DAYS,
+        ) ?: return null
         val level = if (currentNav < sma) SignalLevel.GUL else SignalLevel.GRON
         return TrendSignal(level)
     }

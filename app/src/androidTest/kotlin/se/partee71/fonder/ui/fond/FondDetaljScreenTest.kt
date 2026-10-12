@@ -16,6 +16,7 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -173,6 +174,27 @@ class FondDetaljScreenTest {
         }
 
         composeRule.onNodeWithText("Första köp 2024-03-15 · Inköpsvärde 500,00 kr", substring = true).assertExists()
+    }
+
+    @Test
+    fun visar_200_dagarssnittet_i_kursdiagrammet_nar_historiken_racker() {
+        // ANA-14: snittet räknas ur hela historiken, så också förvalda 1 mån har en snittlinje.
+        val history = (0L..250L).map { FundPrice(fundId = "SHB0000442", epochDay = 20_000 + it, nav = 100.0 + it) }
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(
+                    state = FondDetaljUiState(
+                        loading = false,
+                        fundName = "Fond A",
+                        prices = history.sortedByDescending { it.epochDay },
+                        movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }),
+                        analysis = null,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("200-dagarssnitt").performScrollTo().assertExists()
     }
 
     @Test

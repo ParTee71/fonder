@@ -225,6 +225,27 @@ class FondDetaljViewModelTest {
     }
 
     @Test
+    fun `levererar 200-dagarssnittet ur hela historiken, och inget nar historiken ar for kort (ANA-14)`() = runTest(dispatcher) {
+        // 250 dagars kurser, osorterade som från en cache: snittet börjar dag 200 (första dagen
+        // med ett helt fönster bakom sig) och ligger i stigande ordning.
+        history.value = (0L..250L).reversed().map { FundPrice(fundId = fund.fundId, epochDay = it, nav = 100.0 + it, currency = "SEK") }
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals((200L..250L).toList(), state.movingAverage.map { it.first })
+            // Dag 250: medel av dag 50 … 250 → NAV 150 … 350 = 250.
+            assertEquals(250.0, state.movingAverage.last().second, 1e-9)
+
+            history.value = history.value.filter { it.epochDay >= 100 }
+            do state = awaitItem() while (state.prices.size != 151)
+            assertEquals(emptyList<Pair<Long, Double>>(), state.movingAverage)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `purchaseEpochDays innehaller bara kop, inte salj, utan dubbletter`() = runTest(dispatcher) {
         val sell = Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = 250, shares = 1.0, pricePerShare = 100.0)
         transactionsForFund.value = listOf(

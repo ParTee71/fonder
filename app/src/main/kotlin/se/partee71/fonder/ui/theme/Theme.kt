@@ -96,4 +96,9 @@ object ChartSeriesColors {
     val candidate: Color
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.secondary
+
+    /** 200-dagarssnittet (ANA-14) — dämpat `onSurfaceVariant` och prickat, så det varken förväxlas med kursen eller jämförelsen. */
+    val movingAverage: Color
+        @Composable @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.onSurfaceVariant
 }
