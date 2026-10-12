@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.diagram
 
+import com.patrykandpatrick.vico.compose.cartesian.data.LineCartesianLayerModel
 import com.patrykandpatrick.vico.compose.common.data.MutableExtraStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -56,5 +57,20 @@ class FundLineChartTest {
         assertTrue("nollinjen ska inte tvingas in", minY > 0.0)
         assertEquals(0.025, minY, 1e-9)
         assertEquals(0.085, maxY, 1e-9)
+    }
+
+    @Test
+    fun `y-intervallet rymmer snittet nar det ligger utanfor kursens min-max`() {
+        // ANA-14: kursen har rört sig mellan 380 och 390 kr, snittet ligger kvar på 360 — samma
+        // lager, så intervallet räknas över båda och snittlinjen klipps inte bort.
+        val price = (0L until 10L).map { it to 380.0 + it }
+        val average = (0L until 10L).map { it to 360.0 }
+        val layer = chartModel(listOf(price, average)).models.single() as LineCartesianLayerModel
+
+        assertEquals(360.0, layer.minY, 1e-9)
+        assertEquals(389.0, layer.maxY, 1e-9)
+        val minY = PriceRangeProvider.getMinY(layer.minY, layer.maxY, extraStore)
+        val maxY = PriceRangeProvider.getMaxY(layer.minY, layer.maxY, extraStore)
+        assertTrue("snittet ska ligga inom y-axeln", minY < 360.0 && maxY > 389.0)
     }
 }

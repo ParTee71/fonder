@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.diagram
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +75,7 @@ import se.partee71.fonder.ui.components.ConnectedChoiceButton
 import se.partee71.fonder.ui.components.ConnectedChoiceSpacing
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.ChartSeriesColors
+import se.partee71.fonder.ui.theme.MonoAmountStyle
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -134,6 +139,13 @@ const val CHART_PERIOD_ROW_TEST_TAG = "chart_period_row"
  *   [points] innan de indexeras.
  * @param valueAxis vad y-värdena betyder — kronor (NAV) eller procent (avkastning). Se
  *   [ChartValueAxis]; i procentläge indexeras serierna aldrig.
+ * @param movingAverage 200-dagarssnittet (ANA-14, [se.partee71.fonder.domain.usecase.MovingAverageCalc])
+ *   för [points], räknat ur **hela** historiken — beskärs här till den valda periodens fönster,
+ *   så också en kort period får en snittlinje från sin första punkt. Ritas prickat i
+ *   [ChartSeriesColors.movingAverage] utan yta, med en teckenförklaring som visar senaste kurs och
+ *   senaste snitt. Bara för en ensam kurva i kronor: med [comparisonSeries] eller i procentläge
+ *   ignoreras den. `null` (förval) eller en serie utan punkter i perioden ritar ingen linje och
+ *   ingen förklaring (ANA-4-principen).
  */
 @Composable
 fun FundLineChart(
@@ -142,6 +154,7 @@ fun FundLineChart(
     primaryLabel: String? = null,
     comparisonSeries: List<ChartSeries> = emptyList(),
     valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
+    movingAverage: List<Pair<Long, Double>>? = null,
     working: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -174,6 +187,16 @@ fun FundLineChart(
         }
     }
     val primaryPoints = normalized.series.firstOrNull().orEmpty()
+    // Snittet hör bara till en ensam kurva i kronor: i ett indexerat eller nollställt läge hade
+    // det haft fel skala, och bredvid en jämförelse vore det en tredje kurva utan namn i bilden.
+    val windowedAverage = remember(windowedPoints, movingAverage, comparisonSeries, valueAxis) {
+        val from = windowedPoints.minOfOrNull { it.first }
+        if (movingAverage == null || from == null || comparisonSeries.isNotEmpty() || valueAxis != ChartValueAxis.KRONOR) {
+            emptyList()
+        } else {
+            movingAverage.filter { it.first >= from }
+        }
+    }
     val markerEpochDays = remember(primaryPoints, purchaseEpochDays) {
         PurchaseMarkerFilter.apply(primaryPoints, purchaseEpochDays)
     }
@@ -185,13 +208,10 @@ fun FundLineChart(
     // Modellen byggs synkront i kompositionen (som i Dagboken) i stället för via
     // CartesianChartModelProducer, som räknar på en annan tråd: diagrammet ritas då i samma
     // bildruta som datan kommer, och skärmdumpstesterna slipper vänta på en bakgrundstråd.
-    val model = remember(visibleSeries) {
+    val showMovingAverage = visibleSeries.size == 1 && windowedAverage.isNotEmpty()
+    val model = remember(visibleSeries, windowedAverage, showMovingAverage) {
         visibleSeries.takeIf { it.isNotEmpty() }?.let { lines ->
-            CartesianChartModel(
-                LineCartesianLayerModel.build {
-                    lines.forEach { (points, _) -> series(x = points.map { it.first }, y = points.map { it.second }) }
-                },
-            )
+            chartModel(lines.map { (points, _) -> points } + if (showMovingAverage) listOf(windowedAverage) else emptyList())
         }
     }
 
@@ -224,13 +244,19 @@ fun FundLineChart(
         // tom i det udda fallet att bara en jämförelseserie har data (annars kraschade min/max).
         else -> {
             val described = visibleSeries.first().first
-            stringResource(
+            val base = stringResource(
                 R.string.format_fond_chart_description,
                 stringResource(periodLabelRes(period)),
                 described.size,
                 MoneyFormat.kr(described.minOf { it.second }),
                 MoneyFormat.kr(described.maxOf { it.second }),
             )
+            // Snittlinjen nämns med sitt senaste värde (ANA-14) — linjen får inte bara finnas i bilden (UI-3).
+            if (showMovingAverage) {
+                stringResource(R.string.format_fond_chart_description_with_average, base, MoneyFormat.kr(windowedAverage.last().second))
+            } else {
+                base
+            }
         }
     }
 
@@ -250,7 +276,11 @@ fun FundLineChart(
             }
         }
         val purchaseMarker = rememberPurchaseMarker()
-        val lineProvider = rememberSeriesLineProvider(seriesColors, areaUnderPrimary = visibleSeries.size == 1)
+        val lineProvider = rememberSeriesLineProvider(
+            seriesColors,
+            areaUnderPrimary = visibleSeries.size == 1,
+            movingAverageSecond = showMovingAverage,
+        )
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
         // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
         // (helt andra) datavolym.
@@ -286,10 +316,33 @@ fun FundLineChart(
         } }
         if (visibleSeries.size > 1) {
             ChartLegend(
-                labels = visibleSeries.map { (_, label) -> label },
-                colors = seriesColors,
+                entries = visibleSeries.mapIndexed { index, (_, label) ->
+                    LegendEntry(label = label, color = seriesColors[index % seriesColors.size])
+                },
                 indexed = normalized.indexed,
                 partial = normalized.partial,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        } else if (showMovingAverage) {
+            // Kurs och snitt med sina linjesymboler och senaste värden (ANA-14) — symbolen visar
+            // vilken linje som är vilken, beloppen gör förklaringen läsbar utan att peka i diagrammet.
+            ChartLegend(
+                entries = listOf(
+                    LegendEntry(
+                        label = stringResource(R.string.fond_chart_legend_price),
+                        color = seriesColors[0],
+                        symbol = LegendSymbol.LINE,
+                        value = MoneyFormat.kr(visibleSeries.first().first.last().second),
+                    ),
+                    LegendEntry(
+                        label = stringResource(R.string.fond_chart_legend_moving_average),
+                        color = ChartSeriesColors.movingAverage,
+                        symbol = LegendSymbol.DOTTED_LINE,
+                        value = MoneyFormat.kr(windowedAverage.last().second),
+                    ),
+                ),
+                indexed = false,
+                partial = false,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
@@ -333,9 +386,16 @@ private fun seriesColors(): List<Color> =
  * @param areaUnderPrimary tonar ytan under en ensam kurva i `primaryContainer` (UI-12). I en
  *   jämförelse utelämnas ytan: den skulle skugga den andra kurvan och få serierna att se olika
  *   viktiga ut.
+ * @param movingAverageSecond andra serien är 200-dagarssnittet (ANA-14), inte en jämförelse: den
+ *   ritas då prickad i [ChartSeriesColors.movingAverage], utan yta — skild från kursen (heldragen
+ *   med yta) och från jämförelsen (streckad koppar).
  */
 @Composable
-private fun rememberSeriesLineProvider(colors: List<Color>, areaUnderPrimary: Boolean): LineCartesianLayer.LineProvider {
+private fun rememberSeriesLineProvider(
+    colors: List<Color>,
+    areaUnderPrimary: Boolean,
+    movingAverageSecond: Boolean = false,
+): LineCartesianLayer.LineProvider {
     val areaColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = AREA_ALPHA)
     val primary = LineCartesianLayer.rememberLine(
         fill = LineCartesianLayer.LineFill.single(Fill(colors[0])),
@@ -346,34 +406,56 @@ private fun rememberSeriesLineProvider(colors: List<Color>, areaUnderPrimary: Bo
         fill = LineCartesianLayer.LineFill.single(Fill(colors[1])),
         stroke = LineCartesianLayer.LineStroke.Dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP),
     )
-    return LineCartesianLayer.LineProvider.series(primary, comparison)
+    val movingAverage = LineCartesianLayer.rememberLine(
+        fill = LineCartesianLayer.LineFill.single(Fill(ChartSeriesColors.movingAverage)),
+        stroke = LineCartesianLayer.LineStroke.Dashed(
+            thickness = MOVING_AVERAGE_THICKNESS,
+            cap = StrokeCap.Round,
+            dashLength = 0.dp,
+            gapLength = MOVING_AVERAGE_DOT_PITCH,
+        ),
+    )
+    return LineCartesianLayer.LineProvider.series(primary, if (movingAverageSecond) movingAverage else comparison)
 }
+
+/** Symbolen före en rad i [ChartLegend]: färgprick (förval, jämförelsen) eller linjens eget streck. */
+internal enum class LegendSymbol { DOT, LINE, DOTTED_LINE }
+
+/** En rad i [ChartLegend] — [value] (t.ex. senaste kurs) högerställs med tabulära siffror; null = inget värde. */
+internal data class LegendEntry(
+    val label: String,
+    val color: Color,
+    val symbol: LegendSymbol = LegendSymbol.DOT,
+    val value: String? = null,
+)
 
 /**
  * Teckenförklaring för en jämförelse (ANA-11) — färgprick **plus** fondnamn, aldrig färgen
  * ensam (UI-3). Säger också rakt ut att skalan är ett index och, när kandidatens historik är
  * kortare än perioden, att jämförelsen bara täcker den gemensamma delen (samma
  * markera-hellre-än-gissa-princip som HEM-2/ANA-4).
+ *
+ * Samma förklaring används för kurs och 200-dagarssnitt (ANA-14): då med linjesymboler
+ * ([LegendSymbol]) och senaste värdet högerställt per rad. Förvalen (prick, inget värde)
+ * bevarar jämförelsens utseende.
  */
 @Composable
 private fun ChartLegend(
-    labels: List<String>,
-    colors: List<Color>,
+    entries: List<LegendEntry>,
     indexed: Boolean,
     partial: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        labels.forEachIndexed { index, label ->
+        entries.forEach { entry ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
-                Box(
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(colors[index % colors.size]),
-                )
-                Text(label, style = MaterialTheme.typography.bodySmall)
+                LegendSymbolMark(entry.symbol, entry.color, modifier = Modifier.padding(end = 8.dp))
+                if (entry.value == null) {
+                    Text(entry.label, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text(entry.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text(entry.value, style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall))
+                }
             }
         }
         if (indexed) {
@@ -392,6 +474,48 @@ private fun ChartLegend(
         }
     }
 }
+
+/** Ritar [LegendSymbol] — linjerna med samma tjocklek och prickavstånd som i diagrammet. */
+@Composable
+private fun LegendSymbolMark(symbol: LegendSymbol, color: Color, modifier: Modifier = Modifier) {
+    when (symbol) {
+        LegendSymbol.DOT -> Box(
+            modifier = modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        LegendSymbol.LINE, LegendSymbol.DOTTED_LINE -> Canvas(modifier = modifier.size(width = LEGEND_LINE_WIDTH, height = 10.dp)) {
+            val y = size.height / 2
+            val thickness = if (symbol == LegendSymbol.LINE) LEGEND_PRICE_THICKNESS.toPx() else MOVING_AVERAGE_THICKNESS.toPx()
+            val dots = if (symbol == LegendSymbol.DOTTED_LINE) {
+                PathEffect.dashPathEffect(floatArrayOf(0f, MOVING_AVERAGE_DOT_PITCH.toPx()))
+            } else {
+                null
+            }
+            drawLine(
+                color = color,
+                start = Offset(thickness / 2, y),
+                end = Offset(size.width - thickness / 2, y),
+                strokeWidth = thickness,
+                cap = StrokeCap.Round,
+                pathEffect = dots,
+            )
+        }
+    }
+}
+
+/**
+ * Diagrammodellen för de serier som ritas, i ordning (kurs, sedan jämförelser eller snitt).
+ * Alla serier ligger i samma lager, så y-intervallet ([PriceRangeProvider]) räknas över dem
+ * tillsammans — ett snitt utanför kursens min/max får alltså plats (ANA-14).
+ */
+internal fun chartModel(lines: List<List<Pair<Long, Double>>>): CartesianChartModel =
+    CartesianChartModel(
+        LineCartesianLayerModel.build {
+            lines.forEach { points -> series(x = points.map { it.first }, y = points.map { it.second }) }
+        },
+    )
 
 /** Etikett för en diagramperiod — delad mellan chipparna och diagrammets semantik. */
 private fun periodLabelRes(period: ChartPeriodFilter.Period): Int = when (period) {
@@ -499,3 +623,11 @@ private object DateValueFormatter : CartesianValueFormatter {
 
 private val COMPARISON_DASH = 6.dp
 private val COMPARISON_GAP = 4.dp
+
+/** Snittlinjen (ANA-14): runda prickar ~2 dp med ~5 dp luft emellan (avståndet räknas mellan prickarnas mitt). */
+private val MOVING_AVERAGE_THICKNESS = 2.dp
+private val MOVING_AVERAGE_DOT_PITCH = 7.dp
+
+/** Teckenförklaringens linjesymboler: längd och kurslinjens tjocklek (Vicos förvalda linje). */
+private val LEGEND_LINE_WIDTH = 18.dp
+private val LEGEND_PRICE_THICKNESS = 2.dp

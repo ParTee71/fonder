@@ -154,6 +154,9 @@
     <string name="fond_isin_suggested_body">Föreslaget ISIN utifrån fondens namn — kontrollera innan du sparar.</string>
     <string name="fond_chart_description_empty">Kursdiagram utan data för vald period</string>
     <string name="format_fond_chart_description">Kursdiagram, %1$s, %2$d kurspunkter mellan %3$s och %4$s</string>
+    <string name="format_fond_chart_description_with_average">%1$s, 200-dagarssnitt %2$s</string>
+    <string name="fond_chart_legend_price">Kurs</string>
+    <string name="fond_chart_legend_moving_average">200-dagarssnitt</string>
     <string name="fond_chart_period_1man">1 mån</string>
     <string name="fond_chart_period_3man">3 mån</string>
     <string name="fond_chart_period_1ar">1 år</string>

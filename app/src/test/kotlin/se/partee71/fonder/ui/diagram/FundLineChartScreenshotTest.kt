@@ -5,6 +5,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
 import java.time.LocalDate
@@ -12,7 +13,8 @@ import kotlin.math.sin
 
 /**
  * Skärmdumpar ljust + mörkt av [FundLineChart] (UI-12, skill diagram): en ensam kurva med tonad
- * yta och köpmarkörer i koppar, och en jämförelse utan yta. Påhittad kurshistorik.
+ * yta och köpmarkörer i koppar, en jämförelse utan yta, och en kurva med prickat 200-dagarssnitt
+ * och dess teckenförklaring (ANA-14). Påhittad kurshistorik.
  */
 @RunWith(RobolectricTestRunner::class)
 class FundLineChartScreenshotTest {
@@ -39,5 +41,13 @@ class FundLineChartScreenshotTest {
             primaryLabel = "Global Indexfond A",
             comparisonSeries = listOf(ChartSeries("Tillväxtmarknad Bred", series(120.0, -0.2))),
         )
+    }
+
+    @Test
+    fun `kurva med 200-dagarssnitt`() = composeRule.captureLightAndDark("FundLineChart_movingAverage", ready = { isDrawn() }) {
+        // Ett års påhittade kurser som stiger från ~330 till ~390 kr; diagrammet visar sista
+        // månaden, snittet räknas ur hela året och ligger därför under kursen.
+        val history = (0L until 365L).map { day -> (end - 364 + day) to 330.0 + 0.16 * day + 6 * sin(day / 5.0) }
+        FundLineChart(points = history, movingAverage = MovingAverageCalc.series(history))
     }
 }

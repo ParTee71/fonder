@@ -207,6 +207,25 @@ class FundAnalysisCalcTest {
     }
 
     @Test
+    fun `S2 raknar snittet over kalenderfonstret till idag, kurser fore fonstret ingar inte`() {
+        // Regression för utbrytningen till MovingAverageCalc (ANA-14): samma fönster som förut —
+        // kurser i [idag − 200, idag], och en kurs på eller före fönstrets start krävs.
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
+        // 201 dagar gammal toppkurs ligger utanför fönstret: snittet är (100 + 100 + 110) / 3 ≈ 103,3
+        // och dagens 110 ligger över det. Hade toppen räknats in hade S2 blivit gul.
+        val history = listOf(price(201, 1000.0), price(200, 100.0), price(100, 100.0), price(0, 110.0))
+
+        val trend = FundAnalysisCalc.analyze(today, holding, history, today.minusYears(1), 1100.0, null)!!.trend!!
+
+        assertEquals(FundAnalysisCalc.SignalLevel.GRON, trend.level)
+        assertEquals(
+            310.0 / 3,
+            MovingAverageCalc.averageAt(history.map { it.epochDay to it.nav }, today.toEpochDay())!!,
+            1e-9,
+        )
+    }
+
+    @Test
     fun `S3 momentum - minst 5 procentenheter samre an portfoljsnittet ger gul`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
         val history = listOf(price(100, 100.0), price(0, 90.0)) // -10 % senaste 3 mån

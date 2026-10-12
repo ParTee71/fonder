@@ -38,6 +38,7 @@ import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.CheaperAlternatives
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -51,6 +52,13 @@ data class FondDetaljUiState(
     val isin: String? = null,
     val suggestedIsin: String? = null,
     val prices: List<FundPrice> = emptyList(),
+    /**
+     * 200-dagarssnittet (epochDay, NAV) för varje kurspunkt där historiken räcker, i stigande
+     * ordning (ANA-14, [MovingAverageCalc]) — räknat ur hela den laddade historiken, inte ur
+     * diagrammets valda period, så diagrammet bara behöver beskära den. Tom = historiken räcker
+     * inte, ingen snittlinje (ANA-4).
+     */
+    val movingAverage: List<Pair<Long, Double>> = emptyList(),
     /** Första köp-datum och kvarvarande (FIFO) inköpsvärde — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
     val firstPurchaseEpochDay: Long? = null,
     val netInvested: Double? = null,
@@ -280,6 +288,7 @@ class FondDetaljViewModel @Inject constructor(
                 isin = fund?.isin,
                 suggestedIsin = snapshot.suggestedIsin,
                 prices = history.sortedByDescending { it.epochDay },
+                movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }),
                 firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
                 netInvested = holding?.netInvested,
                 purchaseEpochDays = snapshot.purchaseEpochDays,

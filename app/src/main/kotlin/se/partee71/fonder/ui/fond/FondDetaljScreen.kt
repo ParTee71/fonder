@@ -149,6 +149,7 @@ fun FondDetaljContent(
                             FundLineChart(
                                 points = chartPoints,
                                 purchaseEpochDays = state.purchaseEpochDays,
+                                movingAverage = state.movingAverage,
                                 working = state.chartWorking,
                                 modifier = Modifier.padding(top = 16.dp),
                             )
