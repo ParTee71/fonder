@@ -179,7 +179,7 @@ data/
 │                 SuggestionDismissalRepository (avstådda bytesförslag per fondpar, HEM-14)
 └── room/         AppDatabase (v16) · entities (inkl. FxRateEntity, FundMetadataEntity, SwitchWatchEntity,
                   SuggestionDismissalEntity) · daos (inkl. FxRateDao, FundMetadataDao, SwitchWatchDao, SuggestionDismissalDao)
-di/               Hilt-moduler (AppModule, NetworkModule, RepositoryModule)
+di/               Hilt-moduler (AppModule, StorageModule – Room-filen och DataStore, NetworkModule, RepositoryModule)
 domain/
 ├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding · RiskProfile/RiskProfileAnswers (#68)
@@ -223,7 +223,9 @@ ui/
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
 │                 sälj och köp, ANA-12/ANA-13, #114)
-├── navigation/   AppNavigation · Screen · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
+├── navigation/   AppNavigation (Navigation 3: NavDisplay, en dekorerad stack per flik) · AppBackStack (stack per
+│                 flik, sparas över rotation och processdöd) · AppKeys (@Serializable NavKey per skärm) · Screen ·
+│                 Transitions · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
 ├── components/   Delade komponenter (EmptyState, SelectField, DateField, PeriodRow, AnalysisStatusBanner/StatusDot,
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
 │                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)

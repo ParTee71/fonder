@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,24 +12,24 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavHostController
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.beslut.BeslutScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
@@ -57,8 +58,8 @@ import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
 
 /**
- * Appens navigering: skalet ([AppNavigationShell]) med Fonders skärmar. Körstatusen för chromets
- * bakgrundsindikator (NAV-6) hämtas här, så att skalet går att testa utan Hilt.
+ * Appens navigering: skalet ([AppNavigationShell]) med Fonders skärmar ([fonderEntries]). Körstatusen
+ * för chromets bakgrundsindikator (NAV-6) hämtas här, så att skalet går att testa utan Hilt.
  */
 @Composable
 fun AppNavigation() {
@@ -69,67 +70,65 @@ fun AppNavigation() {
 
     // Engångsbegäran från Översiktens påminnelse: Inställningar skrollar fram säkerhetskopieringen
     // och kvitterar. Sparad så den överlever rotation mellan trycket och skrollningen.
-    var scrollSettingsToBackup by rememberSaveable { mutableStateOf(false) }
+    val scrollSettingsToBackup = rememberSaveable { mutableStateOf(false) }
+    val backStack = rememberAppBackStack()
+    val entries = remember(backStack) { fonderEntries(backStack, scrollSettingsToBackup) }
 
-    AppNavigationShell(isWorkerRunning = isRunning, beslutBadgeCount = beslutBadgeCount) { navController ->
-        fonderDestinations(
-            navController = navController,
-            scrollSettingsToBackup = scrollSettingsToBackup,
-            onScrollSettingsToBackupChange = { scrollSettingsToBackup = it },
-        )
-    }
+    AppNavigationShell(
+        isWorkerRunning = isRunning,
+        beslutBadgeCount = beslutBadgeCount,
+        backStack = backStack,
+        entryProvider = entries,
+    )
 }
 
 /**
- * Hur en flik öppnas (NAV-7) — flikraden och Översiktens "Att besluta" landar i samma flikstack. Översikt ligger alltid underst, så bakåt från en annan flik går till Översikt, och
- * varje fliks stack sparas och återställs när man byter flik.
- */
-fun NavHostController.navigateToTab(screen: Screen) {
-    navigate(screen.route) {
-        popUpTo(Screen.START.route) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
-/** Inställningar ovanpå Översikt (NAV-7) — en skärm i stacken, inte en flik. */
-fun NavHostController.navigateToSettings() {
-    navigate(Routes.SETTINGS) { launchSingleTop = true }
-}
-
-/**
- * Skalet runt [NavHost] (NAV-7, NAV-8, UI-14): på en flik en stor rubrik överst
+ * Skalet runt `NavDisplay` (NAV-7, NAV-8, UI-14): på en flik en stor rubrik överst
  * ([AppTabHeading]), den flytande flikraden ([AppFloatingToolbar]) och plusmenyn ([AppFabMenu])
  * längs nederkanten; på en skärm djupare i stacken i stället en topprad med bakåtpil
  * ([AppTopBar]) och varken flikrad eller plusmeny. [beslutBadgeCount] är kopparmärket på Beslut
- * (NAV-9) – 0 ritar inget. [destinations] bygger grafen – i appen [fonderDestinations], i
- * testerna enkla ersättare.
+ * (NAV-9) – 0 ritar inget. [entryProvider] ger skärmarna – i appen [fonderEntries], i testerna
+ * enkla ersättare.
+ *
+ * Varje fliks stack dekoreras för sig (sparat tillstånd och ViewModels per post), så en flik som
+ * lämnas via flikraden behåller sina skärmar tills man kommer tillbaka; [AppBackStack] släpper dem
+ * när fliken lämnas med bakåt.
  */
 @Composable
 fun AppNavigationShell(
     isWorkerRunning: Boolean,
     beslutBadgeCount: Int = 0,
-    navController: NavHostController = rememberNavController(),
-    destinations: NavGraphBuilder.(NavHostController) -> Unit,
+    backStack: AppBackStack = rememberAppBackStack(),
+    entryProvider: (AppKey) -> NavEntry<AppKey>,
 ) {
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
-    val currentTab = Screen.forRoute(currentRoute)
+    val currentKey = backStack.current
+    val currentTab = Screen.forKey(currentKey)
 
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    // Menyn hör till flikarna: lämnas fliken (även via systemets bakåt) stängs den.
-    // Före första kompositionen av grafen är rutten null; då rörs inte menyn (överlever rotation, UI-9).
-    LaunchedEffect(currentRoute) { if (currentRoute != null && currentTab == null) fabMenuExpanded = false }
+    // Menyn hör till flikarna: lämnas fliken (även via systemets bakåt) stängs den. Efter en
+    // rotation återställs stacken innan effekten körs, så en öppen meny på en flik står kvar (UI-9).
+    LaunchedEffect(currentKey) { if (currentTab == null) fabMenuExpanded = false }
+
+    val decorators = listOf(
+        rememberSaveableStateHolderNavEntryDecorator<AppKey>(),
+        rememberViewModelStoreNavEntryDecorator<AppKey>(),
+    )
+    val decoratedStacks = Screen.entries.associateWith { tab ->
+        rememberDecoratedNavEntries(backStack.stack(tab), decorators, entryProvider)
+    }
+    val shownEntries = Screen.entries
+        .filter { it == Screen.START || it == backStack.currentTab }
+        .flatMap { decoratedStacks.getValue(it) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
                 if (currentTab != null) {
-                    TabHeading(currentTab, isWorkerRunning, navController)
+                    TabHeading(currentTab, isWorkerRunning, backStack)
                 } else {
                     // Varje skärm djupare i stacken har rubrik och bakåtpil (UI-8, issue #78).
-                    titleResFor(currentRoute)?.let { title ->
-                        AppTopBar(title = stringResource(title), onBack = { navController.popBackStack() }) {
+                    titleResFor(currentKey)?.let { title ->
+                        AppTopBar(title = stringResource(title), onBack = { backStack.pop() }) {
                             WorkerStatusIcon(isRunning = isWorkerRunning)
                         }
                     }
@@ -161,38 +160,46 @@ fun AppNavigationShell(
                         AppFloatingToolbar(
                             tabs = tabs,
                             selectedIndex = Screen.entries.indexOf(currentTab),
-                            onSelect = { index -> navController.navigateToTab(Screen.entries[index]) },
+                            onSelect = { index -> backStack.select(Screen.entries[index]) },
                         )
                     }
                 }
             },
         ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = Screen.START.route,
+            NavDisplay(
+                entries = shownEntries,
                 // imePadding på ett ställe i stället för per skärm (regel 4): appen kör
                 // enableEdgeToEdge, och Scaffolds standardinsets är bara systemBars — tangentbordet
                 // låg därför **över** transaktionsformulärets Spara-knapp, ISIN-fältet i Fonddetalj
                 // och sökfältet i Fondsök. `adjustResize` räcker inte edge-to-edge på API 30+, där
                 // IME är en inset appen själv måste konsumera (issue #78).
                 modifier = Modifier.padding(innerPadding).imePadding(),
-            ) {
-                destinations(navController)
-            }
+                transitionSpec = Transitions.forward,
+                popTransitionSpec = Transitions.back,
+                predictivePopTransitionSpec = Transitions.predictiveBack,
+                onBack = { backStack.pop() },
+            )
+            // Bakåt stänger en öppen plusmeny i stället för att lämna fliken – menyns enda bakåthanterare
+            // (AppFabMenu får handleBack = false). Den senast registrerade hanteraren tas först, och
+            // NavDisplays registreras i Scaffolds subkomposition, alltså efter allt i skalets egen
+            // komposition – även efter en rotation. Därför ligger den här efter NavDisplay, i samma
+            // subkomposition, och inte i AppFabMenu.
+            BackHandler(enabled = fabMenuExpanded && currentTab != null) { fabMenuExpanded = false }
         }
         if (currentTab != null) {
             AppFabMenu(
                 expanded = fabMenuExpanded,
                 onExpandedChange = { fabMenuExpanded = it },
                 items = listOf(
-                    AppFabMenuItem(stringResource(R.string.transaktioner_add), { navController.navigate(Routes.TRANSACTION_FORM) }),
-                    AppFabMenuItem(stringResource(R.string.fab_import_orders), { navController.navigate(Routes.IMPORT_ORDERS) }),
-                    AppFabMenuItem(stringResource(R.string.fab_import_holdings), { navController.navigate(Routes.IMPORT_HOLDINGS) }),
-                    AppFabMenuItem(stringResource(R.string.fab_watch_fund), { navController.navigate(Routes.FUND_SEARCH) }),
+                    AppFabMenuItem(stringResource(R.string.transaktioner_add), { backStack.push(TransactionFormKey) }),
+                    AppFabMenuItem(stringResource(R.string.fab_import_orders), { backStack.push(ImportOrdersKey) }),
+                    AppFabMenuItem(stringResource(R.string.fab_import_holdings), { backStack.push(ImportHoldingsKey) }),
+                    AppFabMenuItem(stringResource(R.string.fab_watch_fund), { backStack.push(FundSearchKey) }),
                 ),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding(),
+                handleBack = false,
             )
         }
     }
@@ -207,14 +214,14 @@ private val TOOLBAR_HALF_HEIGHT = 32.dp
  * deras realiserade resultat står i Händelsers lista (SLD-1, NAV-5).
  */
 @Composable
-private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, navController: NavHostController) {
+private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, backStack: AppBackStack) {
     AppTabHeading(title = stringResource(tab.labelRes)) {
         WorkerStatusIcon(isRunning = isWorkerRunning)
         when (tab) {
             Screen.Oversikt -> AppIconButton(
                 icon = Icons.Outlined.Settings,
                 contentDescription = stringResource(R.string.nav_settings),
-                onClick = { navController.navigateToSettings() },
+                onClick = { backStack.push(SettingsKey) },
                 variant = AppIconButtonVariant.Tonal,
             )
             Screen.Innehav, Screen.Beslut, Screen.Handelser -> Unit
@@ -222,109 +229,107 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, navController: Nav
     }
 }
 
-/** Fonders skärmar: de fyra flikarna och alla skärmar djupare i stacken, med sina rutter och argument. */
-fun NavGraphBuilder.fonderDestinations(
-    navController: NavHostController,
-    scrollSettingsToBackup: Boolean,
-    onScrollSettingsToBackupChange: (Boolean) -> Unit,
-) {
-    composable(Screen.Oversikt.route) {
+/**
+ * Fonders skärmar: de fyra flikarna och alla skärmar djupare i stacken, en per nyckel. En skärm som
+ * stänger sig själv gör det med `popIfTop(key)`, så att ett andra anrop inte stänger skärmen under.
+ * [scrollSettingsToBackup] läses när Inställningar ritas, inte när posten skapas, så kvitteringen
+ * slår igenom direkt.
+ */
+fun fonderEntries(
+    backStack: AppBackStack,
+    scrollSettingsToBackup: MutableState<Boolean>,
+): (AppKey) -> NavEntry<AppKey> = entryProvider {
+    entry<OversiktKey> {
         HemScreen(
-            onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) },
-            onOpenBeslut = { navController.navigateToTab(Screen.Beslut) },
+            onFundClick = { fundId -> backStack.push(FondDetaljKey(fundId)) },
+            onOpenBeslut = { backStack.select(Screen.Beslut) },
             onOpenBackup = {
-                onScrollSettingsToBackupChange(true)
-                navController.navigateToSettings()
+                scrollSettingsToBackup.value = true
+                backStack.push(SettingsKey)
             },
         )
     }
-    composable(Screen.Innehav.route) {
-        PortfoljScreen(onFundClick = { fundId -> navController.navigate(Routes.fond(fundId)) })
+    entry<InnehavKey> {
+        PortfoljScreen(onFundClick = { fundId -> backStack.push(FondDetaljKey(fundId)) })
     }
-    composable(Screen.Beslut.route) {
+    entry<BeslutKey> {
         BeslutScreen(
-            onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
-            onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) { launchSingleTop = true } },
-            onOpenFacit = { navController.navigate(Routes.FACIT) { launchSingleTop = true } },
+            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
+            onOpenRiskProfile = { backStack.push(RiskProfileKey) },
+            onOpenFacit = { backStack.push(FacitKey) },
         )
     }
     // Facit (SET-5) — en skärm i stacken med bakåtpil, från Beslut och från Inställningar (NAV-9).
-    composable(Routes.FACIT) {
+    entry<FacitKey> {
         FacitScreen()
     }
-    composable(Screen.Handelser.route) {
+    entry<HandelserKey> {
         TransaktionerScreen(
-            onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
         )
     }
-    composable(Routes.SETTINGS) {
+    entry<SettingsKey> {
         SettingsScreen(
-            onImportHoldings = { navController.navigate(Routes.IMPORT_HOLDINGS) },
-            onImportOrders = { navController.navigate(Routes.IMPORT_ORDERS) },
-            onOpenRiskProfile = { navController.navigate(Routes.RISK_PROFILE) },
-            onOpenFacit = { navController.navigate(Routes.FACIT) { launchSingleTop = true } },
-            onOpenBenchmarkPicker = { navController.navigate(Routes.BENCHMARK_PICKER) },
-            scrollToBackup = scrollSettingsToBackup,
-            onScrolledToBackup = { onScrollSettingsToBackupChange(false) },
+            onImportHoldings = { backStack.push(ImportHoldingsKey) },
+            onImportOrders = { backStack.push(ImportOrdersKey) },
+            onOpenRiskProfile = { backStack.push(RiskProfileKey) },
+            onOpenFacit = { backStack.push(FacitKey) },
+            onOpenBenchmarkPicker = { backStack.push(BenchmarkPickerKey) },
+            scrollToBackup = scrollSettingsToBackup.value,
+            onScrolledToBackup = { scrollSettingsToBackup.value = false },
         )
     }
-    composable(
-        route = Routes.FOND,
-        arguments = listOf(navArgument("fundId") { type = NavType.StringType }),
-    ) {
+    entry<FondDetaljKey> { key ->
         FondDetaljScreen(
-            onOpenSwitchWatch = { watchId -> navController.navigate(Routes.switchWatch(watchId)) },
+            fundId = key.fundId,
+            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
         )
     }
-    composable(Routes.FUND_SEARCH) {
+    entry<FundSearchKey> {
         FundSearchScreen()
     }
-    composable(Routes.TRANSACTION_FORM) {
-        TransactionFormScreen(onSaved = { navController.popBackStack() })
+    entry<TransactionFormKey> { key ->
+        TransactionFormScreen(onSaved = { backStack.popIfTop(key) })
     }
-    composable(Routes.IMPORT_HOLDINGS) {
-        ImportHoldingsScreen(onDone = { navController.popBackStack() })
+    entry<ImportHoldingsKey> { key ->
+        ImportHoldingsScreen(onDone = { backStack.popIfTop(key) })
     }
-    composable(Routes.IMPORT_ORDERS) {
-        ImportOrdersScreen(onDone = { navController.popBackStack() })
+    entry<ImportOrdersKey> { key ->
+        ImportOrdersScreen(onDone = { backStack.popIfTop(key) })
     }
-    composable(Routes.RISK_PROFILE) {
-        RiskProfilScreen(onSaved = { navController.popBackStack() })
+    entry<RiskProfileKey> { key ->
+        RiskProfilScreen(onSaved = { backStack.popIfTop(key) })
     }
     // Fondsök i valläge (HEM-10, issue #102): samma skärm, men träffraden pekar ut en
     // jämförelsefond i stället för att lägga till den i bevakningen. Valet skrivs av
     // SettingsViewModel, som redan äger inställningarna — fondsök förblir en sökskärm.
-    composable(Routes.BENCHMARK_PICKER) {
+    entry<BenchmarkPickerKey> { key ->
         val settingsViewModel: SettingsViewModel = hiltViewModel()
         FundSearchScreen(
             onPickFund = { fund ->
                 settingsViewModel.chooseBenchmark(fund)
-                navController.popBackStack()
+                backStack.popIfTop(key)
             },
         )
     }
-    composable(
-        route = Routes.SWITCH_WATCH,
-        arguments = listOf(navArgument("watchId") { type = NavType.StringType }),
-    ) { entry ->
-        val watchId = entry.arguments?.getString("watchId")?.toLongOrNull()
+    entry<SwitchWatchKey> { key ->
         SwitchWatchScreen(
-            onAddCandidate = { watchId?.let { navController.navigate(Routes.switchWatchPicker(it)) } },
-            onClosed = { navController.popBackStack() },
+            watchId = key.watchId,
+            onAddCandidate = { backStack.push(SwitchWatchPickerKey(key.watchId)) },
+            onClosed = { backStack.popIfTop(key) },
         )
     }
     // Fondsök i valläge (ANA-13): samma skärm som HEM-10:s referensval, men träffen
     // läggs till som bevakat alternativ i stället för att bli ny bevakad fond. Egen
-    // ViewModel för rutten — den får bevakningens id ur sina egna navigationsargument.
-    composable(
-        route = Routes.SWITCH_WATCH_PICKER,
-        arguments = listOf(navArgument("watchId") { type = NavType.StringType }),
-    ) {
-        val switchWatchViewModel: SwitchWatchViewModel = hiltViewModel()
+    // ViewModel för posten — den får bevakningens id ur sin nyckel.
+    entry<SwitchWatchPickerKey> { key ->
+        val switchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> {
+            it.create(key.watchId)
+        }
         FundSearchScreen(
             onPickFund = { fund ->
                 switchWatchViewModel.onAddCandidate(fund)
-                navController.popBackStack()
+                backStack.popIfTop(key)
             },
         )
     }

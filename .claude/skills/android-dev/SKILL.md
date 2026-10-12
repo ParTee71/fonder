@@ -118,8 +118,15 @@ Compose → ViewModel → Repository → Data sources
 
 ## Navigation
 
-- Use `navigation-compose 2.8+` with type-safe `@Serializable` route objects (not string routes).
-- Single Activity host (`MainActivity`). Navigate via `NavController` — never from the ViewModel directly.
+- **Jetpack Navigation 3** (`navigation3-runtime`/`-ui`): one `@Serializable` `AppKey : NavKey` per screen in
+  `ui/navigation/AppKeys.kt`; arguments live in the key (`FondDetaljKey(fundId)`), never in string routes.
+- `AppBackStack` (`ui/navigation/`) holds one stack per tab and is saved with `rememberSaveable` (rotation and process
+  death). Screens navigate through callbacks wired in `fonderEntries` (`push`, `select`, `popIfTop(key)` when a screen
+  closes itself) — never from the ViewModel. Transitions only in `ui/navigation/Transitions.kt`.
+- ViewModels are scoped per entry (`lifecycle-viewmodel-navigation3`). A ViewModel that needs a navigation argument
+  takes it with assisted injection — `@HiltViewModel(assistedFactory = …)` + `hiltViewModel<VM, VM.Factory> { it.create(id) }`
+  (`androidx.hilt.lifecycle.viewmodel.compose`) — not from `SavedStateHandle`.
+- Single Activity host (`MainActivity`).
 - For one-time navigation/UI events from the ViewModel, use `Channel` + `receiveAsFlow()` for exactly-once delivery.
 
 ## Background Work

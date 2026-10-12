@@ -47,7 +47,9 @@ object AppFabMenuDefaults {
  * primärbehållaren.
  *
  * Ett val stänger menyn innan det utförs, och bakåt stänger en öppen meny i stället för att lämna
- * skärmen. Knappen läses "Lägg till" respektive "Stäng meny" med utfällt-läget som tillstånd.
+ * skärmen. [handleBack] = `false` när anroparen själv stänger menyn vid bakåt – `AppNavigationShell`
+ * gör det, eftersom dess hanterare måste registreras efter `NavDisplay`s för att tas före.
+ * Knappen läses "Lägg till" respektive "Stäng meny" med utfällt-läget som tillstånd.
  * Stateless: [expanded] hoistas till anroparen (sparas med `rememberSaveable` där, UI-9).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -57,12 +59,13 @@ fun AppFabMenu(
     onExpandedChange: (Boolean) -> Unit,
     items: List<AppFabMenuItem>,
     modifier: Modifier = Modifier,
+    handleBack: Boolean = true,
 ) {
     val openDescription = stringResource(R.string.fab_menu_open)
     val closeDescription = stringResource(R.string.fab_menu_close)
     val expandedState = stringResource(R.string.state_expanded)
     val collapsedState = stringResource(R.string.state_collapsed)
-    BackHandler(enabled = expanded) { onExpandedChange(false) }
+    BackHandler(enabled = handleBack && expanded) { onExpandedChange(false) }
     FloatingActionButtonMenu(
         expanded = expanded,
         modifier = modifier,

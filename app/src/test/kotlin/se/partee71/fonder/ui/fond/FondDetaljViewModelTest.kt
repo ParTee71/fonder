@@ -3,7 +3,6 @@ package se.partee71.fonder.ui.fond
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -171,7 +170,7 @@ class FondDetaljViewModelTest {
     private val fakeDismissalRepo = FakeSuggestionDismissalRepository()
 
     private fun viewModel() = FondDetaljViewModel(
-        SavedStateHandle(mapOf("fundId" to fund.fundId)),
+        fund.fundId,
         fakeTransactionRepo,
         fakePriceRepo,
         fakeFundMetadataRepo,

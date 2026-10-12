@@ -37,7 +37,7 @@ class PreferencesRepository @Inject constructor(
     /**
      * Alla läsningar går via det här flödet i stället för `dataStore.data` direkt: en oläsbar
      * inställningsfil ska ge **standardvärden**, inte ett undantag som kastas in i varje
-     * prenumerant. `ReplaceFileCorruptionHandler` i `AppModule` täcker en trasig fil på disk,
+     * prenumerant. `ReplaceFileCorruptionHandler` i `StorageModule` täcker en trasig fil på disk,
      * men ett I/O-fel vid läsningen (t.ex. under en Auto Backup-återställning) kan fortfarande
      * nå hit — och `MainViewModel.themeMode` samlas i `viewModelScope`, där ett undantag
      * annars låser appen på splash-skärmen.

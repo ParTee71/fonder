@@ -1,8 +1,10 @@
 package se.partee71.fonder.ui.fond
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -44,7 +46,6 @@ import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.startFromSuggestion
 import java.time.LocalDate
-import javax.inject.Inject
 
 data class FondDetaljUiState(
     val loading: Boolean = true,
@@ -203,9 +204,10 @@ private const val COMPARISON_HISTORY_YEARS = 3L
  * ([onSuggestionExpanded]) — inte vid öppning, eftersom varje kandidat kostar ett nätverksanrop.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@HiltViewModel
-class FondDetaljViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+@HiltViewModel(assistedFactory = FondDetaljViewModel.Factory::class)
+class FondDetaljViewModel @AssistedInject constructor(
+    /** Fonden skärmen visar — ur navigationsnyckeln (`FondDetaljKey`). */
+    @Assisted private val fundId: String,
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
@@ -214,8 +216,6 @@ class FondDetaljViewModel @Inject constructor(
     private val switchWatchRepository: SwitchWatchRepository,
     suggestionDismissalRepository: SuggestionDismissalRepository,
 ) : ViewModel() {
-
-    private val fundId: String = checkNotNull(savedStateHandle["fundId"])
 
     /** Se [FondDetaljUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
     private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
@@ -565,5 +565,11 @@ class FondDetaljViewModel @Inject constructor(
             suggestedIsin.value = null
             earliestPurchase.first()?.let { since -> fundPriceRepository.refreshSince(fundId, trimmed, since) }
         }
+    }
+
+    /** Skapar ViewModeln för en given fond (assisted injection, `hiltViewModel` med `creationCallback`). */
+    @AssistedFactory
+    interface Factory {
+        fun create(fundId: String): FondDetaljViewModel
     }
 }

@@ -1,8 +1,10 @@
 package se.partee71.fonder.ui.bytesfonster
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +27,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
-import javax.inject.Inject
 
 /** Kurshistoriken för en bevakad kandidat — samma tre lägen som ANA-11:s jämförelse. */
 sealed interface CandidateHistory {
@@ -121,17 +122,16 @@ data class SwitchWatchUiState(
  * Appen **utför aldrig ett byte**: "Köpte den här" registrerar vad användaren gjort, precis som
  * kvitteringen i bytesplanen (SET-5).
  */
-@HiltViewModel
-class SwitchWatchViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+@HiltViewModel(assistedFactory = SwitchWatchViewModel.Factory::class)
+class SwitchWatchViewModel @AssistedInject constructor(
+    /** Bevakningen skärmen visar — ur navigationsnyckeln (`SwitchWatchKey`/`SwitchWatchPickerKey`). */
+    @Assisted private val watchId: Long,
     private val switchWatchRepository: SwitchWatchRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
 ) : ViewModel() {
-
-    private val watchId: Long = checkNotNull(savedStateHandle.get<String>(ARG_WATCH_ID)).toLong()
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
     private val histories = MutableStateFlow<Map<String, CandidateHistory>>(emptyMap())
@@ -415,10 +415,13 @@ class SwitchWatchViewModel @Inject constructor(
         message.value = null
     }
 
-    companion object {
-        /** Navigationsargumentets namn — delat med [se.partee71.fonder.ui.navigation.Routes]. */
-        const val ARG_WATCH_ID = "watchId"
+    /** Skapar ViewModeln för en given bevakning (assisted injection, `hiltViewModel` med `creationCallback`). */
+    @AssistedFactory
+    interface Factory {
+        fun create(watchId: Long): SwitchWatchViewModel
+    }
 
+    companion object {
         /**
          * Hur långt tillbaka säljfondens kurva hämtas ur cachen. Samma horisont som ANA-11:s
          * jämförelse: täcker diagrammets längsta fasta period med marginal, utan att dra in en

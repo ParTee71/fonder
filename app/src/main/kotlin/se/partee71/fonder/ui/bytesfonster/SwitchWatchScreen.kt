@@ -19,7 +19,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -54,10 +54,11 @@ const val SWITCH_WATCH_LIST_TEST_TAG = "switch_watch_list"
  */
 @Composable
 fun SwitchWatchScreen(
+    watchId: Long,
     onAddCandidate: () -> Unit,
     onClosed: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SwitchWatchViewModel = hiltViewModel(),
+    viewModel: SwitchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> { it.create(watchId) },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
