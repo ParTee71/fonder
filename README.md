@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.66.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.66.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -134,6 +134,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.66.1 | **Navigation 3** (TP-2): navigeringen bygger nu på Jetpack Navigation 3 med en egen bakåtstack per flik som överlever rotation och processdöd – samma flikar, bakåt och plusmeny som förut, ingen synlig ändring. Instrumenttest med Hilt bevisar Innehav → Fonddetalj och Beslut → Pågående byte på enhet (#139). |
 | 0.66.0 | **200-dagarssnitt i kursdiagrammet** (ANA-14, ANA-2): Fonddetaljs kursdiagram visar 200-dagarssnittet som en prickad linje, med en förklaring under diagrammet som visar senaste kurs och senaste snitt i kronor. Snittet är detsamma som säljsignalen S2 jämför mot och räknas ur hela historiken, så också 1 mån har en snittlinje. Räcker historiken inte visas ingen linje. |
 | 0.65.0 | **Resultatet på Beslut** (NAV-9, SET-5): raden "Hur gick det?" visar nu vad de förslag du följt har gett i kronor mot att ha behållit innehavet, färgat som vinst eller förlust, bredvid antalet ("Facit · 7 följda förslag  +4 210,00 kr"). Beloppet är samma som Facits rader "Genomförda" tillsammans. Utan mätbart resultat visas bara antalet. |
 | 0.64.0 | **Billigare alternativ på Beslut** (ANA-9, ANA-10, NAV-9, HEM-13, HEM-14): de billigare alternativen till dina fonder visas nu också på Beslut, under bytesplanen, ett kort per alternativ med fondparet, avgifterna och besparingen per år samt Följ och Avstå. Ett följt alternativ visar "Genomförd" och "Bevaka alternativ", ett avstått hamnar under "Avstådda (N)". Öppna alternativ räknas i flikens märke och i "Att besluta" ("2 bytesförslag · 1 billigare alternativ · 1 pågående byte"). Ett avstått förslag visas inte heller i Fonddetalj, som i stället säger hur många som avståtts. |
