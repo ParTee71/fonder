@@ -26,7 +26,7 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Compose-UI (skärmar och komponenter) | `app/src/androidTest/…/ui/**` | `createComposeRule` mot `*Content` | `instrumented-tests` |
 | WorkManager-schemaläggning | `app/src/androidTest/…/worker/` | `work-testing` | `instrumented-tests` |
 | Compose-UI i JVM | `app/src/test/…/ui/**` (först: `ui/components/EmptyStateTest.kt`) | Robolectric (`@RunWith(RobolectricTestRunner::class)`) + `createComposeRule`; SDK, mått och `Application` i `app/src/test/resources/robolectric.properties` | `android.yml` (`build-and-test`) |
-| Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `composeRule.captureLightAndDark(name) { … }`, ljust + mörkt – en per komponent i `ComponentScreenshotTest` och `FundLineChartScreenshotTest` | inte än: referenserna spelas in lokalt med `recordRoborazziDebug`, men `verifyRoborazziDebug` körs inte i CI (skill `ci-budget`) – anropen skriver inga bilder i en vanlig testkörning |
+| Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `composeRule.captureLightAndDark(name) { … }`, ljust + mörkt – en per komponent i `ComponentScreenshotTest` och `FundLineChartScreenshotTest` | `android.yml` (`build-and-test`): `verifyRoborazziDebug` – samma körning som enhetstesterna, jämför mot referenserna med 0,1 % pixeltolerans och fäller vid skillnad; diffbilderna som artifact `screenshot-diffs`. Se "Skärmdumpsreferenser" nedan |
 | Konsistens (regel 4) | `app/src/test/…/consistency/UiConsistencyTest.kt` mot hela `app/src/main` | Konsist + `ui-forbidden.txt`/`ui-allowlist.txt` | `android.yml` (`build-and-test`) |
 | Dubbelkod (regel 4) | hela `app/src` (`main`, `test`, `androidTest`) mot `config/cpd-baseline.txt` | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
 | Hooken `regel4-check` och baslinjeskriptet | `.claude/hooks/test/regel4-check.test.mjs` | `node --test` | `android.yml` (`changes`, varje PR) |
@@ -102,10 +102,30 @@ Saknad data ska ge "kunde inte beräknas", aldrig 0 eller ett tomt värde som se
 svar (ANA-4). Testa **den** skillnaden – att ett saknat NAV ger "ej utvärderat" och inte noll
 är precis den bugg som annars slinker igenom.
 
+## Skärmdumpsreferenser
+
+Referensbilderna i `app/src/test/screenshots/` är facit för `verifyRoborazziDebug`, som CI kör i
+stället för `testDebugUnitTest` (skill `ci-budget`). En vanlig `testDebugUnitTest` skriver och
+jämför inga bilder.
+
+- **Avsiktlig visuell ändring eller ny skärmdump:** `./gradlew :app:recordRoborazziDebug` lokalt
+  (Android SDK i sessionen), granska de ändrade bilderna i `git diff --stat
+  app/src/test/screenshots/` och checka in dem **i samma PR** som ändringen. Spela aldrig in för
+  att få en oavsiktlig diff grön – rätta koden.
+- **Rött i CI:** hämta artifacten `screenshot-diffs`; `<namn>_compare.png` visar referens, ny bild
+  och diff sida vid sida. Lokalt: `./gradlew :app:verifyRoborazziDebug`, bilderna hamnar i
+  `app/build/outputs/roborazzi/`.
+- **Tolerans:** 0,1 % av pixlarna (`CHANGE_THRESHOLD` i `testing/Screenshots.kt`, enda stället) –
+  för enstaka kantutjämnade pixlar mellan maskiner. Färg, form och avstånd fäller; ett enstaka
+  ändrat tecken i en helskärmsbild (~250 av 4,9 miljoner pixlar) gör det inte, så texter
+  kontrolleras i Compose-testerna. Höj inte toleransen för att få grönt – en bild som skiljer
+  mellan körningar är flaky (se nedan) och ska göras deterministisk (`animated`, `ready`).
+
 ## Innan du anser dig klar
 
 ```bash
-./gradlew :app:testDebugUnitTest               # enhetstester, Robolectric och UiConsistencyTest
+./gradlew :app:verifyRoborazziDebug            # som CI: enhetstester, Robolectric, UiConsistencyTest och skärmdumpsjämförelsen
+./gradlew :app:recordRoborazziDebug            # bara vid avsiktlig visuell ändring – checka in bilderna
 ./gradlew cpdCheck                             # copy-paste-detektor (regel 4)
 ./gradlew :app:compileDebugAndroidTestKotlin   # instrumenttester ska minst kompilera
 ./gradlew :app:connectedDebugAndroidTest       # kräver emulator/enhet
