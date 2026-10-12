@@ -114,6 +114,8 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ```bash
 ./gradlew :app:compileDebugKotlin            # kompilera
 ./gradlew :app:testDebugUnitTest             # enhetstester (JUnit/MockK/Turbine), Robolectric, UiConsistencyTest
+./gradlew :app:verifyRoborazziDebug          # samma tester + skärmdumpsjämförelse mot app/src/test/screenshots/ (som CI)
+./gradlew :app:recordRoborazziDebug          # spela in referenserna – bara vid avsiktlig visuell ändring, checka in bilderna
 ./gradlew :app:compileDebugAndroidTestKotlin # kompilera instrumenttester
 ./gradlew cpdCheck                           # copy-paste-detektor (regel 4)
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)

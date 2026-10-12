@@ -25,6 +25,9 @@ Före CI-etappen kostade varje PR-push ~17–20 minuter (`build-and-test` + `rel
 emulatorn i `instrumented.yml`, oavsett vad PR:en ändrade). Siffrorna ovan är uppskattningar –
 ersätt dem med uppmätta värden när de finns.
 
+**Skärmdumpsjämförelsen** (`verifyRoborazziDebug` i stället för `testDebugUnitTest`) lade
+inget jobb till och uppskattas till **+0–10 s** per kod-PR (se "När du lägger till något").
+
 **Verkstads-PR:en** lade till regel 4-kontrollerna och JVM-UI-testerna i de befintliga jobben –
 inga nya jobb. Uppskattat tillägg (varm cache): hooktestet ~2 s i `changes`; i `build-and-test`
 `cpdCheck` ~7 s (PMD CPD över ~270 filer, uppmätt lokalt), `UiConsistencyTest` (Konsist tolkar
@@ -42,7 +45,7 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 | Workflow · jobb | Trigger | Villkor | Steg |
 |---|---|---|---|
 | `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); hooktest `node --test .claude/hooks/test/*.test.mjs` (regel4-hooken, baslinjen i `ui-allowlist.txt`, hookkommandona); i PR `dorny/paths-filter@v3` med filtren `app` (`app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
-| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-java` 17, `gradle/actions/setup-gradle@v4` (cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `testDebugUnitTest` omfattar Robolectric-testerna och `UiConsistencyTest`; testrapport och CPD-rapport som artifact. Roborazzi spelar inte in och jämför inte här |
+| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-java` 17, `gradle/actions/setup-gradle@v4` (cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `verifyRoborazziDebug` kör `testDebugUnitTest` (alla enhetstester, Robolectric-testerna och `UiConsistencyTest`) **en gång** med skärmdumpsjämförelsen mot `app/src/test/screenshots/` påslagen (tolerans 0,1 % pixlar i `captureLightAndDark`); testrapport och CPD-rapport som artifact (`test-results`, `if: always()`), vid fel även diffbilderna (`screenshot-diffs`: `app/build/outputs/roborazzi/`, `app/build/test-results/roborazzi/`, `app/build/reports/roborazzi/`; `if: failure()`, 7 dagar) |
 | `android.yml` · `instrumented-tests` (timeout 18) | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | `setup-java` 17, `setup-gradle`, KVM, `reactivecircus/android-emulator-runner@v2` (API 34, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
 | `android.yml` · `ci-ok` (timeout 2) | som ovan | alltid (`if: always()`) | grönt när alla jobb ovan blivit `success` eller `skipped` – **enda obligatoriska statuskravet** |
 | `quality.yml` · `quality` (timeout 20) | `schedule` måndagar 04:23 UTC, `workflow_dispatch` | schemalagd körning hoppas över om senaste gröna `quality.yml` gällde samma commit | `setup-java` 17, `setup-gradle` (bara läsning), `:app:assembleRelease` osignerat och sedan `:app:lintDebug` (separata anrop – i samma anrop krockade debug- och release-KSP om Room-schemat) (R8 + resursskrympning); lintrapport som artifact vid fel |
@@ -84,11 +87,13 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 - **Ny testnivå eller nytt verktyg** (som Robolectric, Konsist och `cpdCheck` i verkstads-PR:en):
   lägg det i JVM-jobbet, aldrig i emulatorjobbet om det inte kräver enhet. Snabba kontroller utan
   JDK (som hooktestet) läggs som steg i `changes`, inte som eget jobb.
-- **Skärmdumpar (Roborazzi):** `verifyRoborazziDebug` körs inte i PR-flödet än – referensbilderna
-  kan inte spelas in i en session utan Android SDK. Förslaget är en `workflow_dispatch`-workflow
-  som kör `recordRoborazziDebug` på en gren och committar `app/src/test/screenshots/` dit (eller
-  laddar upp dem som artifact); därefter läggs `verifyRoborazziDebug` i samma Gradle-anrop som
-  ovan. Byggs i ett eget issue.
+- **Skärmdumpar (Roborazzi):** `verifyRoborazziDebug` ersätter `testDebugUnitTest` i
+  `build-and-test` – samma testtask, så testerna körs en gång och kostnaden är i stort sett
+  oförändrad (lokalt, 2 kärnor: `testDebugUnitTest` ~61 s mot `verifyRoborazziDebug` ~55–68 s
+  för 1 090 tester och 74 bilder; uppskattat **+0–10 s** per kod-PR, plus uppladdningen av
+  diffbilderna bara vid fel). `testDebugUnitTest` behöver inte stå med i anropet – det är redan
+  med; ett separat anrop utan verifiering skulle däremot köra testerna en gång till. Referenserna spelas in lokalt (skill `testing-strategy`) och
+  checkas in; en inspelningsworkflow behövs inte så länge sessionen har Android SDK.
 - **Över budget:** eget issue med mätning och förslag – aldrig en tyst höjning av timeouten.
 - **Lokalt före push** (skill `testing-strategy`): kör de tasks ändringen berör. Lokala körningar
   kostar inga Actions-minuter; en röd CI-runda gör det.

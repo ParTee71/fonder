@@ -21,6 +21,9 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
+import com.github.takahirom.roborazzi.RoborazziOptions
+import com.github.takahirom.roborazzi.ThresholdValidator
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import se.partee71.fonder.ui.theme.FonderTheme
@@ -28,6 +31,21 @@ import se.partee71.fonder.ui.theme.FonderTheme
 private const val SCREENSHOT_TAG = "screenshot_root"
 private const val ANIMATION_STEP_MS = 400L
 private const val READY_TIMEOUT_MS = 10_000L
+
+/**
+ * Andel pixlar som får skilja innan `verifyRoborazziDebug` fäller: 0,1 %. Robolectrics
+ * NATIVE-rendering är bitidentisk mellan körningar på samma maskin (verifierat två gånger i rad),
+ * och färgnyanser under Roborazzis avståndsgräns räknas redan inte som skillnad – marginalen är
+ * till för enstaka kantutjämnade pixlar om CI-maskinens rendering skiljer sig något. En riktig
+ * ändring (färg, form, avstånd, rad som flyttar) berör långt fler pixlar: i den minsta bilden
+ * (1170 × 131) tolereras ~150 pixlar, i den största helskärmsbilden (1170 × 4200) ~4 900. Ett
+ * enstaka ändrat tecken i en helskärmsbild (uppmätt ~250 pixlar) passerar alltså – texter
+ * fångas av Compose-testernas textkontroller, skärmdumparna vaktar utseendet.
+ */
+private const val CHANGE_THRESHOLD = 0.001f
+private val screenshotOptions = RoborazziOptions(
+    compareOptions = RoborazziOptions.CompareOptions(resultValidator = ThresholdValidator(CHANGE_THRESHOLD)),
+)
 
 /**
  * Tar skärmdumpar i ljust och mörkt tema: `<name>_light.png` och `<name>_dark.png` i Roborazzis
@@ -52,8 +70,10 @@ private const val READY_TIMEOUT_MS = 10_000L
  * ett eget fönster (dialoger, menyer), som inte finns i nodens bild.
  *
  * Gör ingenting i en vanlig `testDebugUnitTest` – bilderna skrivs bara av `recordRoborazziDebug`
- * och jämförs bara av `verifyRoborazziDebug` (skill ci-budget).
+ * och jämförs av `verifyRoborazziDebug`, som CI-jobbet `build-and-test` kör (skill ci-budget),
+ * med toleransen [CHANGE_THRESHOLD].
  */
+@OptIn(ExperimentalRoborazziApi::class) // captureScreenRoboImage med RoborazziOptions
 fun ComposeContentTestRule.captureLightAndDark(
     name: String,
     screen: Boolean = false,
@@ -84,7 +104,11 @@ fun ComposeContentTestRule.captureLightAndDark(
         if (animated) mainClock.advanceTimeBy(ANIMATION_STEP_MS) else waitForIdle()
         if (ready != null) waitUntil(READY_TIMEOUT_MS) { ready() }
         val file = "${name}_$suffix.png"
-        if (screen) captureScreenRoboImage(file) else onNodeWithTag(SCREENSHOT_TAG).captureRoboImage(file)
+        if (screen) {
+            captureScreenRoboImage(file, screenshotOptions)
+        } else {
+            onNodeWithTag(SCREENSHOT_TAG).captureRoboImage(file, screenshotOptions)
+        }
     }
 }
 

@@ -118,7 +118,7 @@ jobs:
             echo "|---|---|"
             echo "| nyckelgrind | true |"
             echo "| hooktest (regel 4) | true |"
-            echo "| kompilering, enhetstester, Robolectric, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
+            echo "| kompilering, enhetstester, Robolectric, skärmdumpsjämförelse, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
             echo "| instrumenttester på emulator (\`instrumented-tests\`) | $instrumented |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -154,15 +154,17 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Ett enda Gradle-anrop (projektet konfigureras en gång). testDebugUnitTest kompilerar
-      # enhetstesterna och kör även Robolectric-testerna och UiConsistencyTest (Konsist);
+      # Ett enda Gradle-anrop (projektet konfigureras en gång). verifyRoborazziDebug kör
+      # testDebugUnitTest – alla enhetstester, Robolectric-testerna och UiConsistencyTest (Konsist) –
+      # med skärmdumpsjämförelsen påslagen, så testerna körs en gång och en skärmdump som skiljer
+      # från referensen i app/src/test/screenshots/ fäller bygget (tolerans i testing/Screenshots.kt).
       # cpdCheck är copy-paste-detektorn (regel 4). androidTest-koden kompileras här så att ett
       # kompileringsfel syns innan emulatorn startar.
-      - name: Kompilera och kör enhetstester
+      - name: Kompilera och kör enhetstester och skärmdumpsjämförelse
         env:
           LC_ALL: C.UTF-8
           LANG: C.UTF-8
-        run: ./gradlew --continue :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :cpdCheck
+        run: ./gradlew --continue :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck
 
       - name: Upload test results
         if: always()
@@ -172,6 +174,21 @@ jobs:
           path: |
             app/build/reports/tests/testDebugUnitTest/
             build/reports/cpd/
+          if-no-files-found: ignore
+
+      # Vid en skärmdumpsdiff: bilderna (<namn>_compare.png med referens, ny bild och diff sida
+      # vid sida, samt <namn>_actual.png) och jämförelserapporten. Kort lagring – de behövs bara
+      # tills PR:en rättats eller referenserna spelats in på nytt.
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: |
+            app/build/outputs/roborazzi/
+            app/build/test-results/roborazzi/
+            app/build/reports/roborazzi/
+          retention-days: 7
           if-no-files-found: ignore
 
   # Emulatorkonfigurationen är oförändrad från den tidigare instrumented.yml. `needs` på
