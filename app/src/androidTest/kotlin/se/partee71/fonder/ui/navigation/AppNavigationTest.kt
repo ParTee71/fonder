@@ -4,14 +4,17 @@ import android.content.Context
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
@@ -33,6 +36,7 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.testing.NetworkGuard
+import se.partee71.fonder.ui.portfolj.PORTFOLJ_LIST_TEST_TAG
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -94,8 +98,11 @@ class AppNavigationTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             waitFor(hasContentDescription("Innehav"))
             composeRule.onNodeWithContentDescription("Innehav").performClick()
-            waitFor(hasText(FUND_NAME))
-            composeRule.onAllNodesWithText(FUND_NAME).onFirst().performScrollTo().performClick()
+            // Fondraden ligger i en LazyColumn under korten och komponeras inte förrän listan
+            // skrollats dit (issue #66) – skrolla listan till raden i stället för att vänta på den.
+            waitFor(hasTestTag(PORTFOLJ_LIST_TEST_TAG))
+            composeRule.onNodeWithTag(PORTFOLJ_LIST_TEST_TAG).performScrollToNode(hasText(FUND_NAME))
+            composeRule.onAllNodesWithText(FUND_NAME).onFirst().performClick()
 
             // Fonddetalj med topprad och bakåtpil. När övergången är klar är Innehav borta, så
             // fondens namn kommer från FondDetaljViewModel – som fick fundId ur nyckeln.
