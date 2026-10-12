@@ -30,7 +30,7 @@
 | ID | Krav |
 |----|------|
 | TP-1 | Android, **minSdk 30**, targetSdk 35, **compileSdk 37** (höjt för Vico-beroendet, issue #7, och för biblioteken i den tekniska uppgraderingen: Kotlin 2.4, AGP 9, Compose BOM 2026.09, material3 1.5), JDK 17. Paket `se.partee71.fonder`. |
-| TP-2 | UI byggt med **Jetpack Compose** + Material 3. |
+| TP-2 | UI byggt med **Jetpack Compose** + Material 3; navigeringen med **Jetpack Navigation 3** – en bakåtstack per flik (NAV-7) som överlever rotation och processdöd. |
 | TP-3 | Arkitektur: **MVVM** med Hilt (DI), Repository-mönster, ViewModels med `StateFlow`. |
 | TP-4 | Lokal lagring i **Room** (`exportSchema = true`); inställningar i **DataStore (Preferences)**. |
 | TP-5 | Bakgrundsjobb via **WorkManager** (Hilt-integrerad worker): handelsdagsmedveten kursuppdatering för bevakade fonder — en billig launch-gate vid appstart plus en gles periodisk backstop (12h), båda gated av staleness (se TP-17, issue #27; ersätter den tidigare fasta 24h-periodiken). |

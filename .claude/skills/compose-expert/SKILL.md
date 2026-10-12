@@ -104,9 +104,9 @@ When helping with Compose code:
 
 This project uses:
 - **Material 3** with a warm "Sunrise Garden" palette (Amber, Rose, Emerald color tokens)
-- **Navigation Compose** with type-safe `@Serializable` routes
+- **Navigation 3** (`NavDisplay`, `@Serializable` `NavKey`s, one back stack per tab — see skill `android-dev`)
 - **MVVM** with `StateFlow<UiState>` + `collectAsStateWithLifecycle()`
-- **Hilt** for DI, `hiltViewModel()` in composables
+- **Hilt** for DI, `hiltViewModel()` (`androidx.hilt.lifecycle.viewmodel.compose`) in composables
 - **Coil** for image loading (`AsyncImage`)
 - **`collectAsState()`** — prefer `collectAsStateWithLifecycle()` for lifecycle safety
 

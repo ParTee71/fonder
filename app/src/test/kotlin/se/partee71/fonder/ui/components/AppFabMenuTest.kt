@@ -1,5 +1,7 @@
 package se.partee71.fonder.ui.components
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,7 +16,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -30,26 +32,60 @@ import se.partee71.fonder.ui.theme.FonderTheme
 /**
  * Den delade [AppFabMenu] (NAV-8, UI-14) i JVM: stängd visar den bara knappen ("Lägg till",
  * ihopfälld), ett tryck fäller ut valen och knappen blir "Stäng meny", och ett val stänger menyn
- * innan det utförs.
+ * innan det utförs. Bakåt stänger en öppen meny – utom med `handleBack = false`, då anroparen äger
+ * bakåt (navigeringsskalet).
  */
 @RunWith(RobolectricTestRunner::class)
 class AppFabMenuTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private val chosen = mutableListOf<String>()
 
     private fun items() = listOf("Ny transaktion", "Importera avräkningsnota", "Importera innehav", "Bevaka ny fond")
         .map { label -> AppFabMenuItem(label, { chosen += label }) }
 
-    private fun setMenu() = composeRule.setContent {
+    /** Bakåt som nådde anroparen (en hanterare under menyn) i stället för menyn. */
+    private var backsToCaller = 0
+
+    private fun setMenu(handleBack: Boolean = true) = composeRule.setContent {
+        // Anroparens egen hantering av bakåt – bara när menyn lämnar bakåt åt den.
+        if (!handleBack) BackHandler { backsToCaller++ }
         FonderTheme {
             var expanded by remember { mutableStateOf(false) }
             Box(Modifier.fillMaxWidth().height(500.dp), contentAlignment = Alignment.BottomEnd) {
-                AppFabMenu(expanded = expanded, onExpandedChange = { expanded = it }, items = items())
+                AppFabMenu(expanded = expanded, onExpandedChange = { expanded = it }, items = items(), handleBack = handleBack)
             }
         }
+    }
+
+    private fun pressBack() {
+        // Menyns bakåthanterare slås på i nästa komposition efter trycket – vänta in den först.
+        composeRule.waitForIdle()
+        composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+    }
+
+    @Test
+    fun `bakåt stänger en öppen meny`() {
+        setMenu()
+        composeRule.onNodeWithContentDescription("Lägg till").performClick()
+
+        pressBack()
+
+        composeRule.onNodeWithContentDescription("Lägg till").assertExists()
+        composeRule.onNodeWithText("Ny transaktion").assertDoesNotExist()
+    }
+
+    @Test
+    fun `utan handleBack lämnas bakåt åt anroparen`() {
+        setMenu(handleBack = false)
+        composeRule.onNodeWithContentDescription("Lägg till").performClick()
+
+        pressBack()
+
+        composeRule.onNodeWithContentDescription("Stäng meny").assertExists()
+        assertEquals(1, backsToCaller)
     }
 
     @Test

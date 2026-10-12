@@ -140,7 +140,7 @@ class PreferencesRepositoryTest {
     @Test
     fun `en korrupt installningsfil ger standardvarden i stallet for ett undantag`() = runTest {
         // Filen ingår i Android Auto Backup och kan komma trunkerad tillbaka vid en
-        // återställning. Utan `corruptionHandler` (AppModule) kastar `data` en
+        // återställning. Utan `corruptionHandler` (StorageModule) kastar `data` en
         // CorruptionException in i MainViewModel.themeMode, och eftersom MainActivity håller
         // kvar splash-skärmen tills temat lästs startade appen aldrig igen.
         val corruptFile = tempFolder.newFile("corrupt.preferences_pb")

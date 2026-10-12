@@ -1,6 +1,5 @@
 package se.partee71.fonder.ui.bytesfonster
 
-import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -146,7 +145,7 @@ class SwitchWatchViewModelTest {
     )
 
     private fun viewModel(watchId: Long) = SwitchWatchViewModel(
-        SavedStateHandle(mapOf(SwitchWatchViewModel.ARG_WATCH_ID to watchId.toString())),
+        watchId,
         switchWatchRepo,
         fakePriceRepo,
         metadataRepo,
