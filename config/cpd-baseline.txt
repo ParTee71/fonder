@@ -9,7 +9,6 @@ app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration1011Test.kt | a
 app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration78Test.kt | app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration89Test.kt
 app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration78Test.kt | app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration910Test.kt
 app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration89Test.kt | app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration910Test.kt
-app/src/androidTest/kotlin/se/partee71/fonder/ui/facit/FacitScreenTest.kt | app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitViewModel.kt
 app/src/androidTest/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreenTest.kt
 app/src/androidTest/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreenTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fond/FondDetaljViewModelTest.kt
 app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt | app/src/main/kotlin/se/partee71/fonder/ui/portfolj/PortfoljScreen.kt
