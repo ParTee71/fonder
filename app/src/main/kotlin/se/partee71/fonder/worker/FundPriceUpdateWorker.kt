@@ -658,7 +658,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          *
          * Skanningen körs efter varje avstående och ångrat avstående, alltså flera gånger per
          * dygn, och inspelningen är därför **per plan**: ett par som redan spelats in i dag
-         * **flyttas** till den nya körningen ([SuggestionRecordRepository.moveToBatch]) i stället
+         * **flyttas** till den nya körningen ([SuggestionRecordRepository.commitBatch]) i stället
          * för att spelas in igen — facit (SET-5) räknar varje råd en gång per dag, och den senaste
          * körningen är ändå komplett från `planIndex 0`. Bara nya par kostar ett NAV-uppslag. Ger
          * omräkningen en **tom** plan spelas inget in; i stället sätts
