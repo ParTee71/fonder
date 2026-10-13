@@ -19,6 +19,7 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.SwitchRows
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
@@ -47,7 +48,11 @@ data class BeslutUiState(
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [BeslutViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null,
 ) {
-    val isEmpty: Boolean get() = !loading && decisions.isEmpty
+    /** Listan "Byten" (BYT-4) — samma [SwitchRows] som "Att besluta" (HEM-13) och flikmärket räknar på. */
+    val switches: SwitchRows get() = decisions.switches
+
+    /** Inga byten väntar — listan är tom; rubrikraden, omräkningen, den hopfällda sektionen och Facit-raden står kvar. */
+    val isEmpty: Boolean get() = !loading && switches.isEmpty
 
     /**
      * Sant när en omräkning av bytesplanen (HEM-8, issue #88) över huvud taget kan ge något:
@@ -56,15 +61,16 @@ data class BeslutUiState(
      */
     val canRecomputeSwitchPlan: Boolean get() = riskProfile != null && accountType == AccountType.ISK_KF
 
-    // Per avsnitt, inte ett gemensamt "något kör" (NAV-6): ledaren i ett pågående byte vilar på
-    // kurserna, förslagen på bytesplanens skanning.
-    val switchWatchWorking: Boolean get() = loading || pricesWorking
-    val suggestionsWorking: Boolean get() = loading || switchPlanWorking
+    /**
+     * Listans väntesnurra (NAV-6): de sålda bytenas ledare vilar på kurserna, förslagen på
+     * bytesplanens skanning — en lista, en rubrik, en snurra för båda.
+     */
+    val switchesWorking: Boolean get() = loading || pricesWorking || switchPlanWorking
 }
 
 /**
- * Fliken **Beslut** (NAV-9) — det som väntar på användaren: pågående byten (ANA-12), bytesplanen
- * (HEM-8) och de billigare alternativen (ANA-9) med Följ och Avstå (HEM-14) — Följ navigerar till
+ * Fliken **Beslut** (NAV-9) — listan "Byten" (BYT-4): sålda byten (ANA-12), bytesplanen (HEM-8) och
+ * de billigare alternativen (ANA-9), ett byte per rad, med Registrera säljet och Avstå (HEM-14) — Registrera säljet navigerar till
  * säljformuläret ([se.partee71.fonder.ui.navigation.TransactionFormKey.follow]) och skriver
  * ingenting här — mot riskprofilen och
  * kontotypen, plus vägen till Facit (SET-5) med de följda rådens resultat ur [FacitSummary] — samma

@@ -29,6 +29,9 @@ import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
@@ -36,10 +39,11 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import java.time.LocalDate
 
 /**
- * Fliken Beslut (NAV-9) i JVM med Robolectric: rubrikraden mot riskprofilen, tomt läge, vägen till
- * Facit och skärmdumpar ljust + mörkt. Förslagens och bevakningarnas egna interaktioner testas
+ * Fliken Beslut (NAV-9) i JVM med Robolectric: rubrikraden mot riskprofilen, listan Byten (BYT-4)
+ * med tillstånd och beslut, tomt läge, vägen till Facit och skärmdumpar ljust + mörkt. Förslagens och bevakningarnas egna interaktioner testas
  * instrumenterat i `androidTest/…/ui/beslut/BeslutScreenTest` (flyttade från Hem).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -64,9 +68,41 @@ class BeslutScreenTest {
         buyFeePercent = 0.40,
     )
 
+    private val today = LocalDate.of(2026, 10, 13)
+
+    private val planRow1 = SwitchPlanResolver.Suggestion(
+        recordId = 11, planIndex = 0, sellIsin = "SE_TM", buyIsin = "SE_GI",
+        sellFundName = "Tillväxtmarknad Bred", buyFundName = "Global Indexfond A",
+        fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.9, switchValueKr = 300.0, inProgress = true,
+    )
+    private val planRow2 = SwitchPlanResolver.Suggestion(
+        recordId = 12, planIndex = 1, sellIsin = "SE_SB", buyIsin = "SE_RF",
+        sellFundName = "Sverige Småbolag", buyFundName = "Räntefond Kort",
+        fromLevel = 5, toLevel = 2, feeDeltaPercent = -1.05, switchValueKr = 12_500.0,
+    )
+    private val planRow3 = SwitchPlanResolver.Suggestion(
+        recordId = 13, planIndex = 2, sellIsin = "SE_EN", buyIsin = "SE_RB",
+        sellFundName = "Energi Norden", buyFundName = "Räntefond Bred",
+        fromLevel = 6, toLevel = 3, feeDeltaPercent = -0.4, switchValueKr = 4_000.0, followed = true,
+    )
+
+    /** Ett köpt och ett utgånget byte, stängda inom 14 dagar (BYT-4). */
+    private val closedWatches = listOf(
+        SwitchWatch(
+            id = 5, sellIsin = "SE_AMF", sellFundName = "Aktiefond Global", soldAtEpochDay = today.toEpochDay() - 9,
+            closedAtEpochDay = LocalDate.of(2026, 10, 7).toEpochDay(), closeReason = SwitchWatchCloseReason.KOPT, boughtIsin = "SE_GIX",
+            candidates = listOf(SwitchWatchCandidate(isin = "SE_GIX", name = "Global Indexnära")),
+        ),
+        SwitchWatch(
+            id = 6, sellIsin = "SE_NGS", sellFundName = "Global Stars", soldAtEpochDay = today.toEpochDay() - 20,
+            closedAtEpochDay = today.toEpochDay() - 5, closeReason = SwitchWatchCloseReason.UTGANGEN,
+        ),
+    )
+
     /**
-     * Mockupens läge: ett pågående byte, två förslag (ett med Följ/Avstå, ett kvitterat), ett billigare
-     * alternativ och sju följda i facit med deras resultat i kronor.
+     * Mockupens läge (BYT-4): ett sålt planbyte (planrad 1 ersatt av sin bevakning), ett föreslaget,
+     * ett kvitterat i Facit, ett billigare alternativ, och i den hopfällda sektionen ett köpt, ett
+     * utgånget och ett avstått byte; sju följda i facit med deras resultat i kronor.
      */
     private val full = BeslutUiState(
         loading = false,
@@ -77,32 +113,23 @@ class BeslutScreenTest {
         decisions = PendingDecisions(
             openWatches = listOf(
                 OpenSwitchWatch(
-                    watchId = 3, sellFundName = "Sverige Småbolag", daysWaiting = 2, candidateCount = 3,
-                    leaderName = "Global Indexfond A", leaderChangeFraction = 0.012,
+                    watchId = 3, sellFundName = "Tillväxtmarknad Bred", daysWaiting = 2, candidateCount = 3,
+                    leaderName = "Global Indexfond A", leaderChangeFraction = 0.018, proceedsKr = 18_400.0,
+                    sourceRecordId = 11, sourceKind = SuggestionKind.RISK_PLAN,
                 ),
             ),
-            switchPlan = listOf(
-                SwitchPlanResolver.Suggestion(
-                    recordId = 11, planIndex = 0, sellIsin = "SE_TM", buyIsin = "SE_GI",
-                    sellFundName = "Tillväxtmarknad Bred", buyFundName = "Global Indexfond A",
-                    fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.9, switchValueKr = 300.0,
-                ),
-                SwitchPlanResolver.Suggestion(
-                    recordId = 12, planIndex = 1, sellIsin = "SE_SB", buyIsin = "SE_RF",
-                    sellFundName = "Sverige Småbolag", buyFundName = "Räntefond Kort",
-                    fromLevel = 5, toLevel = 2, feeDeltaPercent = -0.2, switchValueKr = 450.0, followed = true,
-                ),
-            ),
+            switchPlan = listOf(planRow1, planRow2, planRow3),
             cheaperAlternatives = listOf(cheaper),
-        ),
+            dismissedSuggestions = listOf(planRow2.copy(recordId = 14, sellFundName = "Aktiefond Investmentbolag", buyFundName = "Zero")),
+        ).withSwitches(closedWatches, today),
     )
 
     /** Allt avstått (HEM-14), ett byte i planen och ett billigare alternativ: inget att besluta, men raden för att ångra finns kvar. */
     private val withDismissed = full.copy(
         decisions = PendingDecisions(
-            dismissedSuggestions = listOf(full.decisions.switchPlan.first()),
+            dismissedSuggestions = listOf(planRow2),
             dismissedCheaperAlternatives = listOf(cheaper),
-        ),
+        ).withSwitches(emptyList(), today),
     )
 
     @Test
@@ -130,7 +157,8 @@ class BeslutScreenTest {
             FonderTheme { BeslutContent(state = BeslutUiState(loading = false, followedCount = 1), onOpenFacit = { facit++ }) }
         }
 
-        composeRule.onNodeWithText("Inget att besluta just nu").assertIsDisplayed()
+        composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
+        composeRule.onNodeWithText("Byten").assertDoesNotExist()
         composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Facit · 1 följt förslag"))
         composeRule.onNodeWithText("Facit · 1 följt förslag").performClick()
 
@@ -160,22 +188,53 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun `avsnitten visas i mockupens ordning med facit sist`() {
+    fun `listan Byten visar ett byte per rad med tillstandschip i mockupens ordning`() {
         composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
 
-        composeRule.onNodeWithText("Pågående byte").assertIsDisplayed()
-        composeRule.onNodeWithText("Sverige Småbolag → Global Indexfond A").assertIsDisplayed()
-        // Lat lista: det som ligger under skärmkanten komponeras först när listan skrollats dit (UI-5).
-        listOf("Förslag", "Billigare alternativ", "Hur gick det?", "Facit · 7 följda förslag").forEach { text ->
-            composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText(text))
-            composeRule.onNodeWithText(text).assertIsDisplayed()
+        composeRule.onNodeWithText("Byten").assertIsDisplayed()
+        // Föreslaget (2) + Avgift (1) + Sålt (1); det kvitterade väntar inte.
+        composeRule.onNodeWithText("3 väntar på dig").assertIsDisplayed()
+        // Det sålda planbytet ersätter planrad 1 — ingen "1. Sälj Tillväxtmarknad Bred …" finns kvar.
+        composeRule.onAllNodesWithText("1. Sälj", substring = true).assertCountEquals(0)
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        // Varje rad är en nod (chip, ursprung, rubrik, underlag) — exakt textmatchning per del.
+        listOf(
+            "Sålt · dag 2 av 14",
+            "Bytesplan · byte 1",
+            "Tillväxtmarknad Bred → välj köpfond",
+            "${MoneyFormat.kr(18_400.0)} väntar på likviden · 3 bevakade alternativ",
+            "Bytesplan · byte 2",
+            "2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)",
+            "Sälj Sverige Småbolag → Köp Småbolag Index",
+            "Sparar ca ${MoneyFormat.kr(960.0)}/år · avgift 1,40 % → 0,40 %",
+            "Avslutade och avstådda (3)",
+            "Hur gick det?",
+        ).forEach { text ->
+            list.performScrollToNode(hasText(text))
+            composeRule.onAllNodesWithText(text).assertCountEquals(1)
         }
-        composeRule.onNodeWithText("Inget att besluta just nu").assertDoesNotExist()
+        // Chipen för förslagen: planens "Föreslaget" och det billigare alternativets "Avgift".
+        list.performScrollToNode(hasText("2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)"))
+        composeRule.onNode(hasText("2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)")).assert(hasText("Föreslaget"))
+        list.performScrollToNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index"))
+        composeRule.onNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index")).assert(hasText("Avgift"))
+        composeRule.onNodeWithText("Inga byten att besluta om").assertDoesNotExist()
     }
 
     @Test
-    fun `folj och avsta visas pa ett okvitterat forslag och anropar sina callbacks`() {
-        // HEM-14/BYT-2: "Följ" öppnar säljformuläret för förslaget, "Avstå" döljer paret.
+    fun `salt visar ledaren med tecken och oppnar bevakningen`() {
+        var opened: Long? = null
+        composeRule.setContent { FonderTheme { BeslutContent(state = full, onOpenSwitchWatch = { opened = it }) } }
+
+        composeRule.onNodeWithText("Bäst sedan säljdagen: Global Indexfond A ${MoneyFormat.percentSigned(0.018)}", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Öppna bevakningen: Tillväxtmarknad Bred").performClick()
+
+        assertEquals(3L, opened)
+    }
+
+    @Test
+    fun `registrera saljet och avsta visas pa ett oppet forslag och anropar sina callbacks`() {
+        // HEM-14/BYT-2: "Registrera säljet" öppnar säljformuläret för förslaget, "Avstå" döljer paret.
         var followed: SwitchPlanResolver.Suggestion? = null
         var dismissed: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
@@ -189,59 +248,62 @@ class BeslutScreenTest {
         }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A"))
-        composeRule.onNodeWithContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A").performClick()
-        composeRule.onNodeWithContentDescription("Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A").performClick()
-        // Bara det okvitterade förslaget har knapparna; det kvitterade (i Facit) erbjuder bevakningen.
-        list.performScrollToNode(hasText("Bevaka alternativ"))
-        composeRule.onAllNodesWithContentDescription("Följ: sälj Sverige Småbolag, köp Räntefond Kort").assertCountEquals(0)
+        list.performScrollToNode(hasContentDescription("Avstå: sälj Sverige Småbolag, köp Räntefond Kort"))
+        composeRule.onNodeWithContentDescription("Avstå: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
+        composeRule.onNodeWithContentDescription("Registrera säljet: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
+        // Det sålda bytet erbjuds inte att säljas igen (BYT-1).
+        composeRule.onAllNodesWithContentDescription("Registrera säljet: sälj Tillväxtmarknad Bred, köp Global Indexfond A").assertCountEquals(0)
 
-        assertEquals(11L, dismissed?.recordId)
-        assertEquals(11L, followed?.recordId)
+        assertEquals(12L, dismissed?.recordId)
+        assertEquals(12L, followed?.recordId)
     }
 
     @Test
-    fun `ett kvitterat forslag har ingen kvittering att bocka ur - den gors i Facit`() {
+    fun `ett kvitterat forslag erbjuder Bevaka alternativ i stallet for Registrera saljet`() {
         // FollowedToggleRow finns bara i Facit (SET-5) sedan Följ går via formuläret (BYT-2).
         var watched: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent { FonderTheme { BeslutContent(state = full, onStartSwitchWatch = { watched = it }) } }
 
         composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Bevaka alternativ"))
         composeRule.onAllNodesWithText("Genomförd").assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription("Registrera säljet: sälj Energi Norden, köp Räntefond Bred").assertCountEquals(0)
         composeRule.onNodeWithText("Bevaka alternativ").performClick()
 
-        assertEquals(12L, watched?.recordId)
+        assertEquals(13L, watched?.recordId)
     }
 
     @Test
-    fun `ett pagaende byte erbjuds inte Folj igen`() {
-        // BYT-1: raden är redan såld — Följ hade registrerat samma sälj en gång till.
-        val inProgress = full.copy(
-            decisions = full.decisions.copy(switchPlan = full.decisions.switchPlan.map { it.copy(followed = false, inProgress = it.recordId == 11L) }),
-        )
-        composeRule.setContent { FonderTheme { BeslutContent(state = inProgress) } }
+    fun `ett billigare alternativ har samma tva beslut som planen`() {
+        var followed: SwitchPlanResolver.Suggestion? = null
+        var dismissed: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent {
+            FonderTheme { BeslutContent(state = full, onFollow = { followed = it }, onDismissSuggestion = { dismissed = it }) }
+        }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A"))
-        composeRule.onAllNodesWithContentDescription("Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A").assertCountEquals(0)
-        list.performScrollToNode(hasContentDescription("Följ: sälj Sverige Småbolag, köp Räntefond Kort"))
+        list.performScrollToNode(hasContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index"))
+        composeRule.onNodeWithContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index").performClick()
+        composeRule.onNodeWithContentDescription("Registrera säljet: sälj Sverige Småbolag, köp Småbolag Index").performClick()
+
+        assertEquals(SuggestionKind.FEE, dismissed?.kind)
+        assertEquals(21L, followed?.recordId)
     }
 
     @Test
-    fun `avstadda forslag ligger sist och kan angras`() {
+    fun `avslutade och avstadda ligger hopfallda och avstadda kan angras`() {
         var undone: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
             FonderTheme { BeslutContent(state = withDismissed, onUndoDismissal = { undone = it }) }
         }
 
-        composeRule.onNodeWithText("Inget att besluta just nu").assertIsDisplayed()
-        // Båda sorterna i samma lista: planens byte och det billigare alternativet (ANA-9).
-        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Avstådda (2)"))
-        composeRule.onNodeWithText("Avstådda (2)").performClick()
-        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Sverige Småbolag 1,40 % → Småbolag Index 0,40 %"))
-        composeRule.onNodeWithText("1. Sälj Tillväxtmarknad Bred (nivå 6) → Köp Global Indexfond A (nivå 4)").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Ångra avstående: sälj Tillväxtmarknad Bred, köp Global Indexfond A").performClick()
-        assertEquals(11L, undone?.recordId)
+        composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        list.performScrollToNode(hasText("Avslutade och avstådda (2)"))
+        composeRule.onNodeWithText("Avslutade och avstådda (2)").performClick()
+        list.performScrollToNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index"))
+        composeRule.onAllNodesWithText("Avstått").assertCountEquals(2)
+        composeRule.onNodeWithContentDescription("Ångra avstående: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
+        assertEquals(12L, undone?.recordId)
 
         composeRule.onNodeWithContentDescription("Ångra avstående: sälj Sverige Småbolag, köp Småbolag Index").performClick()
         assertEquals(SuggestionKind.FEE, undone?.kind)
@@ -249,87 +311,32 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun `folj avsta och angra sager vilket fondpar de galler`() {
-        // UI-3: knapparna upprepas per kort med samma korta etikett — skärmläsaren ska höra paret.
-        val twoOpen = full.copy(
-            decisions = full.decisions.copy(
-                switchPlan = full.decisions.switchPlan.map { it.copy(followed = false) },
-                dismissedSuggestions = listOf(full.decisions.switchPlan.first()),
-            ),
-        )
-        composeRule.setContent { FonderTheme { BeslutContent(state = twoOpen) } }
-
-        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        listOf(
-            "Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A",
-            "Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A",
-            "Följ: sälj Sverige Småbolag, köp Räntefond Kort",
-            "Avstå: sälj Sverige Småbolag, köp Räntefond Kort",
-        ).forEach { label ->
-            list.performScrollToNode(hasContentDescription(label))
-            composeRule.onAllNodesWithContentDescription(label).assertCountEquals(1)
-        }
-
-        list.performScrollToNode(hasText("Avstådda (1)"))
-        composeRule.onNodeWithText("Avstådda (1)").performClick()
-        val undo = "Ångra avstående: sälj Tillväxtmarknad Bred, köp Global Indexfond A"
-        list.performScrollToNode(hasContentDescription(undo))
-        composeRule.onAllNodesWithContentDescription(undo).assertCountEquals(1)
-    }
-
-    @Test
-    fun `ett billigare alternativ visar fondparet avgifterna och besparingen med Folj och Avsta`() {
-        // ANA-9 som eget förslag, enligt mockupen — samma två beslut och samma etiketter som planen (UI-3).
-        var followed: SwitchPlanResolver.Suggestion? = null
-        var dismissed: SwitchPlanResolver.Suggestion? = null
-        composeRule.setContent {
-            FonderTheme {
-                BeslutContent(
-                    state = full,
-                    onFollow = { followed = it },
-                    onDismissSuggestion = { dismissed = it },
-                )
-            }
-        }
-
-        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasText("Sverige Småbolag 1,40 % → Småbolag Index 0,40 %"))
-        composeRule.onNodeWithText("Sverige Småbolag 1,40 % → Småbolag Index 0,40 %").assertIsDisplayed()
-        list.performScrollToNode(hasText("Sparar ca 960,00 kr/år"))
-        list.performScrollToNode(hasContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index"))
-        composeRule.onNodeWithContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index").performClick()
-        composeRule.onNodeWithContentDescription("Följ: sälj Sverige Småbolag, köp Småbolag Index").performClick()
-
-        assertEquals(SuggestionKind.FEE, dismissed?.kind)
-        assertEquals(21L, followed?.recordId)
-    }
-
-    @Test
-    fun `ett kvitterat billigare alternativ visar Bevaka alternativ som planen`() {
-        var watched: SwitchPlanResolver.Suggestion? = null
-        val followedCheaper = cheaper.copy(suggestion = cheaper.suggestion.copy(followed = true))
-        val state = full.copy(decisions = PendingDecisions(cheaperAlternatives = listOf(followedCheaper)))
-        composeRule.setContent { FonderTheme { BeslutContent(state = state, onStartSwitchWatch = { watched = it }) } }
-
-        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        composeRule.onAllNodesWithContentDescription("Följ: sälj Sverige Småbolag, köp Småbolag Index").assertCountEquals(0)
-        list.performScrollToNode(hasText("Bevaka alternativ"))
-        composeRule.onNodeWithText("Bevaka alternativ").performClick()
-
-        assertEquals(21L, watched?.recordId)
-    }
-
-    @Test
-    fun `utan avstadda forslag visas ingen avstadda-rad`() {
+    fun `avslutade byten visar kopt med datum och utganget utan angra`() {
         composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
 
-        composeRule.onNodeWithText("Avstådda", substring = true).assertDoesNotExist()
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        list.performScrollToNode(hasText("Avslutade och avstådda (3)"))
+        composeRule.onNodeWithText("Avslutade och avstådda (3)").performClick()
+        list.performScrollToNode(hasText("Global Stars → inget köp registrerat"))
+        composeRule.onNodeWithText("Köpt 7 okt").assertExists()
+        composeRule.onNodeWithText("Aktiefond Global → Global Indexnära").assertExists()
+        composeRule.onNodeWithText("Utgånget").assertExists()
+        // Bara det avstådda kan ångras — ett avslutat byte står i Facit.
+        composeRule.onAllNodesWithText("Ångra").assertCountEquals(1)
     }
 
-    // Lång skärm, så att hela listan – även de billigare alternativen under planen – kommer med i bilden.
-    @Config(qualifiers = "w390dp-h1400dp-xxhdpi")
     @Test
-    fun `skärmdump med byte förslag och facit`() = composeRule.captureLightAndDark("BeslutScreen_full") {
+    fun `utan avslutade eller avstadda visas ingen hopfalld sektion`() {
+        val noClosed = full.copy(decisions = full.decisions.copy(dismissedSuggestions = emptyList()).withSwitches(emptyList(), today))
+        composeRule.setContent { FonderTheme { BeslutContent(state = noClosed) } }
+
+        composeRule.onNodeWithText("Avslutade och avstådda", substring = true).assertDoesNotExist()
+    }
+
+    // Lång skärm, så att hela listan – även de billigare alternativen och den hopfällda sektionen – kommer med i bilden.
+    @Config(qualifiers = "w390dp-h1600dp-xxhdpi")
+    @Test
+    fun `skärmdump med byten och facit`() = composeRule.captureLightAndDark("BeslutScreen_full") {
         BeslutContent(state = full)
     }
 

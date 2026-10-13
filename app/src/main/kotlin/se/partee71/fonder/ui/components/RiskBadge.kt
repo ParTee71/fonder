@@ -1,18 +1,8 @@
 package se.partee71.fonder.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import se.partee71.fonder.R
 
 /** Källans riskskala (TP-21) går 1–7 — visas alltid ut, så en femma inte läses som "5 av 5". */
@@ -48,18 +38,6 @@ fun RiskBadge(level: Int?, modifier: Modifier = Modifier, toLevel: Int? = null) 
         toLevel != null -> stringResource(R.string.format_risk_level_change_description, level, toLevel, RISK_SCALE_MAX)
         else -> stringResource(R.string.format_risk_level_description, level, RISK_SCALE_MAX)
     }
-    Row(
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-            .semantics { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    // Samma märke som bytesradernas tillstånd (BYT-4), i den neutrala tonen: siffran ska inte betyda något utöver sig själv.
+    StateChip(text = label, tone = StateChipTone.Neutral, modifier = modifier, contentDescription = description)
 }

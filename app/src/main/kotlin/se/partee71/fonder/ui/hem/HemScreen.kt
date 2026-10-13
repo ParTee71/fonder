@@ -565,16 +565,16 @@ private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit
 }
 
 /**
- * "Att besluta" (HEM-13): antalet öppna bytesförslag, billigare alternativ och pågående byten i kopparens ton, och vägen
- * till fliken Beslut. Visas bara när något väntar — samma antal som flikradens märke, ur samma
+ * "Att besluta" (HEM-13): "N föreslagna · M sålda, väntar på köp · K billigare alternativ" ur listan
+ * Byten ([se.partee71.fonder.domain.usecase.SwitchRows], BYT-4) i kopparens ton, och vägen till fliken Beslut. Visas bara när något väntar — samma antal som flikradens märke, ur samma
  * källa. Undertexten nämner bara de slag som finns.
  */
 @Composable
 private fun DecisionsRow(decisions: PendingDecisions, onOpen: () -> Unit) {
     val body = listOf(
-        R.plurals.format_hem_decisions_suggestions to decisions.openSwitchCount,
-        R.plurals.format_hem_decisions_cheaper to decisions.openCheaperAlternativeCount,
-        R.plurals.format_hem_decisions_watches to decisions.openWatches.size,
+        R.plurals.format_hem_decisions_suggestions to decisions.switches.proposedCount,
+        R.plurals.format_hem_decisions_sold to decisions.switches.soldCount,
+        R.plurals.format_hem_decisions_cheaper to decisions.switches.feeCount,
     )
         .filter { (_, count) -> count > 0 }
         .map { (plural, count) -> pluralStringResource(plural, count, count) }

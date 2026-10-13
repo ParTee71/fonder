@@ -48,6 +48,10 @@ import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.usecase.SwitchOrigin
+import se.partee71.fonder.domain.usecase.SwitchRowState
+import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.BackgroundWork
@@ -401,7 +405,7 @@ class BeslutViewModelTest {
             while (state.loading || state.decisions.dismissedSuggestions.isEmpty()) state = awaitItem()
             assertEquals(listOf(2L), state.decisions.switchPlan.map { it.recordId })
             assertEquals(listOf(1L), state.decisions.dismissedSuggestions.map { it.recordId })
-            assertEquals(1, state.decisions.dismissedCount)
+            assertEquals(listOf(SwitchRowState.DISMISSED), state.switches.closed.map { it.state })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -618,9 +622,8 @@ class BeslutViewModelTest {
             var state = awaitItem()
             while (state.loading || !state.backgroundWorkRunning) state = awaitItem()
             assertTrue(state.backgroundWorkRunning)
-            // Ledaren i ett pågående byte räknas ur kurscachen — den snurrar, förslagen inte.
-            assertTrue(state.switchWatchWorking)
-            assertFalse(state.suggestionsWorking)
+            // Ledaren i ett sålt byte räknas ur kurscachen — listan Byten snurrar.
+            assertTrue(state.switchesWorking)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -633,8 +636,7 @@ class BeslutViewModelTest {
         viewModel().uiState.test {
             var state = awaitItem()
             while (state.loading || !state.switchPlanWorking) state = awaitItem()
-            assertTrue(state.suggestionsWorking)
-            assertFalse(state.switchWatchWorking)
+            assertTrue(state.switchesWorking)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -683,6 +685,8 @@ class BeslutViewModelTest {
             assertEquals(0.10, watch.leaderChangeFraction!!, 1e-9)
             assertEquals(setOf("SE_SALJ"), state.decisions.watchedSellIsins)
             assertEquals(1, state.decisions.count)
+            assertEquals(10_000.0, watch.proceedsKr!!, 1e-9)
+            assertEquals(SwitchOrigin.STANDALONE, (state.switches.active.single() as SwitchRow.Sold).origin)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -701,6 +705,11 @@ class BeslutViewModelTest {
             while (state.loading || state.decisions.switchPlan.isEmpty() || state.decisions.openWatches.isEmpty()) state = awaitItem()
             assertTrue(state.decisions.switchPlan.single().inProgress)
             assertEquals(setOf("SE_HELD"), state.decisions.watchedSellIsins)
+            // Ett byte, en rad (BYT-4): Sålt-raden ersätter planraden och bär dess plats i planen.
+            val sold = state.switches.active.single() as SwitchRow.Sold
+            assertEquals(SwitchOrigin.PLAN, sold.origin)
+            assertEquals(0, sold.planIndex)
+            assertEquals(1, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -741,6 +750,8 @@ class BeslutViewModelTest {
             assertTrue(state.decisions.openWatches.isEmpty())
             assertEquals(setOf("SE_SALJ"), state.decisions.watchedSellIsins)
             assertEquals(0, state.decisions.count)
+            // Den står som Utgånget i den hopfällda sektionen tills bakgrundskörningen stängt den (BYT-4).
+            assertEquals(listOf(SwitchRowState.EXPIRED), state.switches.closed.map { it.state })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -848,6 +859,44 @@ class BeslutViewModelTest {
             var state = awaitItem()
             while (state.loading || state.followedCount == 0) state = awaitItem()
             assertNull(state.followedExcessKr)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Listan Byten (BYT-4) ---
+
+    @Test
+    fun `ett stangt byte syns i den hopfallda sektionen i 14 dagar och sedan inte`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val recent = switchWatchRepo.start(SwitchWatch(sellIsin = "SE_1", sellFundName = "Fond 1", soldAtEpochDay = today.toEpochDay() - 20))
+        val old = switchWatchRepo.start(SwitchWatch(sellIsin = "SE_2", sellFundName = "Fond 2", soldAtEpochDay = today.toEpochDay() - 40))
+        switchWatchRepo.close(recent, SwitchWatchCloseReason.AVBRUTEN, today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS))
+        switchWatchRepo.close(old, SwitchWatchCloseReason.UTGANGEN, today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1))
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.switches.closed.isEmpty()) state = awaitItem()
+            assertEquals(listOf("closed-$recent"), state.switches.closed.map { it.key })
+            assertEquals(SwitchRowState.CANCELLED, state.switches.closed.single().state)
+            assertTrue(state.isEmpty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett salt billigare alternativ blir en Salt-rad i stallet for avgiftsraden`() = runTest(dispatcher) {
+        setUpCheaperAlternative()
+        switchWatchRepo.start(
+            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 77),
+        )
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.cheaperAlternatives.isEmpty() || state.switches.active.isEmpty()) state = awaitItem()
+            assertTrue(state.decisions.cheaperAlternatives.single().suggestion.inProgress)
+            val sold = state.switches.active.single() as SwitchRow.Sold
+            assertEquals(SwitchOrigin.FEE, sold.origin)
+            assertEquals(1, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }
     }

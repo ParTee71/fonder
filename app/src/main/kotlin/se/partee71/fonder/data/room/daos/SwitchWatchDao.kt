@@ -25,6 +25,14 @@ interface SwitchWatchDao {
     @Query("SELECT * FROM switch_watches WHERE closedAtEpochDay IS NULL ORDER BY soldAtEpochDay DESC, id DESC")
     fun observeOpen(): Flow<List<SwitchWatchWithCandidates>>
 
+    /**
+     * Bevakningar stängda **på eller efter** [epochDay], senast stängda först — Besluts hopfällda
+     * sektion "Avslutade och avstådda" (BYT-4). Ingen schemaändring: samma kolumner som [observeOpen].
+     */
+    @Transaction
+    @Query("SELECT * FROM switch_watches WHERE closedAtEpochDay IS NOT NULL AND closedAtEpochDay >= :epochDay ORDER BY closedAtEpochDay DESC, id DESC")
+    fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatchWithCandidates>>
+
     /** En enskild bevakning, reaktivt — skärmens läsväg. Null när den raderats. */
     @Transaction
     @Query("SELECT * FROM switch_watches WHERE id = :id")

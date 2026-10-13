@@ -123,8 +123,8 @@ class AppNavigationTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             waitFor(beslutTab)
             composeRule.onNode(beslutTab).performClick()
-            waitFor(hasText(SOLD_FUND_NAME))
-            composeRule.onNodeWithText("Registrera köpet").performScrollTo().performClick()
+            waitFor(hasText(SOLD_FUND_NAME, substring = true))
+            composeRule.onNodeWithText("Öppna bevakningen").performScrollTo().performClick()
 
             // Pågående byte. När övergången är klar är Beslut borta, så säljfondens namn kommer från
             // SwitchWatchViewModel – som fick bevakningens id ur nyckeln.
@@ -134,7 +134,7 @@ class AppNavigationTest {
             waitFor(hasText(SOLD_FUND_NAME, substring = true))
             composeRule.onNodeWithContentDescription("Tillbaka").performClick()
 
-            waitFor(hasText("Registrera köpet"))
+            waitFor(hasText("Öppna bevakningen"))
             composeRule.onNodeWithContentDescription("Tillbaka").assertDoesNotExist()
         }
     }

@@ -52,6 +52,16 @@ object ReturnColors {
         @Composable @ReadOnlyComposable
         get() = if (LocalDarkTheme.current) LossDark else LossLight
 
+    /** Tonad behållare i vinstens kulör (märken som "Köpt", BYT-4) — para med [onGainContainer]. */
+    val gainContainer: Color
+        @Composable @ReadOnlyComposable
+        get() = if (LocalDarkTheme.current) GainContainerDark else GainContainerLight
+
+    /** Text på [gainContainer]. */
+    val onGainContainer: Color
+        @Composable @ReadOnlyComposable
+        get() = if (LocalDarkTheme.current) OnGainContainerDark else OnGainContainerLight
+
     /** Färg för ett värde: vinst om >= 0, annars förlust. */
     @Composable @ReadOnlyComposable
     fun forAmount(amount: Double): Color = if (amount >= 0.0) gain else loss

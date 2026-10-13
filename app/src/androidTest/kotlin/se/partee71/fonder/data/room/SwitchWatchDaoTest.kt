@@ -86,6 +86,19 @@ class SwitchWatchDaoTest {
     }
 
     @Test
+    fun observeClosedSince_ger_stangda_fran_och_med_dagen_senast_stangda_forst() = runTest {
+        // BYT-4: Besluts hopfällda sektion visar stängda byten i 14 dagar efter stängningen.
+        insertWatch(sellIsin = "SE_OPPEN")
+        insertWatch(sellIsin = "SE_GAMMAL", closedAtEpochDay = 19_885)
+        insertWatch(sellIsin = "SE_GRANS", closedAtEpochDay = 19_886)
+        insertWatch(sellIsin = "SE_NY", closedAtEpochDay = 19_899)
+
+        val closed = dao.observeClosedSince(19_886).first().map { it.toDomain() }
+
+        assertEquals(listOf("SE_NY", "SE_GRANS"), closed.map { it.sellIsin })
+    }
+
+    @Test
     fun close_stanger_bara_en_oppen_bevakning_och_behaller_raden() = runTest {
         val watchId = insertWatch()
 

@@ -17,6 +17,7 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
 import se.partee71.fonder.ui.theme.FonderTheme
+import java.time.LocalDate
 import kotlin.math.sin
 
 /**
@@ -54,15 +55,15 @@ class HemScreenshotTest {
             ),
         ),
         openWatches = listOf(OpenSwitchWatch(watchId = 1, sellFundName = "Sverige Småbolag", daysWaiting = 2, candidateCount = 3)),
-    )
+    ).withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
 
     @Test
     fun `att besluta namner varje slag som vantar och utelamnar nollor`() {
-        // HEM-13: bytesförslag, billigare alternativ (ANA-9) och pågående byten var för sig.
+        // HEM-13: föreslagna, sålda och billigare alternativ (ANA-9) var för sig, ur listan Byten (BYT-4).
         composeRule.setContent {
             FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true, decisions = decisions)) }
         }
-        composeRule.onNodeWithText("2 bytesförslag · 1 billigare alternativ · 1 pågående byte").assertExists()
+        composeRule.onNodeWithText("2 föreslagna · 1 sålt, väntar på köp · 1 billigare alternativ").assertExists()
     }
 
     @Test
@@ -73,7 +74,8 @@ class HemScreenshotTest {
                     state = HemUiState(
                         loading = false,
                         hasHoldings = true,
-                        decisions = PendingDecisions(cheaperAlternatives = decisions.cheaperAlternatives),
+                        decisions = PendingDecisions(cheaperAlternatives = decisions.cheaperAlternatives)
+                            .withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59)),
                     ),
                 )
             }

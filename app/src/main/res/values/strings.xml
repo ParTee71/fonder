@@ -539,46 +539,84 @@
     <string name="format_switch_watch_limit">Du kan bevaka högst %1$d alternativ åt gången.</string>
     <string name="switch_watch_cancel">Avbryt bevakningen</string>
     <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. ”Köpte den här” öppnar köpformuläret — köpet du registrerar där avslutar bytet.</string>
-    <string name="beslut_switch_watch_title">Pågående byte</string>
     <string name="format_beslut_switch_watch_title">%1$s → %2$s</string>
-    <string name="format_beslut_switch_watch_candidates">%1$d alternativ bevakas</string>
-    <string name="format_beslut_switch_watch_leader">Bäst sedan säljdagen: %1$s (%2$s)</string>
-    <string name="beslut_switch_watch_open">Registrera köpet</string>
     <string name="beslut_switch_watch_no_leader">Ingen utveckling uppmätt än — kurserna fylls på i bakgrunden.</string>
     <string name="format_beslut_risk_profile">Mot riskprofil %1$s</string>
     <string name="beslut_no_risk_profile">Ingen riskprofil satt</string>
     <string name="beslut_change_risk_profile">Ändra</string>
-    <string name="beslut_suggestions_title">Förslag</string>
     <string name="beslut_outcome_title">Hur gick det?</string>
     <string name="beslut_follow">Följ</string>
     <string name="beslut_dismiss">Avstå</string>
-    <string name="format_beslut_dismissed_title">Avstådda (%1$d)</string>
-    <string name="format_beslut_dismissed_explain">Ett avstått förslag döljs i %1$d dagar och räknas inte som ett beslut. Ångra visar det igen.</string>
     <string name="beslut_undo_dismissal">Ångra</string>
     <string name="format_fee_follow_a11y">Följ: byt till det billigare alternativet %1$s</string>
     <string name="format_beslut_follow_a11y">Följ: sälj %1$s, köp %2$s</string>
     <string name="format_beslut_dismiss_a11y">Avstå: sälj %1$s, köp %2$s</string>
     <string name="format_beslut_undo_dismissal_a11y">Ångra avstående: sälj %1$s, köp %2$s</string>
-    <string name="format_beslut_cheaper_row">%1$s %2$s → %3$s %4$s</string>
     <string name="format_beslut_cheaper_savings">Sparar ca %1$s/år</string>
     <plurals name="format_beslut_facit_row">
         <item quantity="one">Facit · %1$d följt förslag</item>
         <item quantity="other">Facit · %1$d följda förslag</item>
     </plurals>
-    <string name="beslut_empty_title">Inget att besluta just nu</string>
+    <string name="beslut_empty_title">Inga byten att besluta om</string>
     <string name="beslut_empty_body">Här samlas bytesförslag mot din riskprofil, billigare alternativ till dina fonder och pågående byten. Förslagen skapas av bakgrundsuppdateringen — bytesplanen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
+    <!-- Listan Byten på Beslut (BYT-4) -->
+    <string name="beslut_switches_title">Byten</string>
+    <string name="format_beslut_switches_waiting">%1$d väntar på dig</string>
+    <string name="switch_state_proposed">Föreslaget</string>
+    <string name="switch_state_fee">Avgift</string>
+    <string name="format_switch_state_sold">Sålt · dag %1$d av %2$d</string>
+    <string name="format_switch_state_bought">Köpt %1$s</string>
+    <string name="switch_state_bought">Köpt</string>
+    <string name="switch_state_cancelled">Avbrutet</string>
+    <string name="switch_state_expired">Utgånget</string>
+    <string name="switch_state_dismissed">Avstått</string>
+    <string name="format_switch_origin_plan_step">Bytesplan · byte %1$d</string>
+    <string name="switch_origin_plan">Bytesplan</string>
+    <string name="switch_origin_standalone">Eget sälj</string>
+    <string name="format_beslut_switch_pair">Sälj %1$s → Köp %2$s</string>
+    <string name="format_beslut_cheaper_fees">avgift %1$s → %2$s</string>
+    <string name="format_beslut_sold_title">%1$s → välj köpfond</string>
+    <string name="format_beslut_sold_proceeds">%1$s väntar på likviden</string>
+    <plurals name="format_beslut_sold_candidates">
+        <item quantity="one">%1$d bevakat alternativ</item>
+        <item quantity="other">%1$d bevakade alternativ</item>
+    </plurals>
+    <string name="beslut_sold_leader_label">Bäst sedan säljdagen:</string>
+    <string name="beslut_register_sale">Registrera säljet</string>
+    <string name="format_beslut_register_sale_a11y">Registrera säljet: sälj %1$s, köp %2$s</string>
+    <string name="beslut_open_watch">Öppna bevakningen</string>
+    <string name="format_beslut_open_watch_a11y">Öppna bevakningen: %1$s</string>
+    <string name="format_beslut_closed_no_buy">%1$s → inget köp registrerat</string>
+    <string name="format_beslut_closed_bought_unknown">%1$s → köp registrerat</string>
+    <string name="format_beslut_closed_title">Avslutade och avstådda (%1$d)</string>
+    <string name="format_beslut_closed_explain">Avslutade byten visas här i %1$d dagar, sedan i Facit. Ett avstående gäller i %2$d dagar.</string>
+    <string name="beslut_never_switches">Appen genomför aldrig ett byte åt dig.</string>
+    <string-array name="month_short">
+        <item>jan</item>
+        <item>feb</item>
+        <item>mar</item>
+        <item>apr</item>
+        <item>maj</item>
+        <item>jun</item>
+        <item>jul</item>
+        <item>aug</item>
+        <item>sep</item>
+        <item>okt</item>
+        <item>nov</item>
+        <item>dec</item>
+    </string-array>
     <string name="hem_decisions_title">Att besluta</string>
     <string name="hem_decisions_action">Visa beslut</string>
     <plurals name="format_hem_decisions_suggestions">
-        <item quantity="one">%1$d bytesförslag</item>
-        <item quantity="other">%1$d bytesförslag</item>
+        <item quantity="one">%1$d föreslaget</item>
+        <item quantity="other">%1$d föreslagna</item>
     </plurals>
     <plurals name="format_hem_decisions_cheaper">
         <item quantity="one">%1$d billigare alternativ</item>
         <item quantity="other">%1$d billigare alternativ</item>
     </plurals>
-    <plurals name="format_hem_decisions_watches">
-        <item quantity="one">%1$d pågående byte</item>
-        <item quantity="other">%1$d pågående byten</item>
+    <plurals name="format_hem_decisions_sold">
+        <item quantity="one">%1$d sålt, väntar på köp</item>
+        <item quantity="other">%1$d sålda, väntar på köp</item>
     </plurals>
 </resources>
