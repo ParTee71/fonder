@@ -77,6 +77,7 @@ fun SwitchWatchScreen(
         onAddCandidate = onAddCandidate,
         onCancel = viewModel::onCancel,
         onMessageShown = viewModel::onMessageShown,
+        onRetryAutoFill = viewModel::onRetryAutoFill,
         modifier = modifier,
     )
 }
@@ -91,6 +92,7 @@ fun SwitchWatchContent(
     onAddCandidate: () -> Unit = {},
     onCancel: () -> Unit = {},
     onMessageShown: () -> Unit = {},
+    onRetryAutoFill: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (state.missing) {
@@ -123,9 +125,20 @@ fun SwitchWatchContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        val text = stringResource(
-                            if (state.fillingCandidates) R.string.switch_watch_filling else R.string.switch_watch_empty_body,
-                        )
+                        val text = when {
+                            state.fillingCandidates -> stringResource(R.string.switch_watch_filling)
+                            // Tre orsaker som förr delade samma text (issue #149) — var och en
+                            // säger vad användaren kan göra åt den.
+                            else -> when (state.emptyReason) {
+                                SwitchWatchEmptyReason.NO_TARGET_LEVEL ->
+                                    stringResource(R.string.format_switch_watch_empty_no_level, state.sellFundName)
+                                SwitchWatchEmptyReason.NONE_AVAILABLE -> state.targetLevel
+                                    ?.let { stringResource(R.string.format_switch_watch_empty_none_available, it) }
+                                    ?: stringResource(R.string.switch_watch_empty_body)
+                                SwitchWatchEmptyReason.LOOKUP_FAILED -> stringResource(R.string.switch_watch_empty_lookup_failed)
+                                null -> stringResource(R.string.switch_watch_empty_body)
+                            }
+                        }
                         // Snurran bara medan förslagen faktiskt hämtas (ANA-13) — "inga alternativ
                         // ännu" är ett färdigt svar, inte ett som är på väg.
                         WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
@@ -133,6 +146,18 @@ fun SwitchWatchContent(
                             text,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // Bara när kontrollen misslyckades: "inga köpbara" och "okänd nivå" blir inte
+                // annorlunda av ett nytt försök, ett misslyckat uppslag kan bli det.
+                if (state.emptyReason == SwitchWatchEmptyReason.LOOKUP_FAILED) {
+                    item {
+                        AppButton(
+                            text = stringResource(R.string.switch_watch_retry),
+                            onClick = onRetryAutoFill,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            variant = AppButtonVariant.Text,
                         )
                     }
                 }

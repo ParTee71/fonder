@@ -204,6 +204,49 @@ class SwitchWatchScreenTest {
     }
 
     @Test
+    fun utan_kand_malniva_sags_orsaken_och_inget_forsok_igen() {
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(state = state(rows = emptyList()).copy(emptyReason = SwitchWatchEmptyReason.NO_TARGET_LEVEL))
+            }
+        }
+
+        composeRule.onNodeWithText("Appen känner inte till risknivån för Såld fond", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Försök igen").assertDoesNotExist()
+    }
+
+    @Test
+    fun inga_kopbara_pa_nivan_namner_nivan() {
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(
+                    state = state(rows = emptyList()).copy(targetLevel = 5, emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Ingen av de bästa fonderna på risknivå 5", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Försök igen").assertDoesNotExist()
+    }
+
+    @Test
+    fun misslyckat_uppslag_erbjuder_forsok_igen() {
+        var retries = 0
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(
+                    state = state(rows = emptyList()).copy(emptyReason = SwitchWatchEmptyReason.LOOKUP_FAILED),
+                    onRetryAutoFill = { retries++ },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Det gick inte att kontrollera", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Försök igen").performClick()
+        assertEquals(1, retries)
+    }
+
+    @Test
     fun en_bevakning_som_inte_finns_visas_som_saknad() {
         composeRule.setContent {
             FonderTheme { SwitchWatchContent(state = SwitchWatchUiState(loading = false, missing = true)) }

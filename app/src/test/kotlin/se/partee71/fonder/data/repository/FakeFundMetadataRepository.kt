@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.repository
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -42,8 +43,19 @@ open class FakeFundMetadataRepository(
 
     override suspend fun knownRiskLevels(): List<Int> = emptyList()
 
+    /** Sant spelar "köpbarheten gick inte att kontrollera" i [searchSwitchCandidates] (issue #149). */
+    var switchLookupFailed: Boolean = false
+
     override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
         switchCandidateCalls += level to excludeIsins
         return switchCandidates.filterNot { it.metadata.isin in excludeIsins }
+    }
+
+    /** Fördröjning i [searchSwitchCandidates] — håller en autofyllning pågående i test av dubbeltryck. */
+    var switchSearchDelayMs: Long = 0
+
+    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch {
+        if (switchSearchDelayMs > 0) delay(switchSearchDelayMs)
+        return SwitchPlanCalc.CandidateSearch(findSwitchCandidates(level, excludeIsins), lookupFailed = switchLookupFailed)
     }
 }

@@ -250,6 +250,9 @@ class BackupRoundTripTest {
         assertEquals("SE0001466368", closed.boughtIsin)
         assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
         assertNull(closed.proceedsKr)
+        // En bevakning utan målnivå ska återställas utan nivå — den fylls bara i efterhand ur
+        // källan (issue #149), aldrig av en återställning som gissar.
+        assertNull(closed.targetLevel)
 
         // Transaktionslänkarna (BYT-1) i båda lägena — och de pekar fortfarande rätt, eftersom
         // transaktions-id:n bevaras i återställningen.

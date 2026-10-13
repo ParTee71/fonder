@@ -43,13 +43,14 @@ class SwitchWatchDaoTest {
         soldAtEpochDay: Long = 19_900,
         closedAtEpochDay: Long? = null,
         sellTransactionId: Long? = null,
+        targetLevel: Int? = 4,
     ): Long = dao.insertWatch(
         SwitchWatchEntity(
             sellIsin = sellIsin,
             sellFundName = "Såld fond",
             soldAtEpochDay = soldAtEpochDay,
             proceedsKr = 10_000.0,
-            targetLevel = 4,
+            targetLevel = targetLevel,
             sourceRecordId = null,
             closedAtEpochDay = closedAtEpochDay,
             boughtIsin = null,
@@ -57,6 +58,21 @@ class SwitchWatchDaoTest {
             sellTransactionId = sellTransactionId,
         ),
     )
+
+    @Test
+    fun fillMissingTargetLevel_skriver_bara_nar_nivan_saknas() = runTest {
+        // Issue #149: målnivån fylls i efterhand, men en befintlig nivå skrivs aldrig över.
+        val withoutLevel = insertWatch(sellIsin = "SE_UTAN", targetLevel = null)
+        val withLevel = insertWatch(sellIsin = "SE_MED", targetLevel = 4)
+
+        assertEquals(1, dao.fillMissingTargetLevel(withoutLevel, 3))
+        assertEquals(0, dao.fillMissingTargetLevel(withoutLevel, 6))
+        assertEquals(0, dao.fillMissingTargetLevel(withLevel, 6))
+        assertEquals(0, dao.fillMissingTargetLevel(9_999, 6))
+
+        assertEquals(3, dao.getById(withoutLevel)!!.watch.targetLevel)
+        assertEquals(4, dao.getById(withLevel)!!.watch.targetLevel)
+    }
 
     @Test
     fun kandidater_lases_i_positionsordning_oavsett_insattningsordning() = runTest {

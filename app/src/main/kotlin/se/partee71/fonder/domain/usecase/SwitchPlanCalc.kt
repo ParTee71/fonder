@@ -55,6 +55,14 @@ object SwitchPlanCalc {
     data class Candidate(val metadata: FundMetadata, val twelveMonthReturn: Double)
 
     /**
+     * Utfallet av en kandidatsökning på en nivå (issue #149) — [candidates] är de verifierat
+     * köpbara, [lookupFailed] sant när minst en prövad kandidats köpbarhet inte gick att avgöra
+     * (katalogen kunde inte hämtas). Skiljer en tom lista som betyder "inga köpbara" från en
+     * som betyder "vi vet inte" — två olika besked till användaren.
+     */
+    data class CandidateSearch(val candidates: List<Candidate>, val lookupFailed: Boolean)
+
+    /**
      * Ett enskilt föreslaget byte: sälj [sellValueKr] ur [sellFund]s position, köp [buyIsin] för
      * samma belopp. [sellValueKr] är **inte** nödvändigtvis hela positionen — den är begränsad
      * till gapet, se klassens KDoc — så beloppet måste visas för användaren; annars är rådet

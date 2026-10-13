@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -177,6 +179,138 @@ class SwitchWatchViewModelTest {
 
         assertTrue(metadataRepo.switchCandidateCalls.isEmpty())
         assertTrue(switchWatchRepo.watches.value.single().candidates.isEmpty())
+    }
+
+    // --- Målnivå i efterhand och tomlägets orsak (issue #149) ---
+
+    private suspend fun TestScope.settledState(vm: SwitchWatchViewModel): SwitchWatchUiState {
+        lateinit var state: SwitchWatchUiState
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            state = expectMostRecentItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+        return state
+    }
+
+    @Test
+    fun `utan malniva slas saljfondens risk upp, sparas och forslagen fylls`() = runTest(dispatcher) {
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 3))
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
+        val watchId = startWatch(targetLevel = null)
+
+        val state = settledState(viewModel(watchId))
+
+        val stored = switchWatchRepo.watches.value.single()
+        assertEquals(3, stored.targetLevel)
+        assertEquals(listOf("SE_A"), stored.candidates.map { it.isin })
+        assertEquals(listOf(3 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
+        assertNull(state.emptyReason)
+    }
+
+    @Test
+    fun `en niva som hann sparas av annan vag galler fore den uppslagna`() = runTest(dispatcher) {
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 3))
+        val watchId = startWatch(targetLevel = null)
+        switchWatchRepo.beforeFillMissingTargetLevel = { id ->
+            switchWatchRepo.watches.value = switchWatchRepo.watches.value.map {
+                if (it.id == id) it.copy(targetLevel = 4) else it
+            }
+        }
+
+        val state = settledState(viewModel(watchId))
+
+        assertEquals(4, switchWatchRepo.watches.value.single().targetLevel)
+        assertEquals(listOf(4 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
+        assertEquals(4, state.targetLevel)
+    }
+
+    @Test
+    fun `utan malniva aven i kallan sags orsaken och inget sparas`() = runTest(dispatcher) {
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = null))
+        val watchId = startWatch(targetLevel = null)
+
+        val state = settledState(viewModel(watchId))
+
+        assertEquals(SwitchWatchEmptyReason.NO_TARGET_LEVEL, state.emptyReason)
+        assertNull(switchWatchRepo.watches.value.single().targetLevel)
+        assertTrue(metadataRepo.switchCandidateCalls.isEmpty())
+    }
+
+    @Test
+    fun `inga kopbara pa nivan sags som egen orsak`() = runTest(dispatcher) {
+        val watchId = startWatch(targetLevel = 5)
+
+        val state = settledState(viewModel(watchId))
+
+        assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, state.emptyReason)
+        assertEquals(5, state.targetLevel)
+    }
+
+    @Test
+    fun `misslyckat uppslag sags och forsok igen kor om autofyllningen`() = runTest(dispatcher) {
+        metadataRepo.switchLookupFailed = true
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, expectMostRecentItem().emptyReason)
+
+            metadataRepo.switchLookupFailed = false
+            metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
+            vm.onRetryAutoFill()
+            advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertNull(state.emptyReason)
+            assertEquals(listOf("SE_A"), state.rows.map { it.isin })
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(2, metadataRepo.switchCandidateCalls.size)
+    }
+
+    @Test
+    fun `dubbeltryck pa forsok igen kor autofyllningen en gang`() = runTest(dispatcher) {
+        metadataRepo.switchLookupFailed = true
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            metadataRepo.switchLookupFailed = false
+            metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
+            metadataRepo.switchSearchDelayMs = 1_000
+            vm.onRetryAutoFill()
+            runCurrent() // första försöket väntar nu i sökningen
+            vm.onRetryAutoFill()
+            advanceUntilIdle()
+
+            assertEquals(listOf("SE_A"), expectMostRecentItem().rows.map { it.isin })
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(2, metadataRepo.switchCandidateCalls.size)
+    }
+
+    @Test
+    fun `en handplockad kandidat efter misslyckat uppslag tar bort orsaken`() = runTest(dispatcher) {
+        metadataRepo.switchLookupFailed = true
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            vm.onAddCandidate(Fund(fundId = "X", name = "Egen fond", isin = "SE_EGEN"))
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals(1, state.rows.size)
+            assertNull(state.emptyReason)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
