@@ -3,6 +3,10 @@ package se.partee71.fonder.domain.usecase
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 import kotlin.math.ceil
 
 /**
@@ -39,6 +43,11 @@ import kotlin.math.ceil
  * **Avstådda par** (HEM-14): ett avstått byte Sälj X → Köp Y tas ur kandidatmängden innan den
  * giriga loopen, så planen numreras 1..n utan luckor i stället för att ett avstått steg lämnar
  * ett hål som nästa byte räknats fram under antagandet att det gjorts.
+ *
+ * **Likvid som väntar på köp** (BYT-3, issue #144): ett sälj som gjorts men vars pengar ännu inte
+ * köpt nästa fond räknas som värde på bevakningens målnivå ([pendingProceedsByLevel]) — i både
+ * nämnaren och nivåns vikt — så ett gap som redan är finansierat inte fyller ett nytt sälj.
+ * Likviden kan inte säljas: den är inte en position.
  */
 object SwitchPlanCalc {
 
@@ -112,13 +121,14 @@ object SwitchPlanCalc {
         holdings: List<Holding>,
         metadataByIsin: Map<String, FundMetadata>,
         targetAllocation: Map<Int, Double>,
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
     ): List<Int> {
         if (targetAllocation.isEmpty()) return emptyList()
         val positions = positionsOf(holdings, metadataByIsin)
-        val totalValueKr = positions.sumOf { it.valueKr }
+        val levelValues = levelValuesOf(positions, pendingProceedsByLevel)
+        val totalValueKr = levelValues.values.sum()
         if (totalValueKr <= 0.0) return emptyList()
 
-        val levelValues = levelValuesOf(positions)
         return gapsPp(targetAllocation, levelValues, totalValueKr)
             .filterValues { it >= MIN_GAP_PP }
             .entries
@@ -139,9 +149,79 @@ object SwitchPlanCalc {
             Position(holding, isin, level, metadata.totalFee, value)
         }
 
-    /** Nivåernas värde ur innehaven. */
-    private fun levelValuesOf(positions: List<Position>): MutableMap<Int, Double> =
-        positions.groupBy { it.level }.mapValuesTo(mutableMapOf()) { (_, p) -> p.sumOf { it.valueKr } }
+    /** Nivåernas värde ur innehaven plus likviden som väntar på köp (BYT-3). */
+    private fun levelValuesOf(positions: List<Position>, pendingProceedsByLevel: Map<Int, Double>): MutableMap<Int, Double> {
+        val values = positions.groupBy { it.level }.mapValuesTo(mutableMapOf()) { (_, p) -> p.sumOf { it.valueKr } }
+        pendingProceedsByLevel.forEach { (level, kr) -> if (kr > 0.0) values[level] = (values[level] ?: 0.0) + kr }
+        return values
+    }
+
+    /**
+     * Likvid som väntar på köp, per målnivå (BYT-3, issue #144): för varje öppen bevakning med
+     * känt belopp, känd målnivå och en säljtransaktion som finns — inte utgången — beloppet minus
+     * de köp som redan gjorts för det. Ett köp **sedan säljdagen** i en bevakad kandidat, i
+     * källförslagets köpfond eller i en fond på målnivån förbrukar likviden (köpets belopp
+     * inklusive avgift).
+     *
+     * Ett köp förbrukas **högst en gång totalt**: bevakningarna gås igenom äldst först (säljdag,
+     * sedan id), köpen i tidsordning, och ett köp som tagits av en bevakning är borta för nästa —
+     * även när två bevakningar har samma målnivå. Ett köp större än det som återstår förbrukas
+     * helt; överskottet förs inte vidare. Likviden kan alltså bara räknas **för lågt**, aldrig
+     * dubbelt: en underräkning ger på sin höjd ett förslag för ett gap som redan är fyllt, en
+     * dubbelräkning hade dolt ett gap som finns.
+     *
+     * Ett köp som redan **avslutat** en bevakning (dess `buyTransactionId`, öppen eller stängd)
+     * är det bytets pengar och förbrukar aldrig en annan bevaknings likvid — annars räknades den
+     * öppna bevakningen för lågt och planen föreslog ett nytt sälj för ett gap som är fyllt.
+     *
+     * Bevakningar utan känd säljtransaktion ("Bevaka alternativ" ur ett förslag) räknas inte —
+     * utan transaktion är pengarna inte bevisligen fria. Fonder utan ISIN kan inte matchas.
+     *
+     * @param watches **alla** bevakningar, även stängda — de stängdas köptransaktioner undantas
+     *   från förbrukningen; bara öppna, inte utgångna räknas som likvid.
+     * @param buyIsinByRecordId källförslagens köpfond per rad-id, se [SwitchTransitions.suggestFor].
+     * @param metadataByIsin risknivå per ISIN för "fond på målnivån" — de innehav som finns;
+     *   en köpt fond som saknas här matchas bara som kandidat eller föreslagen fond.
+     */
+    fun pendingProceedsByLevel(
+        watches: List<SwitchWatch>,
+        transactions: List<Transaction>,
+        funds: List<Fund>,
+        buyIsinByRecordId: Map<Long, String>,
+        metadataByIsin: Map<String, FundMetadata>,
+        today: LocalDate,
+    ): Map<Int, Double> {
+        val transactionIds = transactions.mapTo(mutableSetOf()) { it.id }
+        val isinByFundId = funds.associate { it.fundId to it.isin }
+        val purchases = transactions
+            .filter { it.type == TransactionType.KOP }
+            .sortedWith(compareBy({ it.epochDay }, { it.id }))
+        val consumed = watches.mapNotNullTo(mutableSetOf()) { it.buyTransactionId }
+        val result = mutableMapOf<Int, Double>()
+
+        watches
+            .filter { it.isOpen && !SwitchWatchCalc.isExpired(it, today) }
+            .filter { it.sellTransactionId != null && it.sellTransactionId in transactionIds }
+            .sortedWith(compareBy({ it.soldAtEpochDay }, { it.id }))
+            .forEach { watch ->
+                val level = watch.targetLevel ?: return@forEach
+                var remaining = watch.proceedsKr ?: return@forEach
+                if (remaining <= 0.0) return@forEach
+                val expectedIsins = watch.candidates.mapTo(mutableSetOf()) { it.isin }
+                watch.sourceRecordId?.let { buyIsinByRecordId[it] }?.let { expectedIsins += it }
+
+                for (purchase in purchases) {
+                    if (remaining <= 0.0) break
+                    if (purchase.id in consumed || purchase.epochDay < watch.soldAtEpochDay) continue
+                    val isin = isinByFundId[purchase.fundId] ?: continue
+                    if (isin !in expectedIsins && metadataByIsin[isin]?.risk != level) continue
+                    consumed += purchase.id
+                    remaining -= purchase.amount + purchase.fee
+                }
+                if (remaining > 0.0) result[level] = (result[level] ?: 0.0) + remaining
+            }
+        return result
+    }
 
     /** Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. */
     private fun gapsPp(
@@ -158,6 +238,8 @@ object SwitchPlanCalc {
      *
      * @param excludedPairs avstådda byten som (säljISIN, köpISIN) (HEM-14) — tas ur
      *   kandidatmängden innan loopen, så listan blir 1..n utan luckor.
+     * @param pendingProceedsByLevel likvid som väntar på köp per målnivå (BYT-3,
+     *   [pendingProceedsByLevel]) — räknas som värde på nivån men kan aldrig säljas.
      */
     fun plan(
         holdings: List<Holding>,
@@ -165,6 +247,7 @@ object SwitchPlanCalc {
         candidates: List<Candidate>,
         targetAllocation: Map<Int, Double>,
         excludedPairs: Set<Pair<String, String>> = emptySet(),
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
     ): List<Switch> {
         if (targetAllocation.isEmpty()) return emptyList()
 
@@ -176,11 +259,12 @@ object SwitchPlanCalc {
         // [PortfolioRiskCalc.actualAllocation] använder, så procenttalen i planen och i
         // riskkortet ovanför beskriver samma fördelning.
         val positions = positionsOf(holdings, metadataByIsin)
-        val totalValueKr = positions.sumOf { it.valueKr }
+        // Likviden på väg (BYT-3) väger på sin målnivå och i nämnaren, men ligger inte i sellSlots.
+        val levelValues = levelValuesOf(positions, pendingProceedsByLevel)
+        val totalValueKr = levelValues.values.sum()
         if (totalValueKr <= 0.0) return emptyList()
 
         val sellSlots = positions.filter { it.feePercent != null }.toMutableList()
-        val levelValues = levelValuesOf(positions)
         val usedBuyIsins = positions.mapTo(mutableSetOf()) { it.isin }
         val switches = mutableListOf<Switch>()
 

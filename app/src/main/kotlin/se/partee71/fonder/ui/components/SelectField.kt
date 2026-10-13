@@ -25,6 +25,9 @@ import androidx.compose.ui.Modifier
  *
  * @param clearOptionLabel om satt visas ett extra menyval överst som sätter valet till null
  *   (t.ex. "Alla fondbolag"). Lämna null när ett värde alltid måste vara valt.
+ * @param supportingText förklaring under fältet (bytesväljaren, BYT-2) — läses av skärmläsaren
+ *   tillsammans med fältet.
+ * @param enabled false låser fältet med valet synligt (förifyllt formulär från Följ, BYT-2).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,12 +40,14 @@ fun <T> SelectField(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     clearOptionLabel: String? = null,
+    supportingText: String? = null,
+    enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+        expanded = expanded && enabled,
+        onExpandedChange = { if (enabled) expanded = it },
         modifier = modifier,
     ) {
         OutlinedTextField(
@@ -51,9 +56,11 @@ fun <T> SelectField(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            supportingText = supportingText?.let { text -> { Text(text) } },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
             if (clearOptionLabel != null) {
                 DropdownMenuItem(
                     text = { Text(clearOptionLabel) },

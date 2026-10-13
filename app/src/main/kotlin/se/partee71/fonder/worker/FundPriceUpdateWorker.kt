@@ -256,7 +256,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 if (scanSwitchPlan && !refreshForced) {
                     scanSwitchPlan(
                         transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                        suggestionRecordRepository, suggestionDismissalRepository,
+                        suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
                     )
                 }
                 return
@@ -267,7 +267,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             if (scanSwitchPlan) {
                 scanSwitchPlan(
                     transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                    suggestionRecordRepository, suggestionDismissalRepository,
+                    suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
                 )
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
                 scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository)
@@ -287,7 +287,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 }
                 scanSwitchPlan(
                     transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                    suggestionRecordRepository, suggestionDismissalRepository,
+                    suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
                 )
             }
             switchPlanScanRequestedSince(checkedAt)?.let { request -> enqueueSwitchPlanFollowUp(request.force) }
@@ -652,9 +652,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * någotdera.
          *
          * Sedan issue #143 tas aktiva avståenden (HEM-14) ur kandidatmängden innan den giriga
-         * loopen. Likvid som väntar på köp räknas **inte** — det kommer i #144 (BYT-3), och tills
-         * dess räknas planen inte om efter transaktioner (den hade föreslagit nästa sälj för ett
-         * gap som redan är finansierat).
+         * loopen, och sedan issue #144 räknas **likvid som väntar på köp** (BYT-3,
+         * [SwitchPlanCalc.pendingProceedsByLevel]) som värde på bevakningens målnivå — därför kan
+         * planen räknas om efter varje transaktion ([se.partee71.fonder.domain.usecase.RecordTransaction])
+         * utan att föreslå nästa sälj för ett gap som ett sälj redan finansierat.
          *
          * Skanningen körs efter varje avstående och ångrat avstående, alltså flera gånger per
          * dygn, och inspelningen är därför **per plan**: ett par som redan spelats in i dag
@@ -685,6 +686,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             suggestionDismissalRepository: SuggestionDismissalRepository,
+            switchWatchRepository: SwitchWatchRepository,
             /**
              * Dagens datum och körnings-id:t ([SuggestionRecord.batchEpochMillis]) läses **inuti**
              * låset: en skanning som väntat på en annan ska skriva med ett id som är nyare än
@@ -703,7 +705,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
 
             val plan = computeSwitchPlan(
                 transactionRepository, fundPriceRepository, fundMetadataRepository,
-                suggestionDismissalRepository, targetAllocation, today,
+                suggestionDismissalRepository, suggestionRecordRepository, switchWatchRepository, targetAllocation, today,
             )
             if (plan.switches.isEmpty()) {
                 // Tom plan: bytet är gjort eller behovet borta. Går inte att spela in som rader —
@@ -772,6 +774,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             fundPriceRepository: FundPriceRepository,
             fundMetadataRepository: FundMetadataRepository,
             suggestionDismissalRepository: SuggestionDismissalRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+            switchWatchRepository: SwitchWatchRepository,
             targetAllocation: Map<Int, Double>,
             today: LocalDate,
         ): ComputedPlan {
@@ -805,13 +809,23 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             // det kan bara inte säljas, och en fond som saknar avgift i källan är ett bestående
             // läge — hade det hållit markören tillbaka stod en gammal plan kvar för alltid.
             val metadataComplete = heldIsins.all { metadataByIsin[it]?.risk != null } && withValue.all { it.currentValue != null }
-            val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation)
+
+            // Likvid som väntar på köp (BYT-3) — ur cachen: alla bevakningar (de stängdas köp får
+            // inte förbrukas igen), de öppnas källförslags köpfond (riktat uppslag) och innehavens
+            // redan lästa metadata.
+            val watches = switchWatchRepository.getAll()
+            val buyIsinByRecordId = suggestionRecordRepository
+                .observeByIds(watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }).first()
+                .associate { it.id to it.buyIsin }
+            val pendingProceeds = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, metadataByIsin, today)
+
+            val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation, pendingProceeds)
             if (levels.isEmpty()) return ComputedPlan(emptyList(), prices, conclusive = metadataComplete)
             val candidatesByLevel = levels.associateWith { level ->
                 fundMetadataRepository.findSwitchCandidates(level, excludeIsins = heldIsins)
             }
             return ComputedPlan(
-                SwitchPlanCalc.plan(withValue, metadataByIsin, candidatesByLevel.values.flatten(), targetAllocation, excludedPairs),
+                SwitchPlanCalc.plan(withValue, metadataByIsin, candidatesByLevel.values.flatten(), targetAllocation, excludedPairs, pendingProceeds),
                 prices,
                 // En nivå utan en enda kandidat kan lika gärna vara en källa som inte svarade.
                 conclusive = metadataComplete && candidatesByLevel.values.none { it.isEmpty() },

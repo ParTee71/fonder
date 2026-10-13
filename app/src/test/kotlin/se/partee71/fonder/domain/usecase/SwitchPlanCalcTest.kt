@@ -6,6 +6,12 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
+import java.time.LocalDate
 
 class SwitchPlanCalcTest {
 
@@ -369,5 +375,146 @@ class SwitchPlanCalcTest {
     @Test
     fun `ar alla par pa nivan avstadda ges inget byte dar`() {
         assertTrue(twoSellSlotsPlan(setOf("SEDYR" to "SEC", "SEBILLIG" to "SEC")).isEmpty())
+    }
+
+    // --- Likvid som väntar på köp (BYT-3) ---
+
+    private val today: LocalDate = LocalDate.of(2026, 10, 12)
+    private val soldAt = today.minusDays(2).toEpochDay()
+
+    private fun sell(id: Long, fundId: String, kr: Double, day: Long = soldAt) =
+        Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = 1.0, pricePerShare = kr)
+
+    private fun buy(id: Long, fundId: String, kr: Double, day: Long = soldAt + 1, fee: Double = 0.0) =
+        Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = 1.0, pricePerShare = kr, fee = fee)
+
+    private fun watch(
+        id: Long,
+        proceedsKr: Double? = 4_000.0,
+        targetLevel: Int? = 3,
+        sellTransactionId: Long? = 1,
+        soldAtEpochDay: Long = soldAt,
+        candidates: List<String> = listOf("SEKAND"),
+        sourceRecordId: Long? = null,
+        closed: Boolean = false,
+    ) = SwitchWatch(
+        id = id, sellIsin = "SEA", sellFundName = "A", soldAtEpochDay = soldAtEpochDay, proceedsKr = proceedsKr, targetLevel = targetLevel,
+        sellTransactionId = sellTransactionId, sourceRecordId = sourceRecordId,
+        candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
+        closedAtEpochDay = if (closed) today.toEpochDay() else null, closeReason = if (closed) SwitchWatchCloseReason.KOPT else null,
+    )
+
+    private val funds = listOf(fund("A"), fund("KAND"), fund("FORESLAGEN"), fund("NIVA3"), fund("NIVA5"), fund("UTAN", isin = null))
+    private val levelMetadata = mapOf("SENIVA3" to metadata("SENIVA3", risk = 3, fee = 0.5), "SENIVA5" to metadata("SENIVA5", risk = 5, fee = 0.5))
+
+    private fun pending(
+        watches: List<SwitchWatch>,
+        transactions: List<Transaction>,
+        buyIsinByRecordId: Map<Long, String> = emptyMap(),
+    ) = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, levelMetadata, today)
+
+    @Test
+    fun `en oppen bevakning med saljtransaktion raknas som likvid pa sin malniva`() {
+        val pending = pending(listOf(watch(1)), listOf(sell(1, "A", 4_000.0)))
+
+        assertEquals(mapOf(3 to 4_000.0), pending)
+    }
+
+    @Test
+    fun `bevakningar utan saljtransaktion belopp eller malniva samt stangda och utgangna raknas inte`() {
+        val expiredDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+        val watches = listOf(
+            watch(1, sellTransactionId = null), // "Bevaka alternativ" ur ett förslag — pengarna är inte bevisligen fria
+            watch(2, sellTransactionId = 99), // säljet är borttaget (TRX-2)
+            watch(3, proceedsKr = null),
+            watch(4, targetLevel = null),
+            watch(5, closed = true),
+            watch(6, soldAtEpochDay = expiredDay),
+        )
+
+        assertTrue(pending(watches, listOf(sell(1, "A", 4_000.0))).isEmpty())
+    }
+
+    @Test
+    fun `kop sedan saljdagen i kandidat foreslagen fond eller fond pa malnivan forbrukar likviden inklusive avgift`() {
+        val watches = listOf(watch(1, proceedsKr = 10_000.0, sourceRecordId = 7))
+        val transactions = listOf(
+            sell(1, "A", 10_000.0),
+            buy(2, "KAND", 1_000.0),
+            buy(3, "FORESLAGEN", 2_000.0, fee = 50.0),
+            buy(4, "NIVA3", 3_000.0),
+            buy(5, "NIVA5", 500.0), // annan nivå — inte bytets pengar
+            buy(6, "UTAN", 500.0), // utan ISIN kan inte matchas
+            buy(7, "KAND", 500.0, day = soldAt - 1), // före säljdagen — pengarna fanns inte
+        )
+
+        val pending = pending(watches, transactions, buyIsinByRecordId = mapOf(7L to "SEFORESLAGEN"))
+
+        assertEquals(10_000.0 - 1_000.0 - 2_050.0 - 3_000.0, pending.getValue(3), 1e-9)
+    }
+
+    @Test
+    fun `helt forbrukad likvid ger ingen post - ett kop storre an resten forbrukas helt utan att fora over`() {
+        val watches = listOf(watch(1, proceedsKr = 1_000.0), watch(2, proceedsKr = 1_000.0, sellTransactionId = 2, soldAtEpochDay = soldAt + 1))
+        val transactions = listOf(sell(1, "A", 1_000.0), sell(2, "A", 1_000.0, day = soldAt + 1), buy(3, "KAND", 1_500.0, day = soldAt + 2))
+
+        val pending = pending(watches, transactions)
+
+        // Köpet (1 500) tas av den äldsta bevakningen (1 000 → 0); de 500 kr över förs inte vidare —
+        // den andra bevakningens 1 000 står kvar. Underräkning är ok, dubbelräkning aldrig.
+        assertEquals(mapOf(3 to 1_000.0), pending)
+    }
+
+    @Test
+    fun `ett kop forbrukas hogst en gang totalt aven med tva bevakningar pa samma niva`() {
+        val watches = listOf(watch(2, proceedsKr = 3_000.0, sellTransactionId = 2, soldAtEpochDay = soldAt + 1), watch(1, proceedsKr = 3_000.0))
+        val transactions = listOf(sell(1, "A", 3_000.0), sell(2, "A", 3_000.0, day = soldAt + 1), buy(3, "KAND", 2_000.0, day = soldAt + 2))
+
+        val pending = pending(watches, transactions)
+
+        // Äldst först: bevakning 1 tar köpet (3 000 → 1 000), bevakning 2 har 3 000 kvar. Summan 4 000 —
+        // hade köpet räknats mot båda vore den 2 000.
+        assertEquals(mapOf(3 to 4_000.0), pending)
+    }
+
+    @Test
+    fun `ett kop som avslutat en annan bevakning forbrukar inte den oppnas likvid`() {
+        // Byte 1 (nivå 3) stängdes av köp 3 som buyTransactionId; byte 2 på samma nivå väntar
+        // fortfarande. Räknades köpet igen mot byte 2 blev likviden 0 och planen sålde en gång till.
+        val closedByBuy = watch(1, proceedsKr = 2_000.0).copy(
+            closedAtEpochDay = soldAt + 2, closeReason = SwitchWatchCloseReason.KOPT, boughtIsin = "SEKAND", buyTransactionId = 3,
+        )
+        val open = watch(2, proceedsKr = 2_000.0, sellTransactionId = 2, soldAtEpochDay = soldAt + 1)
+        val transactions = listOf(sell(1, "A", 2_000.0), sell(2, "A", 2_000.0, day = soldAt + 1), buy(3, "KAND", 2_000.0, day = soldAt + 2))
+
+        assertEquals(mapOf(3 to 2_000.0), pending(listOf(closedByBuy, open), transactions))
+    }
+
+    @Test
+    fun `likviden vager pa malnivan och i namnaren - ett finansierat gap foreslar inget nytt salj`() {
+        // 6 000 kr kvar på nivå 5 efter ett sälj på 4 000 kr som väntar på köp (mål 40/60 nivå 3/5).
+        // Utan likviden ser nivå 3 ut som 0 % och planen säljer 2 400 kr till; med den är
+        // fördelningen redan 40/60 och planen tom.
+        val holdings = listOf(holding("A", 6_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
+        val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+        val target = mapOf(3 to 0.4, 5 to 0.6)
+
+        assertEquals(1, plan(holdings, metadataByIsin, candidates, target).size)
+        assertTrue(SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, target, pendingProceedsByLevel = mapOf(3 to 4_000.0)).isEmpty())
+        assertTrue(SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, target, mapOf(3 to 4_000.0)).isEmpty())
+    }
+
+    @Test
+    fun `likviden kan aldrig saljas - en overviktad niva med bara likvid ger ingen plan`() {
+        // Allt innehav på nivå 3 (mål 100 % nivå 3) plus 4 000 kr likvid på väg till nivå 5: nivå 5
+        // är överviktad men det finns ingen position att sälja där — likviden är inte en fond.
+        val holdings = listOf(holding("A", 6_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 3, fee = 1.0))
+        val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+
+        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), pendingProceedsByLevel = mapOf(5 to 4_000.0))
+
+        assertTrue(plan.isEmpty())
     }
 }

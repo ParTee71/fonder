@@ -1,6 +1,5 @@
 package se.partee71.fonder.ui.fond
 
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -706,26 +705,25 @@ class FondDetaljScreenTest {
     }
 
     @Test
-    fun bytesforslaget_kan_kvitteras_som_genomfort_utan_att_fallas_ut() {
-        // SET-5/issue #90: samma inspelade rad som Hems bytesplan skriver mot — kvitteringen
-        // ska gå att göra där beslutet fattas, utan att först fälla ut diagrammet.
-        var callback: Pair<Long, Boolean>? = null
+    fun folj_pa_bytesforslaget_gar_utan_att_fallas_ut() {
+        // ANA-10/BYT-2: Följ öppnar säljformuläret där beslutet fattas, utan att först fälla ut diagrammet.
+        var followed: Long? = null
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
-                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                    onFollow = { followed = it.recordId },
                 )
             }
         }
 
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+        composeRule.onNodeWithText("Följ").performScrollTo().performClick()
 
-        assertEquals(1L to true, callback)
+        assertEquals(1L, followed)
     }
 
     @Test
-    fun kvitteringen_speglar_ett_redan_genomfort_byte() {
+    fun ett_redan_genomfort_byte_erbjuds_inte_folj() {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
@@ -734,13 +732,14 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Genomförd").performScrollTo().assertIsOn()
+        composeRule.onNodeWithText("Följ").assertDoesNotExist()
+        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
     }
 
     // --- Kvittering av avgiftsbytet (ANA-9/SET-5, issue #91) ---
 
     @Test
-    fun avgiftsalternativ_utan_inspelad_rad_har_ingen_kryssruta() {
+    fun avgiftsalternativ_utan_inspelad_rad_har_ingen_folj() {
         // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen —
         // ett alternativ som just dykt upp har inget att kvittera mot. En kryssruta som tyst
         // inte skriver någonstans vore värre än ingen alls.
@@ -756,12 +755,12 @@ class FondDetaljScreenTest {
         }
 
         composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performScrollTo().assertExists()
-        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
+        composeRule.onNodeWithText("Följ").assertDoesNotExist()
     }
 
     @Test
-    fun avgiftsalternativ_med_inspelad_rad_kan_kvitteras() {
-        var callback: Pair<Long, Boolean>? = null
+    fun avgiftsalternativ_med_inspelad_rad_kan_foljas() {
+        var followed: Long? = null
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
@@ -770,19 +769,19 @@ class FondDetaljScreenTest {
                         feeComparison = FeeComparisonUiState.Found(listOf(alternative)),
                         recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = false)),
                     ),
-                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                    onFollowFee = { followed = it },
                 )
             }
         }
 
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
+        composeRule.onNodeWithText("Följ").performScrollTo().performClick()
 
-        // Skriver mot avgiftsradens eget id, inte mot bytesplanens.
-        assertEquals(42L to true, callback)
+        // Följer avgiftsradens eget id, inte bytesplanens.
+        assertEquals(42L, followed)
     }
 
     @Test
-    fun kvitteringen_speglar_ett_redan_genomfort_avgiftsbyte() {
+    fun ett_redan_genomfort_avgiftsbyte_erbjuds_inte_folj() {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
@@ -795,6 +794,7 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Genomförd").performScrollTo().assertIsOn()
+        composeRule.onNodeWithText("Länsförsäkringar Sverige Index").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Följ").assertDoesNotExist()
     }
 }

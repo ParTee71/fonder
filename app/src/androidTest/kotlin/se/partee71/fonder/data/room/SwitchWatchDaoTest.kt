@@ -210,6 +210,50 @@ class SwitchWatchDaoTest {
     }
 
     @Test
+    fun linkSellTransactionOnDay_flyttar_dagen_och_resetCandidateAnchors_nollar_bara_nollpunkten() = runTest {
+        val watchId = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_903, sellTransactionId = null)
+        val other = insertWatch(sellIsin = "SE_ANNAN", soldAtEpochDay = 19_903, sellTransactionId = null)
+        dao.insertCandidates(
+            listOf(
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = 10.0, navAtStartEpochDay = 19_903, position = 0),
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_B", name = "B", navAtStart = 20.0, navAtStartEpochDay = 19_903, source = "MANUELL", position = 1),
+                SwitchWatchCandidateEntity(watchId = other, isin = "SE_C", name = "C", navAtStart = 30.0, navAtStartEpochDay = 19_903, position = 0),
+            ),
+        )
+
+        assertEquals(1, dao.linkSellTransactionOnDay(watchId, transactionId = 42, proceedsKr = 1_475.0, soldAtEpochDay = 19_900))
+        assertEquals(0, dao.linkSellTransactionOnDay(watchId, transactionId = 43, proceedsKr = 999.0, soldAtEpochDay = 19_890))
+        dao.resetCandidateAnchors(watchId)
+
+        val watch = dao.getById(watchId)!!.toDomain()
+        assertEquals(42L, watch.sellTransactionId)
+        assertEquals(19_900L, watch.soldAtEpochDay)
+        assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
+        assertEquals(listOf("SE_A", "SE_B"), watch.candidates.map { it.isin })
+        assertTrue(watch.candidates.all { it.navAtStart == null && it.navAtStartEpochDay == null })
+        assertEquals("MANUELL", dao.getById(watchId)!!.candidates.first { it.isin == "SE_B" }.source)
+        // En annan bevaknings nollpunkt rörs inte.
+        assertEquals(30.0, dao.getById(other)!!.toDomain().candidates.single().navAtStart!!, 1e-9)
+    }
+
+    @Test
+    fun en_stangd_bevakning_lankas_aldrig_och_adoptSuggestion_ror_bara_en_bevakning_utan_forslag() = runTest {
+        val closed = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_903, closedAtEpochDay = 19_905, sellTransactionId = null)
+        val open = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_903, sellTransactionId = null)
+
+        assertEquals(0, dao.linkSellTransaction(closed, transactionId = 42, proceedsKr = 1.0))
+        assertEquals(0, dao.linkSellTransactionOnDay(closed, transactionId = 42, proceedsKr = 1.0, soldAtEpochDay = 19_900))
+        assertNull(dao.getById(closed)!!.toDomain().sellTransactionId)
+
+        dao.adoptSuggestion(open, sourceRecordId = 7, targetLevel = 3)
+        dao.adoptSuggestion(open, sourceRecordId = 8, targetLevel = 5)
+
+        val adopted = dao.getById(open)!!.toDomain()
+        assertEquals(7L, adopted.sourceRecordId)
+        assertEquals(3, adopted.targetLevel)
+    }
+
+    @Test
     fun close_som_kopt_skriver_koptransaktionen_och_raden_behaller_saljlanken() = runTest {
         val watchId = insertWatch(sellTransactionId = 42)
 

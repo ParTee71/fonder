@@ -43,7 +43,6 @@ import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExpandableSection
-import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
@@ -58,6 +57,7 @@ fun BeslutScreen(
     onOpenSwitchWatch: (Long) -> Unit,
     onOpenRiskProfile: () -> Unit,
     onOpenFacit: () -> Unit,
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BeslutViewModel = hiltViewModel(),
 ) {
@@ -76,7 +76,7 @@ fun BeslutScreen(
         state = state,
         onOpenRiskProfile = onOpenRiskProfile,
         onOpenSwitchWatch = onOpenSwitchWatch,
-        onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        onFollow = onFollow,
         onStartSwitchWatch = viewModel::startSwitchWatch,
         onDismissSuggestion = viewModel::dismissSuggestion,
         onUndoDismissal = viewModel::undoDismissal,
@@ -97,7 +97,7 @@ fun BeslutContent(
     modifier: Modifier = Modifier,
     onOpenRiskProfile: () -> Unit = {},
     onOpenSwitchWatch: (Long) -> Unit = {},
-    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onDismissSuggestion: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onUndoDismissal: (SwitchPlanResolver.Suggestion) -> Unit = {},
@@ -136,7 +136,7 @@ fun BeslutContent(
                         stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(switch.feeDeltaPercent / 100.0)),
                     ),
                     watched = switch.sellIsin in decisions.watchedSellIsins,
-                    onFollowedChange = onSwitchFollowedChange,
+                    onFollow = onFollow,
                     onStartSwitchWatch = onStartSwitchWatch,
                     onDismiss = onDismissSuggestion,
                 )
@@ -180,7 +180,7 @@ fun BeslutContent(
                         alternative.annualSavingsKr?.let { stringResource(R.string.format_beslut_cheaper_savings, MoneyFormat.kr(it)) },
                     ),
                     watched = alternative.suggestion.sellIsin in decisions.watchedSellIsins,
-                    onFollowedChange = onSwitchFollowedChange,
+                    onFollow = onFollow,
                     onStartSwitchWatch = onStartSwitchWatch,
                     onDismiss = onDismissSuggestion,
                 )
@@ -333,12 +333,13 @@ private fun cheaperAlternativeHeadline(alternative: CheaperAlternative): String 
  * [SwitchPlanResolver.Suggestion.planIndex], aldrig ur listpositionen: planen är girig och
  * sekventiell, så numret är en del av rådet (issue #75).
  *
- * **Följ** och **Avstå** (HEM-14) är förslagets två beslut. "Följ" utför inget byte, den
- * **registrerar** att användaren gjorde det (SET-5) — samma markering som "Genomförd", som då tar
- * över raden så att kvitteringen kan ångras på samma sätt som i Facit och Fonddetalj. "Avstå" döljer
- * fondparet för förslagets sort (se [SuggestionDismissals]). "Bevaka alternativ" erbjuds först efter
- * kvitteringen — bevakningen handlar om perioden **efter** säljet (ANA-12) — och bara när säljfonden
- * inte redan bevakas, annars hade varje tryck startat ytterligare en bevakning av samma byte.
+ * **Följ** och **Avstå** (HEM-14) är förslagets två beslut. "Följ" utför inget byte, den öppnar
+ * säljformuläret förifyllt för förslaget (BYT-2) — det sparade säljet startar bytet, och ingen
+ * kvittering sker utan transaktion; ett pågående byte (BYT-1) erbjuds inte Följ igen. "Avstå" döljer
+ * fondparet för förslagets sort (se [SuggestionDismissals]). Ett förslag kvitterat i Facit (SET-5)
+ * erbjuder "Bevaka alternativ" — bevakningen handlar om perioden **efter** säljet (ANA-12) — och
+ * bara när säljfonden inte redan bevakas, annars hade varje tryck startat ytterligare en bevakning
+ * av samma byte.
  */
 @Composable
 private fun SuggestionCard(
@@ -346,7 +347,7 @@ private fun SuggestionCard(
     title: String,
     details: List<String>,
     watched: Boolean,
-    onFollowedChange: (Long, Boolean) -> Unit,
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
     onDismiss: (SwitchPlanResolver.Suggestion) -> Unit,
 ) {
@@ -361,10 +362,8 @@ private fun SuggestionCard(
             )
         }
         if (suggestion.followed) {
-            FollowedToggleRow(
-                followed = true,
-                onFollowedChange = { checked -> onFollowedChange(suggestion.recordId, checked) },
-            )
+            // Kvitterat i Facit (SET-5) utan ett registrerat sälj — bevakningen kan startas utan
+            // transaktion (HEM-8/ANA-12); kvitteringen ändras bara i Facit.
             if (!watched) {
                 AppButton(
                     text = stringResource(R.string.switch_watch_start),
@@ -378,12 +377,15 @@ private fun SuggestionCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppButton(
-                    text = stringResource(R.string.beslut_follow),
-                    onClick = { onFollowedChange(suggestion.recordId, true) },
-                    variant = AppButtonVariant.Outlined,
-                    contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName),
-                )
+                // Ett pågående byte (BYT-1) är redan sålt — Följ hade registrerat samma sälj igen.
+                if (!suggestion.inProgress) {
+                    AppButton(
+                        text = stringResource(R.string.beslut_follow),
+                        onClick = { onFollow(suggestion) },
+                        variant = AppButtonVariant.Outlined,
+                        contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName),
+                    )
+                }
                 AppButton(
                     text = stringResource(R.string.beslut_dismiss),
                     onClick = { onDismiss(suggestion) },

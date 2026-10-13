@@ -56,6 +56,7 @@ const val SWITCH_WATCH_LIST_TEST_TAG = "switch_watch_list"
 fun SwitchWatchScreen(
     watchId: Long,
     onAddCandidate: () -> Unit,
+    onBought: (String) -> Unit,
     onClosed: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SwitchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> { it.create(watchId) },
@@ -71,7 +72,7 @@ fun SwitchWatchScreen(
     SwitchWatchContent(
         state = state,
         onRefresh = viewModel::refresh,
-        onBought = viewModel::onBought,
+        onBought = onBought,
         onRemoveCandidate = viewModel::onRemoveCandidate,
         onAddCandidate = onAddCandidate,
         onCancel = viewModel::onCancel,

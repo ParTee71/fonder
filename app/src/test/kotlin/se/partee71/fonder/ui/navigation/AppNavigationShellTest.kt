@@ -55,7 +55,7 @@ class AppNavigationShellTest {
         HandelserKey -> "transaktioner"
         SettingsKey -> "settings"
         FacitKey -> "facit"
-        TransactionFormKey -> "transaction-form"
+        is TransactionFormKey -> "transaction-form"
         ImportOrdersKey -> "import-orders"
         ImportHoldingsKey -> "import-holdings"
         FundSearchKey -> "fund-search"

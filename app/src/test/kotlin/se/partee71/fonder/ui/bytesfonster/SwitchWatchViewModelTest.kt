@@ -21,22 +21,20 @@ import org.junit.Test
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
-import se.partee71.fonder.domain.model.SuggestionKind
-import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
-import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.ui.navigation.TransactionFormKey
 import java.time.LocalDate
 
 /**
@@ -90,22 +88,8 @@ class SwitchWatchViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
-    private class FakeSuggestionRecordRepository : SuggestionRecordRepository {
-        val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records
-        override fun observeHistory(): Flow<List<SuggestionRecord>> = records
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind) = false
-        override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
-        override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {}
-        override suspend fun setFollowed(id: Long, followed: Boolean) {
-            records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
-        }
-        override suspend fun prune(today: LocalDate) {}
-    }
-
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
-    private val suggestionRepo = FakeSuggestionRecordRepository()
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -153,7 +137,6 @@ class SwitchWatchViewModelTest {
         fakePriceRepo,
         metadataRepo,
         fakeTransactionRepo,
-        RecordTransaction(fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo),
     )
 
     @Test
@@ -255,14 +238,10 @@ class SwitchWatchViewModelTest {
     }
 
     @Test
-    fun `kopte den har stanger bevakningen och kvitterar det foljda forslaget`() = runTest(dispatcher) {
-        suggestionRepo.records.value = listOf(
-            SuggestionRecord(
-                id = 7, suggestedAtEpochDay = soldAt.toEpochDay(), planIndex = 0,
-                sellIsin = "SE_SALJ", buyIsin = "SE_A",
-                sellNavAtSuggestion = 200.0, buyNavAtSuggestion = 100.0,
-            ),
-        )
+    fun `kopte den har stanger ingenting sjalv - kopet registreras i formularet`() = runTest(dispatcher) {
+        // ANA-12/BYT-2: knappen öppnar köpformuläret för kandidaten (TransactionFormKey.bought) och
+        // det sparade köpet stänger bevakningen med köptransaktionen — se TransactionFormViewModelTest
+        // och RecordTransactionTest. Skärmen själv kvitterar ingenting utan transaktion.
         val watchId = startWatch(
             targetLevel = null,
             candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A")),
@@ -273,50 +252,14 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onBought("SE_A")
-            advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
 
-        val stored = switchWatchRepo.watches.value.single()
-        assertFalse(stored.isOpen)
-        assertEquals("SE_A", stored.boughtIsin)
-        assertEquals(SwitchWatchCloseReason.KOPT, stored.closeReason)
-        // Kvitteringen görs utan transaktion tills knappen öppnar formuläret (#144) — ingen koppling påstås.
-        assertNull(stored.buyTransactionId)
-        assertEquals(true, suggestionRepo.records.value.single().followed)
-    }
-
-    @Test
-    fun `ett kop av en annan fond an den foreslagna kvitterar inte forslaget`() = runTest(dispatcher) {
-        // Facit mäter *följda råd* (SET-5) — ett byte till något annat är inte rådet som följdes.
-        suggestionRepo.records.value = listOf(
-            SuggestionRecord(
-                id = 7, suggestedAtEpochDay = soldAt.toEpochDay(), planIndex = 0,
-                sellIsin = "SE_SALJ", buyIsin = "SE_A",
-                sellNavAtSuggestion = 200.0, buyNavAtSuggestion = 100.0,
-            ),
+        assertEquals(
+            TransactionFormKey(fundIsin = "SE_A", type = TransactionType.KOP, watchId = watchId),
+            TransactionFormKey.bought(watchId, "SE_A"),
         )
-        val watchId = startWatch(
-            targetLevel = null,
-            candidates = listOf(
-                SwitchWatchCandidate(isin = "SE_A", name = "Fond A"),
-                SwitchWatchCandidate(isin = "SE_B", name = "Fond B"),
-            ),
-            sourceRecordId = 7,
-        )
-
-        val vm = viewModel(watchId)
-        vm.uiState.test {
-            awaitItem()
-            advanceUntilIdle()
-            vm.onBought("SE_B")
-            advanceUntilIdle()
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        assertEquals("SE_B", switchWatchRepo.watches.value.single().boughtIsin)
-        assertNull(suggestionRepo.records.value.single().followed)
+        assertTrue(switchWatchRepo.watches.value.single().isOpen)
     }
 
     @Test

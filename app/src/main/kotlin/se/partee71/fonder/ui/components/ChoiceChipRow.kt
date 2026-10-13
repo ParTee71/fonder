@@ -38,6 +38,7 @@ fun <T> ChoiceChipRow(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()).selectableGroup(),
@@ -50,6 +51,7 @@ fun <T> ChoiceChipRow(
                 index = index,
                 count = options.size,
                 onClick = { onSelect(option) },
+                enabled = enabled,
             )
         }
     }
@@ -76,6 +78,7 @@ fun ConnectedChoiceButton(
     count: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val shapes = when {
         count == 1 -> ToggleButtonShapes(
@@ -90,6 +93,7 @@ fun ConnectedChoiceButton(
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
+        enabled = enabled,
         modifier = modifier.semantics {
             role = Role.RadioButton
             this.selected = selected

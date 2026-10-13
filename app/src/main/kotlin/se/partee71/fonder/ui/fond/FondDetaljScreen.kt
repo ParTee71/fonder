@@ -37,7 +37,6 @@ import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
-import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
@@ -45,6 +44,7 @@ import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.fonder.ui.navigation.TransactionFormKey
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -67,6 +67,7 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 fun FondDetaljScreen(
     fundId: String,
     onOpenSwitchWatch: (Long) -> Unit,
+    onOpenTransactionForm: (TransactionFormKey) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FondDetaljViewModel = hiltViewModel<FondDetaljViewModel, FondDetaljViewModel.Factory> { it.create(fundId) },
 ) {
@@ -86,7 +87,8 @@ fun FondDetaljScreen(
         onRefresh = viewModel::refresh,
         onIsinConfirmed = viewModel::onIsinConfirmed,
         onSuggestionExpanded = viewModel::onSuggestionExpanded,
-        onSwitchFollowedChange = viewModel::setSwitchFollowed,
+        onFollow = { suggestion -> onOpenTransactionForm(TransactionFormKey.follow(suggestion)) },
+        onFollowFee = { recordId -> onOpenTransactionForm(TransactionFormKey.follow(fundId, recordId)) },
         onStartSwitchWatch = viewModel::startSwitchWatch,
         modifier = modifier,
     )
@@ -99,7 +101,8 @@ fun FondDetaljContent(
     onRefresh: () -> Unit = {},
     onIsinConfirmed: (String) -> Unit = {},
     onSuggestionExpanded: (String) -> Unit = {},
-    onSwitchFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit = {},
+    onFollowFee: (Long) -> Unit = {},
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -142,7 +145,8 @@ fun FondDetaljContent(
                                 state = state,
                                 chartPoints = chartPoints,
                                 onSuggestionExpanded = onSuggestionExpanded,
-                                onSwitchFollowedChange = onSwitchFollowedChange,
+                                onFollow = onFollow,
+                                onFollowFee = onFollowFee,
                                 onStartSwitchWatch = onStartSwitchWatch,
                                 modifier = Modifier.padding(vertical = 16.dp),
                             )
@@ -244,7 +248,8 @@ private fun SwitchDecisionSection(
     state: FondDetaljUiState,
     chartPoints: List<Pair<Long, Double>>,
     onSuggestionExpanded: (String) -> Unit,
-    onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
+    onFollowFee: (Long) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -266,7 +271,7 @@ private fun SwitchDecisionSection(
                     chartPoints = chartPoints,
                     comparison = state.comparisons[suggestion.counterpartIsin(state.isin)],
                     onSuggestionExpanded = onSuggestionExpanded,
-                    onSwitchFollowedChange = onSwitchFollowedChange,
+                    onFollow = onFollow,
                     watched = suggestion.sellIsin in state.watchedSellIsins,
                     onStartSwitchWatch = onStartSwitchWatch,
                 )
@@ -297,7 +302,7 @@ private fun SwitchDecisionSection(
                     comparison = state.comparisons[alternative.candidate.isin],
                     recorded = state.recordedFeeSwitches[alternative.candidate.isin],
                     onSuggestionExpanded = onSuggestionExpanded,
-                    onSwitchFollowedChange = onSwitchFollowedChange,
+                    onFollowFee = onFollowFee,
                 )
             }
         }
@@ -378,7 +383,7 @@ private fun SwitchPlanRow(
     chartPoints: List<Pair<Long, Double>>,
     comparison: ComparisonUiState?,
     onSuggestionExpanded: (String) -> Unit,
-    onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     watched: Boolean,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
 ) {
@@ -422,18 +427,22 @@ private fun SwitchPlanRow(
                 )
             }
         }
-        // Kvitteringen ligger **utanför** den utfällbara raden, inte i dess rubrik: rubriken är
-        // en `clickable` som slår ihop sina barns semantik, så en kryssruta där hade blivit en
-        // del av "fäll ut"-noden i stället för en egen växlare för skärmläsaren — och ett klick
-        // hade fällt ut raden i stället för att kvittera. Alltid synlig, av samma skäl som på
-        // Hem: kvitteringen ska gå att göra där beslutet fattas, utan att först fälla ut något.
-        FollowedToggleRow(
-            followed = suggestion.followed,
-            onFollowedChange = { checked -> onSwitchFollowedChange(suggestion.recordId, checked) },
-        )
-        // Bevaka alternativ (ANA-12) — först efter kvitteringen, av samma skäl som på Hem:
-        // bevakningen gäller perioden **efter** säljet, och en öppen bevakning för säljfonden
-        // ska inte kunna startas en gång till.
+        // Följ ligger **utanför** den utfällbara raden, inte i dess rubrik: rubriken är en
+        // `clickable` som slår ihop sina barns semantik, så knappen hade blivit en del av "fäll
+        // ut"-noden för skärmläsaren — och ett tryck hade fällt ut raden. Följ öppnar
+        // säljformuläret förifyllt (BYT-2); kvitterat (i Facit) eller redan pågående (BYT-1)
+        // har förslaget inget sälj kvar att registrera.
+        if (!suggestion.followed && !suggestion.inProgress) {
+            AppButton(
+                text = stringResource(R.string.beslut_follow),
+                onClick = { onFollow(suggestion) },
+                variant = AppButtonVariant.Outlined,
+                contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName),
+            )
+        }
+        // Bevaka alternativ (ANA-12) — för ett förslag kvitterat i Facit, av samma skäl som på
+        // Beslut: bevakningen gäller perioden **efter** säljet, och en öppen bevakning för
+        // säljfonden ska inte kunna startas en gång till.
         if (suggestion.followed && !watched) {
             AppButton(
                 text = stringResource(R.string.switch_watch_start),
@@ -448,10 +457,11 @@ private fun SwitchPlanRow(
  * Ett billigare, likvärdigt alternativ (ANA-9) — namn, årsbesparing och kandidatens risknivå
  * (UI-10) direkt på raden, avgiften och jämförelsediagrammet under när den fälls ut.
  *
- * Kryssrutan visas bara när alternativet har en inspelad rad ([recorded], issue #91). Listan här
- * räknas om mot dagsfärska kurser varje gång kortet öppnas, medan inspelningen sker en gång per
- * dygn i bakgrundsjobbet — ett alternativ som just dykt upp har alltså ännu inget att kvittera
- * *mot*, och en kryssruta som tyst inte skriver någonstans vore värre än ingen.
+ * Följ (BYT-2) visas bara när alternativet har en inspelad rad ([recorded], issue #91) som inte
+ * redan kvitterats. Listan här räknas om mot dagsfärska kurser varje gång kortet öppnas, medan
+ * inspelningen sker en gång per dygn i bakgrundsjobbet — ett alternativ som just dykt upp har
+ * alltså ännu inget förslag att registrera säljet *för*, och en knapp som tyst inte kopplar till
+ * något vore värre än ingen.
  */
 @Composable
 private fun FeeAlternativeRow(
@@ -460,7 +470,7 @@ private fun FeeAlternativeRow(
     comparison: ComparisonUiState?,
     recorded: RecordedFeeSwitch?,
     onSuggestionExpanded: (String) -> Unit,
-    onSwitchFollowedChange: (Long, Boolean) -> Unit,
+    onFollowFee: (Long) -> Unit,
 ) {
     val explanation = stringResource(
         R.string.format_fee_comparison_alternative_explain,
@@ -489,10 +499,12 @@ private fun FeeAlternativeRow(
         }
         // Utanför den utfällbara raden av samma skäl som i SwitchPlanRow: rubriken är en
         // `clickable` som slår ihop sina barns semantik.
-        if (recorded != null) {
-            FollowedToggleRow(
-                followed = recorded.followed,
-                onFollowedChange = { checked -> onSwitchFollowedChange(recorded.recordId, checked) },
+        if (recorded != null && !recorded.followed) {
+            AppButton(
+                text = stringResource(R.string.beslut_follow),
+                onClick = { onFollowFee(recorded.recordId) },
+                variant = AppButtonVariant.Outlined,
+                contentDescription = stringResource(R.string.format_fee_follow_a11y, alternative.candidate.name),
             )
         }
     }

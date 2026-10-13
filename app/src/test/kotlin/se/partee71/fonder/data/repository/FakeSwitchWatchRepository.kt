@@ -45,10 +45,34 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
             .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
             .minByOrNull { it.id }
 
-    override suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double) {
+    /** Sätt till `false` för att spela "någon annan kopplade först": [linkSellTransaction] rör inget och returnerar falskt. */
+    var linkResult: Boolean? = null
+
+    override suspend fun linkSellTransaction(
+        watchId: Long,
+        transactionId: Long,
+        proceedsKr: Double,
+        soldAtEpochDay: Long?,
+        sourceRecordId: Long?,
+        targetLevel: Int?,
+    ): Boolean {
+        linkResult?.let { return it }
+        val current = watches.value.firstOrNull { it.id == watchId } ?: return false
+        if (current.sellTransactionId != null || !current.isOpen) return false
         update(watchId) { watch ->
-            if (watch.sellTransactionId != null) watch else watch.copy(sellTransactionId = transactionId, proceedsKr = proceedsKr)
+            val moved = soldAtEpochDay != null && soldAtEpochDay != watch.soldAtEpochDay
+            val adopt = watch.sourceRecordId == null && sourceRecordId != null && targetLevel != null
+            watch.copy(
+                sellTransactionId = transactionId,
+                proceedsKr = proceedsKr,
+                soldAtEpochDay = soldAtEpochDay ?: watch.soldAtEpochDay,
+                sourceRecordId = if (adopt) sourceRecordId else watch.sourceRecordId,
+                targetLevel = if (adopt) targetLevel else watch.targetLevel,
+                // Som Room: en flyttad dag nollar bara nollpunkten, kandidaterna ligger kvar.
+                candidates = if (moved) watch.candidates.map { it.copy(navAtStart = null, navAtStartEpochDay = null) } else watch.candidates,
+            )
         }
+        return true
     }
 
     override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =

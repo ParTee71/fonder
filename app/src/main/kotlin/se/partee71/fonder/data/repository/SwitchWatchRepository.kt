@@ -44,10 +44,29 @@ interface SwitchWatchRepository {
     /**
      * Kopplar en bevakning utan känd transaktion till säljtransaktionen (BYT-1) och sätter
      * likviden ur den. En bevakning startad ur ett förslag samma dag som säljet blir därmed
-     * säljets bevakning i stället för att säljet får en andra. Säljdagen och kandidaternas
-     * nollpunkt rörs inte.
+     * säljets bevakning i stället för att säljet får en andra. Utan [soldAtEpochDay] rörs varken
+     * säljdagen eller kandidaternas nollpunkt.
+     *
+     * Med [soldAtEpochDay] (en annan dag än bevakningens — efter att användaren tillfrågats,
+     * issue #144) flyttas säljdagen dit och kandidaternas nollpunkt nollas i samma
+     * databastransaktion: nollpunkten är ankrad på den gamla dagen och mäter annars en utveckling
+     * från fel dag. Kandidaterna själva — även de manuellt tillagda — ligger kvar. Är dagen
+     * densamma som bevakningens rörs ingen nollpunkt.
+     *
+     * Med [sourceRecordId] tar en bevakning **utan** förslag över planraden (och [targetLevel])
+     * när den kopplas — säljet var för raden, och bevakningen ska bli radens pågående byte (BYT-1).
+     * En bevakning som redan har ett förslag rörs inte. En stängd bevakning kopplas aldrig.
+     *
+     * @return sant när länken skrevs nu; falskt när bevakningen redan var kopplad, stängd eller inte finns.
      */
-    suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double)
+    suspend fun linkSellTransaction(
+        watchId: Long,
+        transactionId: Long,
+        proceedsKr: Double,
+        soldAtEpochDay: Long? = null,
+        sourceRecordId: Long? = null,
+        targetLevel: Int? = null,
+    ): Boolean
 
     /** Sant om säljtransaktionen redan har en öppen bevakning (BYT-1) — en bevakning per sälj, oavsett startväg. */
     suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean
@@ -123,8 +142,28 @@ class RoomSwitchWatchRepository @Inject constructor(
     override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? =
         dao.getOpenWithoutTransactionFor(sellIsin, soldAtEpochDay).firstOrNull()?.toDomain()
 
-    override suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double) =
-        dao.linkSellTransaction(watchId, transactionId, proceedsKr)
+    override suspend fun linkSellTransaction(
+        watchId: Long,
+        transactionId: Long,
+        proceedsKr: Double,
+        soldAtEpochDay: Long?,
+        sourceRecordId: Long?,
+        targetLevel: Int?,
+    ): Boolean =
+        database.withTransaction {
+            val current = dao.getById(watchId)?.watch ?: return@withTransaction false
+            val linked = if (soldAtEpochDay == null || soldAtEpochDay == current.soldAtEpochDay) {
+                dao.linkSellTransaction(watchId, transactionId, proceedsKr) == 1
+            } else {
+                // Länk, dag och nollpunkt i **en** transaktion: en flyttad dag med gamla nollpunkter
+                // kvar hade mätt kandidaterna från fel dag tills nästa hämtning råkade skriva om dem.
+                val moved = dao.linkSellTransactionOnDay(watchId, transactionId, proceedsKr, soldAtEpochDay) == 1
+                if (moved) dao.resetCandidateAnchors(watchId)
+                moved
+            }
+            if (linked && sourceRecordId != null && targetLevel != null) dao.adoptSuggestion(watchId, sourceRecordId, targetLevel)
+            linked
+        }
 
     override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
         dao.hasOpenForTransaction(sellTransactionId)

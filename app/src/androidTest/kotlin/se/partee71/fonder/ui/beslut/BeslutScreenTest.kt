@@ -87,14 +87,14 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun folj_i_bytesplanen_markerar_forslaget_som_genomfort() {
-        // SET-5 (issue #80) och HEM-14: "Följ" utför inget byte, den registrerar att användaren gjorde det.
-        var callback: Pair<Long, Boolean>? = null
+    fun folj_i_bytesplanen_oppnar_saljformularet_for_forslaget() {
+        // HEM-14/BYT-2: "Följ" utför inget byte och kvitterar ingenting — den öppnar säljformuläret.
+        var followed: Long? = null
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(plan = listOf(dyrTillBillig(recordId = 42))),
-                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
+                    onFollow = { followed = it.recordId },
                 )
             }
         }
@@ -102,26 +102,19 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
         composeRule.onNodeWithText("Följ").performScrollTo().performClick()
 
-        assertEquals(42L to true, callback)
+        assertEquals(42L, followed)
     }
 
     @Test
-    fun genomford_pa_ett_kvitterat_forslag_kan_angras() {
-        var callback: Pair<Long, Boolean>? = null
+    fun ett_kvitterat_forslag_har_varken_folj_avsta_eller_kryssruta() {
+        // Kvitteringen ändras bara i Facit (SET-5).
         composeRule.setContent {
-            FonderTheme {
-                BeslutContent(
-                    state = stateWith(plan = listOf(dyrTillBillig(recordId = 42, followed = true))),
-                    onSwitchFollowedChange = { id, followed -> callback = id to followed },
-                )
-            }
+            FonderTheme { BeslutContent(state = stateWith(plan = listOf(dyrTillBillig(recordId = 42, followed = true)))) }
         }
 
         composeRule.onNodeWithText("Följ").assertDoesNotExist()
         composeRule.onNodeWithText("Avstå").assertDoesNotExist()
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
-
-        assertEquals(42L to false, callback)
+        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
     }
 
     @Test
@@ -190,21 +183,17 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun ett_kvitterat_billigare_alternativ_visar_genomford() {
-        var callback: Pair<Long, Boolean>? = null
+    fun ett_kvitterat_billigare_alternativ_visar_varken_folj_eller_kryssruta() {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
                     state = stateWith().let { it.copy(decisions = it.decisions.copy(cheaperAlternatives = listOf(billigareAlternativ(followed = true)))) },
-                    onSwitchFollowedChange = { id, value -> callback = id to value },
                 )
             }
         }
 
         composeRule.onNodeWithText("Följ").assertDoesNotExist()
-        composeRule.onNodeWithText("Genomförd").performScrollTo().performClick()
-
-        assertEquals(77L to false, callback)
+        composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
     }
 
     @Test
