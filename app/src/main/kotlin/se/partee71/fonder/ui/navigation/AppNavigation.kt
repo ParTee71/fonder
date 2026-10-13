@@ -191,7 +191,7 @@ fun AppNavigationShell(
                 expanded = fabMenuExpanded,
                 onExpandedChange = { fabMenuExpanded = it },
                 items = listOf(
-                    AppFabMenuItem(stringResource(R.string.transaktioner_add), { backStack.push(TransactionFormKey) }),
+                    AppFabMenuItem(stringResource(R.string.transaktioner_add), { backStack.push(TransactionFormKey()) }),
                     AppFabMenuItem(stringResource(R.string.fab_import_orders), { backStack.push(ImportOrdersKey) }),
                     AppFabMenuItem(stringResource(R.string.fab_import_holdings), { backStack.push(ImportHoldingsKey) }),
                     AppFabMenuItem(stringResource(R.string.fab_watch_fund), { backStack.push(FundSearchKey) }),
@@ -257,6 +257,7 @@ fun fonderEntries(
             onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
             onOpenRiskProfile = { backStack.push(RiskProfileKey) },
             onOpenFacit = { backStack.push(FacitKey) },
+            onFollow = { suggestion -> backStack.push(TransactionFormKey.follow(suggestion)) },
         )
     }
     // Facit (SET-5) — en skärm i stacken med bakåtpil, från Beslut och från Inställningar (NAV-9).
@@ -283,13 +284,14 @@ fun fonderEntries(
         FondDetaljScreen(
             fundId = key.fundId,
             onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
+            onOpenTransactionForm = { formKey -> backStack.push(formKey) },
         )
     }
     entry<FundSearchKey> {
         FundSearchScreen()
     }
     entry<TransactionFormKey> { key ->
-        TransactionFormScreen(onSaved = { backStack.popIfTop(key) })
+        TransactionFormScreen(formKey = key, onSaved = { backStack.popIfTop(key) })
     }
     entry<ImportHoldingsKey> { key ->
         ImportHoldingsScreen(onDone = { backStack.popIfTop(key) })
@@ -316,6 +318,7 @@ fun fonderEntries(
         SwitchWatchScreen(
             watchId = key.watchId,
             onAddCandidate = { backStack.push(SwitchWatchPickerKey(key.watchId)) },
+            onBought = { isin -> backStack.push(TransactionFormKey.bought(key.watchId, isin)) },
             onClosed = { backStack.popIfTop(key) },
         )
     }

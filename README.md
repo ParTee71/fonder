@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.67.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.68.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -61,6 +61,9 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
       (HEM-14)
 - [x] Billigare alternativ som egna förslag på Beslut, med Följ och Avstå, i flikens antal och i
       "Att besluta"; avstådda förslag döljs även i Fonddetalj (ANA-9, ANA-10, HEM-13, HEM-14, NAV-9)
+- [x] Byten: bevakningen kopplad till sälj- och köptransaktionen, bytesväljaren i formulär och
+      PDF-import, likvid på väg i bytesplanen och omräkning efter varje transaktion
+      (BYT-1–BYT-3, #143/#144)
 
 ---
 
@@ -134,6 +137,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.68.0 | **Byten B – väljaren i formulär och import** (BYT-2, BYT-3, HEM-8, ANA-12, SET-5, SLD-5, TRX-2, #144): när ett sälj eller köp registreras — i formuläret eller i PDF-importen — svarar du på om det hör till ett byte: *Inget byte*, *Fristående bevakning* eller *för planrad N* vid sälj, *avslutar bevakning X* vid köp. Sälj av en fond planen vill sälja och köp av en bevakad kandidat är förvalda; ett köp av något annat medan ett byte pågår frågar alltid, utan gissning. Köpet stänger bytet på köpdagen med köptransaktionen som koppling; ett sälj som hör till en bevakning du startade en annan dag kopplas bara efter att du svarat ja, och då mäts alternativen om från säljdagen. Bytesplanen räknar nu med likviden som väntar på köp och räknas om efter varje transaktion, så den föreslår inte nästa sälj för ett gap du redan finansierat. Följ på Beslut och Fonddetalj öppnar "Registrera säljet" förifyllt (fond och typ låsta, dagens datum, senaste kurs, andelar ur förslagets belopp), "Köpte den här" köpformuläret med bytet förvalt; "Genomförd"-kryssrutan finns bara kvar i Facit. Väljaren är en vanlig rullgardin ("Byte" / "Hör till byte") med en förklaring under, och Spara är släckt tills en fråga utan förval besvarats. I PDF-importen står säljen före köpen och varje rad har samma väljare. |
 | 0.67.0 | **Transaktionerna driver bytet** (BYT-1–BYT-2, HEM-8, HEM-14, ANA-12, SLD-5, SET-5, TRX-2, NFR-1, #143): ett pågående byte som startas från Händelser är kopplat till säljtransaktionen, så samma sälj inte kan få två bevakningar; "Bevaka alternativ" ur ett förslag på Beslut eller Fonddetalj startar fortfarande utan transaktion och dedupas på fond och dag. Kopplingen till köptransaktionen finns i datamodellen men sätts först i #144. "Bevaka alternativ" på Händelser kopplar en bevakning du redan startat ur ett förslag samma dag i stället för att starta en till. Bytesplanen räknas om efter Avstå/Ångra och lämnar avstådda byten utanför så listan alltid är 1..n; ett avstått byte går att ångra även efter att planen räknats om utan det, och ett byte som är klart tar planen med sig direkt i stället för att ligga kvar en vecka. Tar du bort en transaktion ligger bevakningen kvar utan koppling. Kopplingarna följer med i säkerhetskopian; en äldre kopia läses som okopplade bevakningar. Ingen synlig ändring i formulär eller import än – väljarna, omräkningen efter transaktioner och likviden på väg (BYT-3) kommer i #144, Beslut-listan i #145. |
 | 0.66.1 | **Navigation 3** (TP-2): navigeringen bygger nu på Jetpack Navigation 3 med en egen bakåtstack per flik som överlever rotation och processdöd – samma flikar, bakåt och plusmeny som förut, ingen synlig ändring. Instrumenttest med Hilt bevisar Innehav → Fonddetalj och Beslut → Pågående byte på enhet (#139). |
 | 0.66.0 | **200-dagarssnitt i kursdiagrammet** (ANA-14, ANA-2): Fonddetaljs kursdiagram visar 200-dagarssnittet som en prickad linje, med en förklaring under diagrammet som visar senaste kurs och senaste snitt i kronor. Snittet är detsamma som säljsignalen S2 jämför mot och räknas ur hela historiken, så också 1 mån har en snittlinje. Räcker historiken inte visas ingen linje. |
@@ -201,8 +205,13 @@ domain/
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
                   SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
-                  RecordTransaction (den enda skrivvägen för transaktioner, och bytets livscykel: bevakning
-                  ur sälj i Händelser eller ur förslag, "Köpte den här", BYT-2, #143) ·
+                  RecordTransaction (den enda skrivvägen för transaktioner, och bytets livscykel: `Entry` med
+                  `SwitchDecision`, bevakning ur sälj/planrad, avslut med köptransaktionen, koppling från
+                  annan dag efter fråga, och en begärd omräkning av planen per skrivning, BYT-2/BYT-3, #143/#144) ·
+                  SwitchTransitions + SwitchChoicesSource (bytesväljarens alternativ och förval, `SwitchDecision`,
+                  och vilken okopplad bevakning från en annan dag ett sälj kan kopplas till, BYT-2, #144) ·
+                  SwitchQuestions (väljarens frågor i formuläret och PDF-importen: Följ, "Köpte den här",
+                  fråga om annan dag, köp som avslutar en säljrads bevakning i samma import, BYT-2, #144) ·
                   PendingDecisionsSource (bytesplan + billigare alternativ + pågående byten och deras antal,
                   en källa för Beslut, Översikten och flikmärket, NAV-9/HEM-13) ·
                   CheaperAlternatives (inspelade avgiftsbyten som förslag på Beslut, ANA-9) ·
@@ -238,6 +247,13 @@ ui/
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61 ·
                   kandidatkurser för pågående byten, HEM-11/#114)
 ```
+
+**Domän → worker, ett medvetet undantag:** `RecordTransaction` (domän) beror på
+`FundPriceRefreshScheduler` (worker) för att begära en omräkning av bytesplanen efter varje
+transaktion (BYT-3, #144). Omräkningen är en del av vad en transaktion *betyder* — hade varje
+ViewModel själv behövt minnas den hade en glömd begäran lämnat planen föreslående ett sälj för ett
+gap som redan är fyllt. Beroendet går mot gränssnittet, aldrig mot WorkManager, och testerna
+använder `FakeFundPriceRefreshScheduler`.
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —

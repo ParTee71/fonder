@@ -254,12 +254,14 @@ class ImportHoldingsViewModel @Inject constructor(
                     // köpdatum kan hämtas från ISIN-baserade källor (KRAVLISTA TP-14).
                     transactionRepository.upsertFund(fund.copy(isin = rowState.row.isin))
                     rowState.occasions.map { occasion ->
-                        Transaction(
-                            fundId = fund.fundId,
-                            type = occasion.type,
-                            epochDay = occasion.date.toEpochDay(),
-                            shares = requireNotNull(occasion.shares),
-                            pricePerShare = rowState.row.averageCostPerShare,
+                        RecordTransaction.Entry(
+                            Transaction(
+                                fundId = fund.fundId,
+                                type = occasion.type,
+                                epochDay = occasion.date.toEpochDay(),
+                                shares = requireNotNull(occasion.shares),
+                                pricePerShare = rowState.row.averageCostPerShare,
+                            ),
                         )
                     }
                 }

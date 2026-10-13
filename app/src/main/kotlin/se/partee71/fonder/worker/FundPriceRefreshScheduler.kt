@@ -61,7 +61,8 @@ interface FundPriceRefreshScheduler {
      * begäran ([switchPlanScanRequestedSince]), och workern räknar om planen **en gång till** i
      * slutet av samma körning om en begäran kommit in efter att jobbet började. Inga kedjade
      * jobb (`APPEND_OR_REPLACE` hade gett en skanning per tryck), högst en omräkning extra, och
-     * indatan den räknar på är den senaste. Transaktioner begär ingen omräkning än (#144, BYT-3).
+     * indatan den räknar på är den senaste. Sedan issue #144 begärs den också efter varje transaktion
+     * (`RecordTransaction`, BYT-3) — en import begär en gång.
      *
      * @param force hämta **alla** bevakade fonders kurser först (användarens uttryckliga "Räkna
      *   om", #88). Annars hämtas bara inaktuella kurser (`isPriceStale`, samma princip som

@@ -136,6 +136,44 @@
     <string name="transaktionsform_fee_label">Avgift (kr, valfritt)</string>
     <string name="transaktionsform_no_funds_title">Inga bevakade fonder</string>
     <string name="transaktionsform_no_funds_body">Lägg till en fond via fondsök (+ på Portfölj) innan du registrerar en transaktion.</string>
+    <string name="transaktionsform_title_sale">Registrera säljet</string>
+    <string name="transaktionsform_title_buy">Registrera köpet</string>
+    <string name="transaktionsform_fund_loading">Hämtar fonden …</string>
+    <string name="transaktionsform_fund_not_found_no_funds">Fonden kunde inte slås upp på ISIN, och du bevakar inga fonder att välja bland. Lägg till fonden via fondsök och registrera köpet sedan.</string>
+    <string name="import_orders_switch_sale_row_skipped">Säljraden bytet startas av importeras inte. Rätta säljraden eller välj ett annat svar.</string>
+    <string name="transaktionsform_save_sale">Spara säljet</string>
+    <string name="format_transaktionsform_prefill_note">Förifyllt ur beloppet %1$s och senaste kursen. Ändra till det banken bokförde.</string>
+    <string name="transaktionsform_link_failed">Transaktionen sparades, men bevakningen kunde inte kopplas – den var redan kopplad eller avslutad. Gå tillbaka; säljet finns i Händelser utan koppling.</string>
+    <string name="transaktionsform_save_blocked">Svara på frågan om bytet innan du sparar.</string>
+    <string name="transaktionsform_fund_not_found">Fonden kunde inte slås upp på ISIN. Välj den i listan om du redan bevakar den.</string>
+    <string name="format_transaktionsform_follow_plan">Byte %1$d i bytesplanen: sälj för %2$s och köp %3$s när likviden landat. Gör säljet i banken först och registrera det här.</string>
+    <string name="format_transaktionsform_follow_cheaper">Billigare alternativ: sälj för %1$s och köp %2$s när likviden landat. Gör säljet i banken först och registrera det här.</string>
+    <string name="format_transaktionsform_follow_no_amount">Sälj och köp %1$s när likviden landat. Gör säljet i banken först och registrera det här.</string>
+    <string name="switch_field_sale_label">Byte</string>
+    <string name="switch_field_buy_label">Hör till byte</string>
+    <string name="switch_field_required_placeholder">Välj ett svar</string>
+    <string name="switch_option_none">Inget byte</string>
+    <string name="switch_option_standalone">Fristående bevakning</string>
+    <string name="format_switch_option_plan">Byte %1$d · Sälj %2$s → Köp %3$s</string>
+    <string name="format_switch_option_cheaper">Billigare alternativ · Sälj %1$s → Köp %2$s</string>
+    <string name="format_switch_option_watch">Bytet från %1$s · sålt %2$s</string>
+    <string name="format_switch_option_watch_amount">Bytet från %1$s · sålt %2$s · %3$s väntar på köp</string>
+    <string name="format_switch_option_other_day">Ja, bytet från %1$s som du bevakar sedan %2$s</string>
+    <string name="format_switch_option_sale_row">Bytet från %1$s (startas av säljraden ovan)</string>
+    <string name="switch_help_sale_for_suggestion">Bevakningen startar på säljdagen med likviden som belopp. Bytet syns sedan som Sålt på Beslut tills du registrerar köpet.</string>
+    <string name="switch_help_sale_standalone">Bevakningen startar på säljdagen med likviden som belopp och syns under Pågående byte på Beslut tills du registrerar köpet.</string>
+    <string name="switch_help_sale_not_in_plan">Fonden finns inte i bytesplanen. Välj Fristående bevakning om du tänker köpa något annat för pengarna.</string>
+    <string name="switch_help_sale_several_rows">Fonden ingår i flera byten i bytesplanen, så appen frågar i stället för att gissa. Välj vilket byte säljet hör till.</string>
+    <string name="format_switch_help_other_day">Ett byte av fonden bevakas sedan %1$s, men utan registrerat sälj. Hör säljet till det bytet?</string>
+    <string name="switch_help_link_other_day">Bevakningen kopplas till säljet och tar likviden ur det. Gäller den en annan dag flyttas den till säljdagen och alternativen mäts om därifrån; de du lagt till själv ligger kvar.</string>
+    <string name="format_switch_help_buy_not_candidate">%1$s är inte ett av alternativen du bevakar, så appen frågar i stället för att gissa. Väljer du bytet stängs bevakningen som köpt med den här fonden.</string>
+    <string name="switch_help_buy_required">Flera byten väntar på köp, så appen frågar i stället för att gissa. Väljer du ett byte stängs bevakningen som köpt med den här fonden.</string>
+    <string name="switch_help_buy_closes">Bytet stängs som köpt på köpdagen med den här transaktionen.</string>
+    <plurals name="format_import_orders_link_failed">
+        <item quantity="one">%1$d sälj kunde inte kopplas till bevakningen – den var redan kopplad eller avslutad. Säljet är sparat utan koppling.</item>
+        <item quantity="other">%1$d sälj kunde inte kopplas till sina bevakningar – de var redan kopplade eller avslutade. Säljen är sparade utan koppling.</item>
+    </plurals>
+    <string name="import_orders_switch_intro">Säljen importeras före köpen, så ett köp kan höra till ett byte som ett sälj i samma import startar.</string>
 
     <!-- Sälj i Händelser — realiserat resultat (issue #10, SLD) -->
     <string name="sold_funds_empty_title">Inga sälj ännu</string>
@@ -500,7 +538,7 @@
     <string name="switch_watch_isin_unavailable">Fonden kunde inte identifieras med ISIN och går därför inte att bevaka — kurserna hämtas på ISIN.</string>
     <string name="format_switch_watch_limit">Du kan bevaka högst %1$d alternativ åt gången.</string>
     <string name="switch_watch_cancel">Avbryt bevakningen</string>
-    <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. Kvitteringen registrerar bara vad du gjort — köpet lägger du in som en vanlig transaktion.</string>
+    <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. ”Köpte den här” öppnar köpformuläret — köpet du registrerar där avslutar bytet.</string>
     <string name="beslut_switch_watch_title">Pågående byte</string>
     <string name="format_beslut_switch_watch_title">%1$s → %2$s</string>
     <string name="format_beslut_switch_watch_candidates">%1$d alternativ bevakas</string>
@@ -517,6 +555,7 @@
     <string name="format_beslut_dismissed_title">Avstådda (%1$d)</string>
     <string name="format_beslut_dismissed_explain">Ett avstått förslag döljs i %1$d dagar och räknas inte som ett beslut. Ångra visar det igen.</string>
     <string name="beslut_undo_dismissal">Ångra</string>
+    <string name="format_fee_follow_a11y">Följ: byt till det billigare alternativet %1$s</string>
     <string name="format_beslut_follow_a11y">Följ: sälj %1$s, köp %2$s</string>
     <string name="format_beslut_dismiss_a11y">Avstå: sälj %1$s, köp %2$s</string>
     <string name="format_beslut_undo_dismissal_a11y">Ångra avstående: sälj %1$s, köp %2$s</string>

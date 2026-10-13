@@ -52,6 +52,8 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
+import se.partee71.fonder.ui.navigation.TransactionFormKey
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -174,6 +176,7 @@ class FondDetaljViewModelTest {
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
     private val fakeDismissalRepo = FakeSuggestionDismissalRepository()
+    private val scheduler = FakeFundPriceRefreshScheduler()
 
     private fun viewModel() = FondDetaljViewModel(
         fund.fundId,
@@ -183,7 +186,7 @@ class FondDetaljViewModelTest {
         preferencesRepository,
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
-        RecordTransaction(fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo),
+        RecordTransaction(fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo, scheduler),
         DismissedPlanSource(fakeSuggestionRecordRepo, fakeDismissalRepo, preferencesRepository, fakeFundMetadataRepo),
         InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
     )
@@ -853,17 +856,29 @@ class FondDetaljViewModelTest {
     }
 
     @Test
-    fun `setSwitchFollowed skriver flaggan pa den inspelade raden`() = runTest(dispatcher) {
-        // Samma rad som Hems bytesplan skriver mot (SET-5) — en kvittering på fondkortet och
-        // en på Hem ska vara samma händelse, inte två olika mätningar.
+    fun `folj pa fondkortet oppnar saljformularet for planraden och kvitterar ingenting`() = runTest(dispatcher) {
+        // ANA-10/BYT-2: Följ navigerar till säljformuläret — samma nyckel som Beslut ger för
+        // samma rad — och kvitterar ingenting utan transaktion.
         setUpSwitchPlan()
         val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty()) state = awaitItem()
+
+            val key = TransactionFormKey.follow(state.switchPlan.single())
+            assertEquals(
+                TransactionFormKey(fundIsin = "SE0004297927", type = TransactionType.SALJ, suggestionRecordId = 7, prefillAmountKr = 4000.0),
+                key,
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
         advanceUntilIdle()
 
-        vm.setSwitchFollowed(recordId = 7, followed = true)
-        advanceUntilIdle()
-
-        assertEquals(true, fakeSuggestionRecordRepo.records.value.single().followed)
+        assertNull(fakeSuggestionRecordRepo.records.value.single().followed)
+        assertEquals(
+            TransactionFormKey(fundId = "SHB1", type = TransactionType.SALJ, suggestionRecordId = 6),
+            TransactionFormKey.follow(fundId = "SHB1", recordId = 6),
+        )
     }
 
     // --- Avstådda förslag (HEM-14) döljs även på fondkortet ---

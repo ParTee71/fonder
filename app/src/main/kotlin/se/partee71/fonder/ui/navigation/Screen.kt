@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.ui.graphics.vector.ImageVector
 import se.partee71.fonder.R
+import se.partee71.fonder.domain.model.TransactionType
 
 /**
  * Flikarna i den flytande flikraden (NAV-1, NAV-7), i ordning, med sin nyckel ([TabKey]) – roten i
@@ -36,7 +37,11 @@ fun titleResFor(key: AppKey): Int? = when (key) {
     SettingsKey -> R.string.nav_settings
     is FondDetaljKey -> R.string.fond_title
     FundSearchKey -> R.string.fondsok_title
-    TransactionFormKey -> R.string.transaktionsform_title
+    is TransactionFormKey -> when {
+        !key.prefilled -> R.string.transaktionsform_title
+        key.type == TransactionType.SALJ -> R.string.transaktionsform_title_sale
+        else -> R.string.transaktionsform_title_buy
+    }
     ImportHoldingsKey -> R.string.import_title
     ImportOrdersKey -> R.string.import_orders_title
     RiskProfileKey -> R.string.riskprofil_title

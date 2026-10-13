@@ -28,6 +28,7 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 /**
@@ -59,6 +60,7 @@ class TransaktionerViewModelTest {
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
     private val fakeMetadataRepo = FakeFundMetadataRepository()
+    private val scheduler = FakeFundPriceRefreshScheduler()
 
     /** Fast "idag" så att årets resultat inte beror på när testet körs. */
     private val today = LocalDate.of(2026, 10, 11)
@@ -66,7 +68,7 @@ class TransaktionerViewModelTest {
     private fun viewModel() = TransaktionerViewModel(
         fakeRepo,
         fakeSwitchWatchRepo,
-        RecordTransaction(fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo),
+        RecordTransaction(fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo, scheduler),
     ) { today }
 
     private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) =

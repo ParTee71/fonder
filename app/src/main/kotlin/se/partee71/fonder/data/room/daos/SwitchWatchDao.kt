@@ -84,15 +84,48 @@ interface SwitchWatchDao {
     /**
      * Kopplar en bevakning utan känd transaktion till säljtransaktionen och sätter likviden ur den
      * — transaktionen är sanningen om hur mycket. Säljdagen rörs inte (samma dag är villkoret för
-     * kopplingen), så kandidaternas nollpunkt står kvar. Skriver aldrig över en befintlig länk.
+     * kopplingen), så kandidaternas nollpunkt står kvar. Skriver aldrig över en befintlig länk och
+     * kopplar aldrig en **stängd** bevakning — den har ett avslut, och ett sälj kan inte höra till
+     * ett byte som redan är klart.
+     *
+     * @return antal träffade rader: 1 när länken skrevs, 0 när bevakningen redan var kopplad, stängd eller inte finns.
      */
     @Query(
         """
         UPDATE switch_watches SET sellTransactionId = :transactionId, proceedsKr = :proceedsKr
-        WHERE id = :id AND sellTransactionId IS NULL
+        WHERE id = :id AND sellTransactionId IS NULL AND closedAtEpochDay IS NULL
         """,
     )
-    suspend fun linkSellTransaction(id: Long, transactionId: Long, proceedsKr: Double)
+    suspend fun linkSellTransaction(id: Long, transactionId: Long, proceedsKr: Double): Int
+
+    /**
+     * Som [linkSellTransaction] men **flyttar säljdagen** till transaktionens (issue #144) — vägen
+     * för en bevakning från en annan dag som användaren efter fråga sagt är säljets. Anroparen
+     * nollar kandidaternas nollpunkt i samma transaktion ([resetCandidateAnchors]): den är ankrad
+     * på den gamla dagen och mäter annars en utveckling från fel dag.
+     */
+    @Query(
+        """
+        UPDATE switch_watches SET sellTransactionId = :transactionId, proceedsKr = :proceedsKr, soldAtEpochDay = :soldAtEpochDay
+        WHERE id = :id AND sellTransactionId IS NULL AND closedAtEpochDay IS NULL
+        """,
+    )
+    suspend fun linkSellTransactionOnDay(id: Long, transactionId: Long, proceedsKr: Double, soldAtEpochDay: Long): Int
+
+    /**
+     * Låter en bevakning **utan** förslag ta över planraden den kopplades för (BYT-1, issue #144):
+     * källförslag och målnivå sätts bara när inget förslag finns — en bevakning ur ett annat
+     * förslag skrivs aldrig om.
+     */
+    @Query("UPDATE switch_watches SET sourceRecordId = :sourceRecordId, targetLevel = :targetLevel WHERE id = :id AND sourceRecordId IS NULL")
+    suspend fun adoptSuggestion(id: Long, sourceRecordId: Long, targetLevel: Int)
+
+    /**
+     * Nollar **bara** nollpunkten för bevakningens kandidater — raderna, inklusive de manuellt
+     * tillagda, ligger kvar och ankras om nästa gång historiken hämtas (ANA-12).
+     */
+    @Query("UPDATE switch_watch_candidates SET navAtStart = NULL, navAtStartEpochDay = NULL WHERE watchId = :watchId")
+    suspend fun resetCandidateAnchors(watchId: Long)
 
     /**
      * Sant om säljtransaktionen redan har en **öppen** bevakning (BYT-1) — dedupen per

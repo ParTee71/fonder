@@ -22,21 +22,17 @@ app/src/test/kotlin/se/partee71/fonder/data/repository/FundMetadataRepositoryTes
 app/src/test/kotlin/se/partee71/fonder/data/repository/HandelsbankenFundPriceRepositoryTest.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/imports/ImportOrdersViewModelTest.kt
-app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/transaktioner/TransactionFormViewModelTest.kt
+app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
-app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/transaktioner/TransactionFormViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioFeeCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
 app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
-app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
-app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fond/FondDetaljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/hem/HemViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/riskprofil/RiskProfilViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
-app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/transaktioner/TransactionFormViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/fond/FondDetaljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/fond/FondDetaljViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/transaktioner/TransactionFormViewModelTest.kt

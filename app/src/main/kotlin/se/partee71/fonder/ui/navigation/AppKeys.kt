@@ -2,6 +2,8 @@ package se.partee71.fonder.ui.navigation
 
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
+import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 
 /**
  * Alla skärmar i appen (NAV-7). Sparas med kotlinx.serialization i [AppBackStack], så att
@@ -43,9 +45,46 @@ data class FondDetaljKey(val fundId: String) : AppKey
 @Serializable
 data object FundSearchKey : AppKey
 
-/** Registrera en ny fondtransaktion (köp/sälj). */
+/**
+ * Registrera en ny fondtransaktion (köp/sälj, NAV-4). Utan argument det tomma formuläret från
+ * plusmenyn; med argument förifyllt (BYT-2, issue #144):
+ *
+ * - **Följ** på Beslut och Fonddetalj: säljet för förslaget [suggestionRecordId] — fond och typ
+ *   låsta, andelar ur [prefillAmountKr] (eller förslagets eget belopp) och senaste kursen.
+ * - **"Köpte den här"** på Pågående byte: köpet som avslutar bevakningen [watchId].
+ *
+ * Fonden pekas ut med [fundId] när den är känd, annars med [fundIsin] — en kandidat i ett byte är
+ * sällan en fond appen redan bevakar och slås då upp på ISIN; fondväljaren är reserven när
+ * uppslaget inte ger något.
+ */
 @Serializable
-data object TransactionFormKey : AppKey
+data class TransactionFormKey(
+    val fundId: String? = null,
+    val fundIsin: String? = null,
+    val type: TransactionType? = null,
+    val suggestionRecordId: Long? = null,
+    val watchId: Long? = null,
+    val prefillAmountKr: Double? = null,
+) : AppKey {
+    /** Förifyllt från ett förslag eller en bevakning — formuläret registrerar då en redan gjord affär. */
+    val prefilled: Boolean get() = type != null && (fundId != null || fundIsin != null)
+
+    companion object {
+        /** **Följ** på ett förslag (Beslut, Fonddetalj, HEM-14/ANA-10): säljet av säljfonden för förslaget. */
+        fun follow(suggestion: SwitchPlanResolver.Suggestion) = TransactionFormKey(
+            fundIsin = suggestion.sellIsin,
+            type = TransactionType.SALJ,
+            suggestionRecordId = suggestion.recordId,
+            prefillAmountKr = suggestion.switchValueKr,
+        )
+
+        /** **Följ** på ett inspelat billigare alternativ i Fonddetalj (ANA-9/ANA-10): säljet av fonden [fundId]; beloppet tas ur förslaget. */
+        fun follow(fundId: String, recordId: Long) = TransactionFormKey(fundId = fundId, type = TransactionType.SALJ, suggestionRecordId = recordId)
+
+        /** **"Köpte den här"** på Pågående byte (ANA-12): köpet av kandidaten [isin] som avslutar bevakningen [watchId]. */
+        fun bought(watchId: Long, isin: String) = TransactionFormKey(fundIsin = isin, type = TransactionType.KOP, watchId = watchId)
+    }
+}
 
 /** Importera befintliga innehav från en Handelsbanken-Excel-export. */
 @Serializable

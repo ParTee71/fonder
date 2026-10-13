@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.ImportedOrderTransaction
+import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppTextField
@@ -39,6 +42,7 @@ import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.transaktioner.SwitchDecisionField
 import se.partee71.fonder.ui.transaktioner.labelRes
 
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
@@ -61,7 +65,11 @@ fun ImportOrdersScreen(
     }
 
     if (state.imported) {
-        ImportCompleteDialog(importedCount = state.rows.count { it.readyToImport }, onDismiss = onDone)
+        ImportCompleteDialog(
+            importedCount = state.rows.count { it.readyToImport },
+            onDismiss = onDone,
+            notice = state.linkFailedCount.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.format_import_orders_link_failed, it, it) },
+        )
     }
 
     when {
@@ -86,42 +94,17 @@ fun ImportOrdersScreen(
             modifier = modifier,
         )
 
-        else -> Column(modifier = modifier.fillMaxSize()) {
-            if (state.unparsedFileNames.isNotEmpty()) {
-                Text(
-                    stringResource(
-                        R.string.format_import_orders_unparsed,
-                        state.unparsedFileNames.size,
-                        state.unparsedFileNames.joinToString(", "),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(
-                    state.rows,
-                    key = { "${it.transaction.isin}-${it.transaction.epochDay}-${it.transaction.shares}-${it.transaction.sourceFileName}" },
-                ) { rowState ->
-                    ImportOrderRowCard(
-                        rowState = rowState,
-                        catalogFunds = state.catalogFunds,
-                        onFundOverride = { fund -> viewModel.onFundOverride(rowState.transaction, fund) },
-                        onIncludedChange = { included -> viewModel.onIncludedChange(rowState.transaction, included) },
-                        onDateChange = { date -> viewModel.onDateChange(rowState.transaction, date) },
-                        onSharesTextChange = { text -> viewModel.onSharesTextChange(rowState.transaction, text) },
-                        onPriceTextChange = { text -> viewModel.onPriceTextChange(rowState.transaction, text) },
-                    )
-                }
-            }
-            AppButton(
-                text = stringResource(R.string.import_orders_commit_button, state.rows.count { it.readyToImport }),
-                onClick = viewModel::import,
-                enabled = state.canImport,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-            )
-        }
+        else -> ImportOrdersReview(
+            state = state,
+            onFundOverride = viewModel::onFundOverride,
+            onIncludedChange = viewModel::onIncludedChange,
+            onDateChange = viewModel::onDateChange,
+            onSharesTextChange = viewModel::onSharesTextChange,
+            onPriceTextChange = viewModel::onPriceTextChange,
+            onSwitchSelected = viewModel::onSwitchSelected,
+            onImport = viewModel::import,
+            modifier = modifier,
+        )
     }
 
     // Läsning/tolkning av flera PDF-filer kan ta en stund — overlay-modal precis som
@@ -130,6 +113,70 @@ fun ImportOrdersScreen(
         LoadingDialog(
             title = stringResource(R.string.import_orders_loading_title),
             body = stringResource(R.string.import_orders_loading_body),
+        )
+    }
+}
+
+/**
+ * Granskningen av de tolkade avräkningsnotorna (IMP-6) — tillståndsdriven och testbar, utan
+ * ViewModel. Raderna står sälj före köp, var och en med bytesväljaren (BYT-2).
+ */
+@Composable
+fun ImportOrdersReview(
+    state: ImportOrdersUiState,
+    onFundOverride: (ImportedOrderTransaction, Fund?) -> Unit,
+    onIncludedChange: (ImportedOrderTransaction, Boolean) -> Unit,
+    onDateChange: (ImportedOrderTransaction, java.time.LocalDate) -> Unit,
+    onSharesTextChange: (ImportedOrderTransaction, String) -> Unit,
+    onPriceTextChange: (ImportedOrderTransaction, String) -> Unit,
+    onSwitchSelected: (ImportedOrderTransaction, SwitchOption) -> Unit,
+    onImport: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        if (state.unparsedFileNames.isNotEmpty()) {
+            Text(
+                stringResource(
+                    R.string.format_import_orders_unparsed,
+                    state.unparsedFileNames.size,
+                    state.unparsedFileNames.joinToString(", "),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        if (state.hasSwitchQuestions) {
+            Text(
+                stringResource(R.string.import_orders_switch_intro),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(
+                state.rows,
+                key = { "${it.transaction.isin}-${it.transaction.epochDay}-${it.transaction.shares}-${it.transaction.sourceFileName}" },
+            ) { rowState ->
+                ImportOrderRowCard(
+                    rowState = rowState,
+                    catalogFunds = state.catalogFunds,
+                    onFundOverride = { fund -> onFundOverride(rowState.transaction, fund) },
+                    onIncludedChange = { included -> onIncludedChange(rowState.transaction, included) },
+                    onDateChange = { date -> onDateChange(rowState.transaction, date) },
+                    onSharesTextChange = { text -> onSharesTextChange(rowState.transaction, text) },
+                    onPriceTextChange = { text -> onPriceTextChange(rowState.transaction, text) },
+                    onSwitchSelected = { option -> onSwitchSelected(rowState.transaction, option) },
+                    switchSaleRowSkipped = state.switchSaleRowSkipped(rowState),
+                )
+            }
+        }
+        AppButton(
+            text = stringResource(R.string.import_orders_commit_button, state.rows.count { it.readyToImport }),
+            onClick = onImport,
+            enabled = state.canImport,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
     }
 }
@@ -152,6 +199,8 @@ private fun ImportOrderRowCard(
     onDateChange: (java.time.LocalDate) -> Unit,
     onSharesTextChange: (String) -> Unit,
     onPriceTextChange: (String) -> Unit,
+    onSwitchSelected: (SwitchOption) -> Unit,
+    switchSaleRowSkipped: Boolean,
 ) {
     val tx = rowState.transaction
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -212,5 +261,21 @@ private fun ImportOrderRowCard(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
+        // Bytesväljaren (BYT-2) — samma fält och texter som i transaktionsformuläret.
+        rowState.switchField?.let { field ->
+            SwitchDecisionField(
+                field = field,
+                fundName = rowState.matchedFund?.name ?: tx.fundName,
+                onSelect = onSwitchSelected,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        if (switchSaleRowSkipped) {
+            Text(
+                stringResource(R.string.import_orders_switch_sale_row_skipped),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }

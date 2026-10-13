@@ -701,7 +701,7 @@ class FundPriceUpdateWorkerTest {
         batchEpochMillis: Long = System.currentTimeMillis(),
     ) = FundPriceUpdateWorker.scanSwitchPlan(
         fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
-        dismissalRepo, calendar = { today }, clock = { batchEpochMillis },
+        dismissalRepo, switchWatchRepo, calendar = { today }, clock = { batchEpochMillis },
     )
 
     private fun heldMetadata(isin: String, risk: Int, totalFee: Double) = FundMetadata(
@@ -1080,7 +1080,7 @@ class FundPriceUpdateWorkerTest {
         val reads = mutableListOf<String>()
         fun scan(name: String, batch: Long) = launch {
             FundPriceUpdateWorker.scanSwitchPlan(
-                fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, dismissalRepo,
+                fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, dismissalRepo, switchWatchRepo,
                 calendar = { reads += "dag-$name"; LocalDate.of(2026, 1, 1) },
                 clock = { reads += name; batch },
             )
@@ -1216,6 +1216,76 @@ class FundPriceUpdateWorkerTest {
         scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    /**
+     * Ett sälj på 10 000 kr i en annan fond, helt avyttrad, vars bevakning väntar på köp mot nivå 3
+     * — med [setUpOverweightedPortfolio]s 10 000 kr på nivå 5 och mål 50/50 är fördelningen då
+     * redan på målet.
+     */
+    private suspend fun setUpPendingProceeds(today: LocalDate, sellTransactionId: Long?) {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 0.5, 5 to 0.5)))
+        val sold = Fund(fundId = "SOLD", name = "Såld", isin = "SE_SOLD")
+        funds.value = funds.value + sold
+        transactions.value = transactions.value + buy(sold.fundId, 100.0, 100.0) +
+            Transaction(id = 42, fundId = sold.fundId, type = TransactionType.SALJ, epochDay = today.minusDays(1).toEpochDay(), shares = 100.0, pricePerShare = 100.0)
+        switchWatchRepo.start(
+            SwitchWatch(
+                sellIsin = "SE_SOLD", sellFundName = "Såld", soldAtEpochDay = today.minusDays(1).toEpochDay(), proceedsKr = 10_000.0, targetLevel = 3,
+                sellTransactionId = sellTransactionId, candidates = listOf(SwitchWatchCandidate(isin = "SE_CAND", name = "Kandidat")),
+            ),
+        )
+    }
+
+    @Test
+    fun `likvid som vantar pa kop fyller gapet - ingen ny plan och tomheten ar bevislig`() = runTest {
+        // BYT-3: utan likviden hade planen föreslagit att sälja 5 000 kr till ur HELD för ett gap
+        // som säljet redan finansierat. Ingen källfråga görs när ingen nivå är underviktad.
+        val today = LocalDate.of(2026, 1, 1)
+        setUpPendingProceeds(today, sellTransactionId = 42)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 5_000)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
+        assertTrue(switchCandidateLevelsQueried.isEmpty())
+        assertEquals(5_000L, preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `en bevakning utan saljtransaktion raknas inte som likvid - planen ges som forut`() = runTest {
+        // "Bevaka alternativ" ur ett förslag säger inte att pengarna är fria.
+        val today = LocalDate.of(2026, 1, 1)
+        setUpPendingProceeds(today, sellTransactionId = null)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today)
+
+        assertEquals(5_000.0, suggestionRepo.recorded.single().switchValueKr ?: -1.0, 1e-9)
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `ett kop i kandidaten sedan saljdagen forbrukar likviden - gapet ar oppet igen`() = runTest {
+        // Köpet gjordes utan att bevakningen stängdes ("Inget byte" i väljaren): pengarna är
+        // placerade på nivå 3 som innehav, och likviden får inte räknas en gång till.
+        val today = LocalDate.of(2026, 1, 1)
+        setUpPendingProceeds(today, sellTransactionId = 42)
+        val cand = fundByIsin.getValue("SE_CAND")
+        funds.value = funds.value + cand
+        transactions.value = transactions.value +
+            Transaction(id = 43, fundId = cand.fundId, type = TransactionType.KOP, epochDay = today.toEpochDay(), shares = 200.0, pricePerShare = 50.0)
+        cachedPrices[cand.fundId] = FundPrice(fundId = cand.fundId, epochDay = today.toEpochDay(), nav = 50.0)
+        metadataByIsin["SE_CAND"] = heldMetadata("SE_CAND", risk = 3, totalFee = 0.3)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today)
+
+        // 10 000 på nivå 5 och 10 000 på nivå 3 som innehav — på målet utan likviden, som nu är 0.
+        assertTrue(suggestionRepo.recorded.isEmpty())
+        assertTrue(switchCandidateLevelsQueried.isEmpty())
     }
 
     @Test

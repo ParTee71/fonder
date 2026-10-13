@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.SuggestionDismissalRepository
-import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
@@ -65,7 +64,9 @@ data class BeslutUiState(
 
 /**
  * Fliken **Beslut** (NAV-9) — det som väntar på användaren: pågående byten (ANA-12), bytesplanen
- * (HEM-8) och de billigare alternativen (ANA-9) med Följ och Avstå (HEM-14), mot riskprofilen och
+ * (HEM-8) och de billigare alternativen (ANA-9) med Följ och Avstå (HEM-14) — Följ navigerar till
+ * säljformuläret ([se.partee71.fonder.ui.navigation.TransactionFormKey.follow]) och skriver
+ * ingenting här — mot riskprofilen och
  * kontotypen, plus vägen till Facit (SET-5) med de följda rådens resultat ur [FacitSummary] — samma
  * källa som Facit-skärmen, så facit räknas på ett ställe.
  *
@@ -78,7 +79,6 @@ class BeslutViewModel @Inject constructor(
     pendingDecisionsSource: PendingDecisionsSource,
     facitSummary: FacitSummary,
     preferencesRepository: PreferencesRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository,
     private val recordTransaction: RecordTransaction,
     private val suggestionDismissalRepository: SuggestionDismissalRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
@@ -115,14 +115,6 @@ class BeslutViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = BeslutUiState(),
     )
-
-    /**
-     * Markerar ett förslag som genomfört (HEM-8/SET-5). Skriver bara flaggan — inget byte utförs,
-     * appen rör aldrig användarens innehav. Facit läser den för att mäta följda råd separat.
-     */
-    fun setSwitchFollowed(recordId: Long, followed: Boolean) {
-        viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
-    }
 
     /**
      * Avstår från ett förslag (HEM-14) — ett byte i planen eller ett billigare alternativ (ANA-9),

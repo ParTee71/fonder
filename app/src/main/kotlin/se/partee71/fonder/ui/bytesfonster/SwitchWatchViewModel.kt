@@ -24,7 +24,6 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
@@ -119,8 +118,9 @@ data class SwitchWatchUiState(
  * beslutsgräns: varje kandidat är ett nätverksanrop mot en odokumenterad källa (TP-14) varje
  * gång skärmen öppnas.
  *
- * Appen **utför aldrig ett byte**: "Köpte den här" registrerar vad användaren gjort, precis som
- * kvitteringen i bytesplanen (SET-5).
+ * Appen **utför aldrig ett byte**: "Köpte den här" öppnar köpformuläret för kandidaten
+ * (`TransactionFormKey.bought`, BYT-2), och det sparade köpet stänger bevakningen med
+ * köptransaktionen som koppling — ingen kvittering utan transaktion sker härifrån.
  */
 @HiltViewModel(assistedFactory = SwitchWatchViewModel.Factory::class)
 class SwitchWatchViewModel @AssistedInject constructor(
@@ -130,7 +130,6 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
-    private val recordTransaction: RecordTransaction,
 ) : ViewModel() {
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
@@ -351,20 +350,6 @@ class SwitchWatchViewModel @AssistedInject constructor(
         val isins = (watch.candidates.map { it.isin } + watch.sellIsin).distinct().sorted()
         if (isins.isEmpty() || metadata.value.keys.containsAll(isins)) return
         metadata.value = fundMetadataRepository.metadataFor(isins)
-    }
-
-    /**
-     * Kvitterar att kandidaten köptes och stänger bevakningen (ANA-12,
-     * [RecordTransaction.markBought]) — utan transaktion och utan `buyTransactionId`, tills
-     * "Köpte den här" öppnar formuläret (#144). Utför inget köp — appen rör aldrig innehav.
-     *
-     * Startades bevakningen ur ett bytesförslag (HEM-8) markeras förslaget som genomfört **bara**
-     * när det faktiskt var den föreslagna fonden som köptes — regeln bor i use caset.
-     */
-    fun onBought(isin: String) {
-        viewModelScope.launch {
-            recordTransaction.markBought(watchId, boughtIsin = isin, today = LocalDate.now())
-        }
     }
 
     /** Avbryter bevakningen utan köp — raden ligger kvar, den är användardata (ANA-12). */

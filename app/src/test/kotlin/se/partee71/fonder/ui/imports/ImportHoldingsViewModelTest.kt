@@ -30,6 +30,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -85,8 +86,10 @@ class ImportHoldingsViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
+    private val scheduler = FakeFundPriceRefreshScheduler()
+    private val switchWatchRepo = FakeSwitchWatchRepository()
     private fun recordTransaction(transactionRepo: TransactionRepository = fakeTransactionRepo) = RecordTransaction(
-        transactionRepo, FakeSwitchWatchRepository(), FakeSuggestionRecordRepository(), FakeFundMetadataRepository(),
+        transactionRepo, switchWatchRepo, FakeSuggestionRecordRepository(), FakeFundMetadataRepository(), scheduler,
     )
 
     private fun viewModel(priceRepo: FundPriceRepository = fakePriceRepo, transactionRepo: TransactionRepository = fakeTransactionRepo) =
@@ -631,6 +634,10 @@ class ImportHoldingsViewModelTest {
 
             assertEquals(1, addedTransactions.size)
             assertEquals(TransactionType.SALJ, addedTransactions.first().type)
+            // Excel-importen har ingen bytesväljare (BYT-2): säljet sparas som "Inget byte" och
+            // startar ingen bevakning — planen räknas ändå om, en gång.
+            assertTrue(switchWatchRepo.watches.value.isEmpty())
+            assertEquals(1, scheduler.switchPlanScans)
             cancelAndIgnoreRemainingEvents()
         }
     }

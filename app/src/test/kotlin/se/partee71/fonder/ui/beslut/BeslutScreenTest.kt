@@ -175,14 +175,14 @@ class BeslutScreenTest {
 
     @Test
     fun `folj och avsta visas pa ett okvitterat forslag och anropar sina callbacks`() {
-        // HEM-14: "Följ" är kvitteringen (SET-5), "Avstå" döljer paret.
-        var followed: Pair<Long, Boolean>? = null
+        // HEM-14/BYT-2: "Följ" öppnar säljformuläret för förslaget, "Avstå" döljer paret.
+        var followed: SwitchPlanResolver.Suggestion? = null
         var dismissed: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
                     state = full,
-                    onSwitchFollowedChange = { id, value -> followed = id to value },
+                    onFollow = { followed = it },
                     onDismissSuggestion = { dismissed = it },
                 )
             }
@@ -192,26 +192,39 @@ class BeslutScreenTest {
         list.performScrollToNode(hasContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A"))
         composeRule.onNodeWithContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A").performClick()
         composeRule.onNodeWithContentDescription("Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A").performClick()
-        // Bara det okvitterade förslaget har knapparna; det kvitterade visar "Genomförd".
-        list.performScrollToNode(hasText("Genomförd"))
+        // Bara det okvitterade förslaget har knapparna; det kvitterade (i Facit) erbjuder bevakningen.
+        list.performScrollToNode(hasText("Bevaka alternativ"))
         composeRule.onAllNodesWithContentDescription("Följ: sälj Sverige Småbolag, köp Räntefond Kort").assertCountEquals(0)
 
         assertEquals(11L, dismissed?.recordId)
-        assertEquals(11L to true, followed)
+        assertEquals(11L, followed?.recordId)
     }
 
     @Test
-    fun `ett kvitterat forslag visar Genomford i stallet for Folj och Avsta`() {
-        var followed: Pair<Long, Boolean>? = null
-        composeRule.setContent {
-            FonderTheme { BeslutContent(state = full, onSwitchFollowedChange = { id, value -> followed = id to value }) }
-        }
+    fun `ett kvitterat forslag har ingen kvittering att bocka ur - den gors i Facit`() {
+        // FollowedToggleRow finns bara i Facit (SET-5) sedan Följ går via formuläret (BYT-2).
+        var watched: SwitchPlanResolver.Suggestion? = null
+        composeRule.setContent { FonderTheme { BeslutContent(state = full, onStartSwitchWatch = { watched = it }) } }
 
-        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Genomförd"))
-        composeRule.onNodeWithText("Genomförd").performClick()
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Bevaka alternativ"))
+        composeRule.onAllNodesWithText("Genomförd").assertCountEquals(0)
+        composeRule.onNodeWithText("Bevaka alternativ").performClick()
 
-        // Kvitteringen ångras på samma sätt som i Facit och Fonddetalj.
-        assertEquals(12L to false, followed)
+        assertEquals(12L, watched?.recordId)
+    }
+
+    @Test
+    fun `ett pagaende byte erbjuds inte Folj igen`() {
+        // BYT-1: raden är redan såld — Följ hade registrerat samma sälj en gång till.
+        val inProgress = full.copy(
+            decisions = full.decisions.copy(switchPlan = full.decisions.switchPlan.map { it.copy(followed = false, inProgress = it.recordId == 11L) }),
+        )
+        composeRule.setContent { FonderTheme { BeslutContent(state = inProgress) } }
+
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        list.performScrollToNode(hasContentDescription("Avstå: sälj Tillväxtmarknad Bred, köp Global Indexfond A"))
+        composeRule.onAllNodesWithContentDescription("Följ: sälj Tillväxtmarknad Bred, köp Global Indexfond A").assertCountEquals(0)
+        list.performScrollToNode(hasContentDescription("Följ: sälj Sverige Småbolag, köp Räntefond Kort"))
     }
 
     @Test
@@ -267,13 +280,13 @@ class BeslutScreenTest {
     @Test
     fun `ett billigare alternativ visar fondparet avgifterna och besparingen med Folj och Avsta`() {
         // ANA-9 som eget förslag, enligt mockupen — samma två beslut och samma etiketter som planen (UI-3).
-        var followed: Pair<Long, Boolean>? = null
+        var followed: SwitchPlanResolver.Suggestion? = null
         var dismissed: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
                     state = full,
-                    onSwitchFollowedChange = { id, value -> followed = id to value },
+                    onFollow = { followed = it },
                     onDismissSuggestion = { dismissed = it },
                 )
             }
@@ -288,19 +301,17 @@ class BeslutScreenTest {
         composeRule.onNodeWithContentDescription("Följ: sälj Sverige Småbolag, köp Småbolag Index").performClick()
 
         assertEquals(SuggestionKind.FEE, dismissed?.kind)
-        assertEquals(21L to true, followed)
+        assertEquals(21L, followed?.recordId)
     }
 
     @Test
-    fun `ett kvitterat billigare alternativ visar Genomford och Bevaka alternativ som planen`() {
+    fun `ett kvitterat billigare alternativ visar Bevaka alternativ som planen`() {
         var watched: SwitchPlanResolver.Suggestion? = null
         val followedCheaper = cheaper.copy(suggestion = cheaper.suggestion.copy(followed = true))
         val state = full.copy(decisions = PendingDecisions(cheaperAlternatives = listOf(followedCheaper)))
         composeRule.setContent { FonderTheme { BeslutContent(state = state, onStartSwitchWatch = { watched = it }) } }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasText("Genomförd"))
-        composeRule.onNodeWithText("Genomförd").assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("Följ: sälj Sverige Småbolag, köp Småbolag Index").assertCountEquals(0)
         list.performScrollToNode(hasText("Bevaka alternativ"))
         composeRule.onNodeWithText("Bevaka alternativ").performClick()

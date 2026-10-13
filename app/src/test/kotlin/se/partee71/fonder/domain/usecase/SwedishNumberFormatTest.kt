@@ -43,4 +43,19 @@ class SwedishNumberFormatTest {
     fun `tom text ger null`() {
         assertNull(SwedishNumberFormat.parse(""))
     }
+
+    @Test
+    fun `format ger decimalkomma utan tusentalsavgransare och tolkas tillbaka`() {
+        assertEquals("38,4615", SwedishNumberFormat.format(38.46153, 4))
+        assertEquals("12500,0000", SwedishNumberFormat.format(12_500.0, 4))
+        assertEquals(38.4615, SwedishNumberFormat.parse(SwedishNumberFormat.format(38.46153, 4))!!, 1e-9)
+    }
+
+    @Test
+    fun `andelar for ett belopp ar belopp delat med kurs med fyra decimaler`() {
+        assertEquals(38.4615, TransactionPrefill.sharesForAmount(12_500.0, 325.0)!!, 1e-9)
+        assertNull(TransactionPrefill.sharesForAmount(null, 325.0))
+        assertNull(TransactionPrefill.sharesForAmount(12_500.0, null))
+        assertNull(TransactionPrefill.sharesForAmount(12_500.0, 0.0))
+    }
 }

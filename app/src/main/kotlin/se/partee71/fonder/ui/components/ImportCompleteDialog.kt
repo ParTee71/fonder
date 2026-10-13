@@ -12,10 +12,10 @@ import se.partee71.fonder.R
  * med den delade [AppDialog] (UI-13).
  */
 @Composable
-fun ImportCompleteDialog(importedCount: Int, onDismiss: () -> Unit) {
+fun ImportCompleteDialog(importedCount: Int, onDismiss: () -> Unit, notice: String? = null) {
     AppDialog(
         title = stringResource(R.string.import_success_title),
-        body = stringResource(R.string.format_import_success_body, importedCount),
+        body = listOfNotNull(stringResource(R.string.format_import_success_body, importedCount), notice).joinToString("\n\n"),
         onDismissRequest = onDismiss,
         confirmLabel = stringResource(R.string.close),
         onConfirm = onDismiss,

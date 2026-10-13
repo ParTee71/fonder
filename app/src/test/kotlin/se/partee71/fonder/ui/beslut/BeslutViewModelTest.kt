@@ -38,6 +38,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.InProgressSwitches
@@ -48,6 +49,7 @@ import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.testing.testPreferencesRepository
+import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
@@ -82,8 +84,7 @@ class BeslutViewModelTest {
         ),
         FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
         preferencesRepository,
-        suggestionRepo,
-        RecordTransaction(transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo),
+        RecordTransaction(transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler),
         dismissalRepo,
         scheduler,
     )
@@ -191,7 +192,7 @@ class BeslutViewModelTest {
     }
 
     @Test
-    fun `setSwitchFollowed skriver mot inspelningen och speglas i planen`() = runTest(dispatcher) {
+    fun `en kvittering i Facit speglas i planen och tas ur antalet`() = runTest(dispatcher) {
         setUpSwitchPlan()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
 
@@ -202,7 +203,8 @@ class BeslutViewModelTest {
             assertFalse(state.decisions.switchPlan.single().followed)
             assertEquals(1, state.decisions.count)
 
-            vm.setSwitchFollowed(42, true)
+            // Kvitteringen görs bara i Facit (SET-5) sedan Följ går via formuläret (BYT-2).
+            suggestionRepo.setFollowed(42, true)
 
             while (!state.decisions.switchPlan.single().followed) state = awaitItem()
             assertTrue(suggestionRepo.records.value.single { it.id == 42L }.followed == true)
@@ -449,17 +451,19 @@ class BeslutViewModelTest {
     }
 
     @Test
-    fun `folj markerar forslaget som genomfort`() = runTest(dispatcher) {
-        // "Följ" är samma kvittering som "Genomförd" (SET-5) — den skriver mot inspelningen.
+    fun `folj oppnar saljformularet for forslaget och kvitterar ingenting`() = runTest(dispatcher) {
+        // HEM-14/BYT-2: Följ navigerar till säljformuläret förifyllt för förslaget — ingen
+        // kvittering utan transaktion. Det sparade säljet startar bytet (RecordTransactionTest).
         setUpSwitchPlan()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
 
-        val vm = viewModel()
-        loadedPlan(vm)
-        vm.setSwitchFollowed(42, true)
+        val switch = loadedPlan(viewModel()).decisions.switchPlan.single()
+        val key = TransactionFormKey.follow(switch)
         advanceUntilIdle()
 
-        assertEquals(true, suggestionRepo.records.value.single().followed)
+        assertEquals(TransactionFormKey(fundIsin = "SE_HELD", type = TransactionType.SALJ, suggestionRecordId = 42, prefillAmountKr = 2_500.0), key)
+        assertTrue(key.prefilled)
+        assertNull(suggestionRepo.records.value.single().followed)
     }
 
     // --- Billigare alternativ (ANA-9) som egna förslag ---
@@ -532,8 +536,8 @@ class BeslutViewModelTest {
     }
 
     @Test
-    fun `folj pa ett billigare alternativ kvitterar avgiftsraden och tar det ur antalet`() = runTest(dispatcher) {
-        // Samma rad som Fonddetalj och Facit skriver mot (SET-5).
+    fun `en kvittering i Facit av ett billigare alternativ tar det ur antalet`() = runTest(dispatcher) {
+        // Samma rad som Facit skriver mot (SET-5).
         setUpCheaperAlternative()
 
         val vm = viewModel()
@@ -541,7 +545,7 @@ class BeslutViewModelTest {
             var state = awaitItem()
             while (state.loading || state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
 
-            vm.setSwitchFollowed(77, true)
+            suggestionRepo.setFollowed(77, true)
 
             while (!state.decisions.cheaperAlternatives.single().suggestion.followed) state = awaitItem()
             assertEquals(true, suggestionRepo.records.value.single().followed)
