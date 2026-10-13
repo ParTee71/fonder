@@ -40,6 +40,20 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
     override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean =
         watches.value.any { it.isOpen && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
 
+    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? =
+        watches.value
+            .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
+            .minByOrNull { it.id }
+
+    override suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double) {
+        update(watchId) { watch ->
+            if (watch.sellTransactionId != null) watch else watch.copy(sellTransactionId = transactionId, proceedsKr = proceedsKr)
+        }
+    }
+
+    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
+        watches.value.any { it.isOpen && it.sellTransactionId == sellTransactionId }
+
     override suspend fun start(watch: SwitchWatch): Long {
         val id = nextWatchId++
         val candidates = watch.candidates
@@ -90,17 +104,40 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         }
     }
 
-    override suspend fun close(watchId: Long, reason: SwitchWatchCloseReason, today: LocalDate, boughtIsin: String?) {
+    /** Sätt till `false` för att spela "någon annan stängde först": [close] rör inget och returnerar falskt. */
+    var closeResult: Boolean? = null
+
+    override suspend fun close(
+        watchId: Long,
+        reason: SwitchWatchCloseReason,
+        today: LocalDate,
+        boughtIsin: String?,
+        buyTransactionId: Long?,
+    ): Boolean {
+        closeResult?.let { return it }
+        val wasOpen = watches.value.firstOrNull { it.id == watchId }?.isOpen == true
         update(watchId) { watch ->
             if (!watch.isOpen) {
                 watch
             } else {
+                val bought = reason == SwitchWatchCloseReason.KOPT
                 watch.copy(
                     closedAtEpochDay = today.toEpochDay(),
-                    boughtIsin = if (reason == SwitchWatchCloseReason.KOPT) boughtIsin else null,
+                    boughtIsin = if (bought) boughtIsin else null,
                     closeReason = reason,
+                    buyTransactionId = if (bought) buyTransactionId else null,
                 )
             }
+        }
+        return wasOpen
+    }
+
+    override suspend fun clearTransactionLinks(transactionId: Long) {
+        watches.value = watches.value.map { watch ->
+            watch.copy(
+                sellTransactionId = watch.sellTransactionId?.takeUnless { it == transactionId },
+                buyTransactionId = watch.buyTransactionId?.takeUnless { it == transactionId },
+            )
         }
     }
 

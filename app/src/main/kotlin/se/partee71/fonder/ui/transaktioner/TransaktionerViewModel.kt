@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.SwitchWatch
@@ -19,6 +18,8 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.domain.usecase.RealizedTotal
+import se.partee71.fonder.domain.usecase.RecordTransaction
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -38,7 +39,8 @@ data class TransaktionRad(
     val fundIsin: String? = null,
     /**
      * Sant när säljet kan starta en bevakning av ett pågående byte (SLD-5): ISIN känt och ingen
-     * öppen bevakning redan startad för just det här säljet.
+     * öppen bevakning redan kopplad till just den här säljtransaktionen (BYT-1). En öppen bevakning
+     * utan känd transaktion för samma fond och dag kopplas i stället när knappen trycks.
      */
     val canStartSwitchWatch: Boolean = false,
 )
@@ -82,8 +84,8 @@ data class TransaktionerUiState(
 @HiltViewModel
 class TransaktionerViewModel internal constructor(
     private val repository: TransactionRepository,
-    private val switchWatchRepository: SwitchWatchRepository,
-    private val fundMetadataRepository: FundMetadataRepository,
+    switchWatchRepository: SwitchWatchRepository,
+    private val recordTransaction: RecordTransaction,
     private val today: () -> LocalDate,
 ) : ViewModel() {
 
@@ -91,8 +93,8 @@ class TransaktionerViewModel internal constructor(
     constructor(
         repository: TransactionRepository,
         switchWatchRepository: SwitchWatchRepository,
-        fundMetadataRepository: FundMetadataRepository,
-    ) : this(repository, switchWatchRepository, fundMetadataRepository, LocalDate::now)
+        recordTransaction: RecordTransaction,
+    ) : this(repository, switchWatchRepository, recordTransaction, LocalDate::now)
 
     private val filter = MutableStateFlow(HandelseFilter.ALLA)
 
@@ -103,14 +105,10 @@ class TransaktionerViewModel internal constructor(
         combine(
             repository.observeTransactions(),
             repository.observeFunds(),
-            // Nyckeln är fond **och** säljdag: en fond kan säljas i omgångar, och bara det sälj
-            // som redan bevakas ska sluta erbjuda en bevakning (SLD-5).
-            switchWatchRepository.observeOpen().map { watches ->
-                watches.mapTo(mutableSetOf()) { it.sellIsin to it.soldAtEpochDay }
-            },
+            switchWatchRepository.observeOpen(),
             filter,
             startedSwitchWatchId,
-        ) { transactions, funds, watchedSales, selectedFilter, startedId ->
+        ) { transactions, funds, openWatches, selectedFilter, startedId ->
             val fundsById = funds.associateBy { it.fundId }
             val sales = RealizedGainCalculator.compute(transactions)
             val salesByTransactionId = sales.associateBy { it.transactionId }
@@ -123,7 +121,7 @@ class TransaktionerViewModel internal constructor(
                     fundName = fund?.name ?: tx.fundId,
                     sale = sale,
                     fundIsin = isin,
-                    canStartSwitchWatch = sale != null && isin != null && (isin to sale.epochDay) !in watchedSales,
+                    canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) },
                 )
             }
             TransaktionerUiState(
@@ -144,39 +142,35 @@ class TransaktionerViewModel internal constructor(
         filter.value = selected
     }
 
+    /** Tar bort transaktionen (TRX-2) via [RecordTransaction.delete]; bytets länk nollas, bevakningen ligger kvar. */
     fun deleteTransaction(id: Long) {
-        viewModelScope.launch { repository.deleteTransaction(id) }
+        viewModelScope.launch { recordTransaction.delete(id) }
     }
 
     /**
      * Startar en fristående bevakning av ett pågående byte för säljet (SLD-5, issue #114) — för
-     * ett byte gjort på eget initiativ, utanför bytesplanen (HEM-8).
-     *
-     * Säljdatumet och likviden tas ur säljtransaktionen, inte ur dagens datum: här *finns* det
-     * verkliga datumet, och utvecklingen ska mätas från den dag pengarna faktiskt frigjordes.
-     *
-     * Målnivån för de automatiska alternativen (ANA-13) är säljfondens **egen** risknivå ur
-     * metadatacachen — det närmaste appen kommer "något likvärdigt" utan en riskprofil att mäta
-     * mot. Saknas nivån i cachen startas bevakningen ändå, men utan förslag: en gissad nivå hade
-     * gett alternativ på fel risk, vilket är sämre än inga alternativ (ANA-4-principen). Ingen
-     * nätverksfråga görs för att fylla luckan — Händelser är en lokal vy.
+     * ett byte gjort på eget initiativ, utanför bytesplanen (HEM-8), via
+     * [RecordTransaction.startWatchForSale] (BYT-2): säljdag och likvid ur transaktionen, målnivå
+     * ur säljfondens egen risknivå, och en bevakning per säljtransaktion.
      */
     fun startSwitchWatch(row: TransaktionRad) {
-        val isin = row.fundIsin ?: return
-        val sale = row.sale ?: return
+        if (row.fundIsin == null || row.sale == null) return
         viewModelScope.launch {
-            if (switchWatchRepository.hasOpenFor(isin, sale.epochDay)) return@launch
-            startedSwitchWatchId.value = switchWatchRepository.start(
-                SwitchWatch(
-                    sellIsin = isin,
-                    sellFundName = row.fundName,
-                    soldAtEpochDay = sale.epochDay,
-                    proceedsKr = sale.proceeds - sale.fee,
-                    targetLevel = fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.risk,
-                ),
-            )
+            recordTransaction.startWatchForSale(row.transaction, today())
+                ?.let { startedSwitchWatchId.value = it }
         }
     }
+
+    /**
+     * Sant när bevakningen redan är säljet [tx]:s (BYT-1): länkad till transaktionen — eller utan
+     * känd transaktion för samma fond och **samma dag** men utgången och ännu inte stängd, som
+     * blockerade före 0.67.0 (fond + dag). En öppen, inte utgången bevakning utan transaktion
+     * samma dag blockerar **inte** — knappen kopplar den till säljet i stället för att starta en
+     * ny ([RecordTransaction.startWatchForSale]).
+     */
+    private fun SwitchWatch.covers(tx: Transaction, isin: String?): Boolean =
+        sellTransactionId == tx.id ||
+            (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today()))
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
     fun onSwitchWatchOpened() {

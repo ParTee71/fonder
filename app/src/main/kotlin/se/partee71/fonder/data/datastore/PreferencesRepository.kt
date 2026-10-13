@@ -49,6 +49,7 @@ class PreferencesRepository @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val lastPriceSyncKey = longPreferencesKey("last_price_sync_epoch_millis")
     private val fundFilterVocabularyKey = stringPreferencesKey("fund_filter_vocabulary")
+    private val switchPlanEmptiedAtKey = longPreferencesKey("switch_plan_emptied_at_epoch_millis")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
     /** Issue #96:s ensamma ISIN — läses fortfarande, skrivs aldrig mer. Se [benchmark]. */
@@ -148,6 +149,31 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setFundFilterVocabulary(vocabulary: FundFilterVocabulary) {
         dataStore.edit { it[fundFilterVocabularyKey] = Json.encodeToString(FundFilterVocabulary.serializer(), vocabulary) }
+    }
+
+    /**
+     * Körnings-id (`batchEpochMillis`) för den senaste bytesplansskanning som gav en **tom** plan
+     * (HEM-8, issue #143), null om ingen gjort det. En tom plan går inte att spela in som rader i
+     * `suggestion_records`, så utan markören hade den senast inspelade (icke-tomma) körningen
+     * fortsatt visas som "senaste planen" i upp till `PLAN_TTL_DAYS` efter att bytet gjorts.
+     * [se.partee71.fonder.domain.usecase.SwitchPlanResolver.resolve] visar bara en körning som är
+     * nyare än markören.
+     *
+     * **Härledd cache, inte användardata** — skanningen räknar fram den igen vid nästa körning
+     * (backstop, transaktion, avstående), och ingår därför medvetet inte i backup-kontraktet
+     * (samma princip som [lastPriceSyncEpochMillis]). En återställning (SET-6) **nollställer**
+     * markören ([clearSwitchPlanEmptiedAt]): den hör till den här enhetens egen skanning, och en
+     * markör som råkar vara nyare än den återställda planens körning hade annars dolt en plan som
+     * aldrig räknats bort — planen gäller tills nästa skanning säger något annat.
+     */
+    val switchPlanEmptiedAtEpochMillis: Flow<Long?> = preferences.map { prefs -> prefs[switchPlanEmptiedAtKey] }
+
+    suspend fun setSwitchPlanEmptiedAt(batchEpochMillis: Long) {
+        dataStore.edit { it[switchPlanEmptiedAtKey] = batchEpochMillis }
+    }
+
+    suspend fun clearSwitchPlanEmptiedAt() {
+        dataStore.edit { it.remove(switchPlanEmptiedAtKey) }
     }
 
     /**

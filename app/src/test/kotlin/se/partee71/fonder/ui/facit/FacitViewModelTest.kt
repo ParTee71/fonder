@@ -62,6 +62,7 @@ class FacitViewModelTest {
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) {}
+        override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {}
         override suspend fun prune(today: LocalDate) {}
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             followedCalls += id to followed

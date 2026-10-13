@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -128,5 +129,31 @@ class RoomTransactionRepositoryTest {
         repository.upsertFund(fund.copy(isin = "SE0000582033"))
 
         assertEquals("SE0000582033", repository.observeFunds().first().single().isin)
+    }
+
+    @Test
+    fun deleteTransaction_nollar_bevakningens_lank_men_lamnar_bevakningen_kvar() = runTest {
+        // TRX-2 + BYT-1: transaktionen försvinner, bevakningen är användardata och raderas aldrig
+        // som sidoeffekt — den blir en bevakning utan känd transaktion, som en rad från före 0.67.0.
+        db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033"))
+        val saleId = db.transactionDao().insert(
+            TransactionEntity(fundId = "SHB0000442", type = "SALJ", epochDay = 100, shares = 3.0, pricePerShare = 50.0),
+        )
+        val watchId = db.switchWatchDao().insertWatch(
+            SwitchWatchEntity(
+                sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 100,
+                proceedsKr = 150.0, targetLevel = 4, sourceRecordId = null,
+                closedAtEpochDay = null, boughtIsin = null, closeReason = null,
+                sellTransactionId = saleId,
+            ),
+        )
+
+        repository.deleteTransaction(saleId)
+
+        assertTrue(repository.observeTransactions().first().isEmpty())
+        val watch = db.switchWatchDao().getById(watchId)!!.toDomain()
+        assertNull(watch.sellTransactionId)
+        assertTrue(watch.isOpen)
+        assertEquals(150.0, watch.proceedsKr!!, 1e-9)
     }
 }

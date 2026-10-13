@@ -38,8 +38,11 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FacitSummary
+import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -72,11 +75,15 @@ class BeslutViewModelTest {
     private val transactionRepo = FakeTransactionRepository()
 
     private fun viewModel() = BeslutViewModel(
-        PendingDecisionsSource(preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo, dismissalRepo),
+        PendingDecisionsSource(
+            preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo,
+            DismissedPlanSource(suggestionRepo, dismissalRepo, preferencesRepository, metadataRepo),
+            InProgressSwitches(switchWatchRepo, suggestionRepo),
+        ),
         FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
         preferencesRepository,
         suggestionRepo,
-        switchWatchRepo,
+        RecordTransaction(transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo),
         dismissalRepo,
         scheduler,
     )
@@ -349,6 +356,9 @@ class BeslutViewModelTest {
 
             while (state.decisions.switchPlan.isNotEmpty()) state = awaitItem()
             assertEquals(listOf(42L), state.decisions.dismissedSuggestions.map { it.recordId })
+            // Avståendet räknar om planen (HEM-8): paret tas ur kandidatmängden — utan forcerad kursuppdatering.
+            assertEquals(1, scheduler.switchPlanScans)
+            assertEquals(0, scheduler.forcedSwitchPlanScans)
             // Märket, "Att besluta" och fliken läser samma antal (NAV-9, HEM-13).
             assertEquals(0, state.decisions.count)
             // Utan plan och pågående byte är fliken tom — avståendet ligger kvar i sin egen rad.
@@ -365,8 +375,44 @@ class BeslutViewModelTest {
             while (state.decisions.switchPlan.isEmpty()) state = awaitItem()
             assertTrue(state.decisions.dismissedSuggestions.isEmpty())
             assertEquals(1, state.decisions.count)
+            // Ångra räknar också om — paret är tillbaka i kandidatmängden.
+            assertEquals(2, scheduler.switchPlanScans)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `ett avstatt byte kan angras aven nar planen raknats om utan paret`() = runTest(dispatcher) {
+        // Efter avståendet tar omräkningen paret ur planen (HEM-8) — den nya inspelningen har ett
+        // annat köp. Raden att ångra ska ändå finnas kvar, ur den senaste inspelningen per par.
+        setUpSwitchPlan()
+        metadataRepo.metadataByIsin = metadataRepo.metadataByIsin + ("SE_ANNAN" to meta("SE_ANNAN", "Annan kandidat", fee = 0.4, risk = 3))
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now())
+        suggestionRepo.records.value = listOf(
+            planRecord(id = 1, batch = 1_000),
+            planRecord(id = 2, buyIsin = "SE_ANNAN", batch = 2_000),
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.dismissedSuggestions.isEmpty()) state = awaitItem()
+            assertEquals(listOf(2L), state.decisions.switchPlan.map { it.recordId })
+            assertEquals(listOf(1L), state.decisions.dismissedSuggestions.map { it.recordId })
+            assertEquals(1, state.decisions.dismissedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `avsta pa ett billigare alternativ raknar inte om planen`() = runTest(dispatcher) {
+        setUpCheaperAlternative()
+
+        val vm = viewModel()
+        vm.dismissSuggestion(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion)
+        advanceUntilIdle()
+
+        assertEquals(0, scheduler.switchPlanScans)
     }
 
     @Test
@@ -594,6 +640,8 @@ class BeslutViewModelTest {
         viewModel().recomputeSwitchPlan()
 
         assertEquals(1, scheduler.switchPlanScans)
+        // Användarens uttryckliga omräkning hämtar alla kurser först — till skillnad från omräkningen efter en transaktion.
+        assertEquals(1, scheduler.forcedSwitchPlanScans)
     }
 
     // --- Pågående byten (ANA-12), flyttade från Hem ---
@@ -631,6 +679,24 @@ class BeslutViewModelTest {
             assertEquals(0.10, watch.leaderChangeFraction!!, 1e-9)
             assertEquals(setOf("SE_SALJ"), state.decisions.watchedSellIsins)
             assertEquals(1, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en planrad vars saljfond ar sald markeras som pagaende`() = runTest(dispatcher) {
+        // Bytet är sålt, inte bara föreslaget (BYT-1): raden ska inte erbjudas som "Sälj X" igen.
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        switchWatchRepo.start(
+            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Innehav", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 9, sourceRecordId = 42),
+        )
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.decisions.switchPlan.isEmpty() || state.decisions.openWatches.isEmpty()) state = awaitItem()
+            assertTrue(state.decisions.switchPlan.single().inProgress)
+            assertEquals(setOf("SE_HELD"), state.decisions.watchedSellIsins)
             cancelAndIgnoreRemainingEvents()
         }
     }

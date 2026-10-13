@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -79,6 +80,9 @@ class BackupSerializerTest {
                 proceedsKr = 12_500.0,
                 targetLevel = 4,
                 sourceRecordId = 3,
+                // Startad ur säljtransaktion 8 (BYT-1); inget köp än.
+                sellTransactionId = 8,
+                buyTransactionId = null,
                 candidates = listOf(
                     SwitchWatchCandidate(
                         id = 5, watchId = 2, isin = "SE0001466368", name = "Kandidat A",
@@ -103,6 +107,9 @@ class BackupSerializerTest {
                 closedAtEpochDay = 19_505,
                 boughtIsin = "SE0001466368",
                 closeReason = SwitchWatchCloseReason.KOPT,
+                // Från före 0.67.0: säljet okänt, köpet kvitterat med transaktion 7.
+                sellTransactionId = null,
+                buyTransactionId = 7,
             ),
         ),
         suggestionDismissals = listOf(
@@ -226,6 +233,7 @@ class BackupSerializerTest {
             setOf(
                 "id", "sellIsin", "sellFundName", "soldAtEpochDay", "proceedsKr", "targetLevel",
                 "sourceRecordId", "closedAtEpochDay", "boughtIsin", "closeReason", "candidates",
+                "sellTransactionId", "buyTransactionId",
             ),
             root.getValue("switchWatches").jsonArray.first().jsonObject.keys,
         )
@@ -238,6 +246,36 @@ class BackupSerializerTest {
             setOf("targetAllocation", "answers", "targetRiskLevel"),
             root.getValue("riskProfile").jsonObject.keys,
         )
+    }
+
+    @Test
+    fun `kopplingen till salj- och koptransaktionen overlever i bada lagen`() {
+        // BYT-1: länken är det som gör bytet till ett objekt — tappas den är bevakningen bara en
+        // bevakning igen, och dedupen per sälj slutar fungera efter en återställning.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+
+        assertEquals(listOf(8L, null), restored.switchWatches.map { it.sellTransactionId })
+        assertEquals(listOf(null, 7L), restored.switchWatches.map { it.buyTransactionId })
+        // Länkarna pekar på transaktioner som finns i samma fil.
+        val transactionIds = restored.transactions.map { it.id }.toSet()
+        assertTrue(restored.switchWatches.mapNotNull { it.sellTransactionId }.all { it in transactionIds })
+        assertTrue(restored.switchWatches.mapNotNull { it.buyTransactionId }.all { it in transactionIds })
+    }
+
+    @Test
+    fun `en fil utan transaktionslankar lases som okopplade bevakningar`() {
+        // Filer skrivna före 0.67.0 saknar nycklarna helt: samma formatversion, fälten läses som
+        // null — aldrig ett påhittat id, aldrig en avvisad fil.
+        val utanLankar = BackupSerializer.encode(fullPayload())
+            .replace(Regex(",\\s*\"sellTransactionId\": (\\d+|null)"), "")
+            .replace(Regex(",\\s*\"buyTransactionId\": (\\d+|null)"), "")
+        assertFalse(utanLankar.contains("TransactionId"))
+
+        val restored = BackupSerializer.decode(utanLankar).getOrThrow()
+
+        assertEquals(2, restored.switchWatches.size)
+        assertTrue(restored.switchWatches.all { it.sellTransactionId == null && it.buyTransactionId == null })
+        assertEquals(BackupPayload.FORMAT_VERSION, restored.formatVersion)
     }
 
     @Test

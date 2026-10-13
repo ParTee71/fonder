@@ -18,6 +18,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -26,6 +29,7 @@ import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import java.time.LocalDate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -81,6 +85,13 @@ class ImportHoldingsViewModelTest {
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
+    private fun recordTransaction(transactionRepo: TransactionRepository = fakeTransactionRepo) = RecordTransaction(
+        transactionRepo, FakeSwitchWatchRepository(), FakeSuggestionRecordRepository(), FakeFundMetadataRepository(),
+    )
+
+    private fun viewModel(priceRepo: FundPriceRepository = fakePriceRepo, transactionRepo: TransactionRepository = fakeTransactionRepo) =
+        ImportHoldingsViewModel(transactionRepo, priceRepo, recordTransaction(transactionRepo))
+
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
@@ -105,7 +116,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `parsar och matchar fond automatiskt`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             assertFalse(awaitItem().fileSelected)
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -130,7 +141,7 @@ class ImportHoldingsViewModelTest {
         val transactionRepoMedBevakadFond = object : TransactionRepository by fakeTransactionRepo {
             override fun observeFunds(): Flow<List<Fund>> = MutableStateFlow(listOf(trackedFund))
         }
-        val vm = ImportHoldingsViewModel(transactionRepoMedBevakadFond, fakePriceRepo)
+        val vm = viewModel(transactionRepo = transactionRepoMedBevakadFond)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -160,7 +171,7 @@ class ImportHoldingsViewModelTest {
         val avanzaFund = Fund(fundId = "LU0496367417", name = "Franklin Gold and Prec Mtls A(acc)USD", currency = "USD", isin = "LU0496367417")
         findFundByIsinResult = avanzaFund
 
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(franklinSheetXml))
@@ -187,7 +198,7 @@ class ImportHoldingsViewModelTest {
             override suspend fun latestPrice(fundId: String): FundPrice =
                 FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedFarskKurs)
+        val vm = viewModel(priceRepoMedFarskKurs)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -204,7 +215,7 @@ class ImportHoldingsViewModelTest {
     @Test
     fun `hamtar kurs nar fonden helt saknar cachad kurs`() = runTest(dispatcher) {
         // fakePriceRepo.latestPrice returnerar null som standard — helt obevakad fond.
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -224,7 +235,7 @@ class ImportHoldingsViewModelTest {
             override suspend fun latestPrice(fundId: String): FundPrice =
                 FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 950.0, currency = "SEK")
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedInaktuellKurs)
+        val vm = viewModel(priceRepoMedInaktuellKurs)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -244,7 +255,7 @@ class ImportHoldingsViewModelTest {
                 return false
             }
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedMisslyckadHamtning)
+        val vm = viewModel(priceRepoMedMisslyckadHamtning)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -267,7 +278,7 @@ class ImportHoldingsViewModelTest {
                 return fakePriceRepo.priceHistory(fundId, fromEpochDay, toEpochDay)
             }
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedFangst)
+        val vm = viewModel(priceRepoMedFangst)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -288,7 +299,7 @@ class ImportHoldingsViewModelTest {
         val priceRepoUtanHistorik = object : FundPriceRepository by fakePriceRepo {
             override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoUtanHistorik)
+        val vm = viewModel(priceRepoUtanHistorik)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -328,7 +339,7 @@ class ImportHoldingsViewModelTest {
             override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
             override suspend fun fetchFundCatalog(): FundCatalog = ambiguousCatalog
         }
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, priceRepoMedTvetydigKatalog)
+        val vm = viewModel(priceRepoMedTvetydigKatalog)
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(ambiguousSheetXml))
@@ -344,7 +355,7 @@ class ImportHoldingsViewModelTest {
     fun `filen ar varken en xlsx-zip eller giltig XML ger PARSE_FAILED`() = runTest(dispatcher) {
         // Filen är varken zippad (för kort/fel magibyte) eller giltig XML — det ska
         // fortfarande ge ett tydligt fel, inte krascha appen.
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(byteArrayOf(1, 2, 3))
@@ -365,7 +376,7 @@ class ImportHoldingsViewModelTest {
                 </sheetData>
             </worksheet>
         """.trimIndent()
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xmlUtanHeader.toByteArray(Charsets.UTF_8))
@@ -379,7 +390,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `trasig xml i arbetsbladet ger PARSE_FAILED`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes("<worksheet><sheetData><row>"))
@@ -395,7 +406,7 @@ class ImportHoldingsViewModelTest {
     fun `ozippad ra-XML (verklig exportform) parsas direkt utan zip-uppackning`() = runTest(dispatcher) {
         // Handelsbankens faktiska export är inte en riktig zip-baserad .xlsx — bara det
         // inre kalkylbladets råa XML. onFileSelected ska hantera den utan att zippa den.
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(sampleSheetXml.toByteArray(Charsets.UTF_8))
@@ -411,7 +422,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `fondval och inkopstillfalle kan overridas per rad`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -438,7 +449,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `rad kan delas i flera inkopstillfallen`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -476,7 +487,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `import skapar fond och transaktion for bekraftade rader`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -500,7 +511,7 @@ class ImportHoldingsViewModelTest {
         // Regression (issue #75): importen gav ingen synlig återkoppling förrän `imported` slog
         // om, så ett andra tryck under skrivningarna startade en andra genomkörning av samma
         // lista — dubbla andelar och dubbelt investerat belopp för varje importerad fond.
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -526,7 +537,7 @@ class ImportHoldingsViewModelTest {
         // Exportens ISIN (kolumn A i sampleSheetXml, "SE0000582033") ska sparas på fonden
         // vid import — inte kasseras — så full kurshistorik sedan köpdatum kan hämtas från
         // ISIN-baserade källor (KRAVLISTA TP-14).
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -544,7 +555,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `import skapar en transaktion per inkopstillfalle`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -579,7 +590,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `rad med felaktig andelssumma importeras inte`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -602,7 +613,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `inkopstillfalle markerat som salj skapar en saljtransaktion vid import`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))
@@ -626,7 +637,7 @@ class ImportHoldingsViewModelTest {
 
     @Test
     fun `avmarkerad rad importeras inte`() = runTest(dispatcher) {
-        val vm = ImportHoldingsViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             awaitItem()
             vm.onFileSelected(xlsxBytes(sampleSheetXml))

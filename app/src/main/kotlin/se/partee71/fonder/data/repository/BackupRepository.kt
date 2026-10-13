@@ -164,6 +164,9 @@ class LocalBackupRepository @Inject constructor(
             payload.chosenBenchmarkIsin
                 ?.let { preferences.setChosenBenchmarkIsin(it) }
                 ?: preferences.clearChosenBenchmarkIsin()
+            // Tom-plan-markören är den här enhetens skanningsstatus, inte en del av filen: en markör
+            // nyare än den återställda planens körning hade dolt en plan som aldrig räknats bort.
+            preferences.clearSwitchPlanEmptiedAt()
 
             RestoreSummary(
                 funds = payload.funds.size,

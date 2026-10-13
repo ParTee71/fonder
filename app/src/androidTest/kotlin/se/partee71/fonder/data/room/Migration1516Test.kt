@@ -5,9 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -25,9 +23,9 @@ import se.partee71.fonder.domain.model.SuggestionKind
  *
  * Version 15:s schema byggs med rå SQL, inte via `MigrationTestHelper` eller de nuvarande
  * entiteterna — men satserna läses ur den incheckade, frysta `schemas/…/15.json` (monterad som
- * androidTest-asset) i stället för att skrivas av en gång till: version 15 har åtta tabeller som
- * alla måste finnas för Rooms schemaverifiering, och en tredje kopia av dem bredvid
- * [Migration1415Test] vore just den dubbelkod `cpdCheck` fäller. Raderna sätts in för hand.
+ * androidTest-asset, [exportedSchemaStatements]) i stället för att skrivas av en gång till: version
+ * 15 har åtta tabeller som alla måste finnas för Rooms schemaverifiering, och en tredje kopia av dem
+ * bredvid [Migration1415Test] vore just den dubbelkod `cpdCheck` fäller. Raderna sätts in för hand.
  */
 @RunWith(AndroidJUnit4::class)
 class Migration1516Test {
@@ -40,29 +38,13 @@ class Migration1516Test {
         context.deleteDatabase(dbName)
     }
 
-    /** `CREATE TABLE`/`CREATE INDEX` för version 15, ur det exporterade schemat. */
-    private fun version15Schema(): List<String> {
-        val testAssets = InstrumentationRegistry.getInstrumentation().context.assets
-        val json = testAssets.open("se.partee71.fonder.data.room.AppDatabase/15.json").bufferedReader().use { it.readText() }
-        val database = JSONObject(json).getJSONObject("database")
-        assertEquals(15, database.getInt("version"))
-        val entities = database.getJSONArray("entities")
-        return (0 until entities.length()).flatMap { i ->
-            val entity = entities.getJSONObject(i)
-            val indices = entity.optJSONArray("indices")
-            val statements = listOf(entity.getString("createSql")) +
-                (0 until (indices?.length() ?: 0)).map { j -> indices!!.getJSONObject(j).getString("createSql") }
-            statements.map { it.replace("\${TABLE_NAME}", entity.getString("tableName")) }
-        }
-    }
-
     @Test
     fun migration_15_16_lagger_till_avstaendena_utan_att_rora_befintlig_data() = runTest {
         context.deleteDatabase(dbName)
         val dbFile = context.getDatabasePath(dbName)
 
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            version15Schema().forEach(db::execSQL)
+            exportedSchemaStatements(15).forEach(db::execSQL)
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
                     "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')",

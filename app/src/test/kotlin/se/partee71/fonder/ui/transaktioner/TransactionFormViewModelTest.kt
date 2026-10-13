@@ -18,12 +18,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -74,9 +78,15 @@ class TransactionFormViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
+    private val recordTransaction = RecordTransaction(
+        fakeTransactionRepo, FakeSwitchWatchRepository(), FakeSuggestionRecordRepository(), FakeFundMetadataRepository(),
+    )
+
+    private fun viewModel() = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo, recordTransaction)
+
     @Test
     fun `formularet ar ogiltigt tills fond antal och kurs fyllts i`() = runTest(dispatcher) {
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -98,7 +108,7 @@ class TransactionFormViewModelTest {
     @Test
     fun `onFundSelected forifyller kurs fran senaste kanda pris`() = runTest(dispatcher) {
         latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -119,7 +129,7 @@ class TransactionFormViewModelTest {
         val utanKurs = Fund(fundId = "SHB0000999", name = "Handelsbanken Global Index Criteria")
         funds.value = listOf(fund, utanKurs)
         pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -149,7 +159,7 @@ class TransactionFormViewModelTest {
         pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
         pricesByFundId[annanFond.fundId] = FundPrice(fundId = annanFond.fundId, epochDay = 100, nav = 99.0, currency = "SEK")
         slowFundId = fund.fundId
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
 
         vm.uiState.test {
             var state = awaitItem()
@@ -173,7 +183,7 @@ class TransactionFormViewModelTest {
     fun `svenskt decimalkomma i antal och kurs gor formularet giltigt`() = runTest(dispatcher) {
         // Regression: KeyboardType.Decimal ger ofta bara komma på ett svenskt tangentbord —
         // formuläret ska inte tyst förbli ogiltigt när användaren skriver "2,5" i stället för "2.5".
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -198,7 +208,7 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `save sparar transaktion och markerar formularet som sparat`() = runTest(dispatcher) {
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -226,7 +236,7 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `tomt avgiftsfalt sparas som 0 avgift`() = runTest(dispatcher) {
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -250,7 +260,7 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `ifylld avgift sparas med transaktionen`() = runTest(dispatcher) {
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()
@@ -276,7 +286,7 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `negativ avgift gor formularet ogiltigt`() = runTest(dispatcher) {
-        val vm = TransactionFormViewModel(fakeTransactionRepo, fakePriceRepo)
+        val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.funds.isEmpty()) state = awaitItem()

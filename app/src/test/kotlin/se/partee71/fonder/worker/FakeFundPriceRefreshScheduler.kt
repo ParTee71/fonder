@@ -41,8 +41,29 @@ class FakeFundPriceRefreshScheduler : FundPriceRefreshScheduler {
         manualRefreshes++
     }
 
-    override fun triggerSwitchPlanScan() {
+    /** Senaste begäran — som den riktiga schemaläggaren antecknar den. */
+    var lastSwitchPlanRequest: SwitchPlanScanRequest? = null
+
+    /** Hur många av [switchPlanScans] som begärts med forcerad kursuppdatering — bara "Räkna om" ska. */
+    var forcedSwitchPlanScans = 0
+        private set
+
+    /** Uppföljare som workern köat, med sin force-flagga. */
+    val switchPlanFollowUps = mutableListOf<Boolean>()
+
+    override fun triggerSwitchPlanScan(force: Boolean) {
         switchPlanScans++
+        if (force) forcedSwitchPlanScans++
+        lastSwitchPlanRequest = SwitchPlanScanRequest(System.currentTimeMillis(), force)
+    }
+
+    override fun switchPlanScanRequestedSince(epochMillis: Long): SwitchPlanScanRequest? =
+        lastSwitchPlanRequest?.takeIf { it.epochMillis > epochMillis }
+
+    override fun takeForcedSwitchPlanRequest(): Boolean = false
+
+    override fun enqueueSwitchPlanFollowUp(force: Boolean) {
+        switchPlanFollowUps += force
     }
 
     override fun triggerBenchmarkScan() {

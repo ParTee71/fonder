@@ -4,17 +4,18 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import java.time.LocalDate
 import javax.inject.Inject
@@ -51,7 +52,9 @@ data class PendingDecisions(
     val switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
     /**
      * Planens byten som användaren avstått från och som fortfarande gäller ([SuggestionDismissals]).
-     * Räknas inte i [count]; Beslut listar dem längst ned så ett avstående kan ångras.
+     * Räknas inte i [count]; Beslut listar dem längst ned så ett avstående kan ångras. Hämtas ur
+     * den **senaste inspelningen per par** ([DismissedPlanSource]), inte ur den visade planen: ett
+     * avstått par tas ur planen vid nästa omräkning (HEM-8/HEM-14), och raden att ångra ska finnas kvar ändå.
      */
     val dismissedSuggestions: List<SwitchPlanResolver.Suggestion> = emptyList(),
     /** De inspelade billigare alternativen ([CheaperAlternatives]) utan de avstådda. */
@@ -62,13 +65,18 @@ data class PendingDecisions(
     val openWatches: List<OpenSwitchWatch> = emptyList(),
     /**
      * Säljfonder som redan har en öppen bevakning, **även** utgångna — styr om ett kvitterat byte
-     * erbjuder "Bevaka alternativ". En utgången bevakning visas inte men blockerar en ny för samma
+     * erbjuder "Bevaka alternativ". Planradens [SwitchPlanResolver.Suggestion.inProgress] sätts
+     * inte härifrån utan av bevakningens källförslag, se [PendingDecisionsSource]. En utgången bevakning visas inte men blockerar en ny för samma
      * sälj tills bakgrundskörningen stängt den; annars hade samma byte fått två rader.
      */
     val watchedSellIsins: Set<String> = emptySet(),
 ) {
-    /** Planens byten användaren ännu inte markerat som genomförda (SET-5) — ett kvitterat byte är redan beslutat. */
-    val openSwitchCount: Int get() = switchPlan.count { !it.followed }
+    /**
+     * Planens byten som väntar på ett beslut: varken kvitterade (SET-5) eller sålda (BYT-1). En
+     * pågående rad räknas inte — dess bevakning räknas redan i [openWatches], och samma byte ska
+     * vara **ett** på märket, inte två.
+     */
+    val openSwitchCount: Int get() = switchPlan.count { !it.followed && !it.inProgress }
 
     /** Billigare alternativ som varken är kvitterade eller avstådda. */
     val openCheaperAlternativeCount: Int get() = cheaperAlternatives.count { !it.suggestion.followed }
@@ -95,6 +103,10 @@ data class PendingDecisions(
  * Kontotypen läses **i** flödet (inte med `first()`), så SET-4-gaten följer en ändring i
  * Inställningar direkt (issue #75). De billigare alternativen gatas inte på kontotypen — det gör
  * inte ANA-9 heller.
+ *
+ * De avstådda planbytena kommer ur [DismissedPlanSource] (senaste raden per avstått par, riktad
+ * fråga), inte ur den visade planen, och de pågående raderna märks av [InProgressSwitches] — båda
+ * delade med Fonddetalj, så de två skärmarna aldrig säger olika om samma rad.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PendingDecisionsSource @Inject constructor(
@@ -103,50 +115,85 @@ class PendingDecisionsSource @Inject constructor(
     private val switchWatchRepository: SwitchWatchRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    private val suggestionDismissalRepository: SuggestionDismissalRepository,
+    private val dismissedPlanSource: DismissedPlanSource,
+    private val inProgressSwitches: InProgressSwitches,
 ) {
 
     fun observe(): Flow<PendingDecisions> =
-        combine(suggestions(), suggestionDismissalRepository.observeAll(), switchWatches()) { (plan, cheaper), dismissals, (open, watchedSellIsins) ->
-            val today = LocalDate.now()
-            val (visible, dismissed) = SuggestionDismissals.partition(plan, dismissals, today)
-            val (visibleCheaper, dismissedCheaper) = SuggestionDismissals.partition(cheaper, dismissals, today) { it.suggestion }
+        combine(suggestions(), switchWatches()) { resolved, watches ->
             PendingDecisions(
-                switchPlan = visible,
-                dismissedSuggestions = dismissed,
-                cheaperAlternatives = visibleCheaper,
-                dismissedCheaperAlternatives = dismissedCheaper,
-                openWatches = open,
-                watchedSellIsins = watchedSellIsins,
+                switchPlan = watches.inProgress.mark(resolved.plan),
+                dismissedSuggestions = resolved.dismissedPlan,
+                cheaperAlternatives = resolved.cheaper,
+                dismissedCheaperAlternatives = resolved.dismissedCheaper,
+                openWatches = watches.visible,
+                watchedSellIsins = watches.sellIsins,
             )
         }
 
+    /** Förslagen resolvade mot samma metadatauppslag, redan delade i visade och avstådda (HEM-14). */
+    private class Resolved(
+        val plan: List<SwitchPlanResolver.Suggestion>,
+        val dismissedPlan: List<SwitchPlanResolver.Suggestion>,
+        val cheaper: List<CheaperAlternative>,
+        val dismissedCheaper: List<CheaperAlternative>,
+    )
+
+    private class SuggestionInput(
+        val accountType: AccountType?,
+        val emptiedAtEpochMillis: Long?,
+        val batch: List<SuggestionRecord>,
+        val feeRecords: List<SuggestionRecord>,
+        val dismissedPlan: List<SwitchPlanResolver.Suggestion>,
+        val dismissals: List<SuggestionDismissal>,
+    )
+
     /** Bytesplanen och de billigare alternativen, resolvade mot samma metadatauppslag. */
-    private fun suggestions(): Flow<Pair<List<SwitchPlanResolver.Suggestion>, List<CheaperAlternative>>> {
+    private fun suggestions(): Flow<Resolved> {
         val feeSince = LocalDate.now().minusDays(CheaperAlternatives.TTL_DAYS).toEpochDay()
+        val planGate = combine(preferencesRepository.accountType, preferencesRepository.switchPlanEmptiedAtEpochMillis) { type, emptied -> type to emptied }
         return combine(
-            preferencesRepository.accountType,
+            planGate,
             suggestionRecordRepository.observeLatestBatch(),
             suggestionRecordRepository.observeRecent(SuggestionKind.FEE, feeSince),
-        ) { accountType, batch, feeRecords -> Triple(accountType, batch, feeRecords) }
-            .mapLatest { (accountType, batch, feeRecords) ->
+            dismissedPlanSource.observe(),
+        ) { (accountType, emptiedAt), batch, feeRecords, dismissedPlan ->
+            SuggestionInput(accountType, emptiedAt, batch, feeRecords, dismissedPlan.suggestions, dismissedPlan.dismissals)
+        }
+            .mapLatest { input ->
                 val today = LocalDate.now()
-                val isins = (batch + feeRecords).flatMap { listOf(it.sellIsin, it.buyIsin) }
+                val isins = (input.batch + input.feeRecords).flatMap { listOf(it.sellIsin, it.buyIsin) }
                 val metadata = fundMetadataRepository.cachedMetadataFor(isins)
-                SwitchPlanResolver.resolve(accountType, batch, metadata, today) to CheaperAlternatives.resolve(feeRecords, metadata, today)
+
+                val plan = SwitchPlanResolver.resolve(input.accountType, input.batch, metadata, today, input.emptiedAtEpochMillis)
+                val (visible, _) = SuggestionDismissals.partition(plan, input.dismissals, today)
+                val dismissedPlan = input.dismissedPlan
+
+                val cheaper = CheaperAlternatives.resolve(input.feeRecords, metadata, today)
+                val (visibleCheaper, dismissedCheaper) = SuggestionDismissals.partition(cheaper, input.dismissals, today) { it.suggestion }
+                Resolved(visible, dismissedPlan, visibleCheaper, dismissedCheaper)
             }
     }
 
-    private fun switchWatches(): Flow<Pair<List<OpenSwitchWatch>, Set<String>>> =
+    /** De öppna bevakningarna som Beslut visar, och vilka planrader de gör pågående — ur **en** läsning av tabellen. */
+    private class Watches(
+        val visible: List<OpenSwitchWatch>,
+        /** Säljfonder med öppen bevakning, **även** utgångna — se [PendingDecisions.watchedSellIsins]. */
+        val sellIsins: Set<String>,
+        val inProgress: InProgressSwitches.Keys,
+    )
+
+    private fun switchWatches(): Flow<Watches> =
         switchWatchRepository.observeOpen().flatMapLatest { watches ->
             val today = LocalDate.now()
             val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
             val visible = watches.filterNot { SwitchWatchCalc.isExpired(it, today) }
-            if (visible.isEmpty()) return@flatMapLatest flowOf(emptyList<OpenSwitchWatch>() to sellIsins)
+            val inProgress = inProgressSwitches.keysFor(watches, today)
+            if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), sellIsins, it) }
 
             val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()
-            fundPriceRepository.observeLatestPrices(candidateIsins).map { prices ->
-                visible.map { it.toOpen(prices, today) } to sellIsins
+            combine(fundPriceRepository.observeLatestPrices(candidateIsins), inProgress) { prices, keys ->
+                Watches(visible = visible.map { it.toOpen(prices, today) }, sellIsins = sellIsins, inProgress = keys)
             }
         }
 
@@ -170,32 +217,4 @@ class PendingDecisionsSource @Inject constructor(
             leaderChangeFraction = leader?.changeFraction,
         )
     }
-}
-
-/**
- * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12/HEM-8) — den
- * enda vägen dit för både Beslut och Fonddetalj (ANA-10), så samma förslag aldrig kan ge två
- * olika bevakningar. Säljdagen sätts till [today]: kvitteringen görs när bytet gjorts, och ett
- * påhittat tidigare datum hade mätt kandidaternas utveckling över dagar pengarna inte var fria
- * (ett äldre sälj bevakas i stället från Sålda fonder, SLD-5). Målnivån är förslagets `toLevel`,
- * så de automatiska alternativen (ANA-13) hämtas ur samma pool som planens köpkandidat.
- *
- * Null när säljfonden redan har en öppen bevakning från [today] — annars hade varje tryck startat
- * ytterligare en bevakning av samma byte.
- */
-suspend fun SwitchWatchRepository.startFromSuggestion(
-    suggestion: SwitchPlanResolver.Suggestion,
-    today: LocalDate = LocalDate.now(),
-): Long? {
-    if (hasOpenFor(suggestion.sellIsin, today.toEpochDay())) return null
-    return start(
-        SwitchWatch(
-            sellIsin = suggestion.sellIsin,
-            sellFundName = suggestion.sellFundName,
-            soldAtEpochDay = today.toEpochDay(),
-            proceedsKr = suggestion.switchValueKr,
-            targetLevel = suggestion.toLevel,
-            sourceRecordId = suggestion.recordId,
-        ),
-    )
 }

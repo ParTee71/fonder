@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,6 +20,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -280,6 +283,12 @@ class FundPriceUpdateWorkerTest {
     /** Nivåerna källan faktiskt frågades om — budgeten i KEY_SCAN_SWITCH_PLAN mäts på dem. */
     private val switchCandidateLevelsQueried = mutableListOf<Int>()
 
+    /** Låter kandidatfrågan ta (virtuell) tid, så två skanningar kan överlappa i testet. */
+    private var switchCandidateDelayMillis = 0L
+
+    /** Uppföljare workern köat — med force-flaggan. */
+    private val followUps = mutableListOf<Boolean>()
+
     /** Kandidater källan svarar med på en fondfråga — riggas av referensfondstesterna (HEM-10). */
     private var queryResult: List<FundMetadata> = emptyList()
 
@@ -296,6 +305,7 @@ class FundPriceUpdateWorkerTest {
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
             switchCandidateLevelsQueried.add(level)
+            if (switchCandidateDelayMillis > 0) delay(switchCandidateDelayMillis)
             return switchCandidatesByLevel[level].orEmpty()
         }
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
@@ -647,16 +657,32 @@ class FundPriceUpdateWorkerTest {
          * bevisat en spärr produktionen inte har.
          */
         private val recordedDays = mutableSetOf<List<Any>>()
-        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> =
-            flowOf(recorded.filter { it.kind == SuggestionKind.RISK_PLAN })
+
+        /** Som DAO:n: senaste dygnets senaste körning, i planordning — skanningen jämför sin plan mot den. */
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> {
+            val plan = recorded.filter { it.kind == SuggestionKind.RISK_PLAN }
+            if (plan.isEmpty()) return flowOf(emptyList())
+            val latestDay = plan.maxOf { it.suggestedAtEpochDay }
+            val sameDay = plan.filter { it.suggestedAtEpochDay == latestDay }
+            val latestBatch = sameDay.maxOf { it.batchEpochMillis }
+            return flowOf(sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex })
+        }
 
         var prunedAt: LocalDate? = null
         override suspend fun prune(today: LocalDate) { prunedAt = today }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean =
             listOf(sellIsin, buyIsin, epochDay, kind) in recordedDays
         override suspend fun record(record: SuggestionRecord) {
-            recorded += record
+            // Löpande id som Room — flytten mellan körningar (moveToBatch) nycklar på det.
+            recorded += record.copy(id = (recorded.maxOfOrNull { it.id } ?: 0L) + 1)
             recordedDays += listOf(record.sellIsin, record.buyIsin, record.suggestedAtEpochDay, record.kind)
+        }
+        override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {
+            moves.forEach { move ->
+                val index = recorded.indexOfFirst { it.id == move.id }
+                recorded[index] = recorded[index].copy(batchEpochMillis = move.batchEpochMillis, planIndex = move.planIndex, switchValueKr = move.switchValueKr)
+            }
+            records.forEach { record(it) }
         }
         override fun observeHistory(): Flow<List<SuggestionRecord>> = flowOf(
             recorded.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex }),
@@ -664,6 +690,19 @@ class FundPriceUpdateWorkerTest {
         /** Workern skriver aldrig markeringen — den ägs av användaren (SET-5, issue #80). */
         override suspend fun setFollowed(id: Long, followed: Boolean) = Unit
     }
+
+    private val switchWatchRepo = FakeSwitchWatchRepository()
+    private val dismissalRepo = FakeSuggestionDismissalRepository()
+
+    /** [FundPriceUpdateWorker.scanSwitchPlan] med testets fakes — avståenden riggas på [dismissalRepo]. */
+    private suspend fun scanSwitchPlan(
+        suggestionRepo: SuggestionRecordRepository,
+        today: LocalDate = LocalDate.now(),
+        batchEpochMillis: Long = System.currentTimeMillis(),
+    ) = FundPriceUpdateWorker.scanSwitchPlan(
+        fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
+        dismissalRepo, calendar = { today }, clock = { batchEpochMillis },
+    )
 
     private fun heldMetadata(isin: String, risk: Int, totalFee: Double) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
@@ -697,7 +736,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
     }
@@ -709,7 +748,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
     }
@@ -720,7 +759,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
     }
@@ -732,7 +771,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, LocalDate.of(2026, 1, 1))
+        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1))
 
         val record = suggestionRepo.recorded.single()
         assertEquals("SE_HELD", record.sellIsin)
@@ -746,7 +785,7 @@ class FundPriceUpdateWorkerTest {
     }
 
     @Test
-    fun `runScans hoppar over bada skanningarna nar kursuppdateringen misslyckades`() = runTest {
+    fun `runScans hoppar over bada skanningarna nar den forcerade kursuppdateringen misslyckades`() = runTest {
         // Regression (issue #75, fynd E): skanningarna kördes villkorslöst efter refreshAll, även
         // när körningen var på väg att returnera Result.retry(). scanSwitchPlan skrev då en
         // SuggestionRecord med ett NAV-utgångsläge ur en cache som just visat sig inaktuell —
@@ -758,6 +797,7 @@ class FundPriceUpdateWorkerTest {
 
         FundPriceUpdateWorker.runScans(
             refreshSucceeded = false,
+            refreshForced = true,
             scanComparisons = true,
             scanSwitchPlan = true,
             transactionRepository = fakeTransactionRepo,
@@ -765,11 +805,39 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
-            switchWatchRepository = FakeSwitchWatchRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
         )
 
         assertTrue("inget förslag får spelas in på inaktuella kurser", suggestionRepo.recorded.isEmpty())
         assertTrue("ingen jämförelse får köras heller", suggestCheaperAlternativesCalls.isEmpty())
+    }
+
+    @Test
+    fun `planen raknas pa cachen nar en icke-forcerad uppdatering misslyckades - ovriga skanningar vantar`() = runTest {
+        // En avregistrerad fond är inaktuell för alltid, så den icke-forcerade hämtningen "misslyckas"
+        // vid varje försök — hade det stoppat planen räknades den aldrig om (retry för evigt).
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = false,
+            refreshForced = false,
+            scanComparisons = true,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+        )
+
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertTrue(suggestCheaperAlternativesCalls.isEmpty())
     }
 
     @Test
@@ -788,10 +856,269 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
-            switchWatchRepository = FakeSwitchWatchRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
         )
 
         assertEquals(1, suggestionRepo.recorded.size)
+    }
+
+    @Test
+    fun `en begaran under skanningen raknar om planen en gang till - inte fler`() = runTest {
+        // KEEP tappar en begäran som görs medan jobbet kör (transaktion, radering, avstående).
+        // Workern frågar schemaläggaren efteråt och räknar om en gång — aldrig en kedja.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        var clock = 1_000L
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            // En begäran "kommer in" efter att skanningen började — men ingen efter sista kollen.
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = false).takeIf { since < 1_500 } },
+            now = { clock++ },
+        )
+
+        // Två skanningar (varje skanning frågar källan om nivå 3 en gång), inte tre — och en rad.
+        assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertTrue("ingen begäran efter sista kollen — ingen uppföljare", followUps.isEmpty())
+    }
+
+    @Test
+    fun `en begaran under kursuppdateringen fangas ocksa - startedAt tas fore refreshAll`() = runTest {
+        // doWork tar startedAt innan kurserna hämtas; en begäran som KEEP tappade medan refreshAll
+        // körde (här: vid 700, före runScans-klockans 1 000) ska ge en omräkning.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        var clock = 1_000L
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            startedAt = 500,
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(700, force = false).takeIf { since < 700 } },
+            now = { clock++ },
+        )
+
+        assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertTrue(followUps.isEmpty())
+    }
+
+    @Test
+    fun `en forcerad begaran under skanningen hamtar kurserna innan omrakningen`() = runTest {
+        // KEEP nedgraderar annars "Räkna om" till den redan köade, icke-forcerade skanningen.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        var clock = 1_000L
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = true).takeIf { since < 1_500 } },
+            now = { clock++ },
+        )
+
+        // HELD har färsk kurs och hade aldrig hämtats utan force (ISIN-fond → refreshSince).
+        assertTrue(refreshSinceCalls.any { it.first == "HELD" })
+        assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
+    }
+
+    @Test
+    fun `en forcerad begaran vars hamtning misslyckas raknas inte om - en forcerad uppfoljare koas`() = runTest {
+        // Samma vakt som första nivån: facit får inte spelas in mot kurser som just inte gick att hämta.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        refreshResult = false
+        refreshSinceResult = false
+        var clock = 1_000L
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = true).takeIf { since < 1_500 } },
+            enqueueSwitchPlanFollowUp = { force -> followUps += force },
+            now = { clock++ },
+        )
+
+        assertEquals(listOf(3), switchCandidateLevelsQueried)
+        assertEquals(listOf(true), followUps)
+    }
+
+    @Test
+    fun `en begaran efter sista kollen koar en uppfoljare med sin force-flagga`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        var clock = 1_000L
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = FakeSuggestionRecordRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            // Begäran kommer först efter sista kollen (klockan står då på 1 001).
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(2_000, force = true).takeIf { since >= 1_001 } },
+            enqueueSwitchPlanFollowUp = { force -> followUps += force },
+            now = { clock++ },
+        )
+
+        assertEquals(listOf(3), switchCandidateLevelsQueried)
+        assertEquals(listOf(true), followUps)
+    }
+
+    @Test
+    fun `en begaran som kommer under de efterfoljande skanningarna raknas ocksa om`() = runTest {
+        // Kontrollen görs sist i körningen: en begäran under scanOutcomeNavs/scanSwitchWatches
+        // tappas annars. Begäran "kommer" här först när facit-ifyllnaden hämtat kandidatens kurs
+        // en andra gång, alltså efter planskanningen.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = suggestionRepo,
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = true,
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false).takeIf { refreshSinceCalls.count { it.second == "SE_CAND" } >= 2 } },
+        )
+
+        assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
+        assertEquals(1, suggestionRepo.recorded.size)
+    }
+
+    @Test
+    fun `tva samtidiga planskanningar spelar inte in samma par tva ganger`() = runTest {
+        // Backstopen och en begärd skanning kör under olika unika namn och kan överlappa; utan
+        // serialisering läser båda dagens inspelning tom och spelar in samma par.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        switchCandidateDelayMillis = 100
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val today = LocalDate.of(2026, 1, 1)
+
+        val first = launch { scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000) }
+        val second = launch { scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000) }
+        first.join()
+        second.join()
+
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertEquals(2_000L, suggestionRepo.recorded.single().batchEpochMillis)
+    }
+
+    @Test
+    fun `kornings-id och dag lases forst nar skanningen fatt laset`() = runTest {
+        // En skanning som väntar på en annan ska skriva med ett nyare id än den som kör — läses
+        // id:t vid anropet får den väntande ett äldre id och den nyaste planen ser äldst ut.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        switchCandidateDelayMillis = 100
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val reads = mutableListOf<String>()
+        fun scan(name: String, batch: Long) = launch {
+            FundPriceUpdateWorker.scanSwitchPlan(
+                fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, dismissalRepo,
+                calendar = { reads += "dag-$name"; LocalDate.of(2026, 1, 1) },
+                clock = { reads += name; batch },
+            )
+        }
+
+        val first = scan("A", 1_000)
+        val second = scan("B", 2_000)
+        testScheduler.advanceTimeBy(50)
+        assertEquals("B väntar på låset och har inte läst klockan", listOf("dag-A", "A"), reads)
+
+        first.join()
+        second.join()
+        assertEquals(listOf("dag-A", "A", "dag-B", "B"), reads)
+        assertEquals(2_000L, suggestionRepo.recorded.single().batchEpochMillis)
+    }
+
+    @Test
+    fun `backstopen raknar inte om pa en begaran - den blockerar ingen`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+
+        FundPriceUpdateWorker.runScans(
+            refreshSucceeded = true,
+            scanComparisons = false,
+            scanSwitchPlan = true,
+            transactionRepository = fakeTransactionRepo,
+            fundPriceRepository = fakeFundPriceRepo,
+            fundMetadataRepository = fakeFundMetadataRepo,
+            preferencesRepository = preferencesRepository,
+            suggestionRecordRepository = FakeSuggestionRecordRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
+            rescanIfRequested = false,
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false) },
+        )
+
+        assertEquals(listOf(3), switchCandidateLevelsQueried)
     }
 
     @Test
@@ -808,7 +1135,7 @@ class FundPriceUpdateWorkerTest {
         )
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertEquals(listOf(3), switchCandidateLevelsQueried)
     }
@@ -821,7 +1148,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(5 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(switchCandidateLevelsQueried.isEmpty())
         assertTrue(suggestionRepo.recorded.isEmpty())
@@ -836,10 +1163,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(
-            fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
-            LocalDate.of(2026, 1, 1),
-        )
+        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1))
 
         // Gallringen körs efter inspelningen, så dagens rader aldrig faller offer för den.
         assertEquals(LocalDate.of(2026, 1, 1), suggestionRepo.prunedAt)
@@ -855,10 +1179,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(
-            fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
-            LocalDate.of(2026, 1, 1), batchEpochMillis = 1_767_222_000_000,
-        )
+        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1), batchEpochMillis = 1_767_222_000_000)
 
         assertEquals(1_767_222_000_000L, suggestionRepo.recorded.single().batchEpochMillis)
     }
@@ -873,7 +1194,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertEquals(1, suggestionRepo.recorded.size)
         assertEquals(
@@ -892,23 +1213,262 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
     }
 
     @Test
-    fun `scanSwitchPlan spelar inte in samma byte tva ganger samma dag`() = runTest {
+    fun `scanSwitchPlan spelar inte in samma plan tva ganger samma dag`() = runTest {
+        // Skanningen körs numera efter varje transaktion och avstående — facit ska inte räkna
+        // samma råd två gånger bara för att planen räknades om och blev densamma.
         setUpOverweightedPortfolio()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
         val today = LocalDate.of(2026, 1, 1)
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, today)
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, today)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
 
+        // Raden flyttas till den nya körningen — en rad, samma id, så facit räknar rådet en gång.
         assertEquals(1, suggestionRepo.recorded.size)
+        assertEquals(2_000L, suggestionRepo.recorded.single().batchEpochMillis)
+        assertEquals(1L, suggestionRepo.recorded.single().id)
+    }
+
+    @Test
+    fun `en andrad plan samma dag flyttar befintliga par och spelar bara in de nya`() = runTest {
+        // Två körningar samma dygn med olika plan: den andra ska vara en komplett körning med
+        // planIndex 0 — Beslut läser den senaste körningen som en enhet och kapar vid första luckan
+        // — men ett par som redan spelats in i dag får inte spelas in igen: facit (SET-5) räknar
+        // varje råd en gång. Raden flyttas i stället, med sitt id och sin kvittering.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val today = LocalDate.of(2026, 1, 1)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
+
+        // En andra fond på nivå 5 kommer till — planen får två steg.
+        val extra = Fund(fundId = "EXTRA", name = "Extra", isin = "SE_EXTRA")
+        funds.value = funds.value + extra
+        transactions.value = transactions.value + buy(extra.fundId, 50.0, 100.0)
+        cachedPrices[extra.fundId] = FundPrice(fundId = extra.fundId, epochDay = today.toEpochDay(), nav = 100.0)
+        metadataByIsin["SE_EXTRA"] = heldMetadata("SE_EXTRA", risk = 5, totalFee = 0.5)
+        switchCandidatesByLevel[3] = switchCandidatesByLevel.getValue(3) +
+            SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND2", risk = 3, totalFee = 0.4, developmentOneYear = 0.1), 0.1)
+        fundByIsin["SE_CAND2"] = Fund(fundId = "SE_CAND2", name = "Kandidat SE_CAND2", isin = "SE_CAND2")
+        isinChainPrices["SE_CAND2"] = FundPrice(fundId = "SE_CAND2", epochDay = today.toEpochDay(), nav = 40.0)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
+
+        val latest = suggestionRepo.observeLatestBatch().first()
+        assertEquals(2_000L, latest.first().batchEpochMillis)
+        assertEquals(listOf(0, 1), latest.map { it.planIndex })
+        assertEquals(listOf("SE_HELD", "SE_EXTRA"), latest.map { it.sellIsin })
+        // Den flyttade raden behåller sitt id (bevakningar och avståenden pekar på det); bara EXTRA är ny.
+        assertEquals(listOf(1L, 2L), latest.map { it.id })
+        assertEquals(2, suggestionRepo.recorded.size)
+        // Bara den nya raden kostade ett NAV-uppslag.
+        assertEquals(listOf("SE_CAND", "SE_CAND2"), refreshSinceCalls.map { it.second })
+    }
+
+    @Test
+    fun `en rad utan hamtbar kurs far inte de andra att spelas in igen`() = runTest {
+        // Jämförelsen får inte vara "hela planen mot det inspelade": en rad vars kandidat-NAV inte
+        // går att lösa upp spelas inte in, och det ska inte göra att resten spelas in på nytt varje
+        // skanning.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val extra = Fund(fundId = "EXTRA", name = "Extra", isin = "SE_EXTRA")
+        funds.value = funds.value + extra
+        transactions.value = transactions.value + buy(extra.fundId, 50.0, 100.0)
+        cachedPrices[extra.fundId] = FundPrice(fundId = extra.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        metadataByIsin["SE_EXTRA"] = heldMetadata("SE_EXTRA", risk = 5, totalFee = 0.5)
+        switchCandidatesByLevel[3] = switchCandidatesByLevel.getValue(3) +
+            SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND2", risk = 3, totalFee = 0.4, developmentOneYear = 0.1), 0.1)
+        // Ingen källa i kedjan känner SE_CAND2 — raden kan inte spelas in.
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val today = LocalDate.of(2026, 1, 1)
+
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_HELD", record.sellIsin)
+        assertEquals(2_000L, record.batchEpochMillis)
+    }
+
+    @Test
+    fun `en tom omrakning gor den inspelade planen inaktuell`() = runTest {
+        // Bytet är gjort: ingen nivå avviker längre. En tom plan kan inte spelas in som rader, så
+        // markören ska sättas — annars står "Sälj X" kvar i upp till PLAN_TTL_DAYS.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(5 to 1.0)))
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+
+        assertEquals(2_000L, preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+        // Historiken rörs inte — rådet gavs, facit mäter det fortfarande.
+        assertEquals(1, suggestionRepo.recorded.size)
+        assertEquals(1_000L, suggestionRepo.recorded.single().batchEpochMillis)
+
+        // En ny icke-tom körning nollställer markören — den får inte dölja planen på en jämförelse
+        // mellan två väggklocke-id:n (en klocka som ställts bakåt hade gömt den nya planen).
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 3_000)
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `saknad metadata eller kandidater satter inte tom-markoren`() = runTest {
+        // Källan nere är inte "ingen plan": en giltig inspelad plan får inte döljas av ett uteblivet svar.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+
+        // Inga kandidater för nivå 3 (källan svarade inte) → planen blir tom, men inte bevisligen.
+        switchCandidatesByLevel.remove(3)
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+
+        // Metadata saknas för innehavet → oklassificerat, inga gap att räkna — inte heller bevisligen tomt.
+        switchCandidatesByLevel[3] = listOf(SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND", risk = 3, totalFee = 0.3, developmentOneYear = 0.1), 0.1))
+        metadataByIsin.remove("SE_HELD")
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 3_000)
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+        assertEquals(1, suggestionRepo.recorded.size)
+    }
+
+    @Test
+    fun `innehav utan kand riskniva satter inte tom-markoren`() = runTest {
+        // Metadataraden finns men saknar risknivån — innehavet är oklassificerat, gapen är räknade
+        // på en halv portfölj och en tom plan är då inget svar.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(risk = null)
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `innehav utan avgift ger en bevisligen tom plan och satter tom-markoren`() = runTest {
+        // Utan avgift väger innehavet ändå på sin nivå (gapen är riktiga) men kan inte säljas, så
+        // planen blir tom — ett svar ur känd data, inte ett uteblivet svar. Avgiften saknas
+        // bestående i källan för vissa fonder; hade den hållit markören tillbaka stod en gammal
+        // plan kvar för alltid.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+        assertEquals(1, suggestionRepo.recorded.size)
+
+        metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(totalFee = null)
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+
+        assertEquals(2_000L, preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `innehav utan kurs satter inte tom-markoren`() = runTest {
+        // Ett innehav utan känt värde faller ur fördelningen — en "tom" plan på en halv portfölj
+        // är inget svar.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+        cachedPrices.remove("HELD")
+
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+    }
+
+    @Test
+    fun `kan steg 0 inte spelas in rors den gamla korningen inte alls`() = runTest {
+        // Flytt och inspelning är ett prefix från steg 0, atomärt: hade de befintliga paren flyttats
+        // till en körning utan steg 0 hade Beslut visat ingen plan alls.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        val today = LocalDate.of(2026, 1, 1)
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
+
+        // En dyrare fond på nivå 5 tar steg 0 (Dyr → CAND), HELD får CAND2 som steg 1 — men
+        // CAND:s NAV går inte längre att lösa upp, så steg 0 kan inte spelas in.
+        val dyr = Fund(fundId = "DYR", name = "Dyr", isin = "SE_DYR")
+        funds.value = funds.value + dyr
+        transactions.value = transactions.value + buy(dyr.fundId, 50.0, 100.0)
+        cachedPrices[dyr.fundId] = FundPrice(fundId = dyr.fundId, epochDay = today.toEpochDay(), nav = 100.0)
+        metadataByIsin["SE_DYR"] = heldMetadata("SE_DYR", risk = 5, totalFee = 2.0)
+        switchCandidatesByLevel[3] = switchCandidatesByLevel.getValue(3) +
+            SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND2", risk = 3, totalFee = 0.4, developmentOneYear = 0.1), 0.1)
+        fundByIsin["SE_CAND2"] = Fund(fundId = "SE_CAND2", name = "Kandidat SE_CAND2", isin = "SE_CAND2")
+        isinChainPrices["SE_CAND2"] = FundPrice(fundId = "SE_CAND2", epochDay = today.toEpochDay(), nav = 40.0)
+        isinChainPrices.remove("SE_CAND")
+        cachedPrices.remove("SE_CAND")
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_HELD", record.sellIsin)
+        assertEquals(1_000L, record.batchEpochMillis)
+        assertEquals(0, record.planIndex)
+        assertEquals(1, suggestionRepo.observeLatestBatch().first().size)
+    }
+
+    @Test
+    fun `en plan inspelad efter en tom omrakning nollstaller markoren`() = runTest {
+        // Markören pekar på en tom körning; nästa icke-tomma körning tar bort den i stället för att
+        // låta resolvern jämföra två väggklocke-id:n.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(5 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 1_000)
+        assertEquals(1_000L, preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        scanSwitchPlan(suggestionRepo, batchEpochMillis = 2_000)
+
+        assertNull(preferencesRepository.switchPlanEmptiedAtEpochMillis.first())
+        assertEquals(2_000L, suggestionRepo.recorded.single().batchEpochMillis)
+    }
+
+    @Test
+    fun `scanSwitchPlan tar aktiva avstaenden ur kandidatmangden`() = runTest {
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        switchCandidatesByLevel[3] = switchCandidatesByLevel.getValue(3) +
+            SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND2", risk = 3, totalFee = 0.4, developmentOneYear = 0.1), 0.1)
+        fundByIsin["SE_CAND2"] = Fund(fundId = "SE_CAND2", name = "Kandidat SE_CAND2", isin = "SE_CAND2")
+        isinChainPrices["SE_CAND2"] = FundPrice(fundId = "SE_CAND2", epochDay = LocalDate.now().toEpochDay(), nav = 40.0)
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now())
+        // Ett avgiftsbyte för det andra paret rör inte planen — bara planens egna avståenden räknas.
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND2", SuggestionKind.FEE, LocalDate.now())
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_CAND2", record.buyIsin)
+        assertEquals(0, record.planIndex)
     }
 
     @Test
@@ -917,7 +1477,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        FundPriceUpdateWorker.scanSwitchPlan(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo)
+        scanSwitchPlan(suggestionRepo)
 
         assertTrue(suggestionRepo.recorded.isEmpty())
     }
@@ -1143,7 +1703,8 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
-            switchWatchRepository = FakeSwitchWatchRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
         )
         assertTrue(queriesRun.isEmpty())
         assertTrue(refreshSinceCalls.isEmpty())
@@ -1158,7 +1719,8 @@ class FundPriceUpdateWorkerTest {
             fundMetadataRepository = fakeFundMetadataRepo,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
-            switchWatchRepository = FakeSwitchWatchRepository(),
+            switchWatchRepository = switchWatchRepo,
+            suggestionDismissalRepository = dismissalRepo,
         )
         assertEquals(listOf("SE_BILLIG"), preferencesRepository.benchmark.first().map { it.isin })
         assertEquals(listOf("SE_BILLIG"), refreshSinceCalls.map { it.second })

@@ -32,7 +32,17 @@ interface TransactionRepository {
      * [se.partee71.fonder.data.repository.FundMetadataRepository]s `toEntityPreservingDerivedState`.
      */
     suspend fun upsertFund(fund: Fund)
+    /**
+     * Skriver raden — **bara** raden. Skärmar och importer ska inte anropa den här direkt utan gå
+     * via [se.partee71.fonder.domain.usecase.RecordTransaction] (BYT-2), som också driver bytets
+     * livscykel; en transaktion som skrivs här utan den vägen lämnar ett pågående byte okopplat.
+     */
     suspend fun addTransaction(tx: Transaction): Long
+
+    /**
+     * Tar bort transaktionen (TRX-2). En bevakning som pekar på den får sina länkar nollade men
+     * ligger kvar — användardata raderas aldrig som sidoeffekt.
+     */
     suspend fun deleteTransaction(id: Long)
 
     /**
@@ -83,8 +93,12 @@ class RoomTransactionRepository @Inject constructor(
     override suspend fun addTransaction(tx: Transaction): Long =
         transactionDao.insert(TransactionEntity.fromDomain(tx))
 
-    override suspend fun deleteTransaction(id: Long) =
-        transactionDao.deleteById(id)
+    override suspend fun deleteTransaction(id: Long) {
+        database.withTransaction {
+            switchWatchDao.clearTransactionLinks(id)
+            transactionDao.deleteById(id)
+        }
+    }
 
     override suspend fun clearAll() {
         database.withTransaction {

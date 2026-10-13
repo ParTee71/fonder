@@ -27,9 +27,18 @@ class FakeSuggestionRecordRepository : SuggestionRecordRepository {
         sameDay.filter { it.batchEpochMillis == latestBatch }.sortedBy { it.planIndex }
     }
 
-    override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { all ->
-        all.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex })
+    /** Antal gånger hela historiken begärts — de riktade uppslagen ([observeByIds]) ska inte gå den vägen. */
+    var observeHistoryCalls = 0
+
+    override fun observeHistory(): Flow<List<SuggestionRecord>> {
+        observeHistoryCalls++
+        return records.map { all ->
+            all.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex })
+        }
     }
+
+    /** Riktat, som Room — inte via [observeHistory] (defaulten i gränssnittet är bara för enkla fakes). */
+    override fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> = records.map { all -> all.filter { it.id in ids } }
 
     override suspend fun setFollowed(id: Long, followed: Boolean) {
         records.value = records.value.map { record -> if (record.id == id) record.copy(followed = followed) else record }
@@ -37,6 +46,15 @@ class FakeSuggestionRecordRepository : SuggestionRecordRepository {
 
     override suspend fun record(record: SuggestionRecord) {
         records.value += record
+    }
+
+    override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {
+        val moved = this.records.value.map { record ->
+            moves.firstOrNull { it.id == record.id }
+                ?.let { record.copy(batchEpochMillis = it.batchEpochMillis, planIndex = it.planIndex, switchValueKr = it.switchValueKr) }
+                ?: record
+        }
+        this.records.value = moved + records
     }
 
     override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false

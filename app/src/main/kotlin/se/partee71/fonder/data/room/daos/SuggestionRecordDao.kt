@@ -93,6 +93,40 @@ interface SuggestionRecordDao {
     )
     suspend fun existsForDay(sellIsin: String, buyIsin: String, epochDay: Long, kind: String): Boolean
 
+    /**
+     * Flyttar en rad till en ny körning (HEM-8, issue #143): när planen räknas om samma dag och ett
+     * par står kvar byter raden körning och plats i stället för att spelas in en gång till — facit
+     * (SET-5) räknar varje råd en gång per dag, och den senaste körningen är ändå komplett från
+     * `planIndex 0`. Id, kvittering och NAV-utgångsläge behålls; beloppet följer den nya planen.
+     */
+    @Query("UPDATE suggestion_records SET batchEpochMillis = :batchEpochMillis, planIndex = :planIndex, switchValueKr = :switchValueKr WHERE id = :id")
+    suspend fun moveToBatch(id: Long, batchEpochMillis: Long, planIndex: Int, switchValueKr: Double?)
+
+    /** Raderna med [ids] — de öppna bevakningarnas källförslag (BYT-1), aldrig hela historiken. */
+    @Query("SELECT * FROM suggestion_records WHERE id IN (:ids)")
+    fun observeByIds(ids: List<Long>): Flow<List<SuggestionRecordEntity>>
+
+    /**
+     * Den **senaste** planraden per fondpar bland paren i [sellIsins] × [buyIsins] — de avstådda
+     * förslagen (HEM-14) hämtas här, inte ur hela historiken: märkesflödet (NAV-9) är alltid aktivt
+     * och tabellen växer med varje körning. Anroparen filtrerar till exakta par; frågan kan ge
+     * korsade par när flera avståenden delar sälj- eller köpfond.
+     */
+    @Query(
+        """
+        SELECT * FROM suggestion_records r
+        WHERE r.kind = 'RISK_PLAN' AND r.sellIsin IN (:sellIsins) AND r.buyIsin IN (:buyIsins)
+          AND r.id = (
+              SELECT s.id FROM suggestion_records s
+              WHERE s.kind = 'RISK_PLAN' AND s.sellIsin = r.sellIsin AND s.buyIsin = r.buyIsin
+              ORDER BY s.suggestedAtEpochDay DESC, s.batchEpochMillis DESC, s.id DESC
+              LIMIT 1
+          )
+        ORDER BY r.planIndex ASC, r.id ASC
+        """,
+    )
+    fun observeLatestPlanRecordsFor(sellIsins: List<String>, buyIsins: List<String>): Flow<List<SuggestionRecordEntity>>
+
     @Insert
     suspend fun insert(record: SuggestionRecordEntity): Long
 

@@ -42,6 +42,7 @@ class SwitchWatchDaoTest {
         sellIsin: String = "SE_SALJ",
         soldAtEpochDay: Long = 19_900,
         closedAtEpochDay: Long? = null,
+        sellTransactionId: Long? = null,
     ): Long = dao.insertWatch(
         SwitchWatchEntity(
             sellIsin = sellIsin,
@@ -53,6 +54,7 @@ class SwitchWatchDaoTest {
             closedAtEpochDay = closedAtEpochDay,
             boughtIsin = null,
             closeReason = null,
+            sellTransactionId = sellTransactionId,
         ),
     )
 
@@ -156,5 +158,89 @@ class SwitchWatchDaoTest {
     @Test
     fun observeById_ger_null_for_en_bevakning_som_inte_finns() = runTest {
         assertNull(dao.observeById(404).first())
+    }
+
+    // --- Transaktionslänkarna (BYT-1, Room 16→17) ---
+
+    @Test
+    fun hasOpenForTransaction_nycklar_pa_saljtransaktionen_och_bara_oppna() = runTest {
+        val watchId = insertWatch(sellTransactionId = 42)
+        insertWatch(sellIsin = "SE_ANNAN", sellTransactionId = null)
+
+        assertTrue(dao.hasOpenForTransaction(42))
+        assertFalse(dao.hasOpenForTransaction(43))
+
+        dao.close(watchId, closedAtEpochDay = 19_905, boughtIsin = null, closeReason = SwitchWatchCloseReason.AVBRUTEN.name)
+        assertFalse(dao.hasOpenForTransaction(42))
+    }
+
+    @Test
+    fun getOpenWithoutTransactionFor_ger_oppna_bevakningar_utan_lank_samma_dag_aldst_forst() = runTest {
+        // En bevakning med länk räknas bara mot sin transaktion, så ett andra sälj kan få en egen
+        // bevakning; en utan länk med samma säljdag är säljets och ska kopplas.
+        insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_900, sellTransactionId = 42)
+        assertTrue(dao.getOpenWithoutTransactionFor("SE_SALJ", 19_900).isEmpty())
+        assertTrue(dao.hasOpenFor("SE_SALJ", 19_900))
+
+        val second = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_900, sellTransactionId = null)
+        val third = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_900, sellTransactionId = null)
+        insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_901, sellTransactionId = null)
+        insertWatch(sellIsin = "SE_ANNAN", soldAtEpochDay = 19_900, closedAtEpochDay = 19_905)
+
+        val found = dao.getOpenWithoutTransactionFor("SE_SALJ", 19_900).map { it.watch.id }
+
+        // En annan dag (19 901) och stängda räknas inte; ordningen är insättningsordning.
+        assertEquals(listOf(second, third), found)
+        assertTrue(dao.getOpenWithoutTransactionFor("SE_ANNAN", 19_900).isEmpty())
+    }
+
+    @Test
+    fun linkSellTransaction_kopplar_satter_likvid_men_ror_inte_dagen_och_skriver_aldrig_over_en_lank() = runTest {
+        val watchId = insertWatch(sellIsin = "SE_SALJ", soldAtEpochDay = 19_903, sellTransactionId = null)
+
+        dao.linkSellTransaction(watchId, transactionId = 42, proceedsKr = 1_475.0)
+        dao.linkSellTransaction(watchId, transactionId = 43, proceedsKr = 999.0)
+
+        val watch = dao.getById(watchId)!!.toDomain()
+        assertEquals(42L, watch.sellTransactionId)
+        assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
+        assertEquals(19_903L, watch.soldAtEpochDay)
+        assertTrue(dao.hasOpenForTransaction(42))
+        assertTrue(dao.getOpenWithoutTransactionFor("SE_SALJ", 19_903).isEmpty())
+    }
+
+    @Test
+    fun close_som_kopt_skriver_koptransaktionen_och_raden_behaller_saljlanken() = runTest {
+        val watchId = insertWatch(sellTransactionId = 42)
+
+        dao.close(watchId, closedAtEpochDay = 19_905, boughtIsin = "SE_A", closeReason = SwitchWatchCloseReason.KOPT.name, buyTransactionId = 77)
+
+        val watch = dao.getById(watchId)!!.toDomain()
+        assertEquals(42L, watch.sellTransactionId)
+        assertEquals(77L, watch.buyTransactionId)
+        assertEquals("SE_A", watch.boughtIsin)
+    }
+
+    @Test
+    fun clearTransactionLinks_nollar_bara_lanken_till_den_borttagna_transaktionen() = runTest {
+        // TRX-2: bevakningen ligger kvar med allt annat orört — bara pekaren på raden som inte
+        // finns längre försvinner, och en annan bevaknings länkar rörs inte.
+        val sold = insertWatch(sellTransactionId = 42)
+        dao.close(sold, closedAtEpochDay = 19_905, boughtIsin = "SE_A", closeReason = SwitchWatchCloseReason.KOPT.name, buyTransactionId = 77)
+        val other = insertWatch(sellIsin = "SE_ANNAN", sellTransactionId = 43)
+
+        dao.clearTransactionLinks(42)
+        dao.clearTransactionLinks(999)
+
+        val cleared = dao.getById(sold)!!.toDomain()
+        assertNull(cleared.sellTransactionId)
+        assertEquals(77L, cleared.buyTransactionId)
+        assertEquals("SE_A", cleared.boughtIsin)
+        assertEquals(SwitchWatchCloseReason.KOPT, cleared.closeReason)
+        assertEquals(43L, dao.getById(other)!!.toDomain().sellTransactionId)
+        assertEquals(2, dao.getAll().size)
+
+        dao.clearTransactionLinks(77)
+        assertNull(dao.getById(sold)!!.toDomain().buyTransactionId)
     }
 }

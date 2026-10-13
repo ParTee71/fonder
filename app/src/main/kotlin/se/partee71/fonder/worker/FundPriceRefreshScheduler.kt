@@ -6,6 +6,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,8 +55,46 @@ interface FundPriceRefreshScheduler {
      * (`REPLACE`) allt som väntar där och skulle annars kunna avbryta en pågående skanning
      * mitt i — och tvärtom. Upprepade anrop koalesceras (`KEEP`), så två snabba sparningar
      * eller tryck aldrig ger två parallella (dyra) skanningar.
+     *
+     * `KEEP` tappar en begäran som görs **medan** skanningen kör — och sedan issue #143 begärs
+     * den också efter varje Avstå och Ångra (HEM-14). Därför antecknas tidpunkten för varje
+     * begäran ([switchPlanScanRequestedSince]), och workern räknar om planen **en gång till** i
+     * slutet av samma körning om en begäran kommit in efter att jobbet började. Inga kedjade
+     * jobb (`APPEND_OR_REPLACE` hade gett en skanning per tryck), högst en omräkning extra, och
+     * indatan den räknar på är den senaste. Transaktioner begär ingen omräkning än (#144, BYT-3).
+     *
+     * @param force hämta **alla** bevakade fonders kurser först (användarens uttryckliga "Räkna
+     *   om", #88). Annars hämtas bara inaktuella kurser (`isPriceStale`, samma princip som
+     *   importen): ett avstående ändrar inte kurserna, och en forcerad hämtning per tryck hade
+     *   kostat ett nätverksanrop per fond i onödan.
      */
-    fun triggerSwitchPlanScan()
+    fun triggerSwitchPlanScan(force: Boolean = false)
+
+    /**
+     * Den senaste begäran om en bytesplansskanning som gjorts **efter** [epochMillis] (strikt —
+     * begäran som startade jobbet räknas inte), eller null. Workerns fråga när skanningen är klar:
+     * kom en begäran in under tiden räknas planen om en gång till, forcerat om någon begäran under
+     * tiden var det (`KEEP` hade annars nedgraderat en forcerad begäran till den köade icke-forcerade).
+     */
+    fun switchPlanScanRequestedSince(epochMillis: Long): SwitchPlanScanRequest?
+
+    /**
+     * Sant om en **forcerad** begäran ([triggerSwitchPlanScan] med `force`) gjorts som ingen
+     * körning ännu tagit — och markerar den som tagen. Workern frågar i början av en begärd
+     * skanning: kom "Räkna om" medan ett icke-forcerat jobb redan **väntade** tappade `KEEP`
+     * den, och jobbet hade annars kört utan att hämta alla kurser. Tas även av
+     * [switchPlanScanRequestedSince] när den rapporterar `force`. Minnet är per process —
+     * efter processdöd bär det köade jobbets egen indata flaggan.
+     */
+    fun takeForcedSwitchPlanRequest(): Boolean
+
+    /**
+     * Köar **en** uppföljande skanning efter den som kör, från workern själv när en begäran kom in
+     * efter dess sista koll. `APPEND_OR_REPLACE` under samma unika namn: hängs efter det pågående
+     * jobbet i stället för att tappas av `KEEP`, och eftersom bara den avslutande körningen köar
+     * (högst en gång) blir det aldrig en kedja — nästa körning gör sin egen koll.
+     */
+    fun enqueueSwitchPlanFollowUp(force: Boolean)
 
     /**
      * Väljer och hämtar hem Hems referensfond (HEM-10) på begäran i stället för att vänta på
@@ -92,6 +132,9 @@ interface FundPriceRefreshScheduler {
     /** Sant om något jobb alls kör — chromets bakgrundsindikator (NAV-6). */
     fun observeIsRunning(): Flow<Boolean> = observeRunningWork().map { it.isNotEmpty() }
 }
+
+/** En begäran om bytesplansskanning — se [FundPriceRefreshScheduler.switchPlanScanRequestedSince]. */
+data class SwitchPlanScanRequest(val epochMillis: Long, val force: Boolean)
 
 /**
  * De sorters bakgrundsarbete ett kort kan vänta på (NAV-6). Enum, inte fritt strängnamn: varje
@@ -157,30 +200,62 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         workManager.enqueueUniqueWork(ONE_TIME_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
-    override fun triggerSwitchPlanScan() {
-        val request = OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
-            // KEY_FORCE är inte kosmetiskt här: `runScans` gör ingenting om kursuppdateringen
-            // inte lyckades, och utan force hoppar `refreshAll` över allt som redan är färskt
-            // och rapporterar det som en lyckad körning utan att ha hämtat något. Skanningen
-            // ska dessutom räkna på färsk NAV — facit mäter utfallet mot kursen *vid*
-            // förslagstillfället (HEM-8).
+    /** Senaste begäran om en bytesplansskanning, senaste **forcerade**, och den forcerade som senast togs av en körning. */
+    private val lastSwitchPlanRequestAt = AtomicLong(0)
+    private val lastForcedSwitchPlanRequestAt = AtomicLong(0)
+    private val takenForcedSwitchPlanRequestAt = AtomicLong(0)
+
+    override fun triggerSwitchPlanScan(force: Boolean) {
+        val now = System.currentTimeMillis()
+        lastSwitchPlanRequestAt.set(now)
+        if (force) lastForcedSwitchPlanRequestAt.set(now)
+        workManager.enqueueUniqueWork(SWITCH_PLAN_WORK_NAME, ExistingWorkPolicy.KEEP, switchPlanScanRequest(force))
+    }
+
+    override fun switchPlanScanRequestedSince(epochMillis: Long): SwitchPlanScanRequest? {
+        val last = lastSwitchPlanRequestAt.get()
+        if (last <= epochMillis) return null
+        return SwitchPlanScanRequest(last, force = takeForcedSwitchPlanRequestAfter(epochMillis))
+    }
+
+    override fun takeForcedSwitchPlanRequest(): Boolean = takeForcedSwitchPlanRequestAfter(0)
+
+    /** Tar den senaste forcerade begäran om den är strikt efter [epochMillis] och ännu inte tagen. */
+    private fun takeForcedSwitchPlanRequestAfter(epochMillis: Long): Boolean {
+        val forcedAt = lastForcedSwitchPlanRequestAt.get()
+        if (forcedAt <= epochMillis || forcedAt <= takenForcedSwitchPlanRequestAt.get()) return false
+        takenForcedSwitchPlanRequestAt.set(forcedAt)
+        return true
+    }
+
+    override fun enqueueSwitchPlanFollowUp(force: Boolean) {
+        workManager.enqueueUniqueWork(SWITCH_PLAN_WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, switchPlanScanRequest(force))
+    }
+
+    /** Begäran som köas av [triggerSwitchPlanScan] och [enqueueSwitchPlanFollowUp] — `internal` så instrumenttestet kan läsa dess indata. */
+    internal fun switchPlanScanRequest(force: Boolean): OneTimeWorkRequest {
+        return OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
+            // Utan force hämtar `refreshAll` bara inaktuella kurser och rapporterar en färsk cache
+            // som lyckad — vilket är rätt: skanningen räknar då på kurser som redan är dagens.
+            // "Räkna om" (#88) forcerar, så facit mäter mot kursen *vid* förslagstillfället även
+            // när användaren uttryckligen vill ha en ny plan.
             .setInputData(
                 workDataOf(
-                    FundPriceUpdateWorker.KEY_FORCE to true,
+                    FundPriceUpdateWorker.KEY_FORCE to force,
                     FundPriceUpdateWorker.KEY_SCAN_SWITCH_PLAN to true,
+                    FundPriceUpdateWorker.KEY_RESCAN_ON_REQUEST to true,
                 ),
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints)
             .build()
-        workManager.enqueueUniqueWork(SWITCH_PLAN_WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
     override fun triggerBenchmarkScan() {
         val request = OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
-            // KEY_FORCE av samma skäl som i triggerSwitchPlanScan: `runScans` gör ingenting om
-            // kursuppdateringen inte lyckades, och utan force rapporterar `refreshAll` framgång
-            // för en redan färsk cache utan att ha hämtat något.
+            // Forcerad kursuppdatering: referensfonden väljs och hämtas på användarens begäran
+            // (Hem utan vald referens), och kurvan den jämförs mot ska vara dagens — inte vad som
+            // råkade ligga i cachen.
             .setInputData(
                 workDataOf(
                     FundPriceUpdateWorker.KEY_FORCE to true,

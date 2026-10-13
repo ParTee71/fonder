@@ -7,10 +7,13 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -24,6 +27,7 @@ import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
@@ -52,24 +56,42 @@ class FundPriceUpdateWorker @AssistedInject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val switchWatchRepository: SwitchWatchRepository,
+    private val suggestionDismissalRepository: SuggestionDismissalRepository,
+    private val scheduler: FundPriceRefreshScheduler,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val force = inputData.getBoolean(KEY_FORCE, false)
+        val scanSwitchPlan = inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false)
+        // Bara den begärda skanningen kör under det unika namn vars KEEP tappar en begäran
+        // som kommer medan den kör eller väntar; backstopen blockerar inte en ny begäran.
+        val rescanIfRequested = inputData.getBoolean(KEY_RESCAN_ON_REQUEST, false)
+        // Tas **före** kursuppdateringen: en begäran som KEEP tappar medan refreshAll kör ska
+        // också fångas av omkollen i runScans.
+        val startedAt = System.currentTimeMillis()
+        // En forcerad begäran ("Räkna om") som kom medan ett icke-forcerat jobb redan **väntade**
+        // tappades av KEEP före startedAt — schemaläggaren minns den tills ett jobb tar den.
+        val requestedForce = scanSwitchPlan && rescanIfRequested && scheduler.takeForcedSwitchPlanRequest()
+        val force = inputData.getBoolean(KEY_FORCE, false) || requestedForce
         val success = refreshAll(transactionRepository, fundPriceRepository, force)
         if (success) preferencesRepository.setLastPriceSyncEpochMillis(System.currentTimeMillis())
 
         runScans(
             refreshSucceeded = success,
+            refreshForced = force,
             scanComparisons = inputData.getBoolean(KEY_SCAN_COMPARISONS, false),
-            scanSwitchPlan = inputData.getBoolean(KEY_SCAN_SWITCH_PLAN, false),
+            scanSwitchPlan = scanSwitchPlan,
             scanBenchmark = inputData.getBoolean(KEY_SCAN_BENCHMARK, false),
+            rescanIfRequested = rescanIfRequested,
+            startedAt = startedAt,
+            switchPlanScanRequestedSince = scheduler::switchPlanScanRequestedSince,
+            enqueueSwitchPlanFollowUp = scheduler::enqueueSwitchPlanFollowUp,
             transactionRepository = transactionRepository,
             fundPriceRepository = fundPriceRepository,
             fundMetadataRepository = fundMetadataRepository,
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRecordRepository,
             switchWatchRepository = switchWatchRepository,
+            suggestionDismissalRepository = suggestionDismissalRepository,
         )
 
         return if (success) Result.success() else Result.retry()
@@ -101,6 +123,20 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * vägar som finns är i stället glesa (var 12:e timme) respektive uttryckligen begärda.
          */
         const val KEY_SCAN_SWITCH_PLAN = "scan_switch_plan"
+
+        /**
+         * Input-data-nyckel satt bara av [FundPriceRefreshScheduler.triggerSwitchPlanScan]: körningen
+         * är den begärda skanningen, vars `KEEP` tappar begäranden som görs medan den kör — se
+         * `rescanIfRequested` i [runScans].
+         */
+        const val KEY_RESCAN_ON_REQUEST = "rescan_on_request"
+
+        /**
+         * Planskanningen körs en i taget i processen: backstopen och en begärd skanning kan annars
+         * köra samtidigt (olika unika arbetsnamn), båda läsa dagens inspelning och båda spela in
+         * samma par. Samma process räcker — WorkManager kör appens jobb i den.
+         */
+        private val switchPlanScanMutex = Mutex()
 
         /**
          * Input-data-nyckel som slår på [scanBenchmark] (HEM-10, issue #96) — satt bara av
@@ -172,9 +208,19 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * förslagstillfället* (HEM-8). Körningen returnerar dessutom `Result.retry()` i det läget,
          * så hela skanningen inklusive dess källfrågor skulle köras om vid varje backoff-försök
          * (issue #75). Ren logik utan `CoroutineWorker`-beroende, av samma skäl som [refreshAll].
+         *
+         * **Undantaget är planskanningen efter en icke-forcerad uppdatering** ([refreshForced]
+         * falskt): den hämtar bara inaktuella fonder, och en fond som avregistrerats hos källan är
+         * inaktuell för alltid — hade misslyckandet stoppat planen räknades den aldrig om, trots
+         * att alla innehav som *finns* har dagens kurs i cachen. Planen räknas då på cachen;
+         * ett innehav helt utan kurs faller ur fördelningen och gör en tom plan icke-bevislig
+         * (`conclusive`), så tom-markören är skyddad. Facit-ifyllnaden och bevakningarna
+         * väntar som förut.
          */
         internal suspend fun runScans(
             refreshSucceeded: Boolean,
+            /** Hämtade uppdateringen **alla** kurser (användarens "Räkna om")? Då gäller vakten fullt ut. */
+            refreshForced: Boolean = false,
             scanComparisons: Boolean,
             scanSwitchPlan: Boolean,
             scanBenchmark: Boolean = false,
@@ -184,19 +230,67 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             switchWatchRepository: SwitchWatchRepository,
+            suggestionDismissalRepository: SuggestionDismissalRepository,
+            /**
+             * Räkna om planen en gång till, **sist i körningen**, om en begäran
+             * ([FundPriceRefreshScheduler.triggerSwitchPlanScan]) kommit in efter [startedAt] —
+             * den begäran tappades av `KEEP`, oavsett om den kom under kursuppdateringen,
+             * planskanningen eller de skanningar som följer; var någon av dem forcerad hämtas
+             * kurserna först. Kom en begäran in efter den kollen köas **en** uppföljare
+             * ([FundPriceRefreshScheduler.enqueueSwitchPlanFollowUp]), som gör sin egen koll.
+             *
+             * Fönstret mellan den sista kollen och att jobbet returnerar (några millisekunder,
+             * utan I/O) täcks inte: en begäran just där tappas av KEEP och fångas först av nästa
+             * begäran eller av backstopen (≤ 12 h). Accepterat — att stänga det hade krävt att
+             * schemaläggaren själv höll kö, för ett fall som kräver två tryck inom samma
+             * millisekunder.
+             */
+            rescanIfRequested: Boolean = false,
+            now: () -> Long = System::currentTimeMillis,
+            /** När jobbet började — tas i `doWork` **före** kursuppdateringen, så att begäranden under den också fångas. */
+            startedAt: Long = now(),
+            switchPlanScanRequestedSince: (epochMillis: Long) -> SwitchPlanScanRequest? = { null },
+            enqueueSwitchPlanFollowUp: (force: Boolean) -> Unit = {},
         ) {
-            if (!refreshSucceeded) return
+            if (!refreshSucceeded) {
+                if (scanSwitchPlan && !refreshForced) {
+                    scanSwitchPlan(
+                        transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
+                        suggestionRecordRepository, suggestionDismissalRepository,
+                    )
+                }
+                return
+            }
             if (scanComparisons) {
                 scanComparisons(transactionRepository, fundPriceRepository, fundMetadataRepository, suggestionRecordRepository)
             }
             if (scanSwitchPlan) {
-                scanSwitchPlan(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository, suggestionRecordRepository)
+                scanSwitchPlan(
+                    transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
+                    suggestionRecordRepository, suggestionDismissalRepository,
+                )
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
                 scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository)
             }
             if (scanBenchmark) {
                 scanBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository)
             }
+            if (!scanSwitchPlan || !rescanIfRequested) return
+            val checkedAt = now()
+            switchPlanScanRequestedSince(startedAt)?.let { request ->
+                // Samma vakt som första nivån: en forcerad hämtning som misslyckas får inte spela
+                // in facit mot gamla kurser — begäran lämnas till en uppföljare, vars eget
+                // misslyckande ger `Result.retry()` med backoff.
+                if (request.force && !refreshAll(transactionRepository, fundPriceRepository, force = true)) {
+                    enqueueSwitchPlanFollowUp(true)
+                    return
+                }
+                scanSwitchPlan(
+                    transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
+                    suggestionRecordRepository, suggestionDismissalRepository,
+                )
+            }
+            switchPlanScanRequestedSince(checkedAt)?.let { request -> enqueueSwitchPlanFollowUp(request.force) }
         }
 
         /**
@@ -557,6 +651,27 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * kontotyp ISK/KF (SET-4) eller utan satt riskprofil (SET-3/#71) — appen gissar aldrig
          * någotdera.
          *
+         * Sedan issue #143 tas aktiva avståenden (HEM-14) ur kandidatmängden innan den giriga
+         * loopen. Likvid som väntar på köp räknas **inte** — det kommer i #144 (BYT-3), och tills
+         * dess räknas planen inte om efter transaktioner (den hade föreslagit nästa sälj för ett
+         * gap som redan är finansierat).
+         *
+         * Skanningen körs efter varje avstående och ångrat avstående, alltså flera gånger per
+         * dygn, och inspelningen är därför **per plan**: ett par som redan spelats in i dag
+         * **flyttas** till den nya körningen ([SuggestionRecordRepository.moveToBatch]) i stället
+         * för att spelas in igen — facit (SET-5) räknar varje råd en gång per dag, och den senaste
+         * körningen är ändå komplett från `planIndex 0`. Bara nya par kostar ett NAV-uppslag. Ger
+         * omräkningen en **tom** plan spelas inget in; i stället sätts
+         * [PreferencesRepository.setSwitchPlanEmptiedAt], som gör den senast inspelade körningen
+         * inaktuell — annars stod "Sälj X" kvar i upp till `PLAN_TTL_DAYS` efter att bytet gjorts.
+         * Markören sätts **bara när planen bevisligen är tom** ur känd data (ingen nivå avviker,
+         * eller allt är avstått) — inte när metadata eller kandidater saknas för att källan inte
+         * svarade; då lämnas den inspelade planen orörd, som förut.
+         *
+         * Flytt och inspelning görs **atomärt** och bara för det prefix från `planIndex 0` som går
+         * att skriva: kan steg 0 inte spelas in (kandidatens NAV gick inte att lösa upp) rörs inte
+         * den gamla körningen alls — en ny körning utan steg 0 hade fått Beslut att visa ingen plan.
+         *
          * Köpkandidatens NAV ([Holding.currentValue] finns bara för redan bevakade fonder)
          * löses upp här, inte i [se.partee71.fonder.ui.hem.HemViewModel] — precis den
          * nätverkskostnaden (ISIN-uppslag + kursuppdatering för en fond appen aldrig ägt) är
@@ -569,65 +684,138 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             fundMetadataRepository: FundMetadataRepository,
             preferencesRepository: PreferencesRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
-            today: LocalDate = LocalDate.now(),
-            /** Körnings-id som grupperar den här skanningens rader till **en** plan — se [SuggestionRecord.batchEpochMillis]. */
-            batchEpochMillis: Long = System.currentTimeMillis(),
-        ) {
-            if (preferencesRepository.accountType.first() != AccountType.ISK_KF) return
-            val riskProfile = preferencesRepository.riskProfile.first() ?: return
+            suggestionDismissalRepository: SuggestionDismissalRepository,
+            /**
+             * Dagens datum och körnings-id:t ([SuggestionRecord.batchEpochMillis]) läses **inuti**
+             * låset: en skanning som väntat på en annan ska skriva med ett id som är nyare än
+             * den förras, annars blev den nyaste planen den som visas som äldst — och ett
+             * datum från före midnatt hade dedupat mot fel dag.
+             */
+            calendar: () -> LocalDate = LocalDate::now,
+            clock: () -> Long = System::currentTimeMillis,
+        ) = switchPlanScanMutex.withLock {
+            val today = calendar()
+            val batchEpochMillis = clock()
+            if (preferencesRepository.accountType.first() != AccountType.ISK_KF) return@withLock
+            val riskProfile = preferencesRepository.riskProfile.first() ?: return@withLock
             val targetAllocation = riskProfile.effectiveAllocation
-            if (targetAllocation.isEmpty()) return
+            if (targetAllocation.isEmpty()) return@withLock
 
+            val plan = computeSwitchPlan(
+                transactionRepository, fundPriceRepository, fundMetadataRepository,
+                suggestionDismissalRepository, targetAllocation, today,
+            )
+            if (plan.switches.isEmpty()) {
+                // Tom plan: bytet är gjort eller behovet borta. Går inte att spela in som rader —
+                // markören gör den senaste körningen inaktuell för resolvern. Men bara när tomheten
+                // är ett svar ur känd data; saknas indata lämnas den inspelade planen i fred.
+                if (plan.conclusive) preferencesRepository.setSwitchPlanEmptiedAt(batchEpochMillis)
+                suggestionRecordRepository.prune(today)
+                return@withLock
+            }
+
+            // Bestäm först vad som kan skrivas — längsta prefixet från steg 0 — och skriv sedan allt i en transaktion.
+            val recordedToday = suggestionRecordRepository.observeRecent(SuggestionKind.RISK_PLAN, today.toEpochDay()).first()
+            val moves = mutableListOf<SuggestionRecordRepository.BatchMove>()
+            val inserts = mutableListOf<SuggestionRecord>()
+            for ((index, switch) in plan.switches.withIndex()) {
+                val sellIsin = switch.sellFund.isin ?: break
+
+                // Samma par redan inspelat i dag → flytta raden till den här körningen (nyaste om flera).
+                val existing = recordedToday
+                    .filter { it.sellIsin == sellIsin && it.buyIsin == switch.buyIsin }
+                    .maxWithOrNull(compareBy({ it.batchEpochMillis }, { it.id }))
+                if (existing != null) {
+                    moves += SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis, index, switch.sellValueKr)
+                    continue
+                }
+
+                // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
+                // `currentValue / netShares` gav exakt samma tal via en division som krävde en
+                // nollvakt och införde flyttalsfel utan vinst (issue #75, punkt 9).
+                val sellNav = plan.prices[switch.sellFund.fundId]?.nav ?: break
+                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: break
+
+                inserts += SuggestionRecord(
+                    suggestedAtEpochDay = today.toEpochDay(),
+                    planIndex = index,
+                    sellIsin = sellIsin,
+                    buyIsin = switch.buyIsin,
+                    sellNavAtSuggestion = sellNav,
+                    buyNavAtSuggestion = buyNav,
+                    switchValueKr = switch.sellValueKr,
+                    batchEpochMillis = batchEpochMillis,
+                )
+            }
+            if (moves.isNotEmpty() || inserts.isNotEmpty()) {
+                suggestionRecordRepository.commitBatch(moves, inserts)
+                // En icke-tom körning är skriven: markören från en tidigare tom körning får inte
+                // dölja den — resolvern jämför annars två väggklocke-id:n, och en klocka som
+                // ställts bakåt hade gömt den nya planen tills färskhetsgränsen.
+                preferencesRepository.clearSwitchPlanEmptiedAt()
+            }
+
+            // Tak mot obegränsad tillväxt — se SuggestionRecordRepository.prune. Körs efter
+            // inspelningen, så dagens rader aldrig kan falla offer för sin egen gallring.
+            suggestionRecordRepository.prune(today)
+        }
+
+        /**
+         * Den framräknade planen och kurserna den räknades på. [conclusive] skiljer "ingen plan"
+         * ur känd data från "kunde inte räkna": saknas metadata för ett innehav eller kandidater
+         * för en underviktad nivå kan källan ha varit nere, och en tom plan då är inget svar.
+         */
+        private class ComputedPlan(val switches: List<SwitchPlanCalc.Switch>, val prices: Map<String, FundPrice>, val conclusive: Boolean)
+
+        private suspend fun computeSwitchPlan(
+            transactionRepository: TransactionRepository,
+            fundPriceRepository: FundPriceRepository,
+            fundMetadataRepository: FundMetadataRepository,
+            suggestionDismissalRepository: SuggestionDismissalRepository,
+            targetAllocation: Map<Int, Double>,
+            today: LocalDate,
+        ): ComputedPlan {
+            val none = ComputedPlan(emptyList(), emptyMap(), conclusive = true)
             val funds = transactionRepository.observeFunds().first()
-            if (funds.isEmpty()) return
-            val holdings = PortfolioCalc.computeHoldings(funds, transactionRepository.observeTransactions().first())
-            if (holdings.isEmpty()) return
+            if (funds.isEmpty()) return none
+            val transactions = transactionRepository.observeTransactions().first()
+            val holdings = PortfolioCalc.computeHoldings(funds, transactions)
+            if (holdings.isEmpty()) return none
 
             val prices = fundPriceRepository.observeLatestPrices(holdings.map { it.fund.fundId }).first()
             val withValue = PortfolioCalc.withCurrentValue(holdings, prices)
             val heldIsins = withValue.mapNotNull { it.fund.isin }.toSet()
             val metadataByIsin = fundMetadataRepository.metadataFor(heldIsins.toList())
 
+            // Avstådda par (HEM-14) — ur cachen, inget nätverk.
+            val excludedPairs = SuggestionDismissals.activeKeys(suggestionDismissalRepository.observeAll().first(), today)
+                .filter { it.kind == SuggestionKind.RISK_PLAN }
+                .mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin }
+
             // Bara **underviktade** nivåer, inte varje nivå i målfördelningen: gapen räknas ur
             // redan känd data utan nätverk, medan varje nivå kostar en källfråga plus upp till
             // MAX_SWITCH_VERIFICATION_ATTEMPTS köpbarhetsuppslag. En femnivåfördelning gav
             // tidigare 5 frågor och upp till 50 verifieringar var 12:e timme, för nivåer planen
-            // ändå aldrig skulle köpa på — i strid med den budget KEY_SCAN_SWITCH_PLAN
+            // ändå aldrig skulle röra — i strid med den budget KEY_SCAN_SWITCH_PLAN
             // dokumenterar (issue #75, punkt 4).
+            // Bevisligen tomt kräver att varje innehav kunde klassificeras (risknivå) och värderas
+            // — ett saknat svar från källan eller en saknad kurs gör ett innehav oklassificerat,
+            // och gapen är då räknade på en halv portfölj. Avgiften krävs **inte**: ett innehav
+            // utan avgift räknas med i sin nivås vikt (SwitchPlanCalc, #75), så gapen är riktiga;
+            // det kan bara inte säljas, och en fond som saknar avgift i källan är ett bestående
+            // läge — hade det hållit markören tillbaka stod en gammal plan kvar för alltid.
+            val metadataComplete = heldIsins.all { metadataByIsin[it]?.risk != null } && withValue.all { it.currentValue != null }
             val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation)
-            if (levels.isEmpty()) return
-            val candidates = levels.flatMap { level ->
+            if (levels.isEmpty()) return ComputedPlan(emptyList(), prices, conclusive = metadataComplete)
+            val candidatesByLevel = levels.associateWith { level ->
                 fundMetadataRepository.findSwitchCandidates(level, excludeIsins = heldIsins)
             }
-            val plan = SwitchPlanCalc.plan(withValue, metadataByIsin, candidates, targetAllocation)
-
-            plan.forEachIndexed { index, switch ->
-                val sellIsin = switch.sellFund.isin ?: return@forEachIndexed
-                if (suggestionRecordRepository.hasRecordedToday(sellIsin, switch.buyIsin, today.toEpochDay(), SuggestionKind.RISK_PLAN)) return@forEachIndexed
-
-                // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
-                // `currentValue / netShares` gav exakt samma tal via en division som krävde en
-                // nollvakt och införde flyttalsfel utan vinst (issue #75, punkt 9).
-                val sellNav = prices[switch.sellFund.fundId]?.nav ?: return@forEachIndexed
-                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: return@forEachIndexed
-
-                suggestionRecordRepository.record(
-                    SuggestionRecord(
-                        suggestedAtEpochDay = today.toEpochDay(),
-                        planIndex = index,
-                        sellIsin = sellIsin,
-                        buyIsin = switch.buyIsin,
-                        sellNavAtSuggestion = sellNav,
-                        buyNavAtSuggestion = buyNav,
-                        switchValueKr = switch.sellValueKr,
-                        batchEpochMillis = batchEpochMillis,
-                    ),
-                )
-            }
-
-            // Tak mot obegränsad tillväxt — se SuggestionRecordRepository.prune. Körs efter
-            // inspelningen, så dagens rader aldrig kan falla offer för sin egen gallring.
-            suggestionRecordRepository.prune(today)
+            return ComputedPlan(
+                SwitchPlanCalc.plan(withValue, metadataByIsin, candidatesByLevel.values.flatten(), targetAllocation, excludedPairs),
+                prices,
+                // En nivå utan en enda kandidat kan lika gärna vara en källa som inte svarade.
+                conclusive = metadataComplete && candidatesByLevel.values.none { it.isEmpty() },
+            )
         }
 
         /**

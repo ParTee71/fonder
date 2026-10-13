@@ -77,7 +77,7 @@ class FacitViewModel @Inject constructor(
      * dragningar aldrig ger två parallella (dyra) skanningar.
      */
     fun refresh() {
-        fundPriceRefreshScheduler.triggerSwitchPlanScan()
+        fundPriceRefreshScheduler.triggerSwitchPlanScan(force = true)
     }
 
     /** Markerar ett förslag som genomfört eller ej (HEM-8/SET-5) — flödet ovan speglar ändringen. */

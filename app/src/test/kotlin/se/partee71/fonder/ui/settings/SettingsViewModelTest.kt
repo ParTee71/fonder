@@ -183,7 +183,10 @@ class SettingsViewModelTest {
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
-        val vm = viewModel()
+        val preferences = PreferencesRepository(dataStore)
+        // Tom-markören pekar på en körning som töms med databasen — den får inte dölja nästa plan.
+        preferences.setSwitchPlanEmptiedAt(5_000)
+        val vm = viewModel(preferences)
 
         vm.uiState.test {
             assertFalse(awaitItem().databaseCleared)
@@ -193,6 +196,7 @@ class SettingsViewModelTest {
             while (!state.databaseCleared) state = awaitItem()
 
             assertTrue(clearAllCalled)
+            assertNull(preferences.switchPlanEmptiedAtEpochMillis.first())
             cancelAndIgnoreRemainingEvents()
         }
     }

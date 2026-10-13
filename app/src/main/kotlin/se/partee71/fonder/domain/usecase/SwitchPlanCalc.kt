@@ -35,6 +35,10 @@ import kotlin.math.ceil
  *
  * Ingen plan ges (tom lista) om ingen nivå avviker minst [MIN_GAP_PP], eller om ingen
  * kvalificerad köp-/säljkandidat finns för den mest avvikande nivån.
+ *
+ * **Avstådda par** (HEM-14): ett avstått byte Sälj X → Köp Y tas ur kandidatmängden innan den
+ * giriga loopen, så planen numreras 1..n utan luckor i stället för att ett avstått steg lämnar
+ * ett hål som nästa byte räknats fram under antagandet att det gjorts.
  */
 object SwitchPlanCalc {
 
@@ -114,7 +118,7 @@ object SwitchPlanCalc {
         val totalValueKr = positions.sumOf { it.valueKr }
         if (totalValueKr <= 0.0) return emptyList()
 
-        val levelValues = positions.groupBy { it.level }.mapValues { (_, p) -> p.sumOf { it.valueKr } }
+        val levelValues = levelValuesOf(positions)
         return gapsPp(targetAllocation, levelValues, totalValueKr)
             .filterValues { it >= MIN_GAP_PP }
             .entries
@@ -135,6 +139,10 @@ object SwitchPlanCalc {
             Position(holding, isin, level, metadata.totalFee, value)
         }
 
+    /** Nivåernas värde ur innehaven. */
+    private fun levelValuesOf(positions: List<Position>): MutableMap<Int, Double> =
+        positions.groupBy { it.level }.mapValuesTo(mutableMapOf()) { (_, p) -> p.sumOf { it.valueKr } }
+
     /** Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. */
     private fun gapsPp(
         targetAllocation: Map<Int, Double>,
@@ -145,12 +153,18 @@ object SwitchPlanCalc {
             ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
         }
 
-    /** Bytena rangordnade så att bara det första ensamt är en giltig handling — se klassens KDoc. */
+    /**
+     * Bytena rangordnade så att bara det första ensamt är en giltig handling — se klassens KDoc.
+     *
+     * @param excludedPairs avstådda byten som (säljISIN, köpISIN) (HEM-14) — tas ur
+     *   kandidatmängden innan loopen, så listan blir 1..n utan luckor.
+     */
     fun plan(
         holdings: List<Holding>,
         metadataByIsin: Map<String, FundMetadata>,
         candidates: List<Candidate>,
         targetAllocation: Map<Int, Double>,
+        excludedPairs: Set<Pair<String, String>> = emptySet(),
     ): List<Switch> {
         if (targetAllocation.isEmpty()) return emptyList()
 
@@ -162,12 +176,11 @@ object SwitchPlanCalc {
         // [PortfolioRiskCalc.actualAllocation] använder, så procenttalen i planen och i
         // riskkortet ovanför beskriver samma fördelning.
         val positions = positionsOf(holdings, metadataByIsin)
-
         val totalValueKr = positions.sumOf { it.valueKr }
         if (totalValueKr <= 0.0) return emptyList()
 
         val sellSlots = positions.filter { it.feePercent != null }.toMutableList()
-        val levelValues = positions.groupBy { it.level }.mapValues { (_, p) -> p.sumOf { it.valueKr } }.toMutableMap()
+        val levelValues = levelValuesOf(positions)
         val usedBuyIsins = positions.mapTo(mutableSetOf()) { it.isin }
         val switches = mutableListOf<Switch>()
 
@@ -178,8 +191,17 @@ object SwitchPlanCalc {
 
             // Bara positioner med känd avgift kan säljas — ligger hela överviktens värde i en
             // fond utan avgiftsuppgift ges ingen plan alls, hellre än ett byte på en gissning.
-            val sellSlot = sellSlots.filter { it.level == overEntry.key }.maxByOrNull { it.feePercent!! } ?: break
-            val buyCandidate = pickBuyCandidate(candidates, underEntry.key, usedBuyIsins) ?: break
+            // Dyrast först; ett avstått par (HEM-14) är inte ett alternativ för just den säljfonden,
+            // så saknar den dyraste en kandidat prövas nästa position på nivån — planen numreras om
+            // 1..n i stället för att tömmas av ett avstående.
+            val match = sellSlots
+                .filter { it.level == overEntry.key }
+                .sortedByDescending { it.feePercent!! }
+                .firstNotNullOfOrNull { slot ->
+                    val excludedForSell = excludedPairs.filter { it.first == slot.isin }.mapTo(mutableSetOf()) { it.second }
+                    pickBuyCandidate(candidates, underEntry.key, usedBuyIsins + excludedForSell)?.let { slot to it }
+                } ?: break
+            val (sellSlot, buyCandidate) = match
 
             // Storleksbestäm bytet till gapet — se klassens KDoc. Båda gapen är uttryckta i
             // procentenheter av portföljen, så de räknas om till kronor mot samma total.

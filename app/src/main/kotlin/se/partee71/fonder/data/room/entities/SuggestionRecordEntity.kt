@@ -1,6 +1,7 @@
 package se.partee71.fonder.data.room.entities
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
@@ -8,8 +9,15 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 /**
  * Facit-inspelningen för bytesplanen (HEM-8, issue #70) — se [SuggestionRecord] för varför
  * det här är genuin, backup-bärande användardata till skillnad från `fund_metadata`.
+ *
+ * Indexet på (kind, sellIsin, buyIsin) bär "senaste raden per fondpar"
+ * ([se.partee71.fonder.data.room.daos.SuggestionRecordDao.observeLatestPlanRecordsFor], HEM-14):
+ * frågan är ett flöde som körs om vid varje skrivning i tabellen och slår upp paret per rad.
  */
-@Entity(tableName = SuggestionRecordEntity.TABLE_NAME)
+@Entity(
+    tableName = SuggestionRecordEntity.TABLE_NAME,
+    indices = [Index("kind", "sellIsin", "buyIsin")],
+)
 data class SuggestionRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val suggestedAtEpochDay: Long,

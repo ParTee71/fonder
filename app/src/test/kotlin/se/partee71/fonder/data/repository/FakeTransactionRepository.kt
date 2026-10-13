@@ -16,7 +16,13 @@ class FakeTransactionRepository : TransactionRepository {
     val funds = MutableStateFlow<List<Fund>>(emptyList())
     val transactions = MutableStateFlow<List<Transaction>>(emptyList())
 
-    override fun observeFunds(): Flow<List<Fund>> = funds
+    /** Antal gånger fondlistan begärts — en import ska läsa den en gång, inte per rad. */
+    var fundsReads = 0
+
+    override fun observeFunds(): Flow<List<Fund>> {
+        fundsReads++
+        return funds
+    }
 
     override fun observeTransactions(): Flow<List<Transaction>> = transactions
 

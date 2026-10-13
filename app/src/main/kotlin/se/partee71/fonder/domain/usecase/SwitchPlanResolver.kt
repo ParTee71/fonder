@@ -52,6 +52,12 @@ object SwitchPlanResolver {
          * Bärs med så att ett avstående (HEM-14) skrivs mot rätt sort: samma fondpar kan vara båda.
          */
         val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        /**
+         * Sant när en öppen bevakning startats ur förslaget (BYT-1) — samma rad eller samma fondpar
+         * i en tidigare inspelning — så bytet är **sålt**, inte bara föreslaget. Sätts av
+         * [InProgressSwitches] (Beslut och Fonddetalj), inte här: resolvern ser bara inspelningen.
+         */
+        val inProgress: Boolean = false,
     )
 
     /**
@@ -69,12 +75,18 @@ object SwitchPlanResolver {
      * jämförelse: ett gammalt råd är fel på ett sätt gammal avgiftsdata inte är. Slutar
      * backstopen köra ska planen försvinna, inte ligga kvar prissatt mot en portfölj som sedan
      * dess rört sig (issue #75, punkt 5).
+     *
+     * @param emptiedAtEpochMillis körnings-id för den senaste skanning som gav en **tom** plan
+     *   ([se.partee71.fonder.data.datastore.PreferencesRepository.switchPlanEmptiedAtEpochMillis]).
+     *   En inspelad körning som inte är nyare än den är inaktuell: bytet är gjort eller behovet
+     *   borta, och "Sälj X" får inte stå kvar i väntan på färskhetsgränsen (issue #143).
      */
     fun resolve(
         accountType: AccountType?,
         latestBatch: List<SuggestionRecord>,
         metadataByIsin: Map<String, FundMetadata>,
         today: LocalDate,
+        emptiedAtEpochMillis: Long? = null,
     ): List<Suggestion> {
         if (accountType != AccountType.ISK_KF) return emptyList()
 
@@ -83,36 +95,46 @@ object SwitchPlanResolver {
         // varje rad hör till samma girigt framräknade plan. Ett avgiftsbyte som slank in hade
         // presenterats som planens `planIndex 0`, alltså ett råd som aldrig räknats fram.
         val planRecords = latestBatch.filter { it.kind == SuggestionKind.RISK_PLAN }
-        val suggestedAt = planRecords.firstOrNull()?.suggestedAtEpochDay ?: return emptyList()
-        if (FundMetadataFreshness.isStale(suggestedAt, today, SwitchPlanCalc.PLAN_TTL_DAYS)) return emptyList()
+        val first = planRecords.firstOrNull() ?: return emptyList()
+        if (FundMetadataFreshness.isStale(first.suggestedAtEpochDay, today, SwitchPlanCalc.PLAN_TTL_DAYS)) return emptyList()
+        if (emptiedAtEpochMillis != null && first.batchEpochMillis <= emptiedAtEpochMillis) return emptyList()
 
-        val resolved = planRecords.mapNotNull { record ->
-            val sellMeta = metadataByIsin[record.sellIsin] ?: return@mapNotNull null
-            val buyMeta = metadataByIsin[record.buyIsin] ?: return@mapNotNull null
-            val sellLevel = sellMeta.risk ?: return@mapNotNull null
-            val buyLevel = buyMeta.risk ?: return@mapNotNull null
-            val sellFee = sellMeta.totalFee ?: return@mapNotNull null
-            val buyFee = buyMeta.totalFee ?: return@mapNotNull null
-            Suggestion(
-                recordId = record.id,
-                planIndex = record.planIndex,
-                sellIsin = record.sellIsin,
-                buyIsin = record.buyIsin,
-                sellFundName = sellMeta.name,
-                buyFundName = buyMeta.name,
-                fromLevel = sellLevel,
-                toLevel = buyLevel,
-                feeDeltaPercent = buyFee - sellFee,
-                switchValueKr = record.switchValueKr,
-                followed = record.followed == true,
-            )
-        }
+        val resolved = planRecords.mapNotNull { record -> resolveRecord(record, metadataByIsin) }
 
         // Behåll bara den obrutna prefixen från och med planIndex 0.
         return resolved.sortedBy { it.planIndex }
             .withIndex()
             .takeWhile { (position, suggestion) -> suggestion.planIndex == position }
             .map { it.value }
+    }
+
+    /**
+     * En enskild inspelad rad som förslag, eller null när metadata för någon sida saknas — samma
+     * uppslag som [resolve] gör per rad, utan prefix- och färskhetsregeln. Används för de
+     * **avstådda** förslagen (HEM-14): ett avstått par tas ur planen vid nästa omräkning, så
+     * raden att ångra hämtas ur historiken i stället för ur den visade planen.
+     */
+    fun resolveRecord(record: SuggestionRecord, metadataByIsin: Map<String, FundMetadata>): Suggestion? {
+        val sellMeta = metadataByIsin[record.sellIsin] ?: return null
+        val buyMeta = metadataByIsin[record.buyIsin] ?: return null
+        val sellLevel = sellMeta.risk ?: return null
+        val buyLevel = buyMeta.risk ?: return null
+        val sellFee = sellMeta.totalFee ?: return null
+        val buyFee = buyMeta.totalFee ?: return null
+        return Suggestion(
+            recordId = record.id,
+            planIndex = record.planIndex,
+            sellIsin = record.sellIsin,
+            buyIsin = record.buyIsin,
+            sellFundName = sellMeta.name,
+            buyFundName = buyMeta.name,
+            fromLevel = sellLevel,
+            toLevel = buyLevel,
+            feeDeltaPercent = buyFee - sellFee,
+            switchValueKr = record.switchValueKr,
+            followed = record.followed == true,
+            kind = record.kind,
+        )
     }
 
     /**

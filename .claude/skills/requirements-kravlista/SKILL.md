@@ -28,6 +28,7 @@ KRAVLISTA.md består av numrerade avsnitt med tabeller `| ID | Krav |`. Varje kr
 | `SLD` | Sålda fonder – säljen i Händelser (§6) |
 | `HEM` | Hem (dashboard) (§7) |
 | `ANA` | Analys – nyckeltal och säljsignaler (§8) |
+| `BYT` | Byten – livscykeln från föreslaget till köpt, driven av transaktionerna (§9) |
 
 | Du gör | Så här |
 |---|---|

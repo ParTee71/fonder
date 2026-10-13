@@ -34,6 +34,7 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
@@ -95,6 +96,7 @@ class SwitchWatchViewModelTest {
         override fun observeHistory(): Flow<List<SuggestionRecord>> = records
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind) = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+        override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {}
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
         }
@@ -144,13 +146,14 @@ class SwitchWatchViewModelTest {
         ),
     )
 
+
     private fun viewModel(watchId: Long) = SwitchWatchViewModel(
         watchId,
         switchWatchRepo,
         fakePriceRepo,
         metadataRepo,
         fakeTransactionRepo,
-        suggestionRepo,
+        RecordTransaction(fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo),
     )
 
     @Test
@@ -279,6 +282,8 @@ class SwitchWatchViewModelTest {
         assertFalse(stored.isOpen)
         assertEquals("SE_A", stored.boughtIsin)
         assertEquals(SwitchWatchCloseReason.KOPT, stored.closeReason)
+        // Kvitteringen görs utan transaktion tills knappen öppnar formuläret (#144) — ingen koppling påstås.
+        assertNull(stored.buyTransactionId)
         assertEquals(true, suggestionRepo.records.value.single().followed)
     }
 

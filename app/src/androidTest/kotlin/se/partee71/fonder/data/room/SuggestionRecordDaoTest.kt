@@ -187,4 +187,47 @@ class SuggestionRecordDaoTest {
 
         assertEquals(listOf("SE_B", "SE_A"), recent.map { it.buyIsin })
     }
+
+    // --- Issue #143: flytt mellan körningar och de riktade frågorna ---
+
+    @Test
+    fun `moveToBatch flyttar raden med id och kvittering men byter korning plats och belopp`() = runTest {
+        val id = dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 1, followed = true))
+        dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 0, buyIsin = "SE_ANNAN"))
+
+        dao.moveToBatch(id, batchEpochMillis = 2_000, planIndex = 0, switchValueKr = 2_500.0)
+
+        val latest = dao.observeLatestBatch().first().single()
+        assertEquals(id, latest.id)
+        assertEquals(0, latest.planIndex)
+        assertEquals(2_500.0, latest.switchValueKr!!, 1e-9)
+        assertEquals(true, latest.followed)
+        assertEquals(100.0, latest.sellNavAtSuggestion, 1e-9)
+        // Den andra raden ligger kvar i sin gamla körning — rådet gavs och mäts i facit.
+        assertEquals(2, dao.getAll().size)
+    }
+
+    @Test
+    fun `observeByIds ger bara de begarda raderna`() = runTest {
+        val a = dao.insert(entity(buyIsin = "SE_A"))
+        dao.insert(entity(buyIsin = "SE_B"))
+        val c = dao.insert(entity(buyIsin = "SE_C"))
+
+        assertEquals(setOf("SE_A", "SE_C"), dao.observeByIds(listOf(a, c)).first().map { it.buyIsin }.toSet())
+    }
+
+    @Test
+    fun `observeLatestPlanRecordsFor ger senaste planraden per par i planordning utan avgiftsbyten`() = runTest {
+        dao.insert(entity(suggestedAtEpochDay = 19_990, batchEpochMillis = 100, planIndex = 0, buyIsin = "SE_A"))
+        val newestA = dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 2_000, planIndex = 1, buyIsin = "SE_A"))
+        dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 0, buyIsin = "SE_A"))
+        val onlyB = dao.insert(entity(suggestedAtEpochDay = 19_995, planIndex = 0, buyIsin = "SE_B"))
+        dao.insert(entity(suggestedAtEpochDay = 20_001, planIndex = 0, buyIsin = "SE_A", kind = SuggestionKind.FEE))
+        dao.insert(entity(suggestedAtEpochDay = 20_001, planIndex = 0, buyIsin = "SE_UTANFOR"))
+
+        val rows = dao.observeLatestPlanRecordsFor(listOf("SE_SELL"), listOf("SE_A", "SE_B")).first()
+
+        assertEquals(listOf(onlyB, newestA), rows.map { it.id })
+        assertEquals(listOf(0, 1), rows.map { it.planIndex })
+    }
 }
