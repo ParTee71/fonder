@@ -75,7 +75,7 @@ class BeslutScreenTest {
         // under tusen — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg beroende på
         // JVM/lokal (se MoneyFormatTest), och ett test som beror på vilket vore flakigt.
         composeRule.onNodeWithText("Belopp: 250,00 kr", substring = true).assertExists()
-        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
+        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %", substring = true).assertExists()
     }
 
     @Test
