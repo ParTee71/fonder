@@ -31,8 +31,26 @@ interface SwitchWatchRepository {
     /** Hela historiken inklusive stängda — backup-kontraktets läsväg, ingen skärm läser den. */
     suspend fun getAll(): List<SwitchWatch>
 
-    /** Sant om säljet redan har en öppen bevakning — gatar starterbjudandet (SLD-5). */
+    /** Sant om säljet (fond och dag) redan har en öppen bevakning, oavsett koppling — gaten för en bevakning ur ett förslag. */
     suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean
+
+    /**
+     * Den öppna bevakning av säljfonden utan känd transaktion med **samma** säljdag som
+     * [soldAtEpochDay] — äldst om flera, null om ingen; även en utgången som bakgrundskörningen
+     * ännu inte stängt, anroparen avgör vad den betyder. Se [linkSellTransaction].
+     */
+    suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch?
+
+    /**
+     * Kopplar en bevakning utan känd transaktion till säljtransaktionen (BYT-1) och sätter
+     * likviden ur den. En bevakning startad ur ett förslag samma dag som säljet blir därmed
+     * säljets bevakning i stället för att säljet får en andra. Säljdagen och kandidaternas
+     * nollpunkt rörs inte.
+     */
+    suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double)
+
+    /** Sant om säljtransaktionen redan har en öppen bevakning (BYT-1) — en bevakning per sälj, oavsett startväg. */
+    suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean
 
     /** Startar en bevakning och returnerar dess id. Kandidaterna i [watch] skrivs med. */
     suspend fun start(watch: SwitchWatch): Long
@@ -52,11 +70,23 @@ interface SwitchWatchRepository {
     suspend fun setNavAtStart(candidateId: Long, nav: Double, epochDay: Long)
 
     /**
-     * Stänger bevakningen. [boughtIsin] bara vid [SwitchWatchCloseReason.KOPT] — de andra
-     * avsluten vet per definition inte vad som köptes, och att skriva ett ISIN där hade
-     * påstått ett köp som aldrig kvitterats.
+     * Stänger bevakningen. [boughtIsin] och [buyTransactionId] bara vid
+     * [SwitchWatchCloseReason.KOPT] — de andra avsluten vet per definition inte vad som köptes,
+     * och att skriva ett ISIN eller en transaktion där hade påstått ett köp som aldrig gjordes.
+     *
+     * @return sant när **det här** anropet stängde den; falskt när den redan var stängd eller
+     *   inte finns. Ett andra avslut skriver aldrig över det första.
      */
-    suspend fun close(watchId: Long, reason: SwitchWatchCloseReason, today: LocalDate, boughtIsin: String? = null)
+    suspend fun close(
+        watchId: Long,
+        reason: SwitchWatchCloseReason,
+        today: LocalDate,
+        boughtIsin: String? = null,
+        buyTransactionId: Long? = null,
+    ): Boolean
+
+    /** Nollar [SwitchWatch.sellTransactionId]/[SwitchWatch.buyTransactionId] som pekar på en borttagen transaktion (TRX-2). */
+    suspend fun clearTransactionLinks(transactionId: Long)
 
     /**
      * Stänger öppna bevakningar som passerat [SwitchWatchCalc.WATCH_TTL_DAYS] som
@@ -89,6 +119,15 @@ class RoomSwitchWatchRepository @Inject constructor(
 
     override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean =
         dao.hasOpenFor(sellIsin, soldAtEpochDay)
+
+    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? =
+        dao.getOpenWithoutTransactionFor(sellIsin, soldAtEpochDay).firstOrNull()?.toDomain()
+
+    override suspend fun linkSellTransaction(watchId: Long, transactionId: Long, proceedsKr: Double) =
+        dao.linkSellTransaction(watchId, transactionId, proceedsKr)
+
+    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
+        dao.hasOpenForTransaction(sellTransactionId)
 
     override suspend fun start(watch: SwitchWatch): Long {
         val row = SwitchWatchWithCandidates.fromDomain(watch)
@@ -138,13 +177,25 @@ class RoomSwitchWatchRepository @Inject constructor(
         dao.setNavAtStart(candidateId, nav, epochDay)
     }
 
-    override suspend fun close(watchId: Long, reason: SwitchWatchCloseReason, today: LocalDate, boughtIsin: String?) {
-        dao.close(
+    override suspend fun close(
+        watchId: Long,
+        reason: SwitchWatchCloseReason,
+        today: LocalDate,
+        boughtIsin: String?,
+        buyTransactionId: Long?,
+    ): Boolean {
+        val bought = reason == SwitchWatchCloseReason.KOPT
+        return dao.close(
             id = watchId,
             closedAtEpochDay = today.toEpochDay(),
-            boughtIsin = if (reason == SwitchWatchCloseReason.KOPT) boughtIsin else null,
+            boughtIsin = if (bought) boughtIsin else null,
             closeReason = reason.name,
-        )
+            buyTransactionId = if (bought) buyTransactionId else null,
+        ) == 1
+    }
+
+    override suspend fun clearTransactionLinks(transactionId: Long) {
+        dao.clearTransactionLinks(transactionId)
     }
 
     override suspend fun expireStale(today: LocalDate): Int {

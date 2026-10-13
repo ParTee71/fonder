@@ -20,6 +20,8 @@ import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
+import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.testing.testPreferencesRepository
 import java.time.LocalDate
@@ -40,13 +42,18 @@ class DecisionBadgeViewModelTest {
 
     @Test
     fun `market raknar pagaende byten och nollas nar de stangs`() = runTest(dispatcher) {
+        val records = FakeSuggestionRecordRepository()
+        val dismissals = FakeSuggestionDismissalRepository()
+        val preferences = testPreferencesRepository(dispatcher, tempFolder, "badge_test")
+        val metadata = FakeFundMetadataRepository()
         val source = PendingDecisionsSource(
-            testPreferencesRepository(dispatcher, tempFolder, "badge_test"),
-            FakeSuggestionRecordRepository(),
+            preferences,
+            records,
             switchWatchRepo,
             FakeCachedPriceRepository(),
-            FakeFundMetadataRepository(),
-            FakeSuggestionDismissalRepository(),
+            metadata,
+            DismissedPlanSource(records, dismissals, preferences, metadata),
+            InProgressSwitches(switchWatchRepo, records),
         )
         val vm = DecisionBadgeViewModel(source)
 

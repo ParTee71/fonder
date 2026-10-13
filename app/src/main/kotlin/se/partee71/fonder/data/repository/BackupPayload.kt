@@ -21,8 +21,9 @@ import se.partee71.fonder.domain.model.Transaction
  * Innehåller **bara genuin användardata**. `fund_prices`, `fx_rates` och `fund_metadata` ligger
  * utanför: de är härledd cache som hämtas om från källan (se `FundMetadataEntity`s KDoc), och
  * skulle mångdubbla filen utan att skydda något som inte går att återskapa. Samma gräns som
- * [se.partee71.fonder.data.datastore.PreferencesRepository.lastPriceSyncEpochMillis] och
- * `fundFilterVocabulary`, som medvetet inte är med.
+ * [se.partee71.fonder.data.datastore.PreferencesRepository.lastPriceSyncEpochMillis],
+ * `fundFilterVocabulary` och `switchPlanEmptiedAtEpochMillis` (skanningen räknar fram den igen),
+ * som medvetet inte är med.
  *
  * @param formatVersion filformatets version, [FORMAT_VERSION] när den skrevs. En fil med *högre*
  *   version avvisas av [BackupSerializer.decode] i stället för att läsas in med de fält den här
@@ -41,7 +42,11 @@ data class BackupPayload(
      * Pågående och avslutade byten med sina bevakade alternativ (ANA-12, issue #114). Genuin
      * användardata av samma skäl som [suggestionRecords]: säljdagen, beloppet, uppsättningen
      * bevakade alternativ och deras ankrade nollpunkt går inte att räkna fram ur NAV-historiken
-     * i efterhand — kandidaterna ligger per definition inte i kurscachen (ANA-11).
+     * i efterhand — kandidaterna ligger per definition inte i kurscachen (ANA-11). Sedan 0.67.0
+     * (BYT-1) bär raden även `sellTransactionId`/`buyTransactionId`, kopplingen till den sälj-
+     * respektive köptransaktion som startade och stängde bytet; fälten följer [SwitchWatch] med
+     * default null, så en äldre fil läses som "okopplade bevakningar" utan att [FORMAT_VERSION]
+     * höjs. Transaktions-id:n bevaras vid återställning, så länken pekar rätt efteråt.
      */
     val switchWatches: List<SwitchWatch> = emptyList(),
     /**

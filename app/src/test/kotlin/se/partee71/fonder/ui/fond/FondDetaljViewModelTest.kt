@@ -27,6 +27,9 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
+import se.partee71.fonder.domain.usecase.InProgressSwitches
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -42,6 +45,7 @@ import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
@@ -143,7 +147,8 @@ class FondDetaljViewModelTest {
         }
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
         override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
+        /** Samma karta som `metadataFor` — testets metadata *är* cachen (de avstådda raderna slås upp här). */
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
 
     private val fakeSuggestionRecordRepo = object : SuggestionRecordRepository {
@@ -160,6 +165,7 @@ class FondDetaljViewModelTest {
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+        override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {}
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
         }
@@ -177,7 +183,9 @@ class FondDetaljViewModelTest {
         preferencesRepository,
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
-        fakeDismissalRepo,
+        RecordTransaction(fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo),
+        DismissedPlanSource(fakeSuggestionRecordRepo, fakeDismissalRepo, preferencesRepository, fakeFundMetadataRepo),
+        InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
     )
 
     @Before
@@ -871,6 +879,53 @@ class FondDetaljViewModelTest {
             while (state.dismissedPlanCount == 0) state = awaitItem()
             assertTrue(state.switchPlan.isEmpty())
             assertEquals(1, state.dismissedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `en planrad vars forslag har en oppen bevakning ar pagaende aven pa fondkortet`() = runTest(dispatcher) {
+        // Samma regel som Beslut (InProgressSwitches, BYT-1): bevakningen är startad ur rad 7.
+        setUpSwitchPlan()
+        fakeSwitchWatchRepo.start(
+            SwitchWatch(sellIsin = "SE0004297927", sellFundName = "Fond A", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 3, sourceRecordId = 7),
+        )
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.switchPlan.isEmpty() || !state.switchPlan.single().inProgress) state = awaitItem()
+            assertEquals(7L, state.switchPlan.single().recordId)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `ett avstatt par som lamnat planen raknas fortfarande som avstatt pa fondkortet`() = runTest(dispatcher) {
+        // Omräkningen tar avstådda par ur planen (HEM-8); fondkortet läser samma källa som Beslut
+        // (DismissedPlanSource), så det fortfarande säger att det finns något att ångra.
+        setUpSwitchPlan()
+        metadataByIsin = metadataByIsin + ("SE_ANNAN" to metadata("SE_ANNAN", "Fond C", risk = 4, fee = 0.3))
+        // Testets fake skiljer inte körningar åt (observeLatestBatch ger alla planrader), så den
+        // avstådda raden får plats 1 bakom den nya — poängen är att den inte är i den visade planen.
+        fakeSuggestionRecordRepo.records.value = listOf(
+            SuggestionRecord(
+                id = 8, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0,
+                sellIsin = "SE0004297927", buyIsin = "SE_ANNAN",
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0, switchValueKr = 4000.0, batchEpochMillis = 2_000,
+            ),
+            fakeSuggestionRecordRepo.records.value.single().copy(planIndex = 1, batchEpochMillis = 2_000),
+        )
+        fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.RISK_PLAN, LocalDate.now())
+
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.dismissedPlanCount == 0 || state.switchPlan.isEmpty()) state = awaitItem()
+            assertEquals(listOf(8L), state.switchPlan.map { it.recordId })
+            assertEquals(1, state.dismissedPlanCount)
             cancelAndIgnoreRemainingEvents()
         }
         advanceUntilIdle()

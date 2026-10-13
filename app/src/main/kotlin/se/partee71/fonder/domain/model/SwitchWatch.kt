@@ -35,6 +35,15 @@ import kotlinx.serialization.Serializable
  *   aldrig** — den är användardata och bär vad som faktiskt köptes.
  * @param boughtIsin fonden användaren kvitterade som köpt, null om bevakningen stängdes utan
  *   köp (avbruten eller utgången).
+ * @param sellTransactionId säljtransaktionen bevakningen startades ur (BYT-1, issue #143) — det
+ *   som gör bytet till **ett** objekt: transaktionen driver övergången Föreslaget → Sålt, och
+ *   dedupen går på transaktionen, inte på (fond, dag). Null för en bevakning från före 0.67.0
+ *   eller en startad utan känd transaktion (Följ/Bevaka alternativ ur ett förslag); ett påhittat
+ *   id vore ett påstående om en koppling som inte finns. Nollas om transaktionen tas bort
+ *   (TRX-2) — bevakningen ligger kvar.
+ * @param buyTransactionId köptransaktionen som stängde bevakningen som [SwitchWatchCloseReason.KOPT],
+ *   null när köpet kvitterades utan transaktion ("Köpte den här") eller bevakningen inte stängts
+ *   av ett köp. Samma regler som [sellTransactionId].
  */
 @Serializable
 data class SwitchWatch(
@@ -49,6 +58,8 @@ data class SwitchWatch(
     val boughtIsin: String? = null,
     val closeReason: SwitchWatchCloseReason? = null,
     val candidates: List<SwitchWatchCandidate> = emptyList(),
+    val sellTransactionId: Long? = null,
+    val buyTransactionId: Long? = null,
 ) {
     /** Öppen = ingen kvittering och ingen utgång skriven. Se [SwitchWatchCalc] för färskhetsgränsen. */
     val isOpen: Boolean get() = closedAtEpochDay == null

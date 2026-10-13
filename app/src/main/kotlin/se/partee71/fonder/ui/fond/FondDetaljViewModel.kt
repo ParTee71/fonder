@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -38,13 +37,15 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
 import se.partee71.fonder.domain.usecase.CheaperAlternatives
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.startFromSuggestion
 import java.time.LocalDate
 
 data class FondDetaljUiState(
@@ -172,6 +173,10 @@ private data class PlanInput(
     val history: List<SuggestionRecord>,
     /** Avståendena (HEM-14) — ett avstått förslag visas inte heller på fondkortet. */
     val dismissals: List<SuggestionDismissal>,
+    /** De avstådda planbytena ur [DismissedPlanSource] — samma källa och samma resolvering som Beslut, så antalen aldrig skiljer sig. */
+    val dismissedPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
+    /** Se [se.partee71.fonder.data.datastore.PreferencesRepository.switchPlanEmptiedAtEpochMillis]. */
+    val emptiedAtEpochMillis: Long? = null,
 )
 
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
@@ -213,8 +218,10 @@ class FondDetaljViewModel @AssistedInject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val switchWatchRepository: SwitchWatchRepository,
-    suggestionDismissalRepository: SuggestionDismissalRepository,
+    switchWatchRepository: SwitchWatchRepository,
+    private val recordTransaction: RecordTransaction,
+    dismissedPlanSource: DismissedPlanSource,
+    inProgressSwitches: InProgressSwitches,
 ) : ViewModel() {
 
     /** Se [FondDetaljUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
@@ -306,14 +313,21 @@ class FondDetaljViewModel @AssistedInject constructor(
         // som går sin egen takt — den senaste körningens rader säger inget om huruvida just den
         // här fondens alternativ har en inspelad rad.
         suggestionRecordRepository.observeHistory(),
-        suggestionDismissalRepository.observeAll(),
-    ) { accountType, batch, metadataByIsin, history, dismissals -> PlanInput(accountType, batch, metadataByIsin, history, dismissals) }
+        // Avståendena och de avstådda planbytenas rader ur samma källa och samma emission som Beslut.
+        dismissedPlanSource.observe(),
+    ) { accountType, batch, metadataByIsin, history, dismissed ->
+        PlanInput(accountType, batch, metadataByIsin, history, dismissed.dismissals, dismissed.suggestions)
+    }
+        .combine(preferencesRepository.switchPlanEmptiedAtEpochMillis) { input, emptiedAt -> input.copy(emptiedAtEpochMillis = emptiedAt) }
 
-    /** Öppna bevakningar och den nystartades id — hållna ihop så combinen nedan inte växer i onödan. */
-    private val switchWatchState: Flow<Pair<Set<String>, Long?>> = combine(
+    /** Öppna bevakningar, de pågående raderna (BYT-1) och den nystartades id — hållna ihop så combinen nedan inte växer i onödan. */
+    private class SwitchWatchState(val watchedSellIsins: Set<String>, val inProgress: InProgressSwitches.Keys, val startedWatchId: Long?)
+
+    private val switchWatchState: Flow<SwitchWatchState> = combine(
         switchWatchRepository.observeOpen().map { watches -> watches.mapTo(mutableSetOf<String>()) { it.sellIsin } },
+        inProgressSwitches.observe(),
         startedSwitchWatchId,
-    ) { sellIsins, startedId -> sellIsins to startedId }
+    ) { sellIsins, inProgress, startedId -> SwitchWatchState(sellIsins, inProgress, startedId) }
 
     val uiState: StateFlow<FondDetaljUiState> = combine(
         baseUiState,
@@ -321,18 +335,22 @@ class FondDetaljViewModel @AssistedInject constructor(
         planInput,
         comparisons,
         switchWatchState,
-    ) { state, feeComparison, plan, comparisonsByIsin, (watchedSellIsins, startedWatchId) ->
+    ) { state, feeComparison, plan, comparisonsByIsin, watchState ->
         // Metadatan behövs för fondens egen risknivå **och** för att kunna slå upp planens
         // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
         // `metadata`-flödet ovan utan att blockera tillståndet.
         refreshMetadata(listOfNotNull(state.isin) + plan.batch.flatMap { listOf(it.sellIsin, it.buyIsin) })
         val today = LocalDate.now()
-        val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, today)
+        val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, today, plan.emptiedAtEpochMillis)
         // Ett avstått förslag (HEM-14) döljs här också, med samma regel som på Beslut — fondkortet
-        // och Beslut får inte ge olika besked om samma förslag.
-        val (fundPlan, dismissedPlan) = SuggestionDismissals.partition(
-            SwitchPlanResolver.forFund(resolvedPlan, state.isin), plan.dismissals, today,
+        // och Beslut får inte ge olika besked om samma förslag. Antalet avstådda kommer ur samma
+        // källa som Beslut (DismissedPlanSource), inte ur den visade planen: ett avstått par tas ur
+        // planen vid nästa omräkning, och fondkortet ska ändå säga att det finns något att ångra.
+        val (fundPlan, _) = SuggestionDismissals.partition(
+            // Samma regel som Beslut för "sålt, väntar på köp" (BYT-1).
+            watchState.inProgress.mark(SwitchPlanResolver.forFund(resolvedPlan, state.isin)), plan.dismissals, today,
         )
+        val dismissedPlan = SwitchPlanResolver.forFund(plan.dismissedPlan, state.isin)
         val recordedFee = recordedFeeSwitches(plan.history, state.isin)
         val (visibleFeeComparison, dismissedFeeCount) = feeComparison.withoutDismissed(
             isin = state.isin,
@@ -347,8 +365,8 @@ class FondDetaljViewModel @AssistedInject constructor(
             dismissedFeeCount = dismissedFeeCount,
             comparisons = comparisonsByIsin,
             recordedFeeSwitches = recordedFee,
-            watchedSellIsins = watchedSellIsins,
-            startedSwitchWatchId = startedWatchId,
+            watchedSellIsins = watchState.watchedSellIsins,
+            startedSwitchWatchId = watchState.startedWatchId,
         )
     }.combine(priceRefreshing) { state, refreshing ->
         // Eget led i kedjan i stället för en sjätte gren i combinen ovan: `combine` tar som mest
@@ -362,13 +380,13 @@ class FondDetaljViewModel @AssistedInject constructor(
 
     /**
      * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12, issue
-     * #114) — samma väg som Beslut ([startFromSuggestion]), eftersom det är samma
-     * förslag och samma inspelade rad: fondkortet och Beslut får aldrig ge två olika bevakningar
-     * av samma byte.
+     * #114) — samma väg som Beslut ([RecordTransaction.startWatchFromSuggestion]), eftersom det är
+     * samma förslag och samma inspelade rad: fondkortet och Beslut får aldrig ge två olika
+     * bevakningar av samma byte.
      */
     fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
-            switchWatchRepository.startFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
+            recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
     }
 

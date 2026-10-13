@@ -18,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -25,6 +26,8 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.RecordTransaction
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
 /**
@@ -60,7 +63,11 @@ class TransaktionerViewModelTest {
     /** Fast "idag" så att årets resultat inte beror på när testet körs. */
     private val today = LocalDate.of(2026, 10, 11)
 
-    private fun viewModel() = TransaktionerViewModel(fakeRepo, fakeSwitchWatchRepo, fakeMetadataRepo) { today }
+    private fun viewModel() = TransaktionerViewModel(
+        fakeRepo,
+        fakeSwitchWatchRepo,
+        RecordTransaction(fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo),
+    ) { today }
 
     private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) =
         Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
@@ -259,6 +266,15 @@ class TransaktionerViewModelTest {
 
     // --- Bevaka alternativ (SLD-5) ---
 
+    /** En fond med känt ISIN, köpt (id 1, dag 100) och såld (id 2, dag 200, 10 andelar à 150). */
+    private fun givenSoldFundWithIsin(fee: Double = 0.0) {
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
+        transactions.value = listOf(
+            salj(id = 2, day = 200, shares = 10.0, price = 150.0, fee = fee),
+            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+        )
+    }
+
     @Test
     fun `ett salj med kant ISIN kan starta en bevakning, ett utan kan inte, ett kop aldrig (SLD-5)`() = runTest(dispatcher) {
         val medIsin = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
@@ -282,12 +298,7 @@ class TransaktionerViewModelTest {
 
     @Test
     fun `startSwitchWatch anvander saljets datum och likvid, inte dagens`() = runTest(dispatcher) {
-        val fond = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            salj(id = 2, day = 200, shares = 10.0, price = 150.0, fee = 25.0),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
-        )
+        givenSoldFundWithIsin(fee = 25.0)
         fakeMetadataRepo.metadataByIsin = mapOf("SE_MED" to metadata("SE_MED", risk = 6))
         val vm = viewModel()
 
@@ -304,27 +315,95 @@ class TransaktionerViewModelTest {
 
         val watch = fakeSwitchWatchRepo.watches.value.single()
         assertEquals("SE_MED", watch.sellIsin)
+        assertEquals("Med ISIN", watch.sellFundName)
         // Utvecklingen ska mätas från dagen pengarna frigjordes, inte från idag.
         assertEquals(200L, watch.soldAtEpochDay)
         assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
         // Målnivån är säljfondens egen risknivå ur cachen — det närmaste "något likvärdigt".
         assertEquals(6, watch.targetLevel)
         assertNull(watch.sourceRecordId)
+        // Bevakningen hör till just den här säljtransaktionen (BYT-1).
+        assertEquals(2L, watch.sellTransactionId)
+    }
+
+    @Test
+    fun `tva tryck pa bevaka alternativ ger en bevakning for saljet`() = runTest(dispatcher) {
+        givenSoldFundWithIsin()
+        val vm = viewModel()
+
+        vm.uiState.test {
+            val row = awaitLoaded().rows.first { it.sale != null }
+            vm.startSwitchWatch(row)
+            advanceUntilIdle()
+            vm.startSwitchWatch(row)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(1, fakeSwitchWatchRepo.watches.value.size)
     }
 
     @Test
     fun `ett salj som redan bevakas erbjuder ingen ny bevakning`() = runTest(dispatcher) {
-        val fond = Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED")
-        funds.value = listOf(fond)
+        // Gaten går på transaktionen (BYT-1): sälj 2 är bevakat, sälj 3 samma fond och dag är det inte.
+        givenSoldFundWithIsin()
+        transactions.value = listOf(salj(id = 3, day = 200, shares = 2.0, price = 150.0)) + transactions.value
+        fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = 200, sellTransactionId = 2))
+        viewModel().uiState.test {
+            val rows = awaitLoaded().rows
+            assertFalse(rows.first { it.transaction.id == 2L }.canStartSwitchWatch)
+            assertTrue(rows.first { it.transaction.id == 3L }.canStartSwitchWatch)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en utgangen okopplad bevakning samma dag blockerar som forut`() = runTest(dispatcher) {
+        // Bakgrundskörningen har inte hunnit stänga den: den kan inte kopplas, men är säljets —
+        // en knapp som startade en ny bredvid hade gett två bevakningar för samma sälj (fond + dag).
+        val soldAt = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 2).toEpochDay()
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
-            salj(id = 2, day = 200, shares = 10.0, price = 150.0),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+            salj(id = 2, day = soldAt, shares = 10.0, price = 150.0),
+            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0),
         )
-        fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = 200))
+        fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = soldAt))
+
         viewModel().uiState.test {
             assertFalse(awaitLoaded().rows.first { it.sale != null }.canStartSwitchWatch)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `en bevakning utan kand transaktion blockerar inte - knappen kopplar den till saljet`() = runTest(dispatcher) {
+        // Startad ur ett förslag på Beslut (eller från före 0.67.0): samma fond och **samma**
+        // säljdag är samma byte, så knappen kopplar den i stället för att starta en andra — dess
+        // likvid blir säljets, dagen står kvar. En bevakning från en annan dag kopplas inte (#144).
+        val soldAt = today.minusDays(2).toEpochDay()
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
+        transactions.value = listOf(
+            salj(id = 2, day = soldAt, shares = 10.0, price = 150.0, fee = 25.0),
+            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0),
+        )
+        val existing = fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = soldAt, proceedsKr = 4_200.0))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            val row = awaitLoaded().rows.first { it.sale != null }
+            assertTrue(row.canStartSwitchWatch)
+            vm.startSwitchWatch(row)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals(existing, state.startedSwitchWatchId)
+            assertFalse(state.rows.first { it.sale != null }.canStartSwitchWatch)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val watch = fakeSwitchWatchRepo.watches.value.single()
+        assertEquals(2L, watch.sellTransactionId)
+        assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
+        assertEquals(soldAt, watch.soldAtEpochDay)
     }
 
     private fun metadata(isin: String, risk: Int?) = FundMetadata(

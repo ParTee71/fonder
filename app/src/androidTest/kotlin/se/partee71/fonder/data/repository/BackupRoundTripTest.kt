@@ -119,12 +119,14 @@ class BackupRoundTripTest {
         )
         // Ett öppet och ett avslutat byte (ANA-12, issue #114). Nollpunkten (navAtStart) kan
         // inte återskapas i efterhand — kandidaten ligger inte i kurscachen (ANA-11) — och det
-        // avslutade bytet bär vad användaren faktiskt köpte.
+        // avslutade bytet bär vad användaren faktiskt köpte. Det öppna är startat ur sälj 12
+        // (BYT-1); det avslutade saknar säljlänk (som en rad från före 0.67.0) men stängdes av köp 11.
         val watchId = db.switchWatchDao().insertWatch(
             SwitchWatchEntity(
                 id = 1, sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 19_900,
                 proceedsKr = 12_500.0, targetLevel = 4, sourceRecordId = 1,
                 closedAtEpochDay = null, boughtIsin = null, closeReason = null,
+                sellTransactionId = 12, buyTransactionId = null,
             ),
         )
         db.switchWatchDao().insertCandidates(
@@ -147,6 +149,7 @@ class BackupRoundTripTest {
                 proceedsKr = null, targetLevel = null, sourceRecordId = null,
                 closedAtEpochDay = 19_505, boughtIsin = "SE0001466368",
                 closeReason = SwitchWatchCloseReason.KOPT.name,
+                sellTransactionId = null, buyTransactionId = 11,
             ),
         )
         // Avstådda förslag (HEM-14) — ett val per fondpar och sort som inte går att räkna fram;
@@ -248,6 +251,16 @@ class BackupRoundTripTest {
         assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
         assertNull(closed.proceedsKr)
 
+        // Transaktionslänkarna (BYT-1) i båda lägena — och de pekar fortfarande rätt, eftersom
+        // transaktions-id:n bevaras i återställningen.
+        assertEquals(12L, open.sellTransactionId)
+        assertNull(open.buyTransactionId)
+        assertNull(closed.sellTransactionId)
+        assertEquals(11L, closed.buyTransactionId)
+        assertEquals("SALJ", txs.first { it.id == open.sellTransactionId }.type)
+        assertEquals("KOP", txs.first { it.id == closed.buyTransactionId }.type)
+        assertTrue(db.switchWatchDao().hasOpenForTransaction(12))
+
         val profile = preferences.riskProfile.first()
         assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), profile?.targetAllocation)
         assertEquals(4, profile?.targetRiskLevel)
@@ -255,6 +268,26 @@ class BackupRoundTripTest {
         assertEquals(AccountType.ISK_KF, preferences.accountType.first())
         assertEquals(ThemeMode.DARK, preferences.themeMode.first())
         assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
+    }
+
+    @Test
+    fun en_fil_utan_transaktionslankar_aterstalls_som_okopplade_bevakningar() = runTest {
+        // En säkerhetskopia från före 0.67.0 saknar nycklarna: samma formatversion, bevakningarna
+        // läses med null i länkarna — aldrig ett påhittat id, aldrig en avvisad fil.
+        seed()
+        val utanLankar = backup.export().getOrThrow()
+            .replace(Regex(",\\s*\"sellTransactionId\": (\\d+|null)"), "")
+            .replace(Regex(",\\s*\"buyTransactionId\": (\\d+|null)"), "")
+        assertFalse(utanLankar.contains("TransactionId"))
+        transactions.clearAll()
+
+        val summary = backup.restore(utanLankar).getOrThrow()
+
+        assertEquals(2, summary.switchWatches)
+        val watches = db.switchWatchDao().getAll().map { it.toDomain() }
+        assertTrue(watches.all { it.sellTransactionId == null && it.buyTransactionId == null })
+        assertEquals(listOf(12_500.0, null), watches.sortedBy { it.id }.map { it.proceedsKr })
+        assertFalse(db.switchWatchDao().hasOpenForTransaction(12))
     }
 
     @Test
@@ -317,6 +350,19 @@ class BackupRoundTripTest {
         assertEquals(2, db.transactionDao().getAll().size)
         assertEquals(3, db.suggestionRecordDao().getAll().size)
         assertEquals(AccountType.ISK_KF, preferences.accountType.first())
+    }
+
+    @Test
+    fun en_aterstallning_nollstaller_tom_plan_markoren() = runTest {
+        // Markören är den här enhetens skanningsstatus (cache, inte i filen): en markör nyare än den
+        // återställda planens körning hade dolt en plan som aldrig räknats bort.
+        seed()
+        val json = backup.export().getOrThrow()
+        preferences.setSwitchPlanEmptiedAt(1_754_300_000_000)
+
+        backup.restore(json).getOrThrow()
+
+        assertNull(preferences.switchPlanEmptiedAtEpochMillis.first())
     }
 
     @Test

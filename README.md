@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.66.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.67.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -134,6 +134,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.67.0 | **Transaktionerna driver bytet** (BYT-1–BYT-2, HEM-8, HEM-14, ANA-12, SLD-5, SET-5, TRX-2, NFR-1, #143): ett pågående byte som startas från Händelser är kopplat till säljtransaktionen, så samma sälj inte kan få två bevakningar; "Bevaka alternativ" ur ett förslag på Beslut eller Fonddetalj startar fortfarande utan transaktion och dedupas på fond och dag. Kopplingen till köptransaktionen finns i datamodellen men sätts först i #144. "Bevaka alternativ" på Händelser kopplar en bevakning du redan startat ur ett förslag samma dag i stället för att starta en till. Bytesplanen räknas om efter Avstå/Ångra och lämnar avstådda byten utanför så listan alltid är 1..n; ett avstått byte går att ångra även efter att planen räknats om utan det, och ett byte som är klart tar planen med sig direkt i stället för att ligga kvar en vecka. Tar du bort en transaktion ligger bevakningen kvar utan koppling. Kopplingarna följer med i säkerhetskopian; en äldre kopia läses som okopplade bevakningar. Ingen synlig ändring i formulär eller import än – väljarna, omräkningen efter transaktioner och likviden på väg (BYT-3) kommer i #144, Beslut-listan i #145. |
 | 0.66.1 | **Navigation 3** (TP-2): navigeringen bygger nu på Jetpack Navigation 3 med en egen bakåtstack per flik som överlever rotation och processdöd – samma flikar, bakåt och plusmeny som förut, ingen synlig ändring. Instrumenttest med Hilt bevisar Innehav → Fonddetalj och Beslut → Pågående byte på enhet (#139). |
 | 0.66.0 | **200-dagarssnitt i kursdiagrammet** (ANA-14, ANA-2): Fonddetaljs kursdiagram visar 200-dagarssnittet som en prickad linje, med en förklaring under diagrammet som visar senaste kurs och senaste snitt i kronor. Snittet är detsamma som säljsignalen S2 jämför mot och räknas ur hela historiken, så också 1 mån har en snittlinje. Räcker historiken inte visas ingen linje. |
 | 0.65.0 | **Resultatet på Beslut** (NAV-9, SET-5): raden "Hur gick det?" visar nu vad de förslag du följt har gett i kronor mot att ha behållit innehavet, färgat som vinst eller förlust, bredvid antalet ("Facit · 7 följda förslag  +4 210,00 kr"). Beloppet är samma som Facits rader "Genomförda" tillsammans. Utan mätbart resultat visas bara antalet. |
@@ -200,6 +201,8 @@ domain/
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
                   SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
+                  RecordTransaction (den enda skrivvägen för transaktioner, och bytets livscykel: bevakning
+                  ur sälj i Händelser eller ur förslag, "Köpte den här", BYT-2, #143) ·
                   PendingDecisionsSource (bytesplan + billigare alternativ + pågående byten och deras antal,
                   en källa för Beslut, Översikten och flikmärket, NAV-9/HEM-13) ·
                   CheaperAlternatives (inspelade avgiftsbyten som förslag på Beslut, ANA-9) ·

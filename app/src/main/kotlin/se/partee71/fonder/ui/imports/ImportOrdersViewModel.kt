@@ -21,6 +21,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.time.LocalDate
 import javax.inject.Inject
@@ -69,6 +70,7 @@ class ImportOrdersViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val pdfTextExtractor: PdfTextExtractor,
+    private val recordTransaction: RecordTransaction,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportOrdersUiState())
@@ -171,26 +173,29 @@ class ImportOrdersViewModel @Inject constructor(
         }
     }
 
-    /** Idempotent under pågående import — se [ImportHoldingsViewModel.import] för varför. */
+    /**
+     * Idempotent under pågående import — se [ImportHoldingsViewModel.import] för varför. Raderna
+     * skrivs via [RecordTransaction] (BYT-2) i **ett** anrop (fonderna läses en gång, inte per
+     * rad). Bytesväljaren per rad kommer i #144; tills dess rör importen inget byte.
+     */
     fun import() {
         if (importJob?.isActive == true) return
         _uiState.update { it.copy(importing = true) }
         importJob = viewModelScope.launch {
-            _uiState.value.rows
+            val entries = _uiState.value.rows
                 .filter { it.readyToImport }
-                .forEach { rowState ->
+                .map { rowState ->
                     val fund = requireNotNull(rowState.matchedFund)
                     transactionRepository.upsertFund(fund.copy(isin = rowState.transaction.isin))
-                    transactionRepository.addTransaction(
-                        Transaction(
-                            fundId = fund.fundId,
-                            type = rowState.transaction.type,
-                            epochDay = rowState.date.toEpochDay(),
-                            shares = requireNotNull(SwedishNumberFormat.parse(rowState.sharesText)),
-                            pricePerShare = requireNotNull(SwedishNumberFormat.parse(rowState.priceText)),
-                        ),
+                    Transaction(
+                        fundId = fund.fundId,
+                        type = rowState.transaction.type,
+                        epochDay = rowState.date.toEpochDay(),
+                        shares = requireNotNull(SwedishNumberFormat.parse(rowState.sharesText)),
+                        pricePerShare = requireNotNull(SwedishNumberFormat.parse(rowState.priceText)),
                     )
                 }
+            recordTransaction.recordAll(entries)
             _uiState.update { it.copy(imported = true, importing = false) }
         }
     }

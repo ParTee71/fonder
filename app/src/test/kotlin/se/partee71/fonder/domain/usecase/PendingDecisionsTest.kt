@@ -39,6 +39,18 @@ class PendingDecisionsTest {
     }
 
     @Test
+    fun `en sald planrad raknas inte - dess bevakning ar redan raknad`() {
+        // Ett byte är ett på märket (BYT-1): raden som är sålt väntar inte på ett beslut, bevakningen gör det.
+        val decisions = PendingDecisions(
+            switchPlan = listOf(suggestion(0, followed = false).copy(inProgress = true), suggestion(1, followed = false)),
+            openWatches = listOf(watch(7)),
+        )
+
+        assertEquals(1, decisions.openSwitchCount)
+        assertEquals(2, decisions.count)
+    }
+
+    @Test
     fun `ett kvitterat forslag raknas inte men visas fortfarande`() {
         val decisions = PendingDecisions(switchPlan = listOf(suggestion(0, followed = true)))
 

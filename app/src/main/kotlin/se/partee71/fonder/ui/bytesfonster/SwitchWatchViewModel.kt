@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
-import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -25,6 +24,7 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
@@ -130,7 +130,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val recordTransaction: RecordTransaction,
 ) : ViewModel() {
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
@@ -354,22 +354,16 @@ class SwitchWatchViewModel @AssistedInject constructor(
     }
 
     /**
-     * Kvitterar att kandidaten köptes och stänger bevakningen (ANA-12). Utför inget köp — appen
-     * rör aldrig innehav; transaktionen registreras som vanligt (TRX-1).
+     * Kvitterar att kandidaten köptes och stänger bevakningen (ANA-12,
+     * [RecordTransaction.markBought]) — utan transaktion och utan `buyTransactionId`, tills
+     * "Köpte den här" öppnar formuläret (#144). Utför inget köp — appen rör aldrig innehav.
      *
      * Startades bevakningen ur ett bytesförslag (HEM-8) markeras förslaget som genomfört **bara**
-     * när det faktiskt var den föreslagna fonden som köptes. Köptes en annan lämnas raden orörd:
-     * facit (SET-5) mäter följda råd, och ett byte till något annat än det föreslagna är inte
-     * rådet som följdes.
+     * när det faktiskt var den föreslagna fonden som köptes — regeln bor i use caset.
      */
     fun onBought(isin: String) {
         viewModelScope.launch {
-            val current = switchWatchRepository.observe(watchId).first() ?: return@launch
-            switchWatchRepository.close(watchId, SwitchWatchCloseReason.KOPT, LocalDate.now(), isin)
-
-            val recordId = current.sourceRecordId ?: return@launch
-            val record = suggestionRecordRepository.observeHistory().first().firstOrNull { it.id == recordId }
-            if (record != null && record.buyIsin == isin) suggestionRecordRepository.setFollowed(recordId, true)
+            recordTransaction.markBought(watchId, boughtIsin = isin, today = LocalDate.now())
         }
     }
 

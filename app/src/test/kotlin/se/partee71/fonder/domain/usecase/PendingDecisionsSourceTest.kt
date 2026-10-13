@@ -18,6 +18,7 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.testing.testPreferencesRepository
 import java.time.LocalDate
 
@@ -37,6 +38,7 @@ class PendingDecisionsSourceTest {
     private val dispatcher = StandardTestDispatcher()
     private val records = FakeSuggestionRecordRepository()
     private val dismissals = FakeSuggestionDismissalRepository()
+    private val watches = FakeSwitchWatchRepository()
     private val metadata = FakeFundMetadataRepository(
         metadataByIsin = listOf("SE_SALJ_1" to 5, "SE_KOP_1" to 3, "SE_SALJ_2" to 6, "SE_KOP_2" to 4)
             .associate { (isin, risk) -> isin to meta(isin, risk) } +
@@ -69,12 +71,15 @@ class PendingDecisionsSourceTest {
 
     /** Läser källan när [until] är uppfyllt — som standard när planen (synlig eller avstådd) har kommit fram. */
     private suspend fun TestScope.decisions(
+        emptiedAt: Long? = null,
         until: (PendingDecisions) -> Boolean = { it.switchPlan.size + it.dismissedSuggestions.size == 2 },
     ): PendingDecisions {
         val preferences = testPreferencesRepository(dispatcher, tempFolder, "pending_${System.nanoTime()}")
         preferences.setAccountType(AccountType.ISK_KF)
+        emptiedAt?.let { preferences.setSwitchPlanEmptiedAt(it) }
         val source = PendingDecisionsSource(
-            preferences, records, FakeSwitchWatchRepository(), FakeCachedPriceRepository(), metadata, dismissals,
+            preferences, records, watches, FakeCachedPriceRepository(), metadata, DismissedPlanSource(records, dismissals, preferences, metadata),
+            InProgressSwitches(watches, records),
         )
         return source.observe().first(until)
     }
@@ -90,6 +95,94 @@ class PendingDecisionsSourceTest {
         assertEquals(listOf(1L), decisions.dismissedSuggestions.map { it.recordId })
         assertEquals(1, decisions.openSuggestionCount)
         assertEquals(1, decisions.count)
+    }
+
+    @Test
+    fun `ett avstatt par som inte langre ar i planen kan fortfarande angras`() = runTest(dispatcher) {
+        // Omräkningen tar avstådda par ur planen (HEM-8/HEM-14) — raden att ångra kommer ur den
+        // senaste inspelningen per par, inte ur den visade planen.
+        records.records.value = listOf(
+            record(1, 0).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
+            record(2, 1).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
+            // Dagens plan: bara byte 2 kvar, nu som steg 1.
+            record(3, 0).copy(sellIsin = "SE_SALJ_2", buyIsin = "SE_KOP_2"),
+        )
+        dismissals.dismiss("SE_SALJ_1", "SE_KOP_1", SuggestionKind.RISK_PLAN, LocalDate.now())
+
+        val decisions = decisions { it.switchPlan.size + it.dismissedSuggestions.size == 2 }
+
+        assertEquals(listOf(3L), decisions.switchPlan.map { it.recordId })
+        assertEquals(listOf(1L), decisions.dismissedSuggestions.map { it.recordId })
+        assertEquals(1, decisions.count)
+    }
+
+    @Test
+    fun `en planrad vars forslag har en oppen bevakning ar pagaende`() = runTest(dispatcher) {
+        records.records.value = listOf(record(1, 0), record(2, 1))
+        watches.start(
+            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 1),
+        )
+
+        val decisions = decisions { it.switchPlan.size == 2 && it.openWatches.isNotEmpty() }
+
+        assertEquals(listOf(true, false), decisions.switchPlan.map { it.inProgress })
+        assertEquals(setOf("SE_SALJ_1"), decisions.watchedSellIsins)
+    }
+
+    @Test
+    fun `en bevakning ur gardagens inspelning av samma par markerar dagens rad`() = runTest(dispatcher) {
+        // Planen spelas in på nytt varje dag med nya id:n — bytet är detsamma, så raden är pågående.
+        records.records.value = listOf(
+            record(9, 0).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
+            record(1, 0), record(2, 1),
+        )
+        watches.start(
+            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 9),
+        )
+
+        val decisions = decisions { it.switchPlan.size == 2 && it.openWatches.isNotEmpty() }
+
+        assertEquals(listOf(true, false), decisions.switchPlan.map { it.inProgress })
+    }
+
+    @Test
+    fun `en utgangen bevakning markerar inte planraden`() = runTest(dispatcher) {
+        // Öppen men äldre än WATCH_TTL_DAYS: Beslut visar den inte, så raden är inte "sålt" heller.
+        records.records.value = listOf(record(1, 0), record(2, 1))
+        watches.start(
+            SwitchWatch(
+                sellIsin = "SE_SALJ_1", sellFundName = "Såld", sellTransactionId = 5, sourceRecordId = 1,
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
+            ),
+        )
+
+        val decisions = decisions { it.switchPlan.size == 2 && it.watchedSellIsins.isNotEmpty() }
+
+        assertEquals(listOf(false, false), decisions.switchPlan.map { it.inProgress })
+        assertTrue(decisions.openWatches.isEmpty())
+    }
+
+    @Test
+    fun `en fristaende bevakning av saljfonden markerar inte planraden`() = runTest(dispatcher) {
+        // Ett annat sälj i samma fond (SLD-5) kan inte kvittera förslaget — raden ska gå att koppla.
+        records.records.value = listOf(record(1, 0), record(2, 1))
+        watches.start(SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5))
+
+        val decisions = decisions { it.switchPlan.size == 2 && it.openWatches.isNotEmpty() }
+
+        assertEquals(listOf(false, false), decisions.switchPlan.map { it.inProgress })
+        assertEquals(setOf("SE_SALJ_1"), decisions.watchedSellIsins)
+    }
+
+    @Test
+    fun `en inspelad plan som ar aldre an senaste tomma omrakning visas inte`() = runTest(dispatcher) {
+        // Bytet är gjort: omräkningen gav tom plan och satte markören — "Sälj X" får inte stå kvar.
+        records.records.value = listOf(record(1, 0).copy(batchEpochMillis = 1_000), record(2, 1).copy(batchEpochMillis = 1_000))
+
+        val decisions = decisions(emptiedAt = 2_000) { !it.isEmpty || it.switchPlan.isEmpty() }
+
+        assertTrue(decisions.switchPlan.isEmpty())
+        assertEquals(0, decisions.count)
     }
 
     @Test

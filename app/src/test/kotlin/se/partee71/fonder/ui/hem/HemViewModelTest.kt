@@ -39,6 +39,8 @@ import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
+import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -126,7 +128,13 @@ class HemViewModelTest {
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
-        PendingDecisionsSource(preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo, FakeSuggestionDismissalRepository()),
+        FakeSuggestionDismissalRepository().let { dismissals ->
+            PendingDecisionsSource(
+                preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo,
+                DismissedPlanSource(fakeSuggestionRecordRepo, dismissals, preferencesRepository, fakeFundMetadataRepo),
+                InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
+            )
+        },
         fakeScheduler,
         backupStatus,
     )

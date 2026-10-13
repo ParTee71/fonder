@@ -17,6 +17,7 @@ import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import se.partee71.fonder.domain.usecase.TransactionFormValidator
 import java.time.LocalDate
@@ -43,11 +44,15 @@ private data class FormFields(
     val feeText: String,
 )
 
-/** Formulär för att registrera en fondtransaktion mot en redan bevakad fond (issue #4). */
+/**
+ * Formulär för att registrera en fondtransaktion mot en redan bevakad fond (issue #4). Sparar via
+ * [RecordTransaction] (BYT-2) — bytesväljaren kommer i #144; tills dess rör transaktionen inget byte.
+ */
 @HiltViewModel
 class TransactionFormViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
+    private val recordTransaction: RecordTransaction,
 ) : ViewModel() {
 
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
@@ -142,7 +147,7 @@ class TransactionFormViewModel @Inject constructor(
         if (!TransactionFormValidator.isValid(fund.fundId, shares, price, date.value, fee)) return
         if (saveJob?.isActive == true) return
         saveJob = viewModelScope.launch {
-            transactionRepository.addTransaction(
+            recordTransaction.record(
                 Transaction(
                     fundId = fund.fundId,
                     type = type.value,

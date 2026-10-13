@@ -76,6 +76,18 @@ class SwitchPlanResolverTest {
     }
 
     @Test
+    fun `en korning som inte ar nyare an senaste tomma omrakning visas inte`() {
+        // En tom plan går inte att spela in som rader (issue #143): markören från den senaste tomma
+        // skanningen gör en äldre inspelning inaktuell, så "Sälj X" inte står kvar när bytet är gjort.
+        val batch = listOf(record(0, "A", "B").copy(batchEpochMillis = 1_000))
+
+        assertTrue(SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today, emptiedAtEpochMillis = 1_000).isEmpty())
+        assertTrue(SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today, emptiedAtEpochMillis = 2_000).isEmpty())
+        assertEquals(1, SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today, emptiedAtEpochMillis = 999).size)
+        assertEquals(1, SwitchPlanResolver.resolve(AccountType.ISK_KF, batch, metadataByIsin, today, emptiedAtEpochMillis = null).size)
+    }
+
+    @Test
     fun `kapar planen vid forsta luckan i stallet for att presentera ett fristaende byte`() {
         // Byte 1 kan inte slås upp (okänd ISIN) → byte 2 får inte visas som om det vore nästa steg.
         val batch = listOf(record(0, "A", "B"), record(1, "A", "OKÄND"), record(2, "A", "C"))

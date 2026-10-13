@@ -53,7 +53,8 @@ hämtas om från källan och som skulle mångdubbla filen utan att skydda något
 De **töms heller inte** av en återställning, så lokal kurshistorik behålls.
 
 Samma gräns gäller cache och driftstatus i DataStore: `lastPriceSyncEpochMillis`,
-`fundFilterVocabulary`, den automatiskt valda jämförelseblandningen (`benchmark`), Drive-flaggan
+`fundFilterVocabulary`, `switchPlanEmptiedAtEpochMillis` (körnings-id för senaste tomma
+bytesplansskanning – skanningen räknar fram den igen), den automatiskt valda jämförelseblandningen (`benchmark`), Drive-flaggan
 "behöver auktorisering" och **senaste säkerhetskopia** (`lastBackup`: datum, mål, fingeravtryck,
 antal transaktioner – nycklarna `last_backup_*`, med reserven `last_drive_backup_epoch_millis`
 från före HEM-12) är **enhetsmetadata**, inte användardata, och ska aldrig in i `BackupPayload`:

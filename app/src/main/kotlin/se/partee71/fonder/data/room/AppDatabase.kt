@@ -34,7 +34,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SwitchWatchCandidateEntity::class,
         SuggestionDismissalEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -408,6 +408,36 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 16 → 17 (BYT-1, issue #143): `switch_watches.sellTransactionId` och
+         * `switch_watches.buyTransactionId` — kopplingen mellan ett pågående byte och den
+         * sälj- respektive köptransaktion som startade och stängde det. Transaktionerna driver
+         * därmed bytets livscykel i stället för att vara fyra lösa saker.
+         *
+         * Nullbara **utan** defaultvärde, med flit: en bevakning från före den här versionen vet
+         * inte vilken transaktion den hör till, och ett påhittat id hade varit ett påstående om
+         * en koppling som aldrig gjordes (samma princip som `switchValueKr` i 10→11). Ingen
+         * främmande nyckel: länken nollas av repositoryt när transaktionen tas bort (TRX-2), så
+         * bevakningen — genuin användardata — alltid ligger kvar. Inga befintliga rader rörs.
+         *
+         * Samma version lägger ett index på `suggestion_records (kind, sellIsin, buyIsin)` för
+         * "senaste raden per fondpar" (HEM-14, `observeLatestPlanRecordsFor`): frågan har en
+         * korrelerad delfråga per rad och körs om vid varje skrivning i tabellen. Ett index är
+         * billigare än att skriva om frågan — "senast" är en tupel (dag, körning, id), som SQLite
+         * inte kan välja med `MAX()` över en enda kolumn, och id-ordningen bevisar inget sedan
+         * rader kan flyttas mellan körningar.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `switch_watches` ADD COLUMN `sellTransactionId` INTEGER")
+                db.execSQL("ALTER TABLE `switch_watches` ADD COLUMN `buyTransactionId` INTEGER")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_suggestion_records_kind_sellIsin_buyIsin` " +
+                        "ON `suggestion_records` (`kind`, `sellIsin`, `buyIsin`)",
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -424,6 +454,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_13_14,
             MIGRATION_14_15,
             MIGRATION_15_16,
+            MIGRATION_16_17,
         )
     }
 }

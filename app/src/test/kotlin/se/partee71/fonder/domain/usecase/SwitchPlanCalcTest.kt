@@ -23,9 +23,24 @@ class SwitchPlanCalcTest {
     private fun candidate(isin: String, risk: Int, fee: Double, twelveMonthReturn: Double) =
         SwitchPlanCalc.Candidate(metadata(isin, risk, fee), twelveMonthReturn)
 
+    /** Som [SwitchPlanCalc.plan], utan avstådda par om inget anges — de flesta fallen rör inte dem. */
+    private fun plan(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        candidates: List<SwitchPlanCalc.Candidate>,
+        targetAllocation: Map<Int, Double>,
+        excludedPairs: Set<Pair<String, String>> = emptySet(),
+    ) = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, targetAllocation, excludedPairs)
+
+    private fun underweightedLevels(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        targetAllocation: Map<Int, Double>,
+    ) = SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, targetAllocation)
+
     @Test
     fun `tom malfordelning ger tom plan`() {
-        val plan = SwitchPlanCalc.plan(emptyList(), emptyMap(), emptyList(), emptyMap())
+        val plan = plan(emptyList(), emptyMap(), emptyList(), emptyMap())
 
         assertTrue(plan.isEmpty())
     }
@@ -35,7 +50,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 10_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 4, fee = 0.5))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, emptyList(), mapOf(4 to 1.0))
+        val plan = plan(holdings, metadataByIsin, emptyList(), mapOf(4 to 1.0))
 
         assertTrue(plan.isEmpty())
     }
@@ -46,7 +61,7 @@ class SwitchPlanCalcTest {
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
         val candidates = listOf(candidate("SEB", risk = 3, fee = 0.3, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
         val switch = plan.single()
         assertEquals("A", switch.sellFund.fundId)
@@ -73,7 +88,7 @@ class SwitchPlanCalcTest {
             candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05),
         )
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.3, 3 to 0.7))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.3, 3 to 0.7))
 
         assertEquals(2, plan.size)
         assertEquals("A" to 3, plan[0].sellFund.fundId to plan[0].toLevel)
@@ -97,7 +112,7 @@ class SwitchPlanCalcTest {
         )
         val candidates = listOf(candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
 
         // Ett enda byte som stänger gapet helt — ingen andra rad som säljer tillbaka.
         val switch = plan.single()
@@ -117,7 +132,7 @@ class SwitchPlanCalcTest {
             candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05),
         )
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.2, 3 to 0.3, 5 to 0.5))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.2, 3 to 0.3, 5 to 0.5))
 
         assertEquals(2, plan.size)
         assertTrue("båda bytena säljer ur samma position", plan.all { it.sellFund.fundId == "Enda" })
@@ -133,7 +148,7 @@ class SwitchPlanCalcTest {
         val metadataByIsin = (1..4).associate { i -> "SEH$i" to metadata("SEH$i", risk = 6, fee = (5 - i).toDouble()) }
         val candidates = (1..4).map { i -> candidate("SEC$i", risk = 1, fee = 0.1, twelveMonthReturn = 0.1) }
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(1 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(1 to 1.0))
 
         assertEquals(SwitchPlanCalc.MAX_SWITCHES_PER_PLAN, plan.size)
     }
@@ -147,7 +162,7 @@ class SwitchPlanCalcTest {
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
         assertEquals("Dyr", plan.first().sellFund.fundId)
     }
@@ -169,7 +184,7 @@ class SwitchPlanCalcTest {
             candidate("C8", risk = 3, fee = 0.5, twelveMonthReturn = 0.01),
         )
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
         assertEquals("HOG_BILLIG", plan.single().buyIsin)
     }
@@ -183,7 +198,7 @@ class SwitchPlanCalcTest {
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
         val switch = plan.single()
         assertEquals("KandRisk", switch.sellFund.fundId)
@@ -204,7 +219,7 @@ class SwitchPlanCalcTest {
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 0.5, 5 to 0.5))
 
         assertTrue("portföljen ligger redan på målet — inget byte ska föreslås", plan.isEmpty())
     }
@@ -217,7 +232,7 @@ class SwitchPlanCalcTest {
         val metadataByIsin = mapOf("SEU" to metadata("SEU", risk = 5, fee = null))
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
 
         assertTrue(plan.isEmpty())
     }
@@ -227,7 +242,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 10_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, emptyList(), mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, emptyList(), mapOf(3 to 1.0))
 
         assertTrue(plan.isEmpty())
     }
@@ -240,7 +255,7 @@ class SwitchPlanCalcTest {
         )
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(3 to 1.0))
+        val plan = plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(3 to 1.0))
 
         assertTrue(plan.isEmpty())
     }
@@ -254,7 +269,7 @@ class SwitchPlanCalcTest {
             "SEB" to metadata("SEB", risk = 3, fee = 0.5),
         )
 
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(4 to 1.0))
+        val plan = plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(4 to 1.0))
 
         assertTrue(plan.isEmpty())
     }
@@ -266,7 +281,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 10_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
 
-        val levels = SwitchPlanCalc.underweightedLevels(
+        val levels = underweightedLevels(
             holdings,
             metadataByIsin,
             // Nivå 3 saknar 60 pp, nivå 4 saknar 39 pp, nivå 2 saknar 1 pp (under gränsen),
@@ -282,7 +297,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 10_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 4, fee = 0.5))
 
-        assertTrue(SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, mapOf(4 to 1.0)).isEmpty())
+        assertTrue(underweightedLevels(holdings, metadataByIsin, mapOf(4 to 1.0)).isEmpty())
     }
 
     @Test
@@ -301,13 +316,58 @@ class SwitchPlanCalcTest {
             candidate("C3", risk = 3, fee = 0.2, twelveMonthReturn = 0.10),
         )
 
-        val levels = SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, target)
-        val plan = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, target)
+        val levels = underweightedLevels(holdings, metadataByIsin, target)
+        val plan = plan(holdings, metadataByIsin, candidates, target)
 
         assertTrue(plan.isNotEmpty())
         assertTrue(
             "plan köpte på en nivå underweightedLevels inte pekade ut",
             plan.map { it.toLevel }.all { it in levels },
         )
+    }
+
+    // --- Avstådda par (HEM-14) tas ur kandidatmängden ---
+
+    @Test
+    fun `ett avstatt par ersatts av nasta kandidat sa listan blir 1 till n utan lucka`() {
+        val holdings = listOf(holding("A", 10_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
+        val candidates = listOf(
+            candidate("SEBAST", risk = 3, fee = 0.1, twelveMonthReturn = 0.3),
+            candidate("SENAST", risk = 3, fee = 0.2, twelveMonthReturn = 0.3),
+        )
+
+        val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), excludedPairs = setOf("SEA" to "SEBAST"))
+
+        val switch = plan.single()
+        assertEquals("SENAST", switch.buyIsin)
+        assertEquals(10_000.0, switch.sellValueKr, 1e-9)
+    }
+
+    /** Två positioner på nivå 5 (Dyr 2,0 %, Billig 0,5 %) och en enda kandidat C på nivå 3; mål 100 % nivå 3. */
+    private fun twoSellSlotsPlan(excludedPairs: Set<Pair<String, String>>): List<SwitchPlanCalc.Switch> {
+        val holdings = listOf(holding("Dyr", 5_000.0, isin = "SEDYR"), holding("Billig", 5_000.0, isin = "SEBILLIG"))
+        val metadataByIsin = mapOf(
+            "SEDYR" to metadata("SEDYR", risk = 5, fee = 2.0),
+            "SEBILLIG" to metadata("SEBILLIG", risk = 5, fee = 0.5),
+        )
+        val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
+        return plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), excludedPairs = excludedPairs)
+    }
+
+    @Test
+    fun `ett avstaende galler paret inte kopfonden for andra saljfonder`() {
+        // Säljkandidaten är Dyr (högst avgift); paret Dyr → C är avstått och C är den enda
+        // kandidaten — då prövas nästa position på nivån: Billig → C blir byte 1, så ett avstående
+        // numrerar om planen i stället för att tömma den.
+        val withDyrDismissed = twoSellSlotsPlan(setOf("SEDYR" to "SEC"))
+        assertEquals(listOf("SEBILLIG"), withDyrDismissed.map { it.sellFund.isin })
+        assertEquals(5_000.0, withDyrDismissed.single().sellValueKr, 1e-9)
+        assertEquals("SEDYR", twoSellSlotsPlan(setOf("SEBILLIG" to "SEC")).first().sellFund.isin)
+    }
+
+    @Test
+    fun `ar alla par pa nivan avstadda ges inget byte dar`() {
+        assertTrue(twoSellSlotsPlan(setOf("SEDYR" to "SEC", "SEBILLIG" to "SEC")).isEmpty())
     }
 }

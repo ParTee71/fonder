@@ -18,6 +18,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.imports.PdfTextExtractor
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -25,6 +28,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import java.time.LocalDate
 
 private const val NORDEA_TEXT = """
@@ -87,8 +91,12 @@ class ImportOrdersViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel(extractor: PdfTextExtractor) =
-        ImportOrdersViewModel(fakeTransactionRepo, fakePriceRepo, extractor)
+    private val recordTransaction = RecordTransaction(
+        fakeTransactionRepo, FakeSwitchWatchRepository(), FakeSuggestionRecordRepository(), FakeFundMetadataRepository(),
+    )
+
+    private fun viewModel(extractor: PdfTextExtractor, priceRepo: FundPriceRepository = fakePriceRepo) =
+        ImportOrdersViewModel(fakeTransactionRepo, priceRepo, extractor, recordTransaction)
 
     @Test
     fun `parsar och matchar fond via ISIN fran en PDF`() = runTest(dispatcher) {
@@ -156,11 +164,7 @@ class ImportOrdersViewModelTest {
         val extractorPerFile: (String) -> String = { fileName ->
             if (fileName == "unparsable.pdf") "ingen avräkningsnota" else NORDEA_TEXT
         }
-        val vm = ImportOrdersViewModel(
-            fakeTransactionRepo,
-            fakePriceRepo,
-            PdfTextExtractor { bytes -> extractorPerFile(String(bytes)) },
-        )
+        val vm = viewModel(PdfTextExtractor { bytes -> extractorPerFile(String(bytes)) })
 
         vm.uiState.test {
             awaitItem()
@@ -288,7 +292,7 @@ class ImportOrdersViewModelTest {
             override suspend fun latestPrice(fundId: String): FundPrice =
                 FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 294.36, currency = "SEK")
         }
-        val vm = ImportOrdersViewModel(fakeTransactionRepo, priceRepoMedFarskKurs, PdfTextExtractor { NORDEA_TEXT })
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT }, priceRepoMedFarskKurs)
 
         vm.uiState.test {
             awaitItem()
@@ -311,7 +315,7 @@ class ImportOrdersViewModelTest {
                 return false
             }
         }
-        val vm = ImportOrdersViewModel(fakeTransactionRepo, priceRepoMedMisslyckadHamtning, PdfTextExtractor { NORDEA_TEXT })
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT }, priceRepoMedMisslyckadHamtning)
 
         vm.uiState.test {
             awaitItem()
@@ -320,6 +324,29 @@ class ImportOrdersViewModelTest {
             while (state.loading) state = awaitItem()
 
             assertTrue(state.rows.first().priceFetchFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `importen raknar om bytesplanen en gang, inte per rad`() = runTest(dispatcher) {
+        // Varje skanning kostar en forcerad kursuppdatering plus källfrågor — en import med många
+        // rader ska koalesceras till en (BYT-2).
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf("nota1.pdf" to ByteArray(0), "nota2.pdf" to ByteArray(0), "nota3.pdf" to ByteArray(0)))
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(3, state.rows.size)
+
+            vm.import()
+            state = awaitItem()
+            while (!state.imported) state = awaitItem()
+
+            assertEquals(3, addedTransactions.size)
             cancelAndIgnoreRemainingEvents()
         }
     }

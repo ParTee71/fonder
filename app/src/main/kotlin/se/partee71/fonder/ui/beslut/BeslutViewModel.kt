@@ -12,14 +12,14 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.SuggestionDismissalRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
-import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.startFromSuggestion
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
@@ -79,7 +79,7 @@ class BeslutViewModel @Inject constructor(
     facitSummary: FacitSummary,
     preferencesRepository: PreferencesRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val switchWatchRepository: SwitchWatchRepository,
+    private val recordTransaction: RecordTransaction,
     private val suggestionDismissalRepository: SuggestionDismissalRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
@@ -129,24 +129,30 @@ class BeslutViewModel @Inject constructor(
      * efter förslagets egen sort: fondparet döljs på Beslut och i Fonddetalj och räknas inte i märket
      * eller i "Att besluta" så länge avståendet gäller. Förslaget självt rörs inte — det är
      * fortfarande ett givet råd i facit (SET-5).
+     *
+     * Ett avstått **planbyte** räknar om planen (HEM-8): paret tas ur kandidatmängden, så nästa
+     * steg inte längre bygger på ett byte som inte ska göras och listan blir 1..n utan lucka. Ett
+     * avgiftsbyte (ANA-9) ingår inte i planen och utlöser ingen omräkning.
      */
     fun dismissSuggestion(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             suggestionDismissalRepository.dismiss(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
+            if (suggestion.kind == SuggestionKind.RISK_PLAN) fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
 
-    /** Ångrar ett avstående (HEM-14) — förslaget visas igen. */
+    /** Ångrar ett avstående (HEM-14) — förslaget visas igen, och planen räknas om med paret tillbaka i kandidatmängden. */
     fun undoDismissal(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             suggestionDismissalRepository.undoDismissal(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
+            if (suggestion.kind == SuggestionKind.RISK_PLAN) fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
 
-    /** Startar en bevakning ur ett kvitterat förslag (ANA-12) — se [startFromSuggestion]. */
+    /** Startar en bevakning ur ett kvitterat förslag (ANA-12) — se [RecordTransaction.startWatchFromSuggestion]. */
     fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
-            switchWatchRepository.startFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
+            recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
     }
 
@@ -160,6 +166,6 @@ class BeslutViewModel @Inject constructor(
      * i WorkManager, med nätverksvillkor och koalescering, precis som backstopens egen körning.
      */
     fun recomputeSwitchPlan() {
-        fundPriceRefreshScheduler.triggerSwitchPlanScan()
+        fundPriceRefreshScheduler.triggerSwitchPlanScan(force = true)
     }
 }

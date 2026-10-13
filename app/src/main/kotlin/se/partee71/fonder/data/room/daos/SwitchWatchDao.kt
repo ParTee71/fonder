@@ -62,6 +62,45 @@ interface SwitchWatchDao {
     )
     suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean
 
+    /**
+     * Öppna bevakningar av säljfonden utan känd transaktion (från före 0.67.0 eller startade ur ett
+     * förslag, "Bevaka alternativ") med **samma** säljdag, äldst först. "Bevaka alternativ" på
+     * Händelser **kopplar** den äldsta ([linkSellTransaction]) i stället för att starta en ny;
+     * bevakningar med länk matchar bara på transaktionen ([hasOpenForTransaction]), så två sälj
+     * kan få varsin. Ingen datumtolerans — en bevakning från en annan dag är en annan fråga som
+     * användaren får ta ställning till (B, #144).
+     */
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM switch_watches
+        WHERE sellIsin = :sellIsin AND soldAtEpochDay = :soldAtEpochDay
+          AND closedAtEpochDay IS NULL AND sellTransactionId IS NULL
+        ORDER BY id ASC
+        """,
+    )
+    suspend fun getOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): List<SwitchWatchWithCandidates>
+
+    /**
+     * Kopplar en bevakning utan känd transaktion till säljtransaktionen och sätter likviden ur den
+     * — transaktionen är sanningen om hur mycket. Säljdagen rörs inte (samma dag är villkoret för
+     * kopplingen), så kandidaternas nollpunkt står kvar. Skriver aldrig över en befintlig länk.
+     */
+    @Query(
+        """
+        UPDATE switch_watches SET sellTransactionId = :transactionId, proceedsKr = :proceedsKr
+        WHERE id = :id AND sellTransactionId IS NULL
+        """,
+    )
+    suspend fun linkSellTransaction(id: Long, transactionId: Long, proceedsKr: Double)
+
+    /**
+     * Sant om säljtransaktionen redan har en **öppen** bevakning (BYT-1) — dedupen per
+     * transaktion, oavsett vilken väg bevakningen startades.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM switch_watches WHERE sellTransactionId = :sellTransactionId AND closedAtEpochDay IS NULL)")
+    suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean
+
     @Insert
     suspend fun insertWatch(watch: SwitchWatchEntity): Long
 
@@ -81,15 +120,34 @@ interface SwitchWatchDao {
     /**
      * Stänger en bevakning. Raden ligger kvar — den bär vad som faktiskt köptes, och det är
      * data ingen omräkning kan återskapa.
+     *
+     * @return antal träffade rader: 1 när den här uppdateringen stängde bevakningen, 0 när den
+     *   redan var stängd eller inte finns — villkoret i `WHERE` avgör, inte en läsning före.
      */
     @Query(
         """
         UPDATE switch_watches
-        SET closedAtEpochDay = :closedAtEpochDay, boughtIsin = :boughtIsin, closeReason = :closeReason
+        SET closedAtEpochDay = :closedAtEpochDay, boughtIsin = :boughtIsin, closeReason = :closeReason,
+            buyTransactionId = :buyTransactionId
         WHERE id = :id AND closedAtEpochDay IS NULL
         """,
     )
-    suspend fun close(id: Long, closedAtEpochDay: Long, boughtIsin: String?, closeReason: String)
+    suspend fun close(id: Long, closedAtEpochDay: Long, boughtIsin: String?, closeReason: String, buyTransactionId: Long? = null): Int
+
+    /**
+     * Nollar länkarna till en transaktion som tas bort (TRX-2) — bevakningen rörs inte i övrigt.
+     * Användardata raderas aldrig som sidoeffekt; raden ligger kvar som en bevakning utan känd
+     * transaktion, precis som en rad från före 0.67.0.
+     */
+    @Query(
+        """
+        UPDATE switch_watches
+        SET sellTransactionId = CASE WHEN sellTransactionId = :transactionId THEN NULL ELSE sellTransactionId END,
+            buyTransactionId = CASE WHEN buyTransactionId = :transactionId THEN NULL ELSE buyTransactionId END
+        WHERE sellTransactionId = :transactionId OR buyTransactionId = :transactionId
+        """,
+    )
+    suspend fun clearTransactionLinks(transactionId: Long)
 
     /** Töms tillsammans med fonder/transaktioner/förslag (SET-1) — bevakningar är användardata, inte cache. */
     @Query("DELETE FROM switch_watches")

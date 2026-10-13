@@ -23,6 +23,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.time.LocalDate
 import javax.inject.Inject
@@ -103,6 +104,7 @@ data class ImportHoldingsUiState(
 class ImportHoldingsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
+    private val recordTransaction: RecordTransaction,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportHoldingsUiState())
@@ -235,31 +237,33 @@ class ImportHoldingsViewModel @Inject constructor(
      * slår om, och skrivningarna tar en stund för en fil med många rader) en andra
      * genomkörning av samma lista — varje transaktion lades då in två gånger, med dubbla
      * andelar och dubbelt investerat belopp som följd.
+     *
+     * Raderna går via [RecordTransaction] (BYT-2) utan bytesväljare: exporten är en historisk
+     * ögonblicksbild, inte ett byte.
      */
     fun import() {
         if (importJob?.isActive == true) return
         _uiState.update { it.copy(importing = true) }
         importJob = viewModelScope.launch {
-            _uiState.value.rows
+            val entries = _uiState.value.rows
                 .filter { it.readyToImport }
-                .forEach { rowState ->
+                .flatMap { rowState ->
                     val fund = requireNotNull(rowState.matchedFund)
                     // Exportradens ISIN är auktoritativt (kommer direkt från källfilen, ingen
                     // gissning) — sparas på den matchade fonden så full kurshistorik sedan
                     // köpdatum kan hämtas från ISIN-baserade källor (KRAVLISTA TP-14).
                     transactionRepository.upsertFund(fund.copy(isin = rowState.row.isin))
-                    rowState.occasions.forEach { occasion ->
-                        transactionRepository.addTransaction(
-                            Transaction(
-                                fundId = fund.fundId,
-                                type = occasion.type,
-                                epochDay = occasion.date.toEpochDay(),
-                                shares = requireNotNull(occasion.shares),
-                                pricePerShare = rowState.row.averageCostPerShare,
-                            ),
+                    rowState.occasions.map { occasion ->
+                        Transaction(
+                            fundId = fund.fundId,
+                            type = occasion.type,
+                            epochDay = occasion.date.toEpochDay(),
+                            shares = requireNotNull(occasion.shares),
+                            pricePerShare = rowState.row.averageCostPerShare,
                         )
                     }
                 }
+            recordTransaction.recordAll(entries)
             _uiState.update { it.copy(imported = true, importing = false) }
         }
     }

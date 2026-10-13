@@ -33,6 +33,17 @@ data class SwitchWatchEntity(
      * [SwitchWatchCloseReason.AVBRUTEN]: en fil från en nyare version ska degradera, inte krascha.
      */
     val closeReason: String?,
+    /**
+     * Säljtransaktionen bevakningen startades ur (BYT-1, Room 16→17), null för äldre rader och
+     * för bevakningar startade utan transaktion — se [SwitchWatch.sellTransactionId]. Ingen
+     * främmande nyckel: transaktioner raderas via TRX-2 och länken nollas i repositoryt
+     * ([se.partee71.fonder.data.repository.RoomTransactionRepository.deleteTransaction]); en
+     * `ON DELETE SET NULL` hade krävt en FK-deklaration och ett index på en tabell som inte har
+     * någon, och bevakningen ska ligga kvar oavsett.
+     */
+    val sellTransactionId: Long? = null,
+    /** Köptransaktionen som stängde bevakningen som köpt, se [SwitchWatch.buyTransactionId]. Samma regler som [sellTransactionId]. */
+    val buyTransactionId: Long? = null,
 ) {
     companion object {
         /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
@@ -123,6 +134,8 @@ data class SwitchWatchWithCandidates(
         candidates = candidates
             .sortedWith(compareBy({ it.position }, { it.id }))
             .map(SwitchWatchCandidateEntity::toDomain),
+        sellTransactionId = watch.sellTransactionId,
+        buyTransactionId = watch.buyTransactionId,
     )
 
     companion object {
@@ -138,6 +151,8 @@ data class SwitchWatchWithCandidates(
                 closedAtEpochDay = watch.closedAtEpochDay,
                 boughtIsin = watch.boughtIsin,
                 closeReason = watch.closeReason?.name,
+                sellTransactionId = watch.sellTransactionId,
+                buyTransactionId = watch.buyTransactionId,
             ),
             candidates = watch.candidates.map { SwitchWatchCandidateEntity.fromDomain(it, watch.id) },
         )

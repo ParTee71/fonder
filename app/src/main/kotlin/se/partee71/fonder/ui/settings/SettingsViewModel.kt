@@ -266,10 +266,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Tömmer hela databasen (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1. */
+    /**
+     * Tömmer hela databasen (fonder, transaktioner, cachade kurser) — irreversibelt, se SET-1.
+     * Tom-markören för bytesplanen (HEM-8) nollställs med: den pekar på en körning som inte
+     * längre finns, och hade annars dolt den första planen efter en nystart tills nästa tomma körning.
+     */
     fun clearDatabase() {
         viewModelScope.launch {
             transactionRepository.clearAll()
+            preferences.clearSwitchPlanEmptiedAt()
             databaseCleared.update { true }
         }
     }
