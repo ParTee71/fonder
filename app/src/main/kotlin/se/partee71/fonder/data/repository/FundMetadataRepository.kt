@@ -121,6 +121,16 @@ interface FundMetadataRepository {
      * aldrig en gissad kandidat.
      */
     suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate>
+
+    /**
+     * Som [findSwitchCandidates], men säger också om köpbarhetsuppslaget misslyckades
+     * ([SwitchPlanCalc.CandidateSearch.lookupFailed], issue #149) — bevakningsskärmen (ANA-13)
+     * skiljer "inga köpbara på nivån" från "det gick inte att kontrollera". Defaulten finns för
+     * testfakes som inte driver det beteendet: den kan inte se uppslagen och svarar därför
+     * aldrig "misslyckades".
+     */
+    suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch =
+        SwitchPlanCalc.CandidateSearch(findSwitchCandidates(level, excludeIsins), lookupFailed = false)
 }
 
 @Singleton
@@ -355,7 +365,10 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return (fromVocabulary + fromCache).distinct().sorted()
     }
 
-    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> {
+    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> =
+        searchSwitchCandidates(level, excludeIsins).candidates
+
+    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch {
         // Källans sida är hårt låst till 20 träffar (TP-21), så sorteringen avgör *vilken ände*
         // av nivån som ens blir synlig. Tidigare hämtades den billigaste änden, varpå
         // SwitchPlanCalcs kvartilregel bara kunde särskilja de billigaste fonderna inbördes och
@@ -378,13 +391,18 @@ class AvanzaFundMetadataRepository @Inject constructor(
         }
 
         val verified = mutableListOf<SwitchPlanCalc.Candidate>()
+        var lookupFailed = false
         for (metadata in eligible.take(MAX_SWITCH_VERIFICATION_ATTEMPTS)) {
             if (verified.size >= MAX_SWITCH_CANDIDATES) break
-            if (resolveHandelsbankenAvailability(metadata.isin) == true) {
-                verified += SwitchPlanCalc.Candidate(metadata, metadata.developmentOneYear!!)
+            when (resolveHandelsbankenAvailability(metadata.isin)) {
+                true -> verified += SwitchPlanCalc.Candidate(metadata, metadata.developmentOneYear!!)
+                // Null = okänt, inte "nej" (se resolveHandelsbankenAvailability) — räknas
+                // fortfarande bort, men utfallet säger att det inte gick att kontrollera.
+                null -> lookupFailed = true
+                false -> Unit
             }
         }
-        return verified
+        return SwitchPlanCalc.CandidateSearch(verified, lookupFailed)
     }
 
     /**

@@ -129,6 +129,15 @@ interface SwitchWatchDao {
     suspend fun adoptSuggestion(id: Long, sourceRecordId: Long, targetLevel: Int)
 
     /**
+     * Fyller i målnivån i efterhand (ANA-13, issue #149) — **bara** där den saknas: en nivå som
+     * redan finns (ur förslaget eller en tidigare ifyllnad) skrivs aldrig över.
+     *
+     * @return antal träffade rader: 1 när nivån skrevs nu, 0 när den redan fanns eller bevakningen inte finns.
+     */
+    @Query("UPDATE switch_watches SET targetLevel = :targetLevel WHERE id = :id AND targetLevel IS NULL")
+    suspend fun fillMissingTargetLevel(id: Long, targetLevel: Int): Int
+
+    /**
      * Nollar **bara** nollpunkten för bevakningens kandidater — raderna, inklusive de manuellt
      * tillagda, ligger kvar och ankras om nästa gång historiken hämtas (ANA-12).
      */

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -774,6 +775,37 @@ class FundMetadataRepositoryTest {
         val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `searchSwitchCandidates ger inga kopbara nar katalogen hamtades men fonden saknas`() = runTest {
+        // Issue #149: en verifierad miss och ett okänt svar ger båda tom lista — men olika besked.
+        val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val repository = repo(
+            FakeAvanzaSource(fullListJson(1, listOf(candidateView))),
+            FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList())),
+        )
+
+        val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertTrue(result.candidates.isEmpty())
+        assertFalse(result.lookupFailed)
+    }
+
+    @Test
+    fun `searchSwitchCandidates sager att uppslaget misslyckades nar katalogen inte kunde hamtas`() = runTest {
+        val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
+        val repository = repo(
+            FakeAvanzaSource(fullListJson(1, listOf(candidateView))),
+            FakeFundPriceRepository(catalog = null),
+        )
+
+        val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet())
+
+        assertTrue(result.candidates.isEmpty())
+        assertTrue(result.lookupFailed)
+        // findSwitchCandidates (bytesplanen, HEM-8) ser samma tomma lista som förut.
+        assertTrue(repository.findSwitchCandidates(level = 3, excludeIsins = emptySet()).isEmpty())
     }
 
     @Test

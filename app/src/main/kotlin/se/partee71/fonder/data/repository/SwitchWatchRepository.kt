@@ -74,6 +74,14 @@ interface SwitchWatchRepository {
         targetLevel: Int? = null,
     ): Boolean
 
+    /**
+     * Fyller i [SwitchWatch.targetLevel] i efterhand för en bevakning som startades utan känd
+     * nivå (ANA-13, issue #149) — skriver bara när nivån saknas, en befintlig nivå rörs aldrig.
+     *
+     * @return sant när nivån skrevs nu; falskt när den redan fanns eller bevakningen inte finns.
+     */
+    suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean
+
     /** Sant om säljtransaktionen redan har en öppen bevakning (BYT-1) — en bevakning per sälj, oavsett startväg. */
     suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean
 
@@ -176,6 +184,9 @@ class RoomSwitchWatchRepository @Inject constructor(
 
     override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
         dao.hasOpenForTransaction(sellTransactionId)
+
+    override suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean =
+        dao.fillMissingTargetLevel(watchId, targetLevel) == 1
 
     override suspend fun start(watch: SwitchWatch): Long {
         val row = SwitchWatchWithCandidates.fromDomain(watch)

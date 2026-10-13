@@ -84,6 +84,17 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
     override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
         watches.value.any { it.isOpen && it.sellTransactionId == sellTransactionId }
 
+    /** Körs först i [fillMissingTargetLevel] — spelar en annan väg som hinner sätta nivån före skrivningen. */
+    var beforeFillMissingTargetLevel: (Long) -> Unit = {}
+
+    override suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean {
+        beforeFillMissingTargetLevel(watchId)
+        val current = watches.value.firstOrNull { it.id == watchId } ?: return false
+        if (current.targetLevel != null) return false
+        update(watchId) { it.copy(targetLevel = targetLevel) }
+        return true
+    }
+
     override suspend fun start(watch: SwitchWatch): Long {
         val id = nextWatchId++
         val candidates = watch.candidates

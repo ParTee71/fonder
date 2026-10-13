@@ -533,6 +533,10 @@
     <string name="switch_watch_add_candidate">Lägg till alternativ</string>
     <string name="switch_watch_filling">Hämtar förslag på alternativ…</string>
     <string name="switch_watch_empty_body">Inga alternativ bevakas än. Lägg till de fonder du överväger att byta till.</string>
+    <string name="format_switch_watch_empty_no_level">Appen känner inte till risknivån för %1$s, så den kan inte föreslå alternativ. Lägg till egna nedan.</string>
+    <string name="format_switch_watch_empty_none_available">Ingen av de bästa fonderna på risknivå %1$d gick att köpa hos Handelsbanken. Lägg till egna nedan.</string>
+    <string name="switch_watch_empty_lookup_failed">Det gick inte att kontrollera vilka fonder som går att köpa just nu.</string>
+    <string name="switch_watch_retry">Försök igen</string>
     <string name="switch_watch_missing_title">Bevakningen finns inte</string>
     <string name="switch_watch_missing_body">Det pågående bytet har tagits bort eller återställts bort. Starta en ny bevakning från Sålda fonder eller från ett bytesförslag.</string>
     <string name="switch_watch_isin_unavailable">Fonden kunde inte identifieras med ISIN och går därför inte att bevaka — kurserna hämtas på ISIN.</string>
