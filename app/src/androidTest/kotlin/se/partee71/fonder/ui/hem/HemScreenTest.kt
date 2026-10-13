@@ -16,6 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
@@ -572,14 +573,14 @@ class HemScreenTest {
             hasHoldings = true,
             riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0),
-            decisions = PendingDecisions(switchPlan = listOf(planSuggestion)),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion)).withSwitches(emptyList(), LocalDate.now()),
         )
 
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
         }
 
-        composeRule.onNodeWithText("1 bytesförslag").assertExists()
+        composeRule.onNodeWithText("1 föreslaget").assertExists()
         composeRule.onNodeWithTag(HEM_LIST_TEST_TAG).performScrollToIndex(RISK_CARD_INDEX + 1)
 
         composeRule.onNodeWithText("Bytesplan").assertDoesNotExist()
@@ -787,14 +788,14 @@ class HemScreenTest {
                     ),
                 ),
                 openWatches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3)),
-            ),
+            ).withSwitches(emptyList(), LocalDate.now()),
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = state, onOpenBeslut = { opened++ }) } }
 
         composeRule.onNodeWithText("Att besluta").assertIsDisplayed()
-        // Varje slag för sig (HEM-13), billigare alternativ (ANA-9) mellan bytesförslagen och bytena.
-        composeRule.onNodeWithText("2 bytesförslag · 1 billigare alternativ · 1 pågående byte").assertIsDisplayed()
+        // Varje slag för sig (HEM-13) ur listan Byten (BYT-4): föreslagna, sålda och billigare alternativ (ANA-9).
+        composeRule.onNodeWithText("2 föreslagna · 1 sålt, väntar på köp · 1 billigare alternativ").assertIsDisplayed()
         // Själva bytet visas inte här — det har flyttat till Beslut (NAV-9).
         composeRule.onNodeWithText("Fond A", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText("Att besluta").performClick()
@@ -808,7 +809,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))).withSwitches(emptyList(), LocalDate.now()),
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = state) } }

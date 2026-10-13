@@ -36,6 +36,14 @@ data class OpenSwitchWatch(
     val candidateCount: Int,
     val leaderName: String? = null,
     val leaderChangeFraction: Double? = null,
+    /** Likviden som väntar på köp, null när beloppet inte är känt (då nämns det inte). */
+    val proceedsKr: Double? = null,
+    /** Förslaget bevakningen startades ur ([SwitchWatch.sourceRecordId]), null för en fristående. */
+    val sourceRecordId: Long? = null,
+    /** Källförslagets fondpar (sälj → köp) — matchar samma byte i en senare inspelning av planen. */
+    val sourcePair: Pair<String, String>? = null,
+    /** Källförslagets sort, null när bevakningen är fristående eller förslaget inte finns kvar. */
+    val sourceKind: SuggestionKind? = null,
 )
 
 /**
@@ -66,32 +74,35 @@ data class PendingDecisions(
     /**
      * Säljfonder som redan har en öppen bevakning, **även** utgångna — styr om ett kvitterat byte
      * erbjuder "Bevaka alternativ". Planradens [SwitchPlanResolver.Suggestion.inProgress] sätts
-     * inte härifrån utan av bevakningens källförslag, se [PendingDecisionsSource]. En utgången bevakning visas inte men blockerar en ny för samma
+     * inte härifrån utan av bevakningens källförslag, se [PendingDecisionsSource]. En utgången bevakning visas inte bland de väntande men blockerar en ny för samma
      * sälj tills bakgrundskörningen stängt den; annars hade samma byte fått två rader.
      */
     val watchedSellIsins: Set<String> = emptySet(),
-) {
     /**
-     * Planens byten som väntar på ett beslut: varken kvitterade (SET-5) eller sålda (BYT-1). En
-     * pågående rad räknas inte — dess bevakning räknas redan i [openWatches], och samma byte ska
-     * vara **ett** på märket, inte två.
+     * Listan "Byten" (BYT-4) byggd av [SwitchRows.build] ur fälten ovan och de nyligen stängda
+     * bevakningarna — sätts av [PendingDecisionsSource] med [withSwitches]. Antalen nedan läser
+     * den, så Beslut, "Att besluta" och flikmärket aldrig kan visa olika.
      */
-    val openSwitchCount: Int get() = switchPlan.count { !it.followed && !it.inProgress }
+    val switches: SwitchRows = SwitchRows(),
+) {
+    /** Planens byten som väntar på ett beslut — se [SwitchRows.proposedCount]. */
+    val openSwitchCount: Int get() = switches.proposedCount
 
-    /** Billigare alternativ som varken är kvitterade eller avstådda. */
-    val openCheaperAlternativeCount: Int get() = cheaperAlternatives.count { !it.suggestion.followed }
+    /** Billigare alternativ som väntar på ett beslut — se [SwitchRows.feeCount]. */
+    val openCheaperAlternativeCount: Int get() = switches.feeCount
 
-    /** Öppna förslag av båda sorterna — ett avstått förslag (HEM-14) ligger inte i listorna. */
-    val openSuggestionCount: Int get() = openSwitchCount + openCheaperAlternativeCount
+    /** Sålda byten som väntar på köp — se [SwitchRows.soldCount]. */
+    val soldCount: Int get() = switches.soldCount
 
-    /** Antalet på Beslut-flikens märke och i "Att besluta": öppna förslag plus pågående byten. */
-    val count: Int get() = openSuggestionCount + openWatches.size
+    /** Antalet på Beslut-flikens märke och i "Att besluta": Föreslaget + Avgift + Sålt. */
+    val count: Int get() = switches.waitingCount
 
-    /** Avstådda förslag av båda sorterna — "Avstådda (N)" på Beslut. */
-    val dismissedCount: Int get() = dismissedSuggestions.size + dismissedCheaperAlternatives.size
+    /** Ingenting väntar på Beslut — listan "Byten" är tom (den hopfällda sektionen kan ha rader). */
+    val isEmpty: Boolean get() = switches.isEmpty
 
-    /** Ingenting att besluta på Beslut — varken ett förslag som inte avståtts eller ett pågående byte. */
-    val isEmpty: Boolean get() = switchPlan.isEmpty() && cheaperAlternatives.isEmpty() && openWatches.isEmpty()
+    /** Samma beslut med [switches] byggd ur fälten och [closedWatches] — enda vägen till listan. */
+    fun withSwitches(closedWatches: List<SwitchWatch>, today: LocalDate): PendingDecisions =
+        copy(switches = SwitchRows.build(this, closedWatches, today))
 }
 
 /**
@@ -119,17 +130,20 @@ class PendingDecisionsSource @Inject constructor(
     private val inProgressSwitches: InProgressSwitches,
 ) {
 
-    fun observe(): Flow<PendingDecisions> =
-        combine(suggestions(), switchWatches()) { resolved, watches ->
+    fun observe(): Flow<PendingDecisions> {
+        val closedSince = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS).toEpochDay()
+        return combine(suggestions(), switchWatches(), switchWatchRepository.observeClosedSince(closedSince)) { resolved, watches, closed ->
             PendingDecisions(
                 switchPlan = watches.inProgress.mark(resolved.plan),
                 dismissedSuggestions = resolved.dismissedPlan,
-                cheaperAlternatives = resolved.cheaper,
+                // Billigare alternativ följer samma livscykel som planen (BYT-4): ett sålt är pågående.
+                cheaperAlternatives = resolved.cheaper.map { it.copy(suggestion = it.suggestion.copy(inProgress = watches.inProgress.marks(it.suggestion))) },
                 dismissedCheaperAlternatives = resolved.dismissedCheaper,
                 openWatches = watches.visible,
                 watchedSellIsins = watches.sellIsins,
-            )
+            ).withSwitches(closedWatches = watches.expired + closed, today = LocalDate.now())
         }
+    }
 
     /** Förslagen resolvade mot samma metadatauppslag, redan delade i visade och avstådda (HEM-14). */
     private class Resolved(
@@ -178,6 +192,8 @@ class PendingDecisionsSource @Inject constructor(
     /** De öppna bevakningarna som Beslut visar, och vilka planrader de gör pågående — ur **en** läsning av tabellen. */
     private class Watches(
         val visible: List<OpenSwitchWatch>,
+        /** Öppna bevakningar som passerat [SwitchWatchCalc.WATCH_TTL_DAYS] — Utgånget tills bakgrundskörningen stänger dem. */
+        val expired: List<SwitchWatch>,
         /** Säljfonder med öppen bevakning, **även** utgångna — se [PendingDecisions.watchedSellIsins]. */
         val sellIsins: Set<String>,
         val inProgress: InProgressSwitches.Keys,
@@ -187,17 +203,17 @@ class PendingDecisionsSource @Inject constructor(
         switchWatchRepository.observeOpen().flatMapLatest { watches ->
             val today = LocalDate.now()
             val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
-            val visible = watches.filterNot { SwitchWatchCalc.isExpired(it, today) }
+            val (expired, visible) = watches.partition { SwitchWatchCalc.isExpired(it, today) }
             val inProgress = inProgressSwitches.keysFor(watches, today)
-            if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), sellIsins, it) }
+            if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), expired, sellIsins, it) }
 
             val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()
             combine(fundPriceRepository.observeLatestPrices(candidateIsins), inProgress) { prices, keys ->
-                Watches(visible = visible.map { it.toOpen(prices, today) }, sellIsins = sellIsins, inProgress = keys)
+                Watches(visible = visible.map { it.toOpen(prices, today, keys) }, expired = expired, sellIsins = sellIsins, inProgress = keys)
             }
         }
 
-    private fun SwitchWatch.toOpen(prices: Map<String, FundPrice>, today: LocalDate): OpenSwitchWatch {
+    private fun SwitchWatch.toOpen(prices: Map<String, FundPrice>, today: LocalDate, keys: InProgressSwitches.Keys): OpenSwitchWatch {
         val leader = SwitchWatchCalc.ranked(
             candidates.map { candidate ->
                 SwitchWatchCalc.outcome(
@@ -215,6 +231,10 @@ class PendingDecisionsSource @Inject constructor(
             candidateCount = candidates.size,
             leaderName = leader?.candidate?.name,
             leaderChangeFraction = leader?.changeFraction,
+            proceedsKr = proceedsKr,
+            sourceRecordId = sourceRecordId,
+            sourcePair = sourceRecordId?.let { keys.sources[it] }?.let { it.sellIsin to it.buyIsin },
+            sourceKind = sourceRecordId?.let { keys.sources[it] }?.kind,
         )
     }
 }

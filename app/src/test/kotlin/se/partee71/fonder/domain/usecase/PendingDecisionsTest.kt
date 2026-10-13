@@ -5,10 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.SuggestionKind
+import java.time.LocalDate
 
 /**
  * Antalet som Beslut-flikens märke och Översiktens "Att besluta" visar (NAV-9, HEM-13): öppna
- * förslag plus pågående byten. Ett kvitterat förslag är redan beslutat och räknas inte.
+ * förslag plus sålda byten, ur listan Byten (BYT-4). Ett kvitterat förslag är redan beslutat och räknas inte.
  */
 class PendingDecisionsTest {
 
@@ -24,6 +25,8 @@ class PendingDecisionsTest {
         buyFeePercent = 0.4,
     )
 
+    private val today = LocalDate.of(2026, 10, 13)
+
     private fun watch(id: Long) = OpenSwitchWatch(watchId = id, sellFundName = "Fond $id", daysWaiting = 1, candidateCount = 0)
 
     @Test
@@ -31,9 +34,9 @@ class PendingDecisionsTest {
         val decisions = PendingDecisions(
             switchPlan = listOf(suggestion(0, followed = false), suggestion(1, followed = false)),
             openWatches = listOf(watch(7)),
-        )
+        ).withSwitches(emptyList(), today)
 
-        assertEquals(2, decisions.openSuggestionCount)
+        assertEquals(2, decisions.openSwitchCount + decisions.openCheaperAlternativeCount)
         assertEquals(3, decisions.count)
         assertFalse(decisions.isEmpty)
     }
@@ -44,7 +47,7 @@ class PendingDecisionsTest {
         val decisions = PendingDecisions(
             switchPlan = listOf(suggestion(0, followed = false).copy(inProgress = true), suggestion(1, followed = false)),
             openWatches = listOf(watch(7)),
-        )
+        ).withSwitches(emptyList(), today)
 
         assertEquals(1, decisions.openSwitchCount)
         assertEquals(2, decisions.count)
@@ -52,7 +55,7 @@ class PendingDecisionsTest {
 
     @Test
     fun `ett kvitterat forslag raknas inte men visas fortfarande`() {
-        val decisions = PendingDecisions(switchPlan = listOf(suggestion(0, followed = true)))
+        val decisions = PendingDecisions(switchPlan = listOf(suggestion(0, followed = true))).withSwitches(emptyList(), today)
 
         assertEquals(0, decisions.count)
         // Planen ligger kvar på Beslut — "Bevaka alternativ" hör till det kvitterade bytet.
@@ -61,7 +64,7 @@ class PendingDecisionsTest {
 
     @Test
     fun `en utgangen bevakning blockerar men raknas inte`() {
-        val decisions = PendingDecisions(watchedSellIsins = setOf("SE_SALJ"))
+        val decisions = PendingDecisions(watchedSellIsins = setOf("SE_SALJ")).withSwitches(emptyList(), today)
 
         assertEquals(0, decisions.count)
         assertTrue(decisions.isEmpty)
@@ -73,11 +76,11 @@ class PendingDecisionsTest {
             switchPlan = listOf(suggestion(0, followed = false)),
             cheaperAlternatives = listOf(cheaper(10, followed = false), cheaper(11, followed = true)),
             openWatches = listOf(watch(7)),
-        )
+        ).withSwitches(emptyList(), today)
 
         assertEquals(1, decisions.openSwitchCount)
         assertEquals(1, decisions.openCheaperAlternativeCount)
-        assertEquals(2, decisions.openSuggestionCount)
+        assertEquals(2, decisions.openSwitchCount + decisions.openCheaperAlternativeCount)
         assertEquals(3, decisions.count)
     }
 
@@ -87,10 +90,10 @@ class PendingDecisionsTest {
             cheaperAlternatives = listOf(cheaper(10, followed = true)),
             dismissedSuggestions = listOf(suggestion(0, followed = false)),
             dismissedCheaperAlternatives = listOf(cheaper(11, followed = false)),
-        )
+        ).withSwitches(emptyList(), today)
 
         assertFalse(decisions.isEmpty)
         assertEquals(0, decisions.count)
-        assertEquals(2, decisions.dismissedCount)
+        assertEquals(2, decisions.switches.closed.size)
     }
 }

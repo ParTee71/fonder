@@ -640,8 +640,8 @@ class HemViewModelTest {
         viewModel().uiState.test {
             var state = awaitItem()
             while (state.loading || state.decisions.count < 2) state = awaitItem()
-            assertEquals(1, state.decisions.openSuggestionCount)
-            assertEquals(1, state.decisions.openWatches.size)
+            assertEquals(1, state.decisions.openSwitchCount)
+            assertEquals(1, state.decisions.soldCount)
             assertEquals(2, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }
@@ -660,7 +660,6 @@ class HemViewModelTest {
             while (state.loading || state.decisions.count < 2) state = awaitItem()
             assertEquals(1, state.decisions.openSwitchCount)
             assertEquals(1, state.decisions.openCheaperAlternativeCount)
-            assertEquals(2, state.decisions.openSuggestionCount)
             assertEquals(2, state.decisions.count)
             cancelAndIgnoreRemainingEvents()
         }

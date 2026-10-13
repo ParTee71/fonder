@@ -11,6 +11,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
@@ -42,13 +43,21 @@ class BeslutScreenTest {
         plan: List<SwitchPlanResolver.Suggestion> = emptyList(),
         watches: List<OpenSwitchWatch> = emptyList(),
         watchedSellIsins: Set<String> = emptySet(),
+        cheaper: List<CheaperAlternative> = emptyList(),
+        dismissed: List<SwitchPlanResolver.Suggestion> = emptyList(),
         canRecompute: Boolean = false,
         backgroundWorkRunning: Boolean = false,
     ) = BeslutUiState(
         loading = false,
         riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
         accountType = if (canRecompute) AccountType.ISK_KF else AccountType.DEPA_AF,
-        decisions = PendingDecisions(switchPlan = plan, openWatches = watches, watchedSellIsins = watchedSellIsins),
+        decisions = PendingDecisions(
+            switchPlan = plan,
+            openWatches = watches,
+            watchedSellIsins = watchedSellIsins,
+            cheaperAlternatives = cheaper,
+            dismissedSuggestions = dismissed,
+        ).withSwitches(emptyList(), LocalDate.now()),
         backgroundWorkRunning = backgroundWorkRunning,
     )
 
@@ -60,13 +69,13 @@ class BeslutScreenTest {
     fun bytesplanen_visar_ratt_rangordning_belopp_och_avgiftsskillnad() {
         show(stateWith(plan = listOf(dyrTillBillig())))
 
-        composeRule.onNodeWithText("Förslag").assertExists()
+        composeRule.onNodeWithText("Byten").assertExists()
         composeRule.onNodeWithText("1. Sälj Dyr fond (nivå 5) → Köp Billig fond (nivå 3)").performScrollTo().assertIsDisplayed()
         // Beloppet måste stå ut: bytet avser gapet, inte hela positionen (issue #75). Belopp
         // under tusen — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg beroende på
         // JVM/lokal (se MoneyFormatTest), och ett test som beror på vilket vore flakigt.
         composeRule.onNodeWithText("Belopp: 250,00 kr", substring = true).assertExists()
-        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %").assertExists()
+        composeRule.onNodeWithText("Avgiftsskillnad: −0,7 %", substring = true).assertExists()
     }
 
     @Test
@@ -88,7 +97,7 @@ class BeslutScreenTest {
 
     @Test
     fun folj_i_bytesplanen_oppnar_saljformularet_for_forslaget() {
-        // HEM-14/BYT-2: "Följ" utför inget byte och kvitterar ingenting — den öppnar säljformuläret.
+        // HEM-14/BYT-2: "Registrera säljet" utför inget byte och kvitterar ingenting — den öppnar säljformuläret.
         var followed: Long? = null
         composeRule.setContent {
             FonderTheme {
@@ -100,7 +109,7 @@ class BeslutScreenTest {
         }
 
         composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
-        composeRule.onNodeWithText("Följ").performScrollTo().performClick()
+        composeRule.onNodeWithText("Registrera säljet").performScrollTo().performClick()
 
         assertEquals(42L, followed)
     }
@@ -112,7 +121,7 @@ class BeslutScreenTest {
             FonderTheme { BeslutContent(state = stateWith(plan = listOf(dyrTillBillig(recordId = 42, followed = true)))) }
         }
 
-        composeRule.onNodeWithText("Följ").assertDoesNotExist()
+        composeRule.onNodeWithText("Registrera säljet").assertDoesNotExist()
         composeRule.onNodeWithText("Avstå").assertDoesNotExist()
         composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
     }
@@ -140,13 +149,13 @@ class BeslutScreenTest {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
-                    state = stateWith().let { it.copy(decisions = it.decisions.copy(dismissedSuggestions = listOf(dyrTillBillig(recordId = 42)))) },
+                    state = stateWith(dismissed = listOf(dyrTillBillig(recordId = 42))),
                     onUndoDismissal = { undone = it },
                 )
             }
         }
 
-        composeRule.onNodeWithText("Avstådda (1)").performScrollTo().performClick()
+        composeRule.onNodeWithText("Avslutade och avstådda (1)").performScrollTo().performClick()
         composeRule.onNodeWithText("Ångra").performScrollTo().performClick()
 
         assertEquals(42L, undone?.recordId)
@@ -166,16 +175,17 @@ class BeslutScreenTest {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
-                    state = stateWith().let { it.copy(decisions = it.decisions.copy(cheaperAlternatives = listOf(billigareAlternativ()))) },
+                    state = stateWith(cheaper = listOf(billigareAlternativ())),
                     onDismissSuggestion = { dismissed = it },
                 )
             }
         }
 
         composeRule.onNodeWithText("Billigare alternativ").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Dyr fond 1,40 % → Billig fond 0,40 %").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Avgift").assertExists()
+        composeRule.onNodeWithText("Sälj Dyr fond → Köp Billig fond").performScrollTo().assertIsDisplayed()
         // 1,40 % − 0,40 % av 500 kr = 5 kr per år (under tusen: se tusentalsavgränsaren ovan).
-        composeRule.onNodeWithText("Sparar ca 5,00 kr/år").assertExists()
+        composeRule.onNodeWithText("Sparar ca 5,00 kr/år · avgift 1,40 % → 0,40 %").assertExists()
         composeRule.onNodeWithText("Avstå").performScrollTo().performClick()
 
         assertEquals(SuggestionKind.FEE, dismissed?.kind)
@@ -187,12 +197,12 @@ class BeslutScreenTest {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
-                    state = stateWith().let { it.copy(decisions = it.decisions.copy(cheaperAlternatives = listOf(billigareAlternativ(followed = true)))) },
+                    state = stateWith(cheaper = listOf(billigareAlternativ(followed = true))),
                 )
             }
         }
 
-        composeRule.onNodeWithText("Följ").assertDoesNotExist()
+        composeRule.onNodeWithText("Registrera säljet").assertDoesNotExist()
         composeRule.onNodeWithText("Genomförd").assertDoesNotExist()
     }
 
@@ -200,8 +210,8 @@ class BeslutScreenTest {
     fun inga_forslag_ger_inget_forslagsavsnitt_utan_ett_tomt_tillstand() {
         show(stateWith())
 
-        composeRule.onNodeWithText("Förslag").assertDoesNotExist()
-        composeRule.onNodeWithText("Inget att besluta just nu").assertIsDisplayed()
+        composeRule.onNodeWithText("Byten").assertDoesNotExist()
+        composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
     }
 
     // --- Knappen "Räkna om bytesplanen" (HEM-8, issue #88) ---
@@ -240,7 +250,7 @@ class BeslutScreenTest {
         assertEquals(1, clicks)
     }
 
-    // --- Pågående byten (ANA-12) ---
+    // --- Sålda byten (ANA-12, BYT-4) ---
 
     @Test
     fun kortet_for_pagaende_byte_visar_ledaren_och_oppnar_bevakningen() {
@@ -253,11 +263,12 @@ class BeslutScreenTest {
             FonderTheme { BeslutContent(state = stateWith(watches = listOf(watch)), onOpenSwitchWatch = { opened = it }) }
         }
 
-        composeRule.onNodeWithText("Fond A → Kandidat B").assertIsDisplayed()
-        composeRule.onNodeWithText("Dag 2 av 14 i väntan på likviden").assertIsDisplayed()
-        composeRule.onNodeWithText("3 alternativ bevakas").assertIsDisplayed()
+        composeRule.onNodeWithText("Fond A → välj köpfond").assertIsDisplayed()
+        composeRule.onNodeWithText("Sålt · dag 2 av 14").assertIsDisplayed()
+        composeRule.onNodeWithText("Eget sälj").assertIsDisplayed()
+        composeRule.onNodeWithText("3 bevakade alternativ").assertIsDisplayed()
         composeRule.onNodeWithText("Bäst sedan säljdagen: Kandidat B", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Registrera köpet").performClick()
+        composeRule.onNodeWithText("Öppna bevakningen").performScrollTo().performClick()
 
         assertEquals(7L, opened)
     }
@@ -268,7 +279,7 @@ class BeslutScreenTest {
         // och en tom rad hade lästs som "inget har hänt" (ANA-4-principen).
         show(stateWith(watches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 1, candidateCount = 2))))
 
-        composeRule.onNodeWithText("Fond A").assertIsDisplayed()
+        composeRule.onNodeWithText("Fond A → välj köpfond").assertIsDisplayed()
         composeRule.onNodeWithText("Ingen utveckling uppmätt än", substring = true).performScrollTo().assertIsDisplayed()
     }
 

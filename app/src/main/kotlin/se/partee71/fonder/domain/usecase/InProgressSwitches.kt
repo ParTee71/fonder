@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
+import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import java.time.LocalDate
 import javax.inject.Inject
@@ -33,8 +34,15 @@ class InProgressSwitches internal constructor(
         suggestionRecordRepository: SuggestionRecordRepository,
     ) : this(switchWatchRepository, suggestionRecordRepository, LocalDate::now)
 
-    /** De öppna bevakningarnas källförslag — som rad-id och som fondpar. */
-    data class Keys(val recordIds: Set<Long> = emptySet(), val pairs: Set<Pair<String, String>> = emptySet()) {
+    /**
+     * De öppna bevakningarnas källförslag — som rad-id och som fondpar, plus själva raderna per id
+     * ([sources]) så Beslut kan säga vilket förslag ett sålt byte kom ur (BYT-4).
+     */
+    data class Keys(
+        val recordIds: Set<Long> = emptySet(),
+        val pairs: Set<Pair<String, String>> = emptySet(),
+        val sources: Map<Long, SuggestionRecord> = emptyMap(),
+    ) {
         fun marks(row: SwitchPlanResolver.Suggestion): Boolean =
             row.recordId in recordIds || (row.sellIsin to row.buyIsin) in pairs
 
@@ -55,7 +63,7 @@ class InProgressSwitches internal constructor(
         // En utgången bevakning beskriver inte längre ett pågående byte — som på Beslut.
         val ids = openWatches.filterNot { SwitchWatchCalc.isExpired(it, today) }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }
         return suggestionRecordRepository.observeByIds(ids).map { records ->
-            Keys(recordIds = ids, pairs = records.mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin })
+            Keys(recordIds = ids, pairs = records.mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin }, sources = records.associateBy { it.id })
         }
     }
 }

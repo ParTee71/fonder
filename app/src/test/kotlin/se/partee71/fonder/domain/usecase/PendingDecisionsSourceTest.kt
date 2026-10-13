@@ -93,7 +93,7 @@ class PendingDecisionsSourceTest {
 
         assertEquals(listOf(2L), decisions.switchPlan.map { it.recordId })
         assertEquals(listOf(1L), decisions.dismissedSuggestions.map { it.recordId })
-        assertEquals(1, decisions.openSuggestionCount)
+        assertEquals(1, (decisions.openSwitchCount + decisions.openCheaperAlternativeCount))
         assertEquals(1, decisions.count)
     }
 
@@ -194,7 +194,7 @@ class PendingDecisionsSourceTest {
 
         assertEquals(listOf(1L, 2L), decisions.switchPlan.map { it.recordId })
         assertTrue(decisions.dismissedSuggestions.isEmpty())
-        assertEquals(2, decisions.openSuggestionCount)
+        assertEquals(2, (decisions.openSwitchCount + decisions.openCheaperAlternativeCount))
         assertEquals(2, decisions.count)
     }
 
@@ -209,7 +209,7 @@ class PendingDecisionsSourceTest {
         assertTrue(decisions.switchPlan.first().followed)
         assertTrue(decisions.dismissedSuggestions.isEmpty())
         // Det genomförda är redan beslutat (SET-5) — bara det andra är öppet.
-        assertEquals(1, decisions.openSuggestionCount)
+        assertEquals(1, (decisions.openSwitchCount + decisions.openCheaperAlternativeCount))
         assertEquals(1, decisions.count)
     }
 
@@ -229,7 +229,7 @@ class PendingDecisionsSourceTest {
         assertEquals(listOf(1L, 2L), decisions.switchPlan.map { it.recordId })
         assertEquals(2, decisions.openSwitchCount)
         assertEquals(1, decisions.openCheaperAlternativeCount)
-        assertEquals(3, decisions.openSuggestionCount)
+        assertEquals(3, (decisions.openSwitchCount + decisions.openCheaperAlternativeCount))
         assertEquals(3, decisions.count)
     }
 
@@ -256,7 +256,7 @@ class PendingDecisionsSourceTest {
 
         assertTrue(decisions.cheaperAlternatives.isEmpty())
         assertEquals(listOf(10L), decisions.dismissedCheaperAlternatives.map { it.suggestion.recordId })
-        assertEquals(1, decisions.dismissedCount)
+        assertEquals(1, decisions.switches.closed.count { it.state == SwitchRowState.DISMISSED })
         // Avståendet gäller sorten: planens byten påverkas inte.
         assertEquals(2, decisions.switchPlan.size)
         assertEquals(2, decisions.count)

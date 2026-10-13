@@ -33,8 +33,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 35
-        versionCode = 78
-        versionName = versionNameOverride ?: "0.68.0"
+        versionCode = 79
+        versionName = versionNameOverride ?: "0.69.0"
 
         // HiltTestApplication i stället för FonderApp, så att @HiltAndroidTest kan starta MainActivity.
         testInstrumentationRunner = "se.partee71.fonder.HiltTestRunner"

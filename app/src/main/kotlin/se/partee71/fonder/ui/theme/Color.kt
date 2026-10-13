@@ -23,6 +23,11 @@ val GainLight = Color(0xFF2FA36B)
 val GainDark  = Color(0xFF5FD39B)
 val LossLight = Color(0xFFC0574E)
 val LossDark  = Color(0xFFE58C82)
+// Tonad vinstbehållare med text i samma kulör — StateChip "Köpt" (BYT-4); skiljer sig i ljushet från koppar och blått.
+val GainContainerLight   = Color(0xFFD3F2E1)
+val OnGainContainerLight = Color(0xFF0B3D24)
+val GainContainerDark    = Color(0xFF0F3D28)
+val OnGainContainerDark  = GainDark
 
 // ─── Ljusa ytor ───────────────────────────────────────────────────────────────
 private val LightBackground   = Color(0xFFF7F9FC)

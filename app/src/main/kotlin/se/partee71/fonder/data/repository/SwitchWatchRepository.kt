@@ -25,6 +25,12 @@ interface SwitchWatchRepository {
     /** De öppna bevakningarna, senast sålda först — Hems kort (HEM-11) och startgatorna. */
     fun observeOpen(): Flow<List<SwitchWatch>>
 
+    /**
+     * Bevakningar stängda på eller efter [epochDay], senast stängda först — Besluts sektion
+     * "Avslutade och avstådda" (BYT-4) visar dem i [SwitchWatchCalc.WATCH_TTL_DAYS] dagar.
+     */
+    fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>>
+
     /** En enskild bevakning med sina kandidater, reaktivt. Null när den inte finns. */
     fun observe(id: Long): Flow<SwitchWatch?>
 
@@ -129,6 +135,9 @@ class RoomSwitchWatchRepository @Inject constructor(
 
     override fun observeOpen(): Flow<List<SwitchWatch>> =
         dao.observeOpen().map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
+
+    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> =
+        dao.observeClosedSince(epochDay).map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
 
     override fun observe(id: Long): Flow<SwitchWatch?> =
         dao.observeById(id).map { it?.toDomain() }

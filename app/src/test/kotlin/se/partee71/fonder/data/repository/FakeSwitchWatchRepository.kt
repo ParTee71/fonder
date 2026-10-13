@@ -32,6 +32,12 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
     override fun observeOpen(): Flow<List<SwitchWatch>> =
         watches.map { all -> all.filter { it.isOpen }.sortedByDescending { it.soldAtEpochDay } }
 
+    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> =
+        watches.map { all ->
+            all.filter { (it.closedAtEpochDay ?: Long.MIN_VALUE) >= epochDay }
+                .sortedWith(compareByDescending<SwitchWatch> { it.closedAtEpochDay }.thenByDescending { it.id })
+        }
+
     override fun observe(id: Long): Flow<SwitchWatch?> =
         watches.map { all -> all.firstOrNull { it.id == id } }
 

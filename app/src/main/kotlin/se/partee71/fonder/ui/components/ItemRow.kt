@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
  * [leading] är ett valfritt innehåll längst till vänster (Händelsers datum, TRX-1); utan det ser
  * raden ut som förut. [headlineStyle] är rubrikens stil (standard `bodyLarge`); Händelser använder
  * `titleSmall` som i sin mockup, så att långa fondnamn får plats bredvid datum och belopp.
+ * [overline] står ovanför rubriken i samma nod — Besluts bytesrader har där sitt tillståndschip och
+ * ursprung (BYT-4); utan det ser raden ut som förut.
  *
  * Första steget mot appens enda listrad (skill shared-ui-components → Kända dubbletter): i dag
  * fondsökens träffrad; de egna raderna på övriga skärmar flyttas hit en i taget.
@@ -36,6 +38,7 @@ fun ItemRow(
     trailing: (@Composable () -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     headlineStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    overline: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -48,6 +51,7 @@ fun ItemRow(
     ) {
         leading?.invoke()
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            overline?.invoke()
             Text(headline, style = headlineStyle)
             supporting?.invoke()
         }
