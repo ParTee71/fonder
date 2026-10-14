@@ -1,14 +1,19 @@
 package se.partee71.fonder.ui.bytesfonster
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -98,8 +103,11 @@ class SwitchWatchScreenTest {
         composeRule.onNodeWithText("Sedan säljdagen").assertIsDisplayed()
         composeRule.onNodeWithText("+3,2 %", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Avgift", substring = true).assertIsDisplayed()
-        // Risknivån alltid som siffra i text, aldrig som enbart en färg (UI-10).
-        composeRule.onNodeWithContentDescription("Risknivå 4 av 7", substring = true).assertIsDisplayed()
+        // Risknivån alltid som siffra i text, aldrig som enbart en färg (UI-10). Nivåväljaren
+        // ovanför har en knapp med samma beskrivning — det här är radens märke, inte knappen.
+        val badge = hasContentDescription("Risknivå 4 av 7", substring = true) and !hasRole(Role.RadioButton)
+        composeRule.onNodeWithTag(SWITCH_WATCH_LIST_TEST_TAG).performScrollToNode(badge)
+        composeRule.onNode(badge).assertIsDisplayed()
     }
 
     @Test
@@ -171,6 +179,8 @@ class SwitchWatchScreenTest {
         }
 
         // Exakt en "Ta bort" — appens egna förslag hör till planen och ska inte gå att plocka bort.
+        // Nivåväljaren ovanför kan trycka ner raderna under skärmkanten, så rulla fram först.
+        composeRule.onNodeWithTag(SWITCH_WATCH_LIST_TEST_TAG).performScrollToNode(hasText("Ta bort"))
         composeRule.onNodeWithText("Ta bort").assertIsDisplayed()
     }
 
@@ -284,11 +294,12 @@ class SwitchWatchScreenTest {
         }
 
         composeRule.onNodeWithText("Köp på risknivå").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Risknivå 4 av 7").assertIsSelected()
+        composeRule.onNode(hasContentDescription("Risknivå 4 av 7") and hasRole(Role.RadioButton)).assertIsSelected()
         // Ramen bär en betydelse och får aldrig vara ensam om den (UI-3).
-        composeRule.onNodeWithContentDescription("Risknivå 6 av 7, säljfondens nivå").assertIsDisplayed()
+        composeRule.onNode(hasContentDescription("Risknivå 6 av 7, säljfondens nivå") and hasRole(Role.RadioButton))
+            .assertIsDisplayed()
         composeRule.onNodeWithText("Ramen på 6 är säljfondens egen nivå", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Risknivå 2 av 7").performClick()
+        composeRule.onNode(hasContentDescription("Risknivå 2 av 7") and hasRole(Role.RadioButton)).performClick()
 
         assertEquals(2, chosen)
     }
@@ -359,3 +370,5 @@ class SwitchWatchScreenTest {
         composeRule.onNodeWithText("Bara indexfonder").assertDoesNotExist()
     }
 }
+
+private fun hasRole(role: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, role)
