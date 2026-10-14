@@ -125,12 +125,22 @@ interface FundMetadataRepository {
     /**
      * Som [findSwitchCandidates], men säger också om köpbarhetsuppslaget misslyckades
      * ([SwitchPlanCalc.CandidateSearch.lookupFailed], issue #149) — bevakningsskärmen (ANA-13)
-     * skiljer "inga köpbara på nivån" från "det gick inte att kontrollera". Defaulten finns för
-     * testfakes som inte driver det beteendet: den kan inte se uppslagen och svarar därför
-     * aldrig "misslyckades".
+     * skiljer "inga köpbara på nivån" från "det gick inte att kontrollera".
+     *
+     * Med [indexOnly] (bevakningens filter, ANA-13, issue #150) innehåller svaret bara indexfonder
+     * ([FundMetadata.indexFund]) — aldrig en fond utanför filtret; finns ingen ges
+     * [SwitchPlanCalc.CandidateSearch] utan kandidater. Hur poolen hämtas är implementationens sak
+     * ([AvanzaFundMetadataRepository.searchSwitchCandidates] filtrerar före verifieringen och bläddrar).
+     *
+     * Defaulten finns bara för testfakes som inte driver det beteendet: den har ingen pool att
+     * filtrera i, utan sållar [findSwitchCandidates] svar i efterhand, och den kan inte se uppslagen
+     * och svarar därför aldrig "misslyckades".
      */
-    suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch =
-        SwitchPlanCalc.CandidateSearch(findSwitchCandidates(level, excludeIsins), lookupFailed = false)
+    suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>, indexOnly: Boolean = false): SwitchPlanCalc.CandidateSearch =
+        SwitchPlanCalc.CandidateSearch(
+            findSwitchCandidates(level, excludeIsins).filter { !indexOnly || it.metadata.indexFund },
+            lookupFailed = false,
+        )
 }
 
 @Singleton
@@ -153,13 +163,22 @@ class AvanzaFundMetadataRepository @Inject constructor(
 
     override fun observeFilterVocabulary(): Flow<FundFilterVocabulary> = preferencesRepository.fundFilterVocabulary
 
-    override suspend fun query(query: FundScreenQuery): List<FundMetadata> {
-        val live = fetchLive(query) ?: return offlineQuery(query)
+    override suspend fun query(query: FundScreenQuery): List<FundMetadata> = queryPage(query).funds
+
+    /** En sida ur [query], med om den kom från källan ([live]) eller ur cachen. */
+    private class Page(val funds: List<FundMetadata>, val live: Boolean)
+
+    /**
+     * [query] med svarets ursprung. [storeVocabulary] false för följdsidor i en bläddring: varje
+     * sida bär samma vokabulär, och den skrivs till DataStore en gång, inte per sida.
+     */
+    private suspend fun queryPage(query: FundScreenQuery, storeVocabulary: Boolean = true): Page {
+        val live = fetchLive(query) ?: return Page(offlineQuery(query), live = false)
 
         if (live.funds.isNotEmpty()) {
             dao.upsertAll(live.funds.map { it.toEntityPreservingDerivedState() })
         }
-        if (live.vocabulary.filters.isNotEmpty()) {
+        if (storeVocabulary && live.vocabulary.filters.isNotEmpty()) {
             preferencesRepository.setFundFilterVocabulary(live.vocabulary)
         }
 
@@ -171,15 +190,15 @@ class AvanzaFundMetadataRepository @Inject constructor(
             if (query.maxTotalFee == null && query.nameContains == null) {
                 lastKnownUnfilteredTotal = live.totalNoFunds
             }
-            return live.funds
+            return Page(live.funds, live = true)
         }
 
         val baseline = lastKnownUnfilteredTotal
         if (baseline != null && live.totalNoFunds == baseline) {
             Log.w(TAG, "Källan verkar ha ignorerat filtret (samma antal träffar som obefiltrerat) — filtrerar lokalt")
-            return offlineQuery(query)
+            return Page(offlineQuery(query), live = false)
         }
-        return live.funds
+        return Page(live.funds, live = true)
     }
 
     private suspend fun fetchLive(query: FundScreenQuery): AvanzaFundListParser.ParsedFundListPage? =
@@ -368,25 +387,60 @@ class AvanzaFundMetadataRepository @Inject constructor(
     override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> =
         searchSwitchCandidates(level, excludeIsins).candidates
 
-    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch {
-        // Källans sida är hårt låst till 20 träffar (TP-21), så sorteringen avgör *vilken ände*
-        // av nivån som ens blir synlig. Tidigare hämtades den billigaste änden, varpå
-        // SwitchPlanCalcs kvartilregel bara kunde särskilja de billigaste fonderna inbördes och
-        // den uppmätta avkastningskanten (#72) aldrig applicerades — issue #75, punkt 3.
-        val results = query(
-            FundScreenQuery(
+    /**
+     * Med [indexOnly] (issue #150) sållas fonder som inte är indexfonder bort **före** rangordning
+     * och köpbarhetsverifiering, så budgeten inte går åt till fonder filtret ändå tar bort. Källan
+     * har inget verifierat filter för indexfonder ([FundScreenQuery] saknar det, TP-21), och en
+     * enda sida är nivåns 20 bästa på 1-årsavkastning — där är indexfonderna oftast inte. Därför
+     * bläddras nivån med `startIndex`, högst [MAX_INDEX_PAGES] sidor, tills poolen räcker till
+     * verifieringsbudgeten, sidan är sista (kort) eller inte gav något nytt (en källa som
+     * ignorerar `startIndex` ger samma sida igen). En följdsida som inte kom från källan (cachen
+     * svarade i stället) avbryter bläddringen och används inte — cachens sida 2 är inte källans —
+     * och räcker förslagen då inte ges [SwitchPlanCalc.CandidateSearch.lookupFailed]. Svarar cachen
+     * redan på första sidan sållas hela den cachade nivån på indexfonder innan sidan tas.
+     * Filtervokabulären skrivs bara av första sidan. Utan filtret hämtas en sida, som förut.
+     */
+    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>, indexOnly: Boolean): SwitchPlanCalc.CandidateSearch {
+        val pool = mutableListOf<FundMetadata>()
+        val seen = mutableSetOf<String>()
+        var unsorted = false
+        var pagingCut = false
+        for (page in 0 until if (indexOnly) MAX_INDEX_PAGES else 1) {
+            // Källans sida är hårt låst till 20 träffar (TP-21), så sorteringen avgör *vilken ände*
+            // av nivån som ens blir synlig. Tidigare hämtades den billigaste änden, varpå
+            // SwitchPlanCalcs kvartilregel bara kunde särskilja de billigaste fonderna inbördes och
+            // den uppmätta avkastningskanten (#72) aldrig applicerades — issue #75, punkt 3.
+            val pageQuery = FundScreenQuery(
                 risk = listOf(level.toString()),
                 sortField = SORT_FIELD_DEVELOPMENT_ONE_YEAR,
                 sortDirection = FundScreenSortDirection.DESCENDING,
-            ),
-        )
+                startIndex = page * FundScreenFilter.PAGE_SIZE,
+            )
+            val fetched = queryPage(pageQuery, storeVocabulary = page == 0)
+            if (page > 0 && !fetched.live) {
+                // Källan svarade inte på en följdsida — det som inte hittats är okänt, inte "inga".
+                pagingCut = true
+                break
+            }
+            // Svarade cachen redan på första sidan med filtret på: hela den cachade nivån sållas på
+            // indexfonder **innan** sidan tas — cachens topp 20 på avkastning är sällan indexfonder.
+            val results = if (!fetched.live && indexOnly) {
+                FundScreenFilter.apply(dao.getAll().map { it.toDomain() }.filter { it.indexFund }, pageQuery)
+            } else {
+                fetched.funds
+            }
+            if (!results.isSortedByOneYearDescending()) unsorted = true
+            val fresh = results.filter { seen.add(it.isin) }
+            pool += fresh.filter {
+                it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null && (!indexOnly || it.indexFund)
+            }
+            if (!fetched.live || results.size < FundScreenFilter.PAGE_SIZE || fresh.isEmpty() || pool.size >= MAX_SWITCH_VERIFICATION_ATTEMPTS) break
+        }
         // Rangordna om lokalt oavsett vad källan gav: ett okänt sortField ignoreras tyst av
         // källan ("fail open", samma verifierade beteende som filtren i [query]), och då vore
         // sidan sorterad på något helt annat utan att något syntes.
-        val eligible = results
-            .filter { it.isin !in excludeIsins && it.developmentOneYear != null && it.totalFee != null }
-            .sortedByDescending { it.developmentOneYear }
-        if (!results.isSortedByOneYearDescending()) {
+        val eligible = pool.sortedByDescending { it.developmentOneYear }
+        if (unsorted) {
             Log.w(TAG, "Källan verkar ha ignorerat sorteringen på $SORT_FIELD_DEVELOPMENT_ONE_YEAR — rangordnar kandidaterna lokalt")
         }
 
@@ -402,6 +456,9 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 false -> Unit
             }
         }
+        // En avbruten bläddring som inte gav fulla förslag säger "gick inte att kontrollera" (Försök
+        // igen), aldrig tyst "inga köpbara indexfonder".
+        if (pagingCut && verified.size < MAX_SWITCH_CANDIDATES) lookupFailed = true
         return SwitchPlanCalc.CandidateSearch(verified, lookupFailed)
     }
 
@@ -437,5 +494,12 @@ class AvanzaFundMetadataRepository @Inject constructor(
 
         /** Tak på antal prövade kandidater innan verifieringen ger upp för nivån, även om inga bekräftas. */
         const val MAX_SWITCH_VERIFICATION_ATTEMPTS = 10
+
+        /**
+         * Tak på antal sidor (à [FundScreenFilter.PAGE_SIZE]) som bläddras på en nivå med
+         * indexfiltret (issue #150) — 100 fonder, långt fler än en nivå brukar ha, och aldrig mer än
+         * fem källfrågor för ett val på skärmen.
+         */
+        const val MAX_INDEX_PAGES = 5
     }
 }

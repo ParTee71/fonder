@@ -29,6 +29,7 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanInputs
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
 
@@ -780,16 +781,18 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             today: LocalDate,
         ): ComputedPlan {
             val none = ComputedPlan(emptyList(), emptyMap(), conclusive = true)
-            val funds = transactionRepository.observeFunds().first()
-            if (funds.isEmpty()) return none
-            val transactions = transactionRepository.observeTransactions().first()
-            val holdings = PortfolioCalc.computeHoldings(funds, transactions)
-            if (holdings.isEmpty()) return none
-
-            val prices = fundPriceRepository.observeLatestPrices(holdings.map { it.fund.fundId }).first()
-            val withValue = PortfolioCalc.withCurrentValue(holdings, prices)
-            val heldIsins = withValue.mapNotNull { it.fund.isin }.toSet()
-            val metadataByIsin = fundMetadataRepository.metadataFor(heldIsins.toList())
+            // Innehav, kurser, metadata och likviden som väntar på köp (BYT-3) — samma läsväg som
+            // målnivåns förval (SwitchPlanInputs), så de två aldrig mäter gapen olika.
+            val inputs = SwitchPlanInputs.load(
+                transactionRepository, fundPriceRepository, switchWatchRepository, suggestionRecordRepository, today,
+                metadataFor = fundMetadataRepository::metadataFor,
+            )
+            if (inputs.holdings.isEmpty()) return none
+            val withValue = inputs.holdings
+            val prices = inputs.prices
+            val heldIsins = inputs.heldIsins
+            val metadataByIsin = inputs.metadataByIsin
+            val pendingProceeds = inputs.pendingProceedsByLevel
 
             // Avstådda par (HEM-14) — ur cachen, inget nätverk.
             val excludedPairs = SuggestionDismissals.activeKeys(suggestionDismissalRepository.observeAll().first(), today)
@@ -809,15 +812,6 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             // det kan bara inte säljas, och en fond som saknar avgift i källan är ett bestående
             // läge — hade det hållit markören tillbaka stod en gammal plan kvar för alltid.
             val metadataComplete = heldIsins.all { metadataByIsin[it]?.risk != null } && withValue.all { it.currentValue != null }
-
-            // Likvid som väntar på köp (BYT-3) — ur cachen: alla bevakningar (de stängdas köp får
-            // inte förbrukas igen), de öppnas källförslags köpfond (riktat uppslag) och innehavens
-            // redan lästa metadata.
-            val watches = switchWatchRepository.getAll()
-            val buyIsinByRecordId = suggestionRecordRepository
-                .observeByIds(watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }).first()
-                .associate { it.id to it.buyIsin }
-            val pendingProceeds = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, metadataByIsin, today)
 
             val levels = SwitchPlanCalc.underweightedLevels(withValue, metadataByIsin, targetAllocation, pendingProceeds)
             if (levels.isEmpty()) return ComputedPlan(emptyList(), prices, conclusive = metadataComplete)

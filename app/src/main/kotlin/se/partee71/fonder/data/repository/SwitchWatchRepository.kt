@@ -9,6 +9,7 @@ import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
@@ -82,6 +83,19 @@ interface SwitchWatchRepository {
      */
     suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean
 
+    /**
+     * Användarens val av målnivå på skärmen (ANA-13, issue #150). I **en** databastransaktion:
+     * nivån skrivs och appens förslag ([SwitchWatchCandidateSource.AUTO]) tas bort — de hörde till
+     * den gamla nivån — medan de handplockade ligger kvar. Anroparen fyller sedan på med förslag på
+     * den nya nivån ([addAutoCandidates]). Bara en öppen bevakning, och bara när nivån faktiskt ändras.
+     *
+     * @return sant när nivån ändrades nu; falskt när den redan var den, bevakningen är stängd eller inte finns.
+     */
+    suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean
+
+    /** Filtret "bara indexfonder" ([SwitchWatch.indexOnly], issue #150) — samma flöde och villkor som [setTargetLevel]. */
+    suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean
+
     /** Sant om säljtransaktionen redan har en öppen bevakning (BYT-1) — en bevakning per sälj, oavsett startväg. */
     suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean
 
@@ -96,6 +110,16 @@ interface SwitchWatchRepository {
      * @return antalet kandidater som faktiskt lades till.
      */
     suspend fun addCandidates(watchId: Long, candidates: List<SwitchWatchCandidate>): Int
+
+    /**
+     * Som [addCandidates], för appens förslag hämtade för [targetLevel] och [indexOnly] — skrivs
+     * **bara** om bevakningen fortfarande är öppen med just den nivån och det filtret, prövat i samma
+     * databastransaktion som insättningen. Ett svar på en sökning som hann bli inaktuell (användaren
+     * bytte nivå medan källan svarade) läggs alltså aldrig till på fel nivå (issue #150).
+     *
+     * @return antalet kandidater som faktiskt lades till; 0 när valet ändrats under tiden.
+     */
+    suspend fun addAutoCandidates(watchId: Long, targetLevel: Int, indexOnly: Boolean, candidates: List<SwitchWatchCandidate>): Int
 
     suspend fun removeCandidate(candidateId: Long)
 
@@ -204,28 +228,58 @@ class RoomSwitchWatchRepository @Inject constructor(
         }
     }
 
+    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean =
+        changeSelection(watchId) { dao.setTargetLevel(watchId, targetLevel) }
+
+    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean =
+        changeSelection(watchId) { dao.setIndexOnly(watchId, indexOnly) }
+
+    /** Valet och borttagningen av appens förslag i **en** transaktion — aldrig en ny nivå med den gamlas förslag kvar. */
+    private suspend fun changeSelection(watchId: Long, write: suspend () -> Int): Boolean =
+        database.withTransaction {
+            val changed = write() == 1
+            if (changed) dao.deleteAutoCandidates(watchId, SwitchWatchCandidateSource.MANUELL.name)
+            changed
+        }
+
     override suspend fun addCandidates(watchId: Long, candidates: List<SwitchWatchCandidate>): Int {
         if (candidates.isEmpty()) return 0
         return database.withTransaction {
             val existing = dao.getById(watchId) ?: return@withTransaction 0
-            val room = SwitchWatchCalc.MAX_CANDIDATES - existing.candidates.size
-            if (room <= 0) return@withTransaction 0
-
-            val alreadyWatched = existing.candidates.mapTo(mutableSetOf()) { it.isin }
-            val nextPosition = (existing.candidates.maxOfOrNull { it.position } ?: -1) + 1
-            val toAdd = candidates
-                .filterNot { it.isin in alreadyWatched || it.isin == existing.watch.sellIsin }
-                .distinctBy { it.isin }
-                .take(room)
-                .mapIndexed { index, candidate ->
-                    SwitchWatchCandidateEntity.fromDomain(
-                        candidate.copy(id = 0, position = nextPosition + index),
-                        watchId = watchId,
-                    )
-                }
-            if (toAdd.isNotEmpty()) dao.insertCandidates(toAdd)
-            toAdd.size
+            insertWithinCap(existing, candidates)
         }
+    }
+
+    override suspend fun addAutoCandidates(watchId: Long, targetLevel: Int, indexOnly: Boolean, candidates: List<SwitchWatchCandidate>): Int {
+        if (candidates.isEmpty()) return 0
+        return database.withTransaction {
+            val existing = dao.getById(watchId) ?: return@withTransaction 0
+            val current = existing.watch
+            val stillChosen = current.closedAtEpochDay == null && current.targetLevel == targetLevel && current.indexOnly == indexOnly
+            if (!stillChosen) return@withTransaction 0
+            insertWithinCap(existing, candidates)
+        }
+    }
+
+    /** Lägger [candidates] sist under taket, utan dubbletter och utan säljfonden. Körs inuti anroparens transaktion. */
+    private suspend fun insertWithinCap(existing: SwitchWatchWithCandidates, candidates: List<SwitchWatchCandidate>): Int {
+        val room = SwitchWatchCalc.MAX_CANDIDATES - existing.candidates.size
+        if (room <= 0) return 0
+
+        val alreadyWatched = existing.candidates.mapTo(mutableSetOf()) { it.isin }
+        val nextPosition = (existing.candidates.maxOfOrNull { it.position } ?: -1) + 1
+        val toAdd = candidates
+            .filterNot { it.isin in alreadyWatched || it.isin == existing.watch.sellIsin }
+            .distinctBy { it.isin }
+            .take(room)
+            .mapIndexed { index, candidate ->
+                SwitchWatchCandidateEntity.fromDomain(
+                    candidate.copy(id = 0, position = nextPosition + index),
+                    watchId = existing.watch.id,
+                )
+            }
+        if (toAdd.isNotEmpty()) dao.insertCandidates(toAdd)
+        return toAdd.size
     }
 
     override suspend fun removeCandidate(candidateId: Long) {

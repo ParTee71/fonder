@@ -124,25 +124,76 @@ object SwitchPlanCalc {
      * den sålda nivån kan aldrig sjunka under sitt eget mål och därmed aldrig bli underviktad
      * av ett byte. Mängden underviktade nivåer kan alltså bara krympa under den giriga loopen,
      * aldrig växa.
+     *
+     * @param unassignedKr värde som hör till portföljen men inte till någon nivå än — likviden ur
+     *   ett sälj vars målnivå ska väljas ([preselectTargetLevel]). Räknas i nämnaren, aldrig i en
+     *   nivås vikt. Planen själv skickar aldrig något här.
      */
     fun underweightedLevels(
         holdings: List<Holding>,
         metadataByIsin: Map<String, FundMetadata>,
         targetAllocation: Map<Int, Double>,
         pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
-    ): List<Int> {
+        unassignedKr: Double = 0.0,
+    ): List<Int> = underweightedGaps(holdings, metadataByIsin, targetAllocation, pendingProceedsByLevel, unassignedKr).map { it.level }
+
+    /** En underviktad nivå och hur mycket den saknar, i procentenheter av portföljen. */
+    data class LevelGap(val level: Int, val gapPp: Double)
+
+    /** [underweightedLevels] med gapen — största först. Den enda platsen regeln står. */
+    private fun underweightedGaps(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        targetAllocation: Map<Int, Double>,
+        pendingProceedsByLevel: Map<Int, Double>,
+        unassignedKr: Double,
+    ): List<LevelGap> {
         if (targetAllocation.isEmpty()) return emptyList()
         val positions = positionsOf(holdings, metadataByIsin)
         val levelValues = levelValuesOf(positions, pendingProceedsByLevel)
-        val totalValueKr = levelValues.values.sum()
+        val totalValueKr = levelValues.values.sum() + unassignedKr.coerceAtLeast(0.0)
         if (totalValueKr <= 0.0) return emptyList()
 
         return gapsPp(targetAllocation, levelValues, totalValueKr)
             .filterValues { it >= MIN_GAP_PP }
             .entries
             .sortedByDescending { it.value }
-            .map { it.key }
+            .map { LevelGap(it.key, it.value) }
     }
+
+    /**
+     * Nivån riskprofilen saknar mest på för en bevakning med likviden [proceedsKr] — regel 2 i
+     * [preselectTargetLevel], med gapet (issue #150): skärmen säger *varför* nivån är förvald
+     * ("9 procentenheter för lite där") och vad profilen hade valt när användaren valt annat.
+     * Likviden räknas i portföljens total men på ingen nivå; null utan profil eller utan någon nivå
+     * underviktad minst [MIN_GAP_PP].
+     */
+    fun profileSuggestion(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        targetAllocation: Map<Int, Double>,
+        proceedsKr: Double?,
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
+    ): LevelGap? =
+        underweightedGaps(holdings, metadataByIsin, targetAllocation, pendingProceedsByLevel, unassignedKr = proceedsKr ?: 0.0).firstOrNull()
+
+    /**
+     * Förvald målnivå för en bevakning (SLD-5/BYT-2, ANA-13, issue #150) — nivån appens förslag
+     * hämtas för och likviden räknas på (BYT-3) tills användaren väljer en annan på skärmen. **Den
+     * enda platsen regeln står**; säljet ([RecordTransaction]) och skärmen som fyller i en saknad
+     * nivå (`SwitchWatchViewModel`) anropar den båda.
+     *
+     * 1. Startad ur bytesplanen: planradens [planToLevel], oförändrad — raden *är* svaret.
+     * 2. Fristående med riskprofil: nivån profilen saknar mest på ([profileSuggestion], räknad med
+     *    säljets egen likvid bara i portföljens total).
+     * 3. Utan profil, eller utan någon nivå som är underviktad minst [MIN_GAP_PP]: säljfondens egen
+     *    nivå [sellLevel] — det närmaste "något likvärdigt" utan ett mål att mäta mot.
+     *
+     * Null när inget av det ger en nivå — då föreslås inget, en gissad nivå hade gett alternativ på
+     * fel risk (ANA-4-principen).
+     */
+    fun preselectTargetLevel(planToLevel: Int?, profileSuggestion: LevelGap?, sellLevel: Int?): Int? =
+        planToLevel ?: profileSuggestion?.level ?: sellLevel
 
     /**
      * Innehav vars risknivå går att avgöra. Se [plan] för varför avgiften **inte** krävs här:

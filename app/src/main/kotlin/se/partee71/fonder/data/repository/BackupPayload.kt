@@ -46,7 +46,10 @@ data class BackupPayload(
      * (BYT-1) bär raden även `sellTransactionId`/`buyTransactionId`, kopplingen till den sälj-
      * respektive köptransaktion som startade och stängde bytet; fälten följer [SwitchWatch] med
      * default null, så en äldre fil läses som "okopplade bevakningar" utan att [FORMAT_VERSION]
-     * höjs. Transaktions-id:n bevaras vid återställning, så länken pekar rätt efteråt.
+     * höjs. Transaktions-id:n bevaras vid återställning, så länken pekar rätt efteråt. Sedan 0.71.0
+     * (issue #150) bär raden även `indexOnly`, användarens filter för förslagen, och `targetLevel` kan
+     * vara användarens eget val på skärmen; en äldre fil utan `indexOnly` läses som falskt (alla
+     * fonder — vad den bevakningen faktiskt visade), också utan att [FORMAT_VERSION] höjs.
      */
     val switchWatches: List<SwitchWatch> = emptyList(),
     /**

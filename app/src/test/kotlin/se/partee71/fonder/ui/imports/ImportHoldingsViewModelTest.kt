@@ -30,6 +30,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 import java.util.zip.ZipEntry
@@ -90,6 +91,7 @@ class ImportHoldingsViewModelTest {
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private fun recordTransaction(transactionRepo: TransactionRepository = fakeTransactionRepo) = RecordTransaction(
         transactionRepo, switchWatchRepo, FakeSuggestionRecordRepository(), FakeFundMetadataRepository(), scheduler,
+        testTargetLevelPreselection(transactionRepo, switchWatchRepo),
     )
 
     private fun viewModel(priceRepo: FundPriceRepository = fakePriceRepo, transactionRepo: TransactionRepository = fakeTransactionRepo) =

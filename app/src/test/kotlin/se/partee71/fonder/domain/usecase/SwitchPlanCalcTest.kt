@@ -517,4 +517,126 @@ class SwitchPlanCalcTest {
 
         assertTrue(plan.isEmpty())
     }
+
+    // --- preselectTargetLevel: förvald målnivå för en fristående bevakning (issue #150) ---
+
+    /** Innehaven **efter** säljet: nivå 2, 3 och 5 (säljfondens nivå) med givna värden. */
+    private fun afterSale(level2: Double, level3: Double, level5: Double): Pair<List<Holding>, Map<String, FundMetadata>> =
+        listOf(holding("Två", level2, isin = "SE2"), holding("Tre", level3, isin = "SE3"), holding("Fem", level5, isin = "SE5")) to mapOf(
+            "SE2" to metadata("SE2", risk = 2, fee = 0.3),
+            "SE3" to metadata("SE3", risk = 3, fee = 0.3),
+            "SE5" to metadata("SE5", risk = 5, fee = 0.3),
+        )
+
+    /**
+     * Förvalet för ett fristående sälj som produktionen räknar det (`TargetLevelPreselection.preselect`):
+     * den enda regeln [SwitchPlanCalc.preselectTargetLevel] på profilens förslag.
+     */
+    private fun preselect(
+        holdings: List<Holding>,
+        metadataByIsin: Map<String, FundMetadata>,
+        target: Map<Int, Double>,
+        sellLevel: Int?,
+        proceedsKr: Double?,
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
+    ): Int? = SwitchPlanCalc.preselectTargetLevel(
+        planToLevel = null,
+        profileSuggestion = SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, target, proceedsKr, pendingProceedsByLevel),
+        sellLevel = sellLevel,
+    )
+
+    @Test
+    fun `forvalet med profil ar nivan med storst gap - egen likvid bara i totalen`() {
+        // Mål 20/60/20 på nivå 2/3/5, 7 000 kr likvid ur ett sälj på nivå 5. Med likviden i totalen
+        // (10 000 kr) saknar nivå 3 40 pp — störst. Utan den i totalen (3 000 kr) är ingen nivå
+        // underviktad 5 pp och förvalet hade fallit tillbaka på säljfondens nivå.
+        val (holdings, metadataByIsin) = afterSale(level2 = 500.0, level3 = 2_000.0, level5 = 500.0)
+        val target = mapOf(2 to 0.2, 3 to 0.6, 5 to 0.2)
+
+        assertEquals(3, preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 7_000.0))
+    }
+
+    @Test
+    fun `profilens forslag ger samma niva som forvalet och gapet i procentenheter`() {
+        // Samma regel som förvalet, med gapet — skärmen säger "40 procentenheter för lite där".
+        val (holdings, metadataByIsin) = afterSale(level2 = 500.0, level3 = 2_000.0, level5 = 500.0)
+        val target = mapOf(2 to 0.2, 3 to 0.6, 5 to 0.2)
+
+        val suggestion = SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, target, proceedsKr = 7_000.0)!!
+
+        assertEquals(3, suggestion.level)
+        assertEquals(40.0, suggestion.gapPp, 1e-9)
+        assertEquals(suggestion.level, preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 7_000.0))
+        // Utan profil finns inget förslag — reserven (säljfondens nivå) hör bara till förvalet.
+        assertEquals(null, SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, emptyMap(), proceedsKr = 7_000.0))
+    }
+
+    @Test
+    fun `forvalet styrs inte av egen likvid pa saljfondens niva`() {
+        // Mål 50/50 på nivå 3/5; säljet tog 5 000 kr ur nivå 5, som nu är mest underviktad. Låg den
+        // egna likviden på nivå 5 hade gapet sett fyllt ut och förvalet blivit nivå 3 — likviden
+        // hade då styrt bort pengarna från nivån de kom ifrån.
+        val (holdings, metadataByIsin) = afterSale(level2 = 0.0, level3 = 4_000.0, level5 = 1_000.0)
+        val target = mapOf(3 to 0.5, 5 to 0.5)
+
+        assertEquals(5, preselect(holdings, metadataByIsin, target, sellLevel = null, proceedsKr = 5_000.0))
+        assertEquals(
+            3,
+            preselect(holdings, metadataByIsin, target, sellLevel = null, proceedsKr = null, pendingProceedsByLevel = mapOf(5 to 5_000.0)),
+        )
+    }
+
+    @Test
+    fun `andra bevakningars likvid raknas pa sina nivaer i forvalet`() {
+        // Nivå 3 är redan på väg att fyllas av ett annat byte (BYT-3) — förvalet går till nivå 2.
+        val (holdings, metadataByIsin) = afterSale(level2 = 1_000.0, level3 = 1_000.0, level5 = 4_000.0)
+        val target = mapOf(2 to 0.3, 3 to 0.4, 5 to 0.3)
+
+        assertEquals(3, preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 2_000.0))
+        assertEquals(
+            2,
+            preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 2_000.0, pendingProceedsByLevel = mapOf(3 to 2_000.0)),
+        )
+    }
+
+    @Test
+    fun `utan riskprofil ar forvalet saljfondens egen niva`() {
+        val (holdings, metadataByIsin) = afterSale(level2 = 500.0, level3 = 2_000.0, level5 = 500.0)
+
+        assertEquals(5, preselect(holdings, metadataByIsin, emptyMap(), sellLevel = 5, proceedsKr = 7_000.0))
+        // Okänd nivå och ingen profil: inget förval, aldrig en gissad nivå (ANA-4).
+        assertEquals(null, preselect(holdings, metadataByIsin, emptyMap(), sellLevel = null, proceedsKr = 7_000.0))
+    }
+
+    @Test
+    fun `utan underviktad niva ar forvalet saljfondens egen niva`() {
+        // Allt ligger inom MIN_GAP_PP från målet — ingen nivå behöver pengarna mer än en annan.
+        val (holdings, metadataByIsin) = afterSale(level2 = 0.0, level3 = 5_000.0, level5 = 4_800.0)
+
+        assertEquals(5, preselect(holdings, metadataByIsin, mapOf(3 to 0.5, 5 to 0.5), sellLevel = 5, proceedsKr = 200.0))
+    }
+
+    @Test
+    fun `bevakning ur bytesplanen behaller planens toLevel`() {
+        val (holdings, metadataByIsin) = afterSale(level2 = 500.0, level3 = 2_000.0, level5 = 500.0)
+        val target = mapOf(2 to 0.2, 3 to 0.6, 5 to 0.2)
+
+        assertEquals(
+            2,
+            SwitchPlanCalc.preselectTargetLevel(
+                planToLevel = 2,
+                profileSuggestion = SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, target, proceedsKr = 7_000.0),
+                sellLevel = 5,
+            ),
+        )
+    }
+
+    @Test
+    fun `regeln - planradens niva fore profilens fore saljfondens`() {
+        val gap = SwitchPlanCalc.LevelGap(level = 3, gapPp = 12.0)
+        assertEquals(2, SwitchPlanCalc.preselectTargetLevel(planToLevel = 2, profileSuggestion = gap, sellLevel = 5))
+        assertEquals(3, SwitchPlanCalc.preselectTargetLevel(planToLevel = null, profileSuggestion = gap, sellLevel = 5))
+        assertEquals(5, SwitchPlanCalc.preselectTargetLevel(planToLevel = null, profileSuggestion = null, sellLevel = 5))
+        assertEquals(null, SwitchPlanCalc.preselectTargetLevel(planToLevel = null, profileSuggestion = null, sellLevel = null))
+    }
 }

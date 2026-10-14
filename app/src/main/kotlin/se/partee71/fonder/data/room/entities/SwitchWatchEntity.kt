@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.room.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -44,6 +45,13 @@ data class SwitchWatchEntity(
     val sellTransactionId: Long? = null,
     /** Köptransaktionen som stängde bevakningen som köpt, se [SwitchWatch.buyTransactionId]. Samma regler som [sellTransactionId]. */
     val buyTransactionId: Long? = null,
+    /**
+     * Användarens filter "bara indexfonder" för appens förslag (ANA-13, issue #150, Room 17→18).
+     * `defaultValue` deklareras här och inte bara i migreringen, så en nyinstallerad databas och en
+     * migrerad har samma schema och Rooms validering prövar defaulten — se [SwitchWatch.indexOnly].
+     */
+    @ColumnInfo(defaultValue = "0")
+    val indexOnly: Boolean = false,
 ) {
     companion object {
         /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
@@ -136,6 +144,7 @@ data class SwitchWatchWithCandidates(
             .map(SwitchWatchCandidateEntity::toDomain),
         sellTransactionId = watch.sellTransactionId,
         buyTransactionId = watch.buyTransactionId,
+        indexOnly = watch.indexOnly,
     )
 
     companion object {
@@ -153,6 +162,7 @@ data class SwitchWatchWithCandidates(
                 closeReason = watch.closeReason?.name,
                 sellTransactionId = watch.sellTransactionId,
                 buyTransactionId = watch.buyTransactionId,
+                indexOnly = watch.indexOnly,
             ),
             candidates = watch.candidates.map { SwitchWatchCandidateEntity.fromDomain(it, watch.id) },
         )

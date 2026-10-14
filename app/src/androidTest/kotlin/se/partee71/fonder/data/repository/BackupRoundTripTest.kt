@@ -143,6 +143,10 @@ class BackupRoundTripTest {
                 ),
             ),
         )
+        // Användarens val på skärmen (ANA-13, issue #150): en annan nivå än förslagets och bara
+        // indexfonder — båda val, inte härledda, och därför en del av kontraktet.
+        db.switchWatchDao().setTargetLevel(watchId, 2)
+        db.switchWatchDao().setIndexOnly(watchId, true)
         db.switchWatchDao().insertWatch(
             SwitchWatchEntity(
                 id = 2, sellIsin = "SE0005991445", sellFundName = "Fond C", soldAtEpochDay = 19_500,
@@ -232,7 +236,9 @@ class BackupRoundTripTest {
         assertEquals("Fond A", open.sellFundName)
         assertEquals(19_900L, open.soldAtEpochDay)
         assertEquals(12_500.0, open.proceedsKr!!, 1e-9)
-        assertEquals(4, open.targetLevel)
+        // Den valda nivån (2), inte förslagets (4), och filtret — användarens val på skärmen (#150).
+        assertEquals(2, open.targetLevel)
+        assertTrue(open.indexOnly)
         assertEquals(1L, open.sourceRecordId)
         assertTrue(open.isOpen)
         // Ordningen, källan och nollpunkten måste alla överleva: utan nollpunkten går
@@ -253,6 +259,7 @@ class BackupRoundTripTest {
         // En bevakning utan målnivå ska återställas utan nivå — den fylls bara i efterhand ur
         // källan (issue #149), aldrig av en återställning som gissar.
         assertNull(closed.targetLevel)
+        assertFalse(closed.indexOnly)
 
         // Transaktionslänkarna (BYT-1) i båda lägena — och de pekar fortfarande rätt, eftersom
         // transaktions-id:n bevaras i återställningen.
@@ -291,6 +298,22 @@ class BackupRoundTripTest {
         assertTrue(watches.all { it.sellTransactionId == null && it.buyTransactionId == null })
         assertEquals(listOf(12_500.0, null), watches.sortedBy { it.id }.map { it.proceedsKr })
         assertFalse(db.switchWatchDao().hasOpenForTransaction(12))
+    }
+
+    @Test
+    fun en_fil_utan_indexfilter_aterstalls_med_alla_fonder() = runTest {
+        // En säkerhetskopia från före 0.71.0 saknar nyckeln: samma formatversion, filtret läses som
+        // falskt — det bevakningen faktiskt gjorde — och målnivån följer med oförändrad.
+        seed()
+        val utanFilter = backup.export().getOrThrow().replace(Regex(",\\s*\"indexOnly\": (true|false)"), "")
+        assertFalse(utanFilter.contains("indexOnly"))
+        transactions.clearAll()
+
+        backup.restore(utanFilter).getOrThrow()
+
+        val watches = db.switchWatchDao().getAll().map { it.toDomain() }.sortedBy { it.id }
+        assertTrue(watches.none { it.indexOnly })
+        assertEquals(listOf(2, null), watches.map { it.targetLevel })
     }
 
     @Test

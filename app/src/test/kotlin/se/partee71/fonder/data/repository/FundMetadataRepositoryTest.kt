@@ -809,6 +809,104 @@ class FundMetadataRepositoryTest {
     }
 
     @Test
+    fun `searchSwitchCandidates med indexfilter ger bara indexfonder och utan filter alla`() = runTest {
+        // Issue #150: bevakningens filter "bara indexfonder" sållar poolen före rangordningen — den
+        // aktiva fonden med högre avkastning får inte tränga undan indexfonden, och den ges aldrig.
+        val active = fundView("SE_AKTIV", "Aktiv fond", totalFee = 1.2, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.20)
+        val index = fundView("SE_INDEX", "Indexfond", totalFee = 0.2, indexFund = true, tags = emptyList(), risk = 3, developmentOneYear = 0.10)
+        val repository = repo(
+            FakeAvanzaSource(fullListJson(2, listOf(active, index))),
+            FakeFundPriceRepository(
+                catalog = FundCatalog(
+                    companies = emptyList(),
+                    funds = listOf(Fund(fundId = "X1", name = "Aktiv fond", currency = "SEK"), Fund(fundId = "X2", name = "Indexfond", currency = "SEK")),
+                ),
+                isinByFundId = mapOf("X1" to "SE_AKTIV", "X2" to "SE_INDEX"),
+            ),
+        )
+
+        val onlyIndex = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
+        val all = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = false)
+
+        assertEquals(listOf("SE_INDEX"), onlyIndex.candidates.map { it.metadata.isin })
+        assertFalse(onlyIndex.lookupFailed)
+        assertEquals(listOf("SE_AKTIV", "SE_INDEX"), all.candidates.map { it.metadata.isin })
+        // Bytesplanen (HEM-8) har inget filter.
+        assertEquals(listOf("SE_AKTIV", "SE_INDEX"), repository.findSwitchCandidates(level = 3, excludeIsins = emptySet()).map { it.metadata.isin })
+    }
+
+    @Test
+    fun `searchSwitchCandidates med indexfilter blaeddrar forbi en forsta sida utan indexfonder`() = runTest {
+        // Granskning #150: källans enda sida är nivåns 20 bästa på 1-årsavkastning — där finns ofta
+        // ingen indexfond, och tomläget hade sagt "inga köpbara indexfonder" fast de fanns på sida 2.
+        val firstPage = (1..20).map { i ->
+            fundView("SE_A$i", "Aktiv $i", totalFee = 1.0, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.30 - i * 0.001)
+        }
+        val index = fundView("SE_INDEX", "Indexfond", totalFee = 0.2, indexFund = true, tags = emptyList(), risk = 3, developmentOneYear = 0.10)
+        val secondPage = listOf(fundView("SE_A21", "Aktiv 21", totalFee = 1.0, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.11), index)
+        val source = FakeAvanzaSource(fullListJson(0, emptyList()))
+        source.enqueue(fullListJson(22, firstPage), fullListJson(22, secondPage))
+        val repository = repo(
+            source,
+            FakeFundPriceRepository(
+                catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Indexfond", currency = "SEK"))),
+                isinByFundId = mapOf("X1" to "SE_INDEX"),
+            ),
+        )
+
+        val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
+
+        assertEquals(listOf("SE_INDEX"), result.candidates.map { it.metadata.isin })
+        // Andra sidan (kort) var den sista — ingen tredje fråga.
+        assertEquals(2, source.fetchFundListCallCount)
+        assertTrue(source.lastRequestBody!!.contains("\"startIndex\":20"))
+    }
+
+    @Test
+    fun `searchSwitchCandidates med indexfilter slutar blaeddra nar kallan ger samma sida igen`() = runTest {
+        // En källa som ignorerar startIndex ger sida 1 om och om igen — det får inte bli fem frågor.
+        val page = (1..20).map { i ->
+            fundView("SE_A$i", "Aktiv $i", totalFee = 1.0, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.2)
+        }
+        val source = FakeAvanzaSource(fullListJson(40, page))
+        val repository = repo(source)
+
+        val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
+
+        assertTrue(result.candidates.isEmpty())
+        assertEquals(2, source.fetchFundListCallCount)
+    }
+
+    @Test
+    fun `searchSwitchCandidates med indexfilter sager att uppslaget misslyckades nar en foljdsida inte kom fran kallan`() = runTest {
+        // Sista granskningen, punkt 1: sida 2 gick inte att hämta — "inga köpbara indexfonder" vore
+        // ett påstående om fonder appen aldrig sett.
+        val page = (1..20).map { i ->
+            fundView("SE_A$i", "Aktiv $i", totalFee = 1.0, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.2)
+        }
+        val source = FakeAvanzaSource("{")
+        source.enqueue(fullListJson(40, page))
+
+        val result = repo(source).searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
+
+        assertTrue(result.candidates.isEmpty())
+        assertTrue(result.lookupFailed)
+        assertEquals(2, source.fetchFundListCallCount)
+    }
+
+    @Test
+    fun `searchSwitchCandidates utan indexfilter fragar en sida`() = runTest {
+        val page = (1..20).map { i ->
+            fundView("SE_A$i", "Aktiv $i", totalFee = 1.0, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.2)
+        }
+        val source = FakeAvanzaSource(fullListJson(40, page))
+
+        repo(source).searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = false)
+
+        assertEquals(1, source.fetchFundListCallCount)
+    }
+
+    @Test
     fun `findSwitchCandidates stannar vid fem bekraftade kandidater`() = runTest {
         val views = (1..8).map { i ->
             fundView("SE_C$i", "Kandidat $i", totalFee = 0.2, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.1)

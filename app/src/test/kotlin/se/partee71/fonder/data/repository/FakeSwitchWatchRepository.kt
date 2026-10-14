@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import java.time.LocalDate
@@ -93,6 +94,28 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         if (current.targetLevel != null) return false
         update(watchId) { it.copy(targetLevel = targetLevel) }
         return true
+    }
+
+    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean =
+        changeSelection(watchId, { it.targetLevel == targetLevel }) { it.copy(targetLevel = targetLevel) }
+
+    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean =
+        changeSelection(watchId, { it.indexOnly == indexOnly }) { it.copy(indexOnly = indexOnly) }
+
+    /** Som Room: bara en öppen bevakning och en verklig ändring; appens förslag går, de handplockade ligger kvar. */
+    private fun changeSelection(watchId: Long, unchanged: (SwitchWatch) -> Boolean, change: (SwitchWatch) -> SwitchWatch): Boolean {
+        val current = watches.value.firstOrNull { it.id == watchId } ?: return false
+        if (!current.isOpen || unchanged(current)) return false
+        update(watchId) { watch ->
+            change(watch).copy(candidates = watch.candidates.filter { it.source == SwitchWatchCandidateSource.MANUELL })
+        }
+        return true
+    }
+
+    override suspend fun addAutoCandidates(watchId: Long, targetLevel: Int, indexOnly: Boolean, candidates: List<SwitchWatchCandidate>): Int {
+        val current = watches.value.firstOrNull { it.id == watchId } ?: return 0
+        if (!current.isOpen || current.targetLevel != targetLevel || current.indexOnly != indexOnly) return 0
+        return addCandidates(watchId, candidates)
     }
 
     override suspend fun start(watch: SwitchWatch): Long {

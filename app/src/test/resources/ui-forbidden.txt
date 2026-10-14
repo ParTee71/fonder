@@ -33,6 +33,7 @@
 \b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow / ProgressBar / LoadingDialog
 \bBadge\s*[({]	RiskBadge / ProfitTakeBadge / StatusDot
 \bCheckbox\s*[({]	CheckRow / FollowedToggleRow
+\bSwitch\s*[({]	SwitchRow
 \b(Text|Outlined|Elevated|Filled|FilledTonal)?Button\s*[({]	AppButton (AppButtonVariant)
 \b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton
 \b(Outlined|Basic)?TextField\s*[({]	AppTextField

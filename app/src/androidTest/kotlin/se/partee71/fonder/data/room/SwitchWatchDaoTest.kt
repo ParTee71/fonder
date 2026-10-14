@@ -75,6 +75,51 @@ class SwitchWatchDaoTest {
     }
 
     @Test
+    fun setTargetLevel_och_setIndexOnly_skriver_bara_en_andring_pa_en_oppen_bevakning() = runTest {
+        // Issue #150: användarens val skriver över nivån, men en stängd bevakning bär vad som hände.
+        val open = insertWatch(sellIsin = "SE_OPPEN", targetLevel = 4)
+        val closed = insertWatch(sellIsin = "SE_STANGD", targetLevel = 4, closedAtEpochDay = 19_905)
+        val withoutLevel = insertWatch(sellIsin = "SE_UTAN", targetLevel = null)
+
+        assertEquals(1, dao.setTargetLevel(open, 2))
+        assertEquals(0, dao.setTargetLevel(open, 2))
+        assertEquals(0, dao.setTargetLevel(closed, 2))
+        assertEquals(1, dao.setTargetLevel(withoutLevel, 6))
+        assertEquals(1, dao.setIndexOnly(open, true))
+        assertEquals(0, dao.setIndexOnly(open, true))
+        assertEquals(0, dao.setIndexOnly(closed, true))
+
+        assertEquals(2, dao.getById(open)!!.watch.targetLevel)
+        assertTrue(dao.getById(open)!!.toDomain().indexOnly)
+        assertEquals(4, dao.getById(closed)!!.watch.targetLevel)
+        assertFalse(dao.getById(closed)!!.watch.indexOnly)
+        assertEquals(6, dao.getById(withoutLevel)!!.watch.targetLevel)
+        // En ny rad utan uttryckligt val får defaulten — alla fonder.
+        assertFalse(dao.getById(withoutLevel)!!.watch.indexOnly)
+    }
+
+    @Test
+    fun deleteAutoCandidates_behaller_de_handplockade_och_ror_inte_andra_bevakningar() = runTest {
+        val watchId = insertWatch()
+        val other = insertWatch(sellIsin = "SE_ANNAN")
+        dao.insertCandidates(
+            listOf(
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = 10.0, navAtStartEpochDay = 19_900, position = 0),
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_EGEN", name = "Egen", navAtStart = 20.0, navAtStartEpochDay = 19_900, source = "MANUELL", position = 1),
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_OKAND", name = "Okänd källa", navAtStart = null, navAtStartEpochDay = null, source = "FRAMTIDA", position = 2),
+                SwitchWatchCandidateEntity(watchId = other, isin = "SE_B", name = "B", navAtStart = null, navAtStartEpochDay = null, position = 0),
+            ),
+        )
+
+        dao.deleteAutoCandidates(watchId, manualSource = "MANUELL")
+
+        // En okänd källa läses som appens (AUTO) och går därför också.
+        assertEquals(listOf("SE_EGEN"), dao.getById(watchId)!!.candidates.map { it.isin })
+        assertEquals(20.0, dao.getById(watchId)!!.candidates.single().navAtStart!!, 1e-9)
+        assertEquals(listOf("SE_B"), dao.getById(other)!!.candidates.map { it.isin })
+    }
+
+    @Test
     fun kandidater_lases_i_positionsordning_oavsett_insattningsordning() = runTest {
         val watchId = insertWatch()
         dao.insertCandidates(

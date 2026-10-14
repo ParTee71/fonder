@@ -6,7 +6,11 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,8 +29,12 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.domain.usecase.TargetLevelPreselection
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 /** Kurshistoriken för en bevakad kandidat — samma tre lägen som ANA-11:s jämförelse. */
 sealed interface CandidateHistory {
@@ -108,14 +116,42 @@ data class SwitchWatchUiState(
     val candidateSeries: List<Pair<String, List<Pair<Long, Double>>>> = emptyList(),
     /** Sant medan appens egna kandidatförslag hämtas (ANA-13) — en källfråga mot nivån. */
     val fillingCandidates: Boolean = false,
-    /** Målnivån förslagen hämtas för — texten för [SwitchWatchEmptyReason.NONE_AVAILABLE] nämner den. */
+    /**
+     * Målnivån förslagen hämtas för — den valda i nivåväljaren (ANA-13, issue #150), och texten för
+     * [SwitchWatchEmptyReason.NONE_AVAILABLE] nämner den. Ändras med [SwitchWatchViewModel.onSelectTargetLevel].
+     */
     val targetLevel: Int? = null,
+    /**
+     * Säljfondens **egen** risknivå ur metadatan — nivåväljarens markering av "samma som du sålde"
+     * (issue #150). Null tills metadatan lästs, eller när nivån inte är känd.
+     */
+    val sellLevel: Int? = null,
+    /** Filtret "bara indexfonder" för appens förslag ([SwitchWatch.indexOnly]) — ändras med [SwitchWatchViewModel.onIndexOnlyChanged]. */
+    val indexOnly: Boolean = false,
+    /**
+     * Nivån riskprofilen saknar mest på (issue #150) — samma regel som förvalet
+     * ([SwitchPlanCalc.profileSuggestion]) men utan planens nivå, med bevakningens egen likvid
+     * räknad i totalen och på ingen nivå. Null utan riskprofil, utan underviktad nivå, för en stängd
+     * bevakning eller tills den räknats. Förklaringsraden jämför den med [targetLevel].
+     */
+    val profileSuggestedLevel: Int? = null,
+    /** Hur mycket profilen saknar på [profileSuggestedLevel], i hela procentenheter (avrundat). Null när den är null. */
+    val profileGapPp: Int? = null,
     /** Varför listan är tom, bara när den är det och bevakningen är öppen — se [SwitchWatchEmptyReason]. */
     val emptyReason: SwitchWatchEmptyReason? = null,
     val message: SwitchWatchMessage? = null,
 ) {
     val canAddCandidate: Boolean get() = !closed && rows.size < SwitchWatchCalc.MAX_CANDIDATES
     val hasChart: Boolean get() = sellSeries.isNotEmpty() || candidateSeries.isNotEmpty()
+
+    /**
+     * Tomläget för [SwitchWatchEmptyReason.NONE_AVAILABLE] beror på filtret: inga köpbara
+     * **indexfonder** på nivån är ett annat besked än inga köpbara fonder alls (issue #150).
+     */
+    val emptyBecauseOfIndexFilter: Boolean get() = emptyReason == SwitchWatchEmptyReason.NONE_AVAILABLE && indexOnly
+
+    /** Nivå och filter går bara att ändra medan bytet pågår — en stängd bevakning bär vad som hände. */
+    val canChangeSelection: Boolean get() = !loading && !missing && !closed
 
     /** Rubrikkortets väntesnurra (NAV-6) — bevakningen läses och alternativen fylls på. */
     val headerWorking: Boolean get() = loading || fillingCandidates
@@ -150,6 +186,8 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
+    private val targetLevelPreselection: TargetLevelPreselection,
+    private val scheduler: FundPriceRefreshScheduler,
 ) : ViewModel() {
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
@@ -158,12 +196,37 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fillingCandidates = MutableStateFlow(false)
     private val emptyReason = MutableStateFlow<SwitchWatchEmptyReason?>(null)
     private val message = MutableStateFlow<SwitchWatchMessage?>(null)
+    private val profileSuggestion = MutableStateFlow<SwitchPlanCalc.LevelGap?>(null)
 
     /** ISIN vars historik redan hämtats (eller pågår) — varje kandidat hämtas en gång per skärmlivstid. */
     private val requestedHistories = mutableSetOf<String>()
+
+    /** Kandidater vars nollpunkt redan skrivits från den här skärmen — en skrivning per kandidat. */
+    private val anchoredCandidates = mutableSetOf<Long>()
+
+    /** Säljdagen historiken i minnet hämtades för — flyttas den (BYT-2-koppling) hämtas historiken om. */
+    private var historiesSoldAt: Long? = null
     private var autoFillAttempted = false
-    private var retryJob: Job? = null
+
+    /**
+     * **Alla** påfyllningar av appens förslag — vid skärmöppning, "Försök igen" och byte av nivå/filter
+     * — körs här, en i taget ([launchFill]): två samtidiga hade kunnat skriva förslag på fel nivå
+     * eller lämna fel [emptyReason]/[fillingCandidates] efter sig.
+     */
+    private var fillJob: Job? = null
+
+    /**
+     * Valet ett **pågående** byte av nivå/filter ska skriva — null när inget pågår. Bara det jämförs
+     * ett nytt tryck med före avbrottet ([changeSelection]); annars är databasen facit.
+     */
+    private var pendingSelection: Selection? = null
     private var sellSeriesLoaded = false
+
+    /**
+     * Profilens förslag, räknat **en** gång per skärmöppning ([profileSuggestionAsync]) — räknas om
+     * bara efter ett fel, av "Försök igen".
+     */
+    private var profileSuggestionJob: Deferred<ProfileSuggestion>? = null
 
     private val watch: Flow<SwitchWatch?> = switchWatchRepository.observe(watchId)
 
@@ -172,8 +235,8 @@ class SwitchWatchViewModel @AssistedInject constructor(
         metadata,
         histories,
         sellSeries,
-        combine(fillingCandidates, emptyReason, message) { filling, reason, msg -> Triple(filling, reason, msg) },
-    ) { watch, metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg) ->
+        combine(fillingCandidates, emptyReason, message, profileSuggestion, ::Transient),
+    ) { watch, metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg, suggestion) ->
         if (watch == null) return@combine SwitchWatchUiState(loading = false, missing = true)
 
         val today = LocalDate.now()
@@ -227,6 +290,10 @@ class SwitchWatchViewModel @AssistedInject constructor(
             },
             fillingCandidates = filling,
             targetLevel = watch.targetLevel,
+            sellLevel = metadataByIsin[watch.sellIsin]?.risk,
+            indexOnly = watch.indexOnly,
+            profileSuggestedLevel = suggestion?.level,
+            profileGapPp = suggestion?.gapPp?.roundToInt(),
             // Bara när listan faktiskt är tom: en handplockad kandidat efter ett misslyckat
             // förslag gör orsaken inaktuell, och en stängd bevakning föreslår inget alls.
             emptyReason = reason.takeIf { rows.isEmpty() && watch.isOpen && !filling },
@@ -242,6 +309,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
         viewModelScope.launch {
             watch.collect { current ->
                 if (current == null) return@collect
+                if (current.isOpen) profileSuggestionAsync(current)
                 ensureAutoCandidates(current)
                 ensureSellSeries(current)
                 ensureHistories(current)
@@ -259,8 +327,9 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * Nollställer hämtningsspärrarna i stället för att gå runt dem, så `ensureHistories` gör
      * exakt vad den gör vid skärmöppning — en andra kodväg hade kunnat hämta ett annat fönster
      * och därmed en annan nollpunkt. Kandidatlistan fylls **inte** på igen: appens förslag
-     * (ANA-13) hör till bevakningens start, och att byta ut alternativen mitt under en pågående
-     * jämförelse vore ett annat svar på en fråga användaren redan ställt.
+     * (ANA-13) hör till bevakningens start och till användarens val av nivå och filter
+     * ([onSelectTargetLevel]), och att byta ut alternativen mitt under en pågående jämförelse vore
+     * ett annat svar på en fråga användaren redan ställt.
      */
     fun refresh() {
         viewModelScope.launch {
@@ -282,36 +351,74 @@ class SwitchWatchViewModel @AssistedInject constructor(
         (historyByIsin[candidate.isin] as? CandidateHistory.Ready)?.points?.maxByOrNull { it.first }?.second
 
     /**
-     * Fyller listan med appens egna förslag (ANA-13) — samma pool och samma rangordning som
-     * bytesplanens köpkandidater ([FundMetadataRepository.findSwitchCandidates]), alltså översta
-     * kvartilen på 12-månadersavkastning och därefter lägst avgift.
+     * Fyller listan med appens egna förslag (ANA-13) när skärmen öppnas — se [fillAutoCandidates].
      *
      * Görs **en gång** per skärmlivstid och bara när listan är tom: en omfyllning vid varje
      * emission hade kostat en källfråga per gång och kunnat byta ut de alternativ användaren
-     * just tittade på.
-     *
-     * Saknar bevakningen målnivå (startad ur en säljrad vars fond inte fanns i metadatacachen,
-     * SLD-5) slås säljfondens risknivå upp nu — cache först, källan vid behov — och sparas på
-     * bevakningen (issue #149). Finns den inte heller i källan görs inget förslag: en gissad nivå
-     * hade gett förslag på fel risk, vilket är sämre än inga förslag (ANA-4-principen). Utfallet
-     * blir [emptyReason], så tomläget kan säga vilken av de tre orsakerna det gäller.
+     * just tittade på. Ett byte av nivå eller filter fyller på igen, en gång per val ([changeSelection]).
+     * Körs i [fillJob] som alla andra påfyllningar, så ett nivåbyte under den avbryter och inväntar den.
      */
-    private suspend fun ensureAutoCandidates(watch: SwitchWatch) {
+    private fun ensureAutoCandidates(watch: SwitchWatch) {
         if (autoFillAttempted || !watch.isOpen || watch.candidates.isNotEmpty()) return
         autoFillAttempted = true
+        // Ett pågående byte av nivå/filter fyller själv på — det får inte avbrytas innan valet skrivits.
+        if (fillJob?.isActive == true) return
+        launchFill { fillAutoCandidates(watch) }
+    }
 
+    /**
+     * Startar en påfyllning i [fillJob] efter att den förra avbrutits **och** avslutats.
+     * [block] får veta om den förra fortfarande pågick — då kan den ha lämnat sitt arbete halvgjort.
+     */
+    private fun launchFill(block: suspend (interrupted: Boolean) -> Unit) {
+        val previous = fillJob
+        val interrupted = previous?.isActive == true
+        fillJob = viewModelScope.launch {
+            previous?.cancelAndJoin()
+            block(interrupted)
+        }
+    }
+
+    /**
+     * Lägger till appens förslag — samma pool och samma rangordning som bytesplanens köpkandidater
+     * ([FundMetadataRepository.findSwitchCandidates]), alltså översta kvartilen på
+     * 12-månadersavkastning och därefter lägst avgift, med bevakningens filter (bara indexfonder,
+     * issue #150) — högst [SwitchWatchCalc.AUTO_CANDIDATES], efter de handplockade som redan finns.
+     *
+     * Saknar bevakningen målnivå förväljs den nu ([fillMissingTargetLevel], issue #149/#150) och
+     * sparas på bevakningen. Ger inte heller det en nivå görs inget förslag: en gissad nivå hade gett
+     * förslag på fel risk, vilket är sämre än inga förslag (ANA-4-principen). Utfallet blir
+     * [emptyReason], så tomläget kan säga vilken av de tre orsakerna det gäller.
+     *
+     * Förslagen skrivs bara om nivån och filtret fortfarande är de sökningen gjordes för
+     * ([SwitchWatchRepository.addAutoCandidates]) — ett svar som hann bli inaktuellt hamnar aldrig
+     * på fel nivå. Fyller bara på upp till [SwitchWatchCalc.AUTO_CANDIDATES] appförslag: en
+     * påfyllning som avbröts av ett nytt val lämnar aldrig listan tom, och en full lista frågar
+     * inte källan igen.
+     */
+    private suspend fun fillAutoCandidates(watch: SwitchWatch) {
+        val missing = SwitchWatchCalc.AUTO_CANDIDATES - watch.candidates.count { it.source == SwitchWatchCandidateSource.AUTO }
+        if (missing <= 0) return
         emptyReason.value = null
         fillingCandidates.value = true
         try {
-            val level = watch.targetLevel ?: fillMissingTargetLevel(watch)
-            if (level == null) {
-                emptyReason.value = SwitchWatchEmptyReason.NO_TARGET_LEVEL
-                return
+            val level = watch.targetLevel ?: when (val filled = fillMissingTargetLevel(watch)) {
+                is MissingLevel.Filled -> filled.level
+                MissingLevel.Unknown -> {
+                    emptyReason.value = SwitchWatchEmptyReason.NO_TARGET_LEVEL
+                    return
+                }
+                // Profilens förslag gick inte att räkna — ingen nivå sparas på ett tillfälligt fel.
+                MissingLevel.Failed -> {
+                    emptyReason.value = SwitchWatchEmptyReason.LOOKUP_FAILED
+                    return
+                }
             }
             val owned = transactionRepository.observeFunds().first().mapNotNull { it.isin }.toSet()
-            val search = fundMetadataRepository.searchSwitchCandidates(level, owned + watch.sellIsin)
+            val watched = watch.candidates.map { it.isin }
+            val search = fundMetadataRepository.searchSwitchCandidates(level, owned + watch.sellIsin + watched, watch.indexOnly)
             val candidates = search.candidates
-                .take(SwitchWatchCalc.AUTO_CANDIDATES)
+                .take(missing)
                 .mapIndexed { index, candidate ->
                     SwitchWatchCandidate(
                         watchId = watch.id,
@@ -322,7 +429,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
                     )
                 }
             if (candidates.isNotEmpty()) {
-                switchWatchRepository.addCandidates(watch.id, candidates)
+                switchWatchRepository.addAutoCandidates(watch.id, level, watch.indexOnly, candidates)
             } else {
                 emptyReason.value =
                     if (search.lookupFailed) SwitchWatchEmptyReason.LOOKUP_FAILED else SwitchWatchEmptyReason.NONE_AVAILABLE
@@ -333,27 +440,143 @@ class SwitchWatchViewModel @AssistedInject constructor(
     }
 
     /**
-     * Säljfondens risknivå ur metadatan, sparad på bevakningen — bara där nivån saknas
-     * ([SwitchWatchRepository.fillMissingTargetLevel]). Null när nivån inte är känd ens i källan.
+     * Förvald målnivå sparad på bevakningen — bara där nivån saknas
+     * ([SwitchWatchRepository.fillMissingTargetLevel]). Samma regel som när säljet registreras
+     * ([SwitchPlanCalc.preselectTargetLevel], issue #150): med riskprofil den mest underviktade nivån
+     * (bevakningens egen likvid oräknad), annars säljfondens risknivå — här får uppslaget gå till
+     * källan. Profilens förslag är **samma** beräkning som skärmen visar ([profileSuggestionAsync]),
+     * inte en andra portföljläsning. [MissingLevel.Unknown] när ingen nivå är känd ens där.
+     *
+     * Gick profilens förslag inte att räkna sparas **ingen** nivå ([MissingLevel.Failed]): med en
+     * riskprofil hade reserven (säljfondens nivå) annars sparats för gott på ett tillfälligt fel.
+     * Utan profil kan förslaget inte misslyckas — då läses inget annat än profilen.
      */
-    private suspend fun fillMissingTargetLevel(watch: SwitchWatch): Int? {
-        val level = fundMetadataRepository.metadataFor(listOf(watch.sellIsin))[watch.sellIsin]?.risk ?: return null
-        if (switchWatchRepository.fillMissingTargetLevel(watch.id, level)) return level
+    private suspend fun fillMissingTargetLevel(watch: SwitchWatch): MissingLevel {
+        val suggestion = profileSuggestionAsync(watch).await()
+        if (suggestion is ProfileSuggestion.Failed) return MissingLevel.Failed
+        val sellLevel = fundMetadataRepository.metadataFor(listOf(watch.sellIsin))[watch.sellIsin]?.risk
+        val level = SwitchPlanCalc.preselectTargetLevel(
+            planToLevel = null,
+            profileSuggestion = (suggestion as ProfileSuggestion.Computed).gap,
+            sellLevel = sellLevel,
+        ) ?: return MissingLevel.Unknown
+        if (switchWatchRepository.fillMissingTargetLevel(watch.id, level)) {
+            // Likviden räknas på målnivån (BYT-3) — en nivå som nyss blev känd ändrar planen.
+            scheduler.triggerSwitchPlanScan(force = false)
+            return MissingLevel.Filled(level)
+        }
         // Någon annan väg (t.ex. ett förslag som kopplades) hann sätta nivån — den sparade gäller.
-        return this.watch.first()?.targetLevel
+        return this.watch.first()?.targetLevel?.let { MissingLevel.Filled(it) } ?: MissingLevel.Unknown
     }
 
     /**
-     * "Försök igen" efter [SwitchWatchEmptyReason.LOOKUP_FAILED] — nollställer spärren och kör
-     * samma autofyllning som vid skärmöppning, ingen andra kodväg.
+     * Var riskprofilen saknar mest ([SwitchWatchUiState.profileSuggestedLevel], issue #150) — räknas
+     * **en gång** per skärmöppning, i en egen korutin så att förslagen inte väntar på den, och
+     * delas med förvalet i efterhand ([fillMissingTargetLevel]): en portföljläsning, inte två.
+     * Innehavens metadata får gå till källan, och bevakningens egen likvid ligger på ingen nivå.
+     * Oberoende av vald nivå, så ett nivåbyte räknar inte om den.
+     *
+     * Läsningen kan gå till nätet: ett fel ger [ProfileSuggestion.Failed], aldrig en krasch —
+     * skärmen visar då bara den valda nivån, och en saknad nivå sparas inte ([fillMissingTargetLevel]).
+     */
+    private fun profileSuggestionAsync(watch: SwitchWatch): Deferred<ProfileSuggestion> =
+        profileSuggestionJob ?: viewModelScope.async {
+            val suggestion = try {
+                ProfileSuggestion.Computed(
+                    targetLevelPreselection.profileSuggestion(
+                        proceedsKr = watch.proceedsKr,
+                        today = LocalDate.now(),
+                        metadataFor = fundMetadataRepository::metadataFor,
+                        excludeWatchId = watch.id,
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Ingen detalj i loggen: undantaget kan bära belopp eller innehav.
+                ProfileSuggestion.Failed
+            }
+            profileSuggestion.value = (suggestion as? ProfileSuggestion.Computed)?.gap
+            suggestion
+        }.also { profileSuggestionJob = it }
+
+    /**
+     * Glömmer ett **misslyckat** profilförslag, så nästa försök räknar om det. Ett avbrutet räknas
+     * som misslyckat — `getCompleted` hade kastat på det.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun forgetFailedProfileSuggestion() {
+        val job = profileSuggestionJob ?: return
+        if (job.isCancelled || (job.isCompleted && job.getCompleted() is ProfileSuggestion.Failed)) profileSuggestionJob = null
+    }
+
+    /**
+     * "Försök igen" efter [SwitchWatchEmptyReason.LOOKUP_FAILED] — samma påfyllning som vid
+     * skärmöppning, i samma jobb som alla andra ([launchFill]).
      */
     fun onRetryAutoFill() {
         // Ett dubbeltryck ska inte starta två autofyllningar som båda lägger till kandidater.
-        if (retryJob?.isActive == true) return
-        retryJob = viewModelScope.launch {
-            val current = watch.first() ?: return@launch
-            autoFillAttempted = false
-            ensureAutoCandidates(current)
+        if (fillJob?.isActive == true) return
+        launchFill {
+            val current = watch.first() ?: return@launchFill
+            // Felet kan ha varit profilens förslag (en saknad nivå) — det räknas om.
+            forgetFailedProfileSuggestion()
+            if (current.isOpen) fillAutoCandidates(current)
+        }
+    }
+
+    /**
+     * Användaren väljer risknivå att köpa på (ANA-13, issue #150). Appens förslag på den gamla
+     * nivån tas bort, de handplockade ligger kvar, och förslag på den nya nivån hämtas — en gång
+     * per val. Bytesplanen räknas om: likviden räknas på målnivån (BYT-3). Samma nivå igen gör ingenting.
+     */
+    fun onSelectTargetLevel(level: Int) {
+        changeSelection(Selection(level = level)) { it.level == level }
+    }
+
+    /** Filtret "bara indexfonder" (issue #150) — samma flöde som [onSelectTargetLevel]. */
+    fun onIndexOnlyChanged(indexOnly: Boolean) {
+        changeSelection(Selection(indexOnly = indexOnly)) { it.indexOnly == indexOnly }
+    }
+
+    /**
+     * Ett tryck på samma val som ett **pågående** byte redan ska skriva är en no-op **innan** något
+     * avbryts — ett dubbeltryck får inte avbryta påfyllningen det första trycket startade. Annars
+     * jämförs inget i minnet: skrivningen själv är villkorad i databasen (en no-op om värdet redan
+     * gäller), så ett tryck ignoreras aldrig när databasen har något annat.
+     *
+     * Ett nytt val avbryter och **inväntar** det förra ([launchFill]) och skriver sedan det förras
+     * ännu oskrivna del tillsammans med sin egen ([pendingSelection]), så ett avbrutet val aldrig
+     * tappas halvvägs. Skrivningen (valet och borttagningen av appens förslag) är en
+     * databastransaktion. Påfyllningen görs när valet ändrades eller ett avbrutet jobb kan ha lämnat
+     * listan halvfylld, och fyller bara det som saknas ([fillAutoCandidates]); den skrivs bara om
+     * valet fortfarande gäller ([SwitchWatchRepository.addAutoCandidates]).
+     *
+     * Bytesplanen räknas om bara när **nivån** kan ha ändrats — likviden räknas på målnivån (BYT-3),
+     * filtret påverkar den inte.
+     */
+    private fun changeSelection(change: Selection, alreadyPending: (Selection) -> Boolean) {
+        val previous = pendingSelection
+        if (previous != null && alreadyPending(previous)) return
+        val wanted = previous?.merge(change) ?: change
+        pendingSelection = wanted
+        // Före skrivningen: en lista som blir tom av den ska inte också fyllas av skärmöppningens väg.
+        autoFillAttempted = true
+        launchFill { interrupted ->
+            try {
+                // En stängd bevakning bär vad som hände — inget skrivs, inget räknas om.
+                if (watch.first()?.isOpen != true) return@launchFill
+                val levelChanged = wanted.level?.let { switchWatchRepository.setTargetLevel(watchId, it) } ?: false
+                val filterChanged = wanted.indexOnly?.let { switchWatchRepository.setIndexOnly(watchId, it) } ?: false
+                // Ett avbrutet byte kan ha hunnit skriva nivån men inte begärt omräkningen.
+                if (levelChanged || (interrupted && previous?.level != null)) scheduler.triggerSwitchPlanScan(force = false)
+                if (levelChanged || filterChanged || interrupted) {
+                    val current = watch.first() ?: return@launchFill
+                    if (current.isOpen) fillAutoCandidates(current)
+                }
+            } finally {
+                if (pendingSelection === wanted) pendingSelection = null
+            }
         }
     }
 
@@ -385,8 +608,22 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * röd dag ändå kan ankras på första handelsdagen efter.
      */
     private suspend fun ensureHistories(watch: SwitchWatch) {
+        // En koppling till ett sälj från en annan dag flyttar säljdagen och nollar nollpunkterna
+        // (RecordTransaction.linkWatch) — historiken i minnet når kanske inte tillbaka till den nya dagen.
+        if (historiesSoldAt != null && historiesSoldAt != watch.soldAtEpochDay) requestedHistories.clear()
+        historiesSoldAt = watch.soldAtEpochDay
         watch.candidates.forEach { candidate ->
-            if (!requestedHistories.add(candidate.isin)) return@forEach
+            // En nollpunkt som nollats efter att den skrevs här ska skrivas igen.
+            if (candidate.navAtStart == null) anchoredCandidates -= candidate.id
+            if (!requestedHistories.add(candidate.isin)) {
+                // Historiken finns redan (eller hämtas) — en kandidat som lagts till igen efter ett
+                // byte av nivå eller filter är en ny rad utan nollpunkt och ankras ur minnet.
+                // Pågår hämtningen ankrar den när den är klar.
+                if (candidate.navAtStart == null) {
+                    (histories.value[candidate.isin] as? CandidateHistory.Ready)?.let { anchor(candidate, it.points, watch.soldAtEpochDay) }
+                }
+                return@forEach
+            }
             histories.value = histories.value + (candidate.isin to CandidateHistory.Loading)
             viewModelScope.launch {
                 val today = LocalDate.now()
@@ -395,16 +632,38 @@ class SwitchWatchViewModel @AssistedInject constructor(
                     .map { it.epochDay to it.nav }
                     .sortedBy { it.first }
 
+                // Säljdagen flyttades medan hämtningen pågick — en ny hämtning för den nya dagen gäller.
+                if (historiesSoldAt != watch.soldAtEpochDay) return@launch
                 histories.value = histories.value + (
                     candidate.isin to if (points.isEmpty()) CandidateHistory.Unavailable else CandidateHistory.Ready(points)
                     )
 
-                if (candidate.navAtStart == null) {
-                    SwitchWatchCalc.anchor(points, watch.soldAtEpochDay)?.let { (epochDay, nav) ->
-                        switchWatchRepository.setNavAtStart(candidate.id, nav, epochDay)
-                    }
-                }
+                // Alla rader med fonden som saknar nollpunkt nu — också de som lagts till medan
+                // hämtningen pågick.
+                val current = this@SwitchWatchViewModel.watch.first() ?: return@launch
+                if (current.soldAtEpochDay != watch.soldAtEpochDay) return@launch
+                current.candidates
+                    .filter { it.isin == candidate.isin && it.navAtStart == null }
+                    .forEach { anchor(it, points, current.soldAtEpochDay) }
             }
+        }
+    }
+
+    /**
+     * Skriver kandidatens nollpunkt på säljdagen (eller första handelsdagen efter), en gång per
+     * kandidat. Kandidaten räknas som ankrad först när skrivningen lyckats — en misslyckad skrivning
+     * görs om vid nästa emission eller uppdatering, i stället för att raden blir utan nollpunkt.
+     */
+    private suspend fun anchor(candidate: SwitchWatchCandidate, points: List<Pair<Long, Double>>, soldAtEpochDay: Long) {
+        val (epochDay, nav) = SwitchWatchCalc.anchor(points, soldAtEpochDay) ?: return
+        if (candidate.id in anchoredCandidates) return
+        try {
+            switchWatchRepository.setNavAtStart(candidate.id, nav, epochDay)
+            anchoredCandidates += candidate.id
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Inga belopp i loggen; nästa försök kommer med nästa emission.
         }
     }
 
@@ -476,3 +735,30 @@ class SwitchWatchViewModel @AssistedInject constructor(
         private const val CHART_HISTORY_YEARS = 3L
     }
 }
+
+/** Ett begärt val av nivå och/eller filter — null = rörs inte. */
+private data class Selection(val level: Int? = null, val indexOnly: Boolean? = null) {
+    /** [newer] vinner där den har ett värde; resten av det här valet ligger kvar. */
+    fun merge(newer: Selection) = Selection(level = newer.level ?: level, indexOnly = newer.indexOnly ?: indexOnly)
+}
+
+/** Profilens förslag: räknat (null = ingen profil eller ingen underviktad nivå) eller misslyckat. */
+private sealed interface ProfileSuggestion {
+    data class Computed(val gap: SwitchPlanCalc.LevelGap?) : ProfileSuggestion
+    data object Failed : ProfileSuggestion
+}
+
+/** Utfallet av att fylla i en saknad målnivå ([SwitchWatchViewModel.fillMissingTargetLevel]). */
+private sealed interface MissingLevel {
+    data class Filled(val level: Int) : MissingLevel
+    data object Unknown : MissingLevel
+    data object Failed : MissingLevel
+}
+
+/** Tillståndet som inte bor i databasen, samlat för `combine` (som tar högst fem flöden). */
+private data class Transient(
+    val filling: Boolean,
+    val reason: SwitchWatchEmptyReason?,
+    val message: SwitchWatchMessage?,
+    val suggestion: SwitchPlanCalc.LevelGap?,
+)

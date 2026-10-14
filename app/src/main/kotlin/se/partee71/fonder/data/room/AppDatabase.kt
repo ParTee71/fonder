@@ -34,7 +34,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SwitchWatchCandidateEntity::class,
         SuggestionDismissalEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -438,6 +438,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 17 → 18 (ANA-13, issue #150): `switch_watches.indexOnly` — användarens filter
+         * "bara indexfonder" för bevakningens automatiska förslag.
+         *
+         * `NOT NULL DEFAULT 0` (falskt): en befintlig bevakning visade förslag ur **alla** fonder på
+         * nivån, så falskt är inte en gissning utan en beskrivning av vad den faktiskt gjorde. Samma
+         * default står i entiteten (`@ColumnInfo(defaultValue = "0")`), så Rooms schemavalidering
+         * prövar den. Inga befintliga rader eller kolumner rörs — målnivån som användaren nu kan byta
+         * på skärmen är den befintliga `targetLevel`.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `switch_watches` ADD COLUMN `indexOnly` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -455,6 +471,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_14_15,
             MIGRATION_15_16,
             MIGRATION_16_17,
+            MIGRATION_17_18,
         )
     }
 }

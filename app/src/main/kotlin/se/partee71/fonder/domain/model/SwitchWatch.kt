@@ -25,9 +25,12 @@ import kotlinx.serialization.Serializable
  * @param proceedsKr beloppet bytet avser, från [SuggestionRecord.switchValueKr] eller
  *   säljtransaktionens likvid. Null när det inte är känt — då visas utvecklingen i procent utan
  *   kronbelopp, aldrig med ett påhittat (samma princip som ett förslag utan belopp).
- * @param targetLevel risknivån bytet ska fylla (bytesplanens `toLevel`, HEM-8) — styr vilka
- *   kandidater som föreslås automatiskt. Null när bevakningen startats fristående för en fond
- *   utan känd nivå; då erbjuds bara manuellt tillägg, aldrig en gissad nivå (ANA-4-principen).
+ * @param targetLevel risknivån bytet ska fylla — styr vilka kandidater som föreslås automatiskt
+ *   och var likviden räknas i bytesplanen (BYT-3). Ur ett förslag bytesplanens `toLevel` (HEM-8);
+ *   fristående förvald efter riskprofilen (den mest underviktade nivån, likviden oräknad) och
+ *   annars säljfondens egen nivå ([se.partee71.fonder.domain.usecase.SwitchPlanCalc.preselectTargetLevel],
+ *   issue #150). Användaren kan byta nivå på skärmen (ANA-13). Null när ingen nivå är känd; då
+ *   erbjuds bara manuellt tillägg, aldrig en gissad nivå (ANA-4-principen).
  * @param sourceRecordId raden i `suggestion_records` som bevakningen startades ur (HEM-8), null
  *   för en fristående bevakning. Nyckeln [SwitchWatchCloseReason.KOPT] skriver `followed` mot
  *   när det köpta faktiskt var det föreslagna.
@@ -44,6 +47,10 @@ import kotlinx.serialization.Serializable
  * @param buyTransactionId köptransaktionen som stängde bevakningen som [SwitchWatchCloseReason.KOPT],
  *   null när köpet kvitterades utan transaktion ("Köpte den här") eller bevakningen inte stängts
  *   av ett köp. Samma regler som [sellTransactionId].
+ * @param indexOnly användarens filter för appens förslag (ANA-13, issue #150): sant = bara
+ *   indexfonder ([FundMetadata.indexFund]) föreslås. Ett val, inte härlett — ingår därför i
+ *   backup-kontraktet. Default falskt, så en bevakning eller säkerhetskopia från före 0.71.0 läses
+ *   som "alla fonder", vilket är vad den faktiskt visade.
  */
 @Serializable
 data class SwitchWatch(
@@ -60,6 +67,7 @@ data class SwitchWatch(
     val candidates: List<SwitchWatchCandidate> = emptyList(),
     val sellTransactionId: Long? = null,
     val buyTransactionId: Long? = null,
+    val indexOnly: Boolean = false,
 ) {
     /** Öppen = ingen kvittering och ingen utgång skriven. Se [SwitchWatchCalc] för färskhetsgränsen. */
     val isOpen: Boolean get() = closedAtEpochDay == null

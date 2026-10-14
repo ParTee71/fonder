@@ -45,6 +45,7 @@ class RecordTransaction @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val scheduler: FundPriceRefreshScheduler,
+    private val targetLevelPreselection: TargetLevelPreselection,
 ) {
 
     /** En transaktion att skriva, med användarens svar på bytesväljaren ("Inget byte" om väljaren inte visats). */
@@ -71,6 +72,11 @@ class RecordTransaction @Inject constructor(
      * och går aldrig förlorad — avbryts importen efter rad n finns rad 1..n, och importflödena
      * (IMP-5/IMP-6) är idempotenta under pågående körning. En gemensam transaktion hade krävt att
      * use caset kände till Room, för ett skydd mot ett fall som inte tappar data.
+     *
+     * Varje fristående sälj förväljer sin målnivå när dess bevakning startas ([startWatch]) och
+     * läser då portföljen (bara cachen, inget nätverk) — en gång **per sådant sälj**, inte per
+     * import. Medvetet: en import har få säljrader, och förvalet ser då exakt det läge raderna före
+     * gav, i samma ordning som de skrevs (issue #150).
      */
     suspend fun recordAll(entries: List<Entry>, today: LocalDate = LocalDate.now()): List<Recorded> {
         if (entries.isEmpty()) return emptyList()
@@ -98,10 +104,12 @@ class RecordTransaction @Inject constructor(
      * Startar bevakningen av ett pågående byte ur en **sparad** säljtransaktion ("Bevaka
      * alternativ" i Händelser, SLD-5/ANA-12, och "Fristående bevakning" i väljaren): säljdag och
      * likvid (belopp − avgift) ur transaktionen, aldrig ur dagens datum — utvecklingen mäts från
-     * dagen pengarna faktiskt frigjordes. Målnivån är säljfondens **egen** risknivå ur
-     * metadatacachen — det närmaste "något likvärdigt" utan en plan att mäta mot; saknas nivån
-     * startas bevakningen utan förslag, en gissad nivå hade gett alternativ på fel risk
-     * (ANA-4-principen). Inget nätverksanrop görs.
+     * dagen pengarna faktiskt frigjordes. Målnivån **förväljs** ([TargetLevelPreselection], issue
+     * #150): med riskprofil den mest underviktade nivån, räknad med säljets egen likvid bara i
+     * portföljens total; utan profil säljfondens **egen** risknivå ur metadatacachen. Ger inget av
+     * det en nivå startas bevakningen utan förslag — en gissad nivå hade gett alternativ på fel
+     * risk (ANA-4-principen). Användaren byter nivå på skärmen (ANA-13). Inget nätverksanrop görs:
+     * innehavens metadata läses bara ur cachen.
      *
      * En öppen bevakning utan känd transaktion för samma fond och **samma säljdag** (startad ur
      * ett förslag innan säljet registrerades, eller från före 0.67.0) **är** det här säljets byte:
@@ -154,14 +162,23 @@ class RecordTransaction @Inject constructor(
             return if (linked) existing.id else null
         }
 
+        val proceedsKr = sale.amount - sale.fee
+        // Ur en planrad gäller radens nivå oförändrad; fristående förväljs den (issue #150).
+        val planToLevel = suggestion?.takeIf { record != null }?.toLevel
+        val targetLevel = targetLevelPreselection.preselect(
+            planToLevel = planToLevel,
+            sellLevel = if (planToLevel == null) fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.risk else null,
+            proceedsKr = proceedsKr,
+            today = today,
+            metadataFor = fundMetadataRepository::cachedMetadataFor,
+        )
         return switchWatchRepository.start(
             SwitchWatch(
                 sellIsin = isin,
                 sellFundName = fund.name,
                 soldAtEpochDay = sale.epochDay,
-                proceedsKr = sale.amount - sale.fee,
-                targetLevel = suggestion?.takeIf { record != null }?.toLevel
-                    ?: fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.risk,
+                proceedsKr = proceedsKr,
+                targetLevel = targetLevel,
                 sourceRecordId = record?.id,
                 sellTransactionId = sale.id,
             ),

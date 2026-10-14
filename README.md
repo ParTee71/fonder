@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.70.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.71.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -137,6 +137,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.71.0 | **Pågående byte – välj nivå och bara indexfonder** (ANA-12, ANA-13, SLD-5, BYT-2, BYT-3, #150): på Pågående byte väljer du vilken risknivå likviden ska köpa på. När du registrerar ett fristående sälj är nivån förvald efter din riskprofil – den nivå som ligger längst under målet, räknat som om likviden inte låg någonstans än – och utan riskprofil är den säljfondens egen nivå som förut; ett byte ur bytesplanen behåller planens nivå. Väljer du en annan nivå byts appens förslag ut mot förslag på den nya nivån, medan de fonder du själv lagt till ligger kvar, och bytesplanen räknas om eftersom likviden räknas på den valda nivån. Med "Bara indexfonder" föreslås bara indexfonder; finns ingen köpbar indexfond på nivån säger skärmen det. Nivån och filtret följer med i säkerhetskopian. |
 | 0.70.0 | **Pågående byte – varför alternativen saknas** (ANA-13, SLD-5, #149): en bevakning som startades utan känd risknivå får nivån i efterhand när skärmen öppnas — säljfondens risknivå slås upp och sparas, och sedan hämtas förslagen. Är listan ändå tom säger skärmen varför: risknivån är okänd, ingen av de bästa fonderna på nivån går att köpa hos Handelsbanken, eller det gick inte att kontrollera just nu — i det sista fallet med knappen Försök igen. |
 | 0.69.0 | **Byten C – ett byte, en rad** (BYT-4, NAV-9, HEM-13, HEM-14, ANA-9, #145): Beslut visar listan Byten i stället för avsnitten Pågående byte, Förslag och Billigare alternativ, som kunde visa samma byte tre gånger. Varje byte står på en rad med ett tillståndschip – Föreslaget, Avgift, Sålt · dag N av 14 – och Registrera säljet/Avstå eller Öppna bevakningen. Köpta, avbrutna och utgångna byten ligger i 14 dagar i den hopfällda sektionen "Avslutade och avstådda" tillsammans med de avstådda förslagen. Översiktens "Att besluta" säger "N föreslagna · M sålda, väntar på köp · K billigare alternativ"; samma antal som flikmärket. |
 | 0.68.0 | **Byten B – väljaren i formulär och import** (BYT-2, BYT-3, HEM-8, ANA-12, SET-5, SLD-5, TRX-2, #144): när ett sälj eller köp registreras — i formuläret eller i PDF-importen — svarar du på om det hör till ett byte: *Inget byte*, *Fristående bevakning* eller *för planrad N* vid sälj, *avslutar bevakning X* vid köp. Sälj av en fond planen vill sälja och köp av en bevakad kandidat är förvalda; ett köp av något annat medan ett byte pågår frågar alltid, utan gissning. Köpet stänger bytet på köpdagen med köptransaktionen som koppling; ett sälj som hör till en bevakning du startade en annan dag kopplas bara efter att du svarat ja, och då mäts alternativen om från säljdagen. Bytesplanen räknar nu med likviden som väntar på köp och räknas om efter varje transaktion, så den föreslår inte nästa sälj för ett gap du redan finansierat. Följ på Beslut och Fonddetalj öppnar "Registrera säljet" förifyllt (fond och typ låsta, dagens datum, senaste kurs, andelar ur förslagets belopp), "Köpte den här" köpformuläret med bytet förvalt; "Genomförd"-kryssrutan finns bara kvar i Facit. Väljaren är en vanlig rullgardin ("Byte" / "Hör till byte") med en förklaring under, och Spara är släckt tills en fråga utan förval besvarats. I PDF-importen står säljen före köpen och varje rad har samma väljare. |
@@ -207,6 +208,10 @@ domain/
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
                   SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
+                  SwitchPlanInputs (portföljläget bytesplanen och målnivåns förval räknas på: innehav med
+                  värde, metadata, likvid på väg — en läsväg för bakgrundskörningen och förvalet, BYT-3) ·
+                  TargetLevelPreselection (förvald målnivå för en fristående bevakning ur riskprofilen,
+                  `SwitchPlanCalc.preselectTargetLevel`, SLD-5/BYT-2/ANA-13, #150) ·
                   RecordTransaction (den enda skrivvägen för transaktioner, och bytets livscykel: `Entry` med
                   `SwitchDecision`, bevakning ur sälj/planrad, avslut med köptransaktionen, koppling från
                   annan dag efter fråga, och en begärd omräkning av planen per skrivning, BYT-2/BYT-3, #143/#144) ·

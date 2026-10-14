@@ -144,4 +144,39 @@ class RoomSwitchWatchRepositoryTest {
         assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
         assertEquals("SE_A", closed.boughtIsin)
     }
+
+    // --- Målnivå och indexfilter på skärmen (ANA-13, issue #150) ---
+
+    @Test
+    fun nivabyte_tar_bort_appens_forslag_behaller_de_handplockade_och_ett_inaktuellt_svar_laggs_inte_till() = runTest {
+        val id = repository.start(watch())
+
+        assertEquals(true, repository.setTargetLevel(id, 5))
+        // Samma nivå igen är ingen ändring.
+        assertEquals(false, repository.setTargetLevel(id, 5))
+
+        val changed = repository.observe(id).first()!!
+        assertEquals(5, changed.targetLevel)
+        assertEquals(listOf("SE_EGEN"), changed.candidates.map { it.isin })
+        assertEquals(33.0, changed.candidates.single().navAtStart!!, 1e-9)
+
+        val fresh = listOf(SwitchWatchCandidate(isin = "SE_NY", name = "Ny"))
+        // Ett svar på en sökning för den gamla nivån — eller utan filtret som nu gäller — skrivs aldrig.
+        assertEquals(0, repository.addAutoCandidates(id, targetLevel = 3, indexOnly = false, candidates = fresh))
+        assertEquals(true, repository.setIndexOnly(id, true))
+        assertEquals(0, repository.addAutoCandidates(id, targetLevel = 5, indexOnly = false, candidates = fresh))
+        assertEquals(1, repository.addAutoCandidates(id, targetLevel = 5, indexOnly = true, candidates = fresh))
+
+        val filled = repository.observe(id).first()!!
+        assertEquals(true, filled.indexOnly)
+        assertEquals(listOf("SE_EGEN", "SE_NY"), filled.candidates.map { it.isin })
+        assertEquals(listOf(SwitchWatchCandidateSource.MANUELL, SwitchWatchCandidateSource.AUTO), filled.candidates.map { it.source })
+
+        // En stängd bevakning byter varken nivå eller filter, och får inga förslag.
+        repository.close(id, SwitchWatchCloseReason.AVBRUTEN, today)
+        assertEquals(false, repository.setTargetLevel(id, 2))
+        assertEquals(false, repository.setIndexOnly(id, false))
+        assertEquals(0, repository.addAutoCandidates(id, targetLevel = 5, indexOnly = true, candidates = listOf(SwitchWatchCandidate(isin = "SE_X", name = "X"))))
+        assertEquals(5, repository.observe(id).first()!!.targetLevel)
+    }
 }

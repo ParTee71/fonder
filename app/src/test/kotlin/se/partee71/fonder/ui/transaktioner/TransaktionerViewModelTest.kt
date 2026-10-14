@@ -28,6 +28,7 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
@@ -68,7 +69,10 @@ class TransaktionerViewModelTest {
     private fun viewModel() = TransaktionerViewModel(
         fakeRepo,
         fakeSwitchWatchRepo,
-        RecordTransaction(fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo, scheduler),
+        RecordTransaction(
+            fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo, scheduler,
+            testTargetLevelPreselection(fakeRepo, fakeSwitchWatchRepo),
+        ),
     ) { today }
 
     private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) =
