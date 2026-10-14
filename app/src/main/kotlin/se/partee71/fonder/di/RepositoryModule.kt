@@ -14,10 +14,12 @@ import se.partee71.fonder.data.network.AvanzaPriceSource
 import se.partee71.fonder.data.network.AvanzaSource
 import se.partee71.fonder.data.network.FondlistaFundPageSource
 import se.partee71.fonder.data.network.FondlistaHtmlSource
+import se.partee71.fonder.data.network.FondlistaWafTokenSource
 import se.partee71.fonder.data.network.FxRateSource
 import se.partee71.fonder.data.network.HandelsbankenFondlistaClient
 import se.partee71.fonder.data.network.IsinPriceHistorySource
 import se.partee71.fonder.data.network.RiksbankFxClient
+import se.partee71.fonder.data.network.WebViewFondlistaWafTokenSource
 import se.partee71.fonder.data.repository.AvanzaFundMetadataRepository
 import se.partee71.fonder.data.repository.BackupRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
@@ -62,6 +64,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFondlistaHtmlSource(impl: HandelsbankenFondlistaClient): FondlistaHtmlSource
+
+    @Binds
+    abstract fun bindFondlistaWafTokenSource(impl: WebViewFondlistaWafTokenSource): FondlistaWafTokenSource
 
     @Binds
     abstract fun bindFondlistaFundPageSource(impl: HandelsbankenFondlistaClient): FondlistaFundPageSource
