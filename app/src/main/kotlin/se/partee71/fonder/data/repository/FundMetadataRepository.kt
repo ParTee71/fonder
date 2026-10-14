@@ -265,13 +265,24 @@ class AvanzaFundMetadataRepository @Inject constructor(
      * **Null när katalogen inte kunde hämtas** — ett obesvarat "vet inte", skilt från ett
      * verifierat `false`. Tidigare gav en tom katalog vid nätverksfel ett `false` som såg
      * auktoritativt ut, cachades i 30 dygn och tyst slog ut både ANA-9 och hela bytesplanen.
+     *
+     * Samma gäller två andra sätt att inte få svar (issue #153): en katalog **utan fonder** (källan
+     * listar ~1500, så en tom lista är ett svar som inte kom fram, t.ex. en brandväggskontroll) och
+     * en fondsida vars ISIN inte gick att läsa. Bara när varje prövad kandidat gav ett ISIN, och
+     * inget var [isin], är svaret ett verifierat `false`.
      */
     private suspend fun resolveViaFondlistaCatalog(fundName: String, isin: String): Boolean? {
         val catalog = fundPriceRepository.fetchFundCatalog() ?: return null
-        val candidates = FundNameMatcher.rankedMatches(fundName, catalog.funds)
-        return candidates
-            .take(MAX_ISIN_VERIFICATIONS)
-            .any { fundPriceRepository.lookupIsin(it.fund.fundId) == isin }
+        if (catalog.funds.isEmpty()) return null
+        var unknown = false
+        for (match in FundNameMatcher.rankedMatches(fundName, catalog.funds).take(MAX_ISIN_VERIFICATIONS)) {
+            when (fundPriceRepository.lookupIsin(match.fund.fundId)) {
+                isin -> return true
+                null -> unknown = true
+                else -> Unit
+            }
+        }
+        return if (unknown) null else false
     }
 
     override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
