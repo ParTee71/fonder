@@ -35,10 +35,10 @@ class HandelsbankenFondlistaClient @Inject constructor(
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
         httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("Oväntat svar (${response.code}) från $url")
-            }
-            response.body?.string() ?: throw IOException("Tomt svar från $url")
+            checkResponse(response.code, response.header(WAF_ACTION_HEADER), url)
+            val body = response.body?.string()
+            if (body.isNullOrBlank()) throw IOException("Tomt svar från $url")
+            body
         }
     }
 
@@ -67,6 +67,20 @@ class HandelsbankenFondlistaClient @Inject constructor(
                 }
                 append("&s=nav")
             }
+        }
+
+        /** Satt av källans brandvägg (AWS WAF) när den kräver en webbläsarkontroll i stället för att svara. */
+        const val WAF_ACTION_HEADER = "x-amzn-waf-action"
+
+        /**
+         * Kastar för allt utom ett riktigt svar. Källans brandvägg svarar ibland `202` med tom kropp
+         * och [WAF_ACTION_HEADER] satt — en JavaScript-kontroll som appen inte kan lösa. Den räknas
+         * som ett fel, inte som en tom sida: en tom katalog tolkades tidigare som "ingen fond går
+         * att köpa hos Handelsbanken" och cachades i 30 dygn (issue #153).
+         */
+        fun checkResponse(code: Int, wafAction: String?, url: String) {
+            if (wafAction != null) throw IOException("Källan krävde en webbläsarkontroll ($wafAction) för $url")
+            if (code != 200) throw IOException("Oväntat svar ($code) från $url")
         }
 
         fun fundUrl(fundId: String): String = "$BASE_URL/funds/${urlEncode(fundId)}?hb=true&sa=2"

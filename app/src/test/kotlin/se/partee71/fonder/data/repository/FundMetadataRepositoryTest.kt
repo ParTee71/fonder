@@ -74,9 +74,18 @@ private class FakeFundMetadataDao : FundMetadataDao {
     override suspend fun deleteAll() { stored.clear() }
 }
 
+/**
+ * En katalog som hämtades men inte innehåller testets fonder — ett riktigt "finns inte". En **tom**
+ * katalog är sedan issue #153 ett svar som inte kom fram och ger null, inte false.
+ */
+private val UNRELATED_CATALOG = FundCatalog(
+    companies = emptyList(),
+    funds = listOf(Fund(fundId = "XZ", name = "Orelaterad Räntefond Kort", currency = "SEK")),
+)
+
 private class FakeFundPriceRepository(
     /** Null = katalogen kunde inte hämtas (nätverksfel), skilt från en tom katalog. */
-    var catalog: FundCatalog? = FundCatalog(companies = emptyList(), funds = emptyList()),
+    var catalog: FundCatalog? = UNRELATED_CATALOG,
     private val isinByFundId: Map<String, String> = emptyMap(),
 ) : FundPriceRepository {
     var fetchFundCatalogCallCount = 0
@@ -339,14 +348,53 @@ class FundMetadataRepositoryTest {
     fun `resolveHandelsbankenAvailability ingen verifierad traff ger false och cachar missen`() = runTest {
         // Katalogen hämtades men innehöll ingen fond som ISIN-verifierade — ett riktigt svar,
         // som därför får cachas. Jämför testet nedan, där katalogen inte gick att hämta alls.
-        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Helt Okänd Fond")
-        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Länsförsäkringar Sverige Index")
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(
+                companies = emptyList(),
+                funds = listOf(
+                    Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"),
+                    Fund(fundId = "X2", name = "Helt Annan Fond", currency = "SEK"),
+                ),
+            ),
+            isinByFundId = mapOf("X1" to "SE_SYSKON", "X2" to "SE2"),
+        )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
 
         val available = repository.resolveHandelsbankenAvailability("SE1")
 
         assertEquals(false, available)
         assertEquals(false, dao.stored["SE1"]?.availableAtHandelsbanken)
+    }
+
+    @Test
+    fun `resolveHandelsbankenAvailability tom katalog ger null och cachar inget`() = runTest {
+        // Issue #153: källans brandväggskontroll gav en tom katalog, som lästes som "går inte att
+        // köpa" och cachades i 30 dygn. Källan listar ~1500 fonder — tom är ett svar som inte kom fram.
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Helt Okänd Fond")
+        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        val repository = repo(FakeAvanzaSource(), fundPriceRepo)
+
+        assertNull(repository.resolveHandelsbankenAvailability("SE1"))
+        assertNull(dao.stored["SE1"]?.availableAtHandelsbanken)
+        assertNull(dao.stored["SE1"]?.availabilityResolvedAtEpochDay)
+    }
+
+    @Test
+    fun `resolveHandelsbankenAvailability olast fondsida ger null i stallet for false`() = runTest {
+        // En namnträff vars sida inte gick att läsa (lookupIsin null) är okänd, inte en miss.
+        dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Länsförsäkringar Sverige Index")
+        val fundPriceRepo = FakeFundPriceRepository(
+            catalog = FundCatalog(
+                companies = emptyList(),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+            ),
+            isinByFundId = emptyMap(),
+        )
+        val repository = repo(FakeAvanzaSource(), fundPriceRepo)
+
+        assertNull(repository.resolveHandelsbankenAvailability("SE1"))
+        assertNull(dao.stored["SE1"]?.availableAtHandelsbanken)
     }
 
     @Test
@@ -528,8 +576,8 @@ class FundMetadataRepositoryTest {
         }
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(candidateViews.size, candidateViews))
-        // Tom katalog — ingen kandidat kan någonsin ISIN-verifieras som köpbar.
-        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        // Katalog utan kandidaterna — ingen kan någonsin ISIN-verifieras som köpbar.
+        val fundPriceRepo = FakeFundPriceRepository(catalog = UNRELATED_CATALOG)
         val repository = repo(source, fundPriceRepo)
 
         val result = repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
@@ -769,7 +817,7 @@ class FundMetadataRepositoryTest {
     fun `findSwitchCandidates ger tom lista nar ingen kandidat ar kopbar`() = runTest {
         val candidateView = fundView("SE_CAND", "Ej köpbar", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
         val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
-        val fundPriceRepo = FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList()))
+        val fundPriceRepo = FakeFundPriceRepository(catalog = UNRELATED_CATALOG)
         val repository = repo(source, fundPriceRepo)
 
         val result = repository.findSwitchCandidates(level = 3, excludeIsins = emptySet())
@@ -783,7 +831,7 @@ class FundMetadataRepositoryTest {
         val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
         val repository = repo(
             FakeAvanzaSource(fullListJson(1, listOf(candidateView))),
-            FakeFundPriceRepository(catalog = FundCatalog(companies = emptyList(), funds = emptyList())),
+            FakeFundPriceRepository(catalog = UNRELATED_CATALOG),
         )
 
         val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet())

@@ -34,7 +34,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SwitchWatchCandidateEntity::class,
         SuggestionDismissalEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -454,6 +454,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 18 → 19 (issue #153): glömmer varje cachat **nej** på köpbarhet hos Handelsbanken
+         * (`fund_metadata.availableAtHandelsbanken = 0`), så det slås upp igen nästa gång det behövs.
+         *
+         * Källans brandväggskontroll (ett tomt `202`-svar) lästes som en tom katalog, och varje fond
+         * som prövades då fick ett nej som cachades i 30 dygn — bytesförslagen sa "ingen gick att köpa"
+         * på nästan varje nivå. Felcachade och riktiga nej går inte att skilja åt i efterhand, så alla
+         * glöms; ett riktigt nej kostar bara en ny uppslagning. Ja-svaren och resten av metadatan rörs
+         * inte. `fund_metadata` är härledd cache utanför backupen, så ingen användardata berörs. Schemat
+         * är oförändrat.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "UPDATE `fund_metadata` SET `availableAtHandelsbanken` = NULL, `availabilityResolvedAtEpochDay` = NULL " +
+                        "WHERE `availableAtHandelsbanken` = 0",
+                )
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -472,6 +492,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
+            MIGRATION_18_19,
         )
     }
 }

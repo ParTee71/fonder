@@ -2,8 +2,10 @@ package se.partee71.fonder.data.network
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.time.LocalDate
 
 /**
@@ -58,5 +60,20 @@ class HandelsbankenFondlistaClientTest {
             "https://handelsbanken.fondlista.se/shb/sv/funds/0P0001KRE7?hb=true&sa=2",
             HandelsbankenFondlistaClient.fundUrl("0P0001KRE7"),
         )
+    }
+
+    @Test
+    fun `brandvaggens kontroll ar ett fel, inte ett tomt svar`() {
+        // Issue #153: källan svarade 202 med tom kropp och x-amzn-waf-action — lästes som en tom
+        // katalog och blev "ingen fond går att köpa hos Handelsbanken".
+        assertThrows(IOException::class.java) { HandelsbankenFondlistaClient.checkResponse(202, "challenge", "u") }
+        assertThrows(IOException::class.java) { HandelsbankenFondlistaClient.checkResponse(200, "challenge", "u") }
+        assertThrows(IOException::class.java) { HandelsbankenFondlistaClient.checkResponse(202, null, "u") }
+        assertThrows(IOException::class.java) { HandelsbankenFondlistaClient.checkResponse(503, null, "u") }
+    }
+
+    @Test
+    fun `ett vanligt 200-svar godtas`() {
+        HandelsbankenFondlistaClient.checkResponse(200, null, "u")
     }
 }
