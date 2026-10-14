@@ -19,6 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class HandelsbankenFondlistaClient @Inject constructor(
     private val httpClient: OkHttpClient,
+    private val wafToken: FondlistaWafTokenSource,
 ) : FondlistaHtmlSource, FondlistaFundPageSource {
 
     /**
@@ -32,15 +33,20 @@ class HandelsbankenFondlistaClient @Inject constructor(
     /** Hämtar en enskild fonds sida, som bär fondens ISIN (KRAVLISTA TP-18). */
     override suspend fun fetchFundPage(fundId: String): String = get(fundUrl(fundId))
 
-    private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url).build()
+    private suspend fun get(url: String): String =
+        fetchWithWafToken(url, wafToken::token) { token -> fetchOnce(url, token) }
+
+    private suspend fun fetchOnce(url: String, token: String?): Response = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).apply {
+            if (token != null) header("Cookie", "${WafToken.COOKIE_NAME}=$token")
+        }.build()
         httpClient.newCall(request).execute().use { response ->
-            checkResponse(response.code, response.header(WAF_ACTION_HEADER), url)
-            val body = response.body?.string()
-            if (body.isNullOrBlank()) throw IOException("Tomt svar från $url")
-            body
+            Response(response.code, response.header(WAF_ACTION_HEADER), response.body?.string())
         }
     }
+
+    /** Det som behövs av ett svar för att avgöra om det är en kontroll — utbrutet för enhetstest. */
+    internal data class Response(val code: Int, val wafAction: String?, val body: String?)
 
     /** Rena URL-byggare, utbrutna för att kunna enhetstestas utan riktig HTTP (som [AvanzaClient.chartUrl]). */
     internal companion object {
@@ -67,6 +73,31 @@ class HandelsbankenFondlistaClient @Inject constructor(
                 }
                 append("&s=nav")
             }
+        }
+
+        /**
+         * Hämtar [url] med fondlistans nyckel (issue #155). Utan nyckel, eller när källan svarar med en
+         * kontroll trots nyckeln (den har gått ut), hämtas en ny via [token] och anropet görs om — en
+         * gång. Ger källan fortfarande en kontroll kastas det, som för alla andra fel ([checkResponse]).
+         */
+        suspend fun fetchWithWafToken(
+            url: String,
+            token: suspend (rejected: String?) -> String?,
+            fetch: suspend (token: String?) -> Response,
+        ): String {
+            var current = token(null)
+            var response = fetch(current)
+            if (response.wafAction != null) {
+                val fresh = token(current)
+                if (fresh != null && fresh != current) {
+                    current = fresh
+                    response = fetch(current)
+                }
+            }
+            checkResponse(response.code, response.wafAction, url)
+            val body = response.body
+            if (body.isNullOrBlank()) throw IOException("Tomt svar från $url")
+            return body
         }
 
         /** Satt av källans brandvägg (AWS WAF) när den kräver en webbläsarkontroll i stället för att svara. */

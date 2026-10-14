@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.71.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.72.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -137,6 +137,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.72.0 | **Handelsbankens fondlista fungerar igen** (TP-18, NAV-3, TP-13, ANA-13, #155): Handelsbankens fondlista släpper bara in webbläsare. Appen löser nu kontrollen själv i en osynlig webbläsare och använder nyckeln den får i flera dygn. Fondsök, importens fondmatchning och kollen av vilka fonder som går att köpa hos Handelsbanken fungerar då igen. |
 | 0.71.1 | **Köpbara alternativ igen** (TP-21, ANA-13, #153): Pågående byte sa att ingen av de bästa fonderna gick att köpa hos Handelsbanken på nästan varje risknivå. Det var Handelsbankens fondlista som svarade med en robotkontroll, och appen läste det som "går inte att köpa" och kom ihåg det i 30 dygn. Nu räknas ett sådant svar som att köpbarheten inte gick att kontrollera, och de felaktigt sparade neja glöms vid uppdateringen så fonderna prövas igen. |
 | 0.71.0 | **Pågående byte – välj nivå och bara indexfonder** (ANA-12, ANA-13, SLD-5, BYT-2, BYT-3, #150): på Pågående byte väljer du vilken risknivå likviden ska köpa på. När du registrerar ett fristående sälj är nivån förvald efter din riskprofil – den nivå som ligger längst under målet, räknat som om likviden inte låg någonstans än – och utan riskprofil är den säljfondens egen nivå som förut; ett byte ur bytesplanen behåller planens nivå. Väljer du en annan nivå byts appens förslag ut mot förslag på den nya nivån, medan de fonder du själv lagt till ligger kvar, och bytesplanen räknas om eftersom likviden räknas på den valda nivån. Med "Bara indexfonder" föreslås bara indexfonder; finns ingen köpbar indexfond på nivån säger skärmen det. Nivån och filtret följer med i säkerhetskopian. |
 | 0.70.0 | **Pågående byte – varför alternativen saknas** (ANA-13, SLD-5, #149): en bevakning som startades utan känd risknivå får nivån i efterhand när skärmen öppnas — säljfondens risknivå slås upp och sparas, och sedan hämtas förslagen. Är listan ändå tom säger skärmen varför: risknivån är okänd, ingen av de bästa fonderna på nivån går att köpa hos Handelsbanken, eller det gick inte att kontrollera just nu — i det sista fallet med knappen Försök igen. |

@@ -1,6 +1,9 @@
 package se.partee71.fonder.data.network
 
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -75,5 +78,92 @@ class HandelsbankenFondlistaClientTest {
     @Test
     fun `ett vanligt 200-svar godtas`() {
         HandelsbankenFondlistaClient.checkResponse(200, null, "u")
+    }
+
+    private val ok = HandelsbankenFondlistaClient.Response(200, null, "<html>katalog</html>")
+    private val challenge = HandelsbankenFondlistaClient.Response(202, "challenge", "")
+
+    @Test
+    fun `nyckeln skickas med och ett vanligt svar godtas utan ny nyckel`() = runTest {
+        val rejections = mutableListOf<String?>()
+        val sent = mutableListOf<String?>()
+
+        val body = HandelsbankenFondlistaClient.fetchWithWafToken(
+            "u",
+            token = { rejected -> rejections += rejected; "T1" },
+            fetch = { token -> sent += token; ok },
+        )
+
+        assertEquals("<html>katalog</html>", body)
+        assertEquals(listOf<String?>(null), rejections)
+        assertEquals(listOf<String?>("T1"), sent)
+    }
+
+    @Test
+    fun `kontroll trots nyckel ger ny nyckel och ett nytt forsok`() = runTest {
+        // Issue #155: nyckeln har gått ut — källan svarar med kontrollen igen.
+        val sent = mutableListOf<String?>()
+
+        val body = HandelsbankenFondlistaClient.fetchWithWafToken(
+            "u",
+            token = { rejected -> if (rejected == "T1") "T2" else "T1" },
+            fetch = { token -> sent += token; if (token == "T2") ok else challenge },
+        )
+
+        assertEquals("<html>katalog</html>", body)
+        assertEquals(listOf<String?>("T1", "T2"), sent)
+    }
+
+    @Test
+    fun `utan nyckel att fa ar kontrollen ett fel, och forsoket gors bara en gang`() {
+        var fetches = 0
+
+        assertThrows(IOException::class.java) {
+            runBlocking {
+                HandelsbankenFondlistaClient.fetchWithWafToken(
+                    "u",
+                    token = { null },
+                    fetch = { fetches++; challenge },
+                )
+            }
+        }
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `nyckeln lases ur kakhuvudet`() {
+        assertEquals("abc:123", WafToken.fromCookieHeader("__utma=1; aws-waf-token=abc:123; AWSALB=x"))
+        assertEquals("abc", WafToken.fromCookieHeader("aws-waf-token=abc"))
+        assertNull(WafToken.fromCookieHeader("AWSALB=x"))
+        assertNull(WafToken.fromCookieHeader("aws-waf-token="))
+        assertNull(WafToken.fromCookieHeader(null))
+    }
+
+    @Test
+    fun `samma nyckel igen ger inget nytt forsok utan ett fel`() {
+        var fetches = 0
+
+        assertThrows(IOException::class.java) {
+            runBlocking {
+                HandelsbankenFondlistaClient.fetchWithWafToken("u", token = { "T1" }, fetch = { fetches++; challenge })
+            }
+        }
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `ingen ny nyckel att fa ger ett fel efter ett forsok`() {
+        var fetches = 0
+
+        assertThrows(IOException::class.java) {
+            runBlocking {
+                HandelsbankenFondlistaClient.fetchWithWafToken(
+                    "u",
+                    token = { rejected -> if (rejected == null) "T1" else null },
+                    fetch = { fetches++; challenge },
+                )
+            }
+        }
+        assertEquals(1, fetches)
     }
 }
