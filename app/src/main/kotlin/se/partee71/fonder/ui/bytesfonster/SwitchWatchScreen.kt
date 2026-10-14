@@ -32,6 +32,8 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
+import se.partee71.fonder.ui.components.RiskLevelPicker
+import se.partee71.fonder.ui.components.SwitchRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
@@ -78,6 +80,8 @@ fun SwitchWatchScreen(
         onCancel = viewModel::onCancel,
         onMessageShown = viewModel::onMessageShown,
         onRetryAutoFill = viewModel::onRetryAutoFill,
+        onSelectTargetLevel = viewModel::onSelectTargetLevel,
+        onIndexOnlyChanged = viewModel::onIndexOnlyChanged,
         modifier = modifier,
     )
 }
@@ -93,6 +97,8 @@ fun SwitchWatchContent(
     onCancel: () -> Unit = {},
     onMessageShown: () -> Unit = {},
     onRetryAutoFill: () -> Unit = {},
+    onSelectTargetLevel: (Int) -> Unit = {},
+    onIndexOnlyChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (state.missing) {
@@ -114,6 +120,17 @@ fun SwitchWatchContent(
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize().testTag(SWITCH_WATCH_LIST_TEST_TAG)) {
             item { HeaderCard(state) }
+            // Nivå och filter går bara att ändra medan bytet pågår (ANA-13) — en stängd
+            // bevakning bär vad som hände och visar ingen väljare.
+            if (state.canChangeSelection) {
+                item {
+                    TargetLevelCard(
+                        state = state,
+                        onSelectTargetLevel = onSelectTargetLevel,
+                        onIndexOnlyChanged = onIndexOnlyChanged,
+                    )
+                }
+            }
             item { ComparisonChart(state) }
 
             if (state.rows.isEmpty()) {
@@ -127,6 +144,10 @@ fun SwitchWatchContent(
                     ) {
                         val text = when {
                             state.fillingCandidates -> stringResource(R.string.switch_watch_filling)
+                            // Med filtret är "inga köpbara indexfonder" ett annat besked än inga
+                            // köpbara fonder alls — och det säger vad som går att ändra (issue #150).
+                            state.emptyBecauseOfIndexFilter && state.targetLevel != null ->
+                                stringResource(R.string.format_switch_watch_empty_index_body, state.targetLevel)
                             // Tre orsaker som förr delade samma text (issue #149) — var och en
                             // säger vad användaren kan göra åt den.
                             else -> when (state.emptyReason) {
@@ -142,11 +163,19 @@ fun SwitchWatchContent(
                         // Snurran bara medan förslagen faktiskt hämtas (ANA-13) — "inga alternativ
                         // ännu" är ett färdigt svar, inte ett som är på väg.
                         WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
-                        Text(
-                            text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Column {
+                            if (!state.fillingCandidates && state.emptyBecauseOfIndexFilter && state.targetLevel != null) {
+                                Text(
+                                    stringResource(R.string.format_switch_watch_empty_index_title, state.targetLevel),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                            Text(
+                                text,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 // Bara när kontrollen misslyckades: "inga köpbara" och "okänd nivå" blir inte
@@ -160,6 +189,24 @@ fun SwitchWatchContent(
                             variant = AppButtonVariant.Text,
                         )
                     }
+                }
+            }
+
+            // Rubriken över alternativen: vad talen mäter och vilken nivå (och filter) förslagen gäller.
+            if (state.rows.isNotEmpty() && state.targetLevel != null) {
+                item {
+                    Text(
+                        stringResource(
+                            if (state.indexOnly) {
+                                R.string.format_switch_watch_alternatives_heading_index
+                            } else {
+                                R.string.format_switch_watch_alternatives_heading
+                            },
+                            state.targetLevel,
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    )
                 }
             }
 
@@ -201,6 +248,14 @@ fun SwitchWatchContent(
                             text = stringResource(R.string.switch_watch_cancel),
                             onClick = onCancel,
                             variant = AppButtonVariant.Text,
+                        )
+                    }
+                    if (state.canChangeSelection) {
+                        Text(
+                            stringResource(R.string.switch_watch_level_footer),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                     Text(
@@ -252,6 +307,71 @@ private fun HeaderCard(state: SwitchWatchUiState) {
             },
             modifier = Modifier.padding(top = 4.dp),
         )
+    }
+}
+
+/**
+ * Risknivån appen föreslår fonder på och filtret "Bara indexfonder" (ANA-13, issue #150). Nivån
+ * väljs i den delade [RiskLevelPicker] med säljfondens egen nivå markerad, så användaren ser vad
+ * "något likvärdigt" hade varit; filtret är en delad [SwitchRow]. Båda byter appens förslag —
+ * ViewModeln tar bort de gamla och hämtar nya, de handplockade ligger kvar.
+ */
+@Composable
+private fun TargetLevelCard(
+    state: SwitchWatchUiState,
+    onSelectTargetLevel: (Int) -> Unit,
+    onIndexOnlyChanged: (Boolean) -> Unit,
+) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+        Text(stringResource(R.string.switch_watch_level_title), style = MaterialTheme.typography.titleSmall)
+        RiskLevelPicker(
+            selected = state.targetLevel,
+            onSelect = onSelectTargetLevel,
+            marked = state.sellLevel,
+            markedDescription = stringResource(R.string.switch_watch_level_marked),
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Text(
+            levelHint(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        SwitchRow(
+            checked = state.indexOnly,
+            onCheckedChange = onIndexOnlyChanged,
+            label = stringResource(R.string.switch_watch_index_only),
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * Förklaringsraden under nivåväljaren (issue #150). Med riskprofil säger den vad profilen saknar
+ * på den valda nivån ("9 procentenheter för lite där") eller, när en annan nivå är vald, var
+ * profilen saknar mest; utan profil vilken nivå appen föreslår på och var säljfondens egen nivå
+ * ligger. Texten säger aldrig att nivån *förvaldes*: bevakningen bär inte vem som valde den (en
+ * planrad, profilen eller användaren), och ett sådant fält finns inte i backupkontraktet.
+ */
+@Composable
+private fun levelHint(state: SwitchWatchUiState): String {
+    val target = state.targetLevel ?: return stringResource(R.string.switch_watch_level_hint_none)
+    val sell = state.sellLevel
+    val profileLevel = state.profileSuggestedLevel
+    val gap = state.profileGapPp
+    return when {
+        profileLevel != null && gap != null && profileLevel == target -> {
+            val reason = stringResource(R.string.format_switch_watch_level_hint_profile, target, gap)
+            when (sell) {
+                null -> reason
+                target -> "$reason ${stringResource(R.string.switch_watch_level_hint_frame_same)}"
+                else -> "$reason ${stringResource(R.string.format_switch_watch_level_hint_frame, sell)}"
+            }
+        }
+        profileLevel != null -> stringResource(R.string.format_switch_watch_level_hint_profile_other, target, profileLevel)
+        sell == null -> stringResource(R.string.format_switch_watch_level_hint_unknown_sell, target)
+        sell == target -> stringResource(R.string.format_switch_watch_level_hint_same, target)
+        else -> stringResource(R.string.format_switch_watch_level_hint, target, sell)
     }
 }
 

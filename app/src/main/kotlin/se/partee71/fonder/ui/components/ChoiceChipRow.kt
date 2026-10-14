@@ -10,6 +10,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonColors
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
@@ -99,11 +100,19 @@ fun ConnectedChoiceButton(
             this.selected = selected
         },
         shapes = shapes,
-        colors = ToggleButtonDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
+        colors = choiceButtonColors(),
     ) {
         Text(label, maxLines = 1)
     }
 }
+
+/**
+ * Färgerna för ett ovalt/valt val — ytvariant ovald, primärfärg vald. Delas av
+ * [ConnectedChoiceButton] och [RiskLevelPicker] så att alla val i appen färgas likadant.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun choiceButtonColors(): ToggleButtonColors = ToggleButtonDefaults.colors(
+    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+    contentColor = MaterialTheme.colorScheme.onSurface,
+)

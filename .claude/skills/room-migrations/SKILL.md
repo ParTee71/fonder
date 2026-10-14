@@ -11,10 +11,12 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 16`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_15_16` ligger i `companion object` och samlas i `MIGRATIONS`.
-  Senaste: `MIGRATION_15_16` skapar `suggestion_dismissals` (avstådda bytesförslag, HEM-14).
-- Migreringstester: `Migration12Test … Migration1516Test` (ett per steg) i
+- `data/room/AppDatabase.kt` — `version = 18`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_17_18` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_17_18` lägger `switch_watches.indexOnly` (`NOT NULL DEFAULT 0`, filtret "bara
+  indexfonder", ANA-13, #150) — defaulten står också i entiteten (`@ColumnInfo(defaultValue = "0")`),
+  så Rooms validering prövar den.
+- Migreringstester: `Migration12Test … Migration1718Test` (ett per steg) i
   `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
   jobbet `instrumented-tests` i `android.yml`, alltså bara i PR som rör `app/src/main`,
   `app/src/androidTest` eller byggfilerna (skill `ci-budget`).

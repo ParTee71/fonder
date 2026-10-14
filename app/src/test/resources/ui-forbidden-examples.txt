@@ -51,6 +51,8 @@ ConfirmDialog(title = "Ta bort?", body = "", confirmLabel = "Ta bort", onConfirm
 AppDialog(title = "Klart", body = "", onDismissRequest = {}, confirmLabel = "Stäng", onConfirm = {})
 LoadingDialog(title = "Importerar", body = "")
 CheckRow(checked = true, onCheckedChange = {}, label = "Ta med")
+SwitchRow(checked = true, onCheckedChange = {}, label = "Bara indexfonder")
+RiskLevelPicker(selected = 4, onSelect = {}, marked = 6)
 ProgressBar()
 ItemRow(headline = "Global Indexfond A")
 AppFloatingToolbar(tabs = tabs, selectedIndex = 0, onSelect = {})
@@ -97,6 +99,7 @@ CircularProgressIndicator()
 LinearProgressIndicator(progress = { 0.5f })
 Badge { }
 Checkbox(checked = true, onCheckedChange = {})
+Switch(checked = true, onCheckedChange = {})
 NavigationBar { }
 NavigationBarItem(selected = true, onClick = {}, icon = {})
 HorizontalFloatingToolbar(expanded = true) { }

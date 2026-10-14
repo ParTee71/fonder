@@ -83,6 +83,8 @@ class BackupSerializerTest {
                 // Startad ur säljtransaktion 8 (BYT-1); inget köp än.
                 sellTransactionId = 8,
                 buyTransactionId = null,
+                // Användaren har valt bara indexfonder (ANA-13, issue #150).
+                indexOnly = true,
                 candidates = listOf(
                     SwitchWatchCandidate(
                         id = 5, watchId = 2, isin = "SE0001466368", name = "Kandidat A",
@@ -233,7 +235,7 @@ class BackupSerializerTest {
             setOf(
                 "id", "sellIsin", "sellFundName", "soldAtEpochDay", "proceedsKr", "targetLevel",
                 "sourceRecordId", "closedAtEpochDay", "boughtIsin", "closeReason", "candidates",
-                "sellTransactionId", "buyTransactionId",
+                "sellTransactionId", "buyTransactionId", "indexOnly",
             ),
             root.getValue("switchWatches").jsonArray.first().jsonObject.keys,
         )
@@ -276,6 +278,22 @@ class BackupSerializerTest {
         assertEquals(2, restored.switchWatches.size)
         assertTrue(restored.switchWatches.all { it.sellTransactionId == null && it.buyTransactionId == null })
         assertEquals(BackupPayload.FORMAT_VERSION, restored.formatVersion)
+    }
+
+    @Test
+    fun `malnivan och indexfiltret overlever och en aldre fil utan filtret lases som alla fonder`() {
+        // Issue #150: nivån och filtret är användarens val på skärmen. En fil från före 0.71.0 saknar
+        // nyckeln — samma formatversion, filtret falskt, aldrig en avvisad fil.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+        assertEquals(listOf(true, false), restored.switchWatches.map { it.indexOnly })
+        assertEquals(listOf(4, null), restored.switchWatches.map { it.targetLevel })
+
+        val utanFilter = BackupSerializer.encode(fullPayload()).replace(Regex(",\\s*\"indexOnly\": (true|false)"), "")
+        assertFalse(utanFilter.contains("indexOnly"))
+        val old = BackupSerializer.decode(utanFilter).getOrThrow()
+        assertTrue(old.switchWatches.none { it.indexOnly })
+        assertEquals(listOf(4, null), old.switchWatches.map { it.targetLevel })
+        assertEquals(BackupPayload.FORMAT_VERSION, old.formatVersion)
     }
 
     @Test

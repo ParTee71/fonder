@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -23,11 +24,13 @@ import org.junit.Test
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
@@ -36,7 +39,9 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
 
 /**
@@ -92,6 +97,10 @@ class SwitchWatchViewModelTest {
 
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
+    private val scheduler = FakeFundPriceRefreshScheduler()
+
+    /** Riskprofilen målnivåns förval läser (issue #150) — null: förvalet är säljfondens egen nivå. */
+    private var riskProfile: RiskProfile? = null
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -132,13 +141,14 @@ class SwitchWatchViewModelTest {
         ),
     )
 
-
     private fun viewModel(watchId: Long) = SwitchWatchViewModel(
         watchId,
         switchWatchRepo,
         fakePriceRepo,
         metadataRepo,
         fakeTransactionRepo,
+        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo, riskProfile, fakePriceRepo),
+        scheduler,
     )
 
     @Test
@@ -475,5 +485,426 @@ class SwitchWatchViewModelTest {
 
         assertTrue(state!!.missing)
         assertFalse(state!!.loading)
+    }
+
+    // --- Målnivå och indexfilter på skärmen (issue #150) ---
+
+    private fun auto(isin: String, position: Int) =
+        SwitchWatchCandidate(isin = isin, name = "Fond $isin", source = SwitchWatchCandidateSource.AUTO, position = position)
+
+    private fun manual(isin: String, position: Int) =
+        SwitchWatchCandidate(isin = isin, name = "Egen $isin", source = SwitchWatchCandidateSource.MANUELL, position = position)
+
+    @Test
+    fun `utan malniva med riskprofil forvaljs nivan med storst gap och planen raknas om`() = runTest(dispatcher) {
+        // Inga innehav: hela portföljen är likviden, och nivå 4 har störst andel i målet — inte
+        // säljfondens egen nivå 3, som förvalet utan profil hade gett.
+        riskProfile = RiskProfile(targetAllocation = mapOf(2 to 0.3, 4 to 0.7))
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 3))
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
+        val watchId = startWatch(targetLevel = null)
+
+        val state = settledState(viewModel(watchId))
+
+        assertEquals(4, switchWatchRepo.watches.value.single().targetLevel)
+        assertEquals(listOf(4 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
+        assertEquals(4, state.targetLevel)
+        assertEquals(3, state.sellLevel)
+        // Likviden räknas på målnivån (BYT-3) — en nivå som nyss blev känd ändrar planen.
+        assertEquals(1, scheduler.switchPlanScans)
+    }
+
+    @Test
+    fun `med riskprofil visas nivan profilen saknar mest pa och gapet - aven nar en annan niva ar vald`() = runTest(dispatcher) {
+        // Inga innehav: hela portföljen är bevakningens likvid, som ligger på ingen nivå — nivå 3
+        // saknar 60 pp (avrundat från 60,0) och nivå 5 40 pp. Bevakningen har redan nivå 5 vald.
+        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 0.6, 5 to 0.4))
+        val watchId = startWatch(targetLevel = 5)
+
+        val state = settledState(viewModel(watchId))
+
+        assertEquals(5, state.targetLevel)
+        assertEquals(3, state.profileSuggestedLevel)
+        assertEquals(60, state.profileGapPp)
+    }
+
+    @Test
+    fun `utan riskprofil eller for en stangd bevakning finns ingen profilniva`() = runTest(dispatcher) {
+        val withoutProfile = settledState(viewModel(startWatch(targetLevel = 5)))
+        assertNull(withoutProfile.profileSuggestedLevel)
+        assertNull(withoutProfile.profileGapPp)
+
+        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 0.6, 5 to 0.4))
+        val closedId = startWatch(targetLevel = 5)
+        switchWatchRepo.close(closedId, SwitchWatchCloseReason.AVBRUTEN, today)
+        val closed = settledState(viewModel(closedId))
+        assertNull(closed.profileSuggestedLevel)
+        assertNull(closed.profileGapPp)
+    }
+
+    @Test
+    fun `nivabyte ersatter appens forslag men behaller de handplockade`() = runTest(dispatcher) {
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 5))
+        metadataRepo.switchCandidates = listOf("SE_B", "SE_C", "SE_D", "SE_E").map { SwitchPlanCalc.Candidate(metadata(it, risk = 3), 0.1) }
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_A", 0), manual("SE_EGEN", 1)))
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals(3, state.targetLevel)
+            assertEquals(5, state.sellLevel)
+            assertNull(state.emptyReason)
+
+            // Samma nivå igen: ingen ny sökning, inga förslag byts ut.
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val stored = switchWatchRepo.watches.value.single()
+        assertEquals(3, stored.targetLevel)
+        // Nivå 5:s förslag (SE_A) är borta, den handplockade ligger kvar, och nivå 3:s tre bästa
+        // läggs efter den — utan att fonder som redan bevakas söks igen.
+        assertEquals(listOf("SE_EGEN", "SE_B", "SE_C", "SE_D"), stored.candidates.map { it.isin })
+        assertEquals(
+            listOf(SwitchWatchCandidateSource.MANUELL) + List(SwitchWatchCalc.AUTO_CANDIDATES) { SwitchWatchCandidateSource.AUTO },
+            stored.candidates.map { it.source },
+        )
+        assertEquals(listOf(3 to setOf("SE_SALJ", "SE_EGEN")), metadataRepo.switchCandidateCalls)
+        assertEquals(1, scheduler.switchPlanScans)
+    }
+
+    @Test
+    fun `indexfiltret ger bara indexfonder och tomlaget sager att det ar filtret`() = runTest(dispatcher) {
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_AKTIV"), 0.2))
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertEquals(listOf("SE_AKTIV"), expectMostRecentItem().rows.map { it.isin })
+
+            vm.onIndexOnlyChanged(true)
+            advanceUntilIdle()
+            val filtered = expectMostRecentItem()
+            assertTrue(filtered.indexOnly)
+            assertTrue(filtered.rows.isEmpty())
+            assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, filtered.emptyReason)
+            assertTrue(filtered.emptyBecauseOfIndexFilter)
+
+            // En indexfond på nivån: filtret av och på igen ger just den, en gång per val.
+            metadataRepo.switchCandidates += SwitchPlanCalc.Candidate(metadata("SE_INDEX").copy(indexFund = true), 0.1)
+            vm.onIndexOnlyChanged(false)
+            advanceUntilIdle()
+            vm.onIndexOnlyChanged(true)
+            advanceUntilIdle()
+            val indexOnly = expectMostRecentItem()
+            assertEquals(listOf("SE_INDEX"), indexOnly.rows.map { it.isin })
+            assertFalse(indexOnly.emptyBecauseOfIndexFilter)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertTrue(switchWatchRepo.watches.value.single().indexOnly)
+        assertEquals(listOf(false, true, false, true), metadataRepo.switchSearchIndexOnly)
+        // Filtret påverkar inte likviden på väg (BYT-3) — ingen omräkning av planen.
+        assertEquals(0, scheduler.switchPlanScans)
+    }
+
+    @Test
+    fun `ett nytt nivaval medan forra sokningen pagar lamnar inga forslag fran den forra`() = runTest(dispatcher) {
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(manual("SE_EGEN", 0)))
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            metadataRepo.switchSearchDelayMs = 1_000
+            vm.onSelectTargetLevel(3)
+            runCurrent() // sökningen för nivå 3 väntar nu på källan
+            vm.onSelectTargetLevel(4)
+            advanceUntilIdle()
+            assertEquals(4, expectMostRecentItem().targetLevel)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // Sökningen för nivå 3 avbröts innan den svarade; bara nivå 4:s förslag finns.
+        assertEquals(listOf(4), metadataRepo.switchCandidateCalls.map { it.first })
+        assertEquals(listOf("SE_EGEN", "SE_B"), switchWatchRepo.watches.value.single().candidates.map { it.isin })
+    }
+
+    @Test
+    fun `dubbeltryck pa samma niva lamnar aldrig listan tom`() = runTest(dispatcher) {
+        // Granskning #150, punkt 1: det andra trycket avbröt påfyllningen efter att nivån skrivits
+        // och appens förslag raderats — och returnerade sedan, eftersom nivån redan var vald.
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_A", 0)))
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            metadataRepo.switchSearchDelayMs = 1_000
+            vm.onSelectTargetLevel(3)
+            runCurrent() // nivå 3 är skriven, SE_A borta, sökningen väntar på källan
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(listOf("SE_B"), switchWatchRepo.watches.value.single().candidates.map { it.isin })
+        assertEquals(listOf(3), metadataRepo.switchCandidateCalls.map { it.first })
+    }
+
+    @Test
+    fun `ett nivabyte under skarmoppningens pafyllning avbryter och invantar den`() = runTest(dispatcher) {
+        // Punkt 4: skärmöppningens påfyllning låg utanför jobbet ett nivåbyte avbryter — båda
+        // sökningarna gick, och den som blev klar sist bestämde väntesnurran och tomlägets orsak.
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        metadataRepo.switchSearchDelayMs = 1_000
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            runCurrent() // skärmöppningens sökning på nivå 5 väntar på källan
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals(3, state.targetLevel)
+            assertFalse(state.fillingCandidates)
+            assertNull(state.emptyReason)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(listOf(3), metadataRepo.switchCandidateCalls.map { it.first })
+        assertEquals(listOf("SE_B"), switchWatchRepo.watches.value.single().candidates.map { it.isin })
+    }
+
+    @Test
+    fun `en kandidat som laggs till igen efter nivabyte far sin nollpunkt`() = runTest(dispatcher) {
+        // Punkt 2: historiken för SE_B var redan hämtad, så den nya raden (nytt id, ingen nollpunkt)
+        // hoppades över och ankrades aldrig — utvecklingen hade aldrig gått att mäta.
+        historyByIsin = mapOf("SE_B" to listOf(soldAt.toEpochDay() to 100.0, today.toEpochDay() to 110.0))
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            val firstId = switchWatchRepo.watches.value.single().candidates.single().id
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            val readded = switchWatchRepo.watches.value.single().candidates.single()
+            assertTrue(readded.id != firstId)
+            assertEquals(100.0, readded.navAtStart!!, 0.0)
+            assertEquals(soldAt.toEpochDay(), readded.navAtStartEpochDay)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // Historiken hämtades en gång; nollpunkten för den nya raden kom ur minnet.
+        assertEquals(listOf("SE_B"), historyCalls)
+    }
+
+    /** Transaktionsläsningen förvalet gör — kastar som ett nätverksfel, eller räknar portföljläsningarna. */
+    private fun preselectionTransactions(fail: () -> Boolean, loads: MutableList<Unit>? = null) = object : TransactionRepository by fakeTransactionRepo {
+        override fun observeTransactions(): Flow<List<Transaction>> {
+            loads?.add(Unit)
+            return if (fail()) flow { throw java.io.IOException("ingen anslutning") } else flowOf(emptyList())
+        }
+    }
+
+    private fun viewModelWithPreselectionTransactions(watchId: Long, transactions: TransactionRepository) = SwitchWatchViewModel(
+        watchId, switchWatchRepo, fakePriceRepo, metadataRepo, fakeTransactionRepo,
+        testTargetLevelPreselection(transactions, switchWatchRepo, riskProfile, fakePriceRepo),
+        scheduler,
+    )
+
+    @Test
+    fun `ett fel i profilens forslag sparar ingen niva - forsok igen raknar om`() = runTest(dispatcher) {
+        // Punkt 5: läsningen kan gå till nätet; ett fel fick tidigare krascha skärmen. Andra
+        // granskningen, B: med riskprofil fick ett tillfälligt fel inte spara säljfondens nivå för gott.
+        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 0.6, 5 to 0.4))
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 4))
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        var offline = true
+        val watchId = startWatch(targetLevel = null)
+        val vm = viewModelWithPreselectionTransactions(watchId, preselectionTransactions(fail = { offline }))
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            val failed = expectMostRecentItem()
+            assertNull(failed.profileSuggestedLevel)
+            assertNull(failed.profileGapPp)
+            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, failed.emptyReason)
+            assertNull(switchWatchRepo.watches.value.single().targetLevel)
+
+            offline = false
+            vm.onRetryAutoFill()
+            advanceUntilIdle()
+            val retried = expectMostRecentItem()
+            assertEquals(3, retried.profileSuggestedLevel)
+            assertEquals(3, retried.targetLevel)
+            assertEquals(listOf("SE_B"), retried.rows.map { it.isin })
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(metadataRepo.switchCandidateCalls.map { it.first } == listOf(3))
+    }
+
+    @Test
+    fun `utan riskprofil sparas saljfondens niva som forut`() = runTest(dispatcher) {
+        metadataRepo.metadataByIsin = mapOf("SE_SALJ" to metadata("SE_SALJ", risk = 4))
+        val watchId = startWatch(targetLevel = null)
+
+        val vm = viewModelWithPreselectionTransactions(watchId, preselectionTransactions(fail = { true }))
+        settledState(vm)
+
+        // Utan profil läses ingen portfölj — inget kan misslyckas.
+        assertEquals(4, switchWatchRepo.watches.value.single().targetLevel)
+    }
+
+    @Test
+    fun `ett tryck pa en niva ignoreras aldrig nar databasen har en annan`() = runTest(dispatcher) {
+        // Andra granskningen, C: valet i minnet (3) jämfördes i stället för databasens värde.
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_A", 0)))
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            switchWatchRepo.setTargetLevel(watchId, 5) // en annan väg skriver nivån
+            advanceUntilIdle()
+            vm.onSelectTargetLevel(3)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(3, switchWatchRepo.watches.value.single().targetLevel)
+    }
+
+    @Test
+    fun `ett nivaval fore forsta lasningen avbryts inte av skarmoppningens pafyllning`() = runTest(dispatcher) {
+        // C: skärmöppningens påfyllning avbröt ett byte som ännu inte skrivit valet — trycket försvann.
+        metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_B"), 0.1))
+        val watchId = startWatch(targetLevel = 5)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            vm.onSelectTargetLevel(3) // innan bevakningen ens lästs
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(3, switchWatchRepo.watches.value.single().targetLevel)
+        assertEquals(listOf(3), metadataRepo.switchCandidateCalls.map { it.first })
+        assertEquals(listOf("SE_B"), switchWatchRepo.watches.value.single().candidates.map { it.isin })
+        assertEquals(1, scheduler.switchPlanScans)
+    }
+
+    @Test
+    fun `en nollpunkt som inte gick att skriva skrivs vid nasta forsok`() = runTest(dispatcher) {
+        // Andra granskningen, E: kandidaten markerades som ankrad före skrivningen — ett fel lämnade
+        // den utan nollpunkt för resten av skärmens livstid.
+        historyByIsin = mapOf("SE_B" to listOf(soldAt.toEpochDay() to 100.0, today.toEpochDay() to 110.0))
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_B", 0)))
+        var failNext = true
+        val flaky = object : SwitchWatchRepository by switchWatchRepo {
+            override suspend fun setNavAtStart(candidateId: Long, nav: Double, epochDay: Long) {
+                if (failNext) {
+                    failNext = false
+                    throw java.io.IOException("disken full")
+                }
+                switchWatchRepo.setNavAtStart(candidateId, nav, epochDay)
+            }
+        }
+        val vm = SwitchWatchViewModel(
+            watchId, flaky, fakePriceRepo, metadataRepo, fakeTransactionRepo,
+            testTargetLevelPreselection(fakeTransactionRepo, flaky, riskProfile, fakePriceRepo),
+            scheduler,
+        )
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertNull(switchWatchRepo.watches.value.single().candidates.single().navAtStart)
+            vm.refresh()
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(100.0, switchWatchRepo.watches.value.single().candidates.single().navAtStart!!, 0.0)
+    }
+
+    @Test
+    fun `skarmoppningen laser portfoljen en gang for forslaget och forvalet`() = runTest(dispatcher) {
+        // Punkt 6: profilens förslag och förvalet av en saknad nivå läste var sin portfölj, parallellt.
+        riskProfile = RiskProfile(targetAllocation = mapOf(3 to 0.6, 5 to 0.4))
+        val loads = mutableListOf<Unit>()
+        val watchId = startWatch(targetLevel = null)
+
+        val vm = viewModelWithPreselectionTransactions(watchId, preselectionTransactions(fail = { false }, loads = loads))
+        val state = settledState(vm)
+
+        assertEquals(1, loads.size)
+        assertEquals(3, state.profileSuggestedLevel)
+        assertEquals(3, switchWatchRepo.watches.value.single().targetLevel)
+    }
+
+    @Test
+    fun `en kopplad bevakning med flyttad saljdag hamtar om historiken och ankras pa nya dagen`() = runTest(dispatcher) {
+        // Sista granskningen, punkt 3: kopplingen till ett sälj från en annan dag nollar nollpunkten
+        // (BYT-2). Kandidaten låg kvar som ankrad, och historiken i minnet nådde inte den nya dagen.
+        val movedTo = soldAt.minusDays(20).toEpochDay()
+        historyByIsin = mapOf("SE_B" to listOf(movedTo to 80.0, soldAt.toEpochDay() to 100.0, today.toEpochDay() to 110.0))
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_B", 0)))
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertEquals(100.0, switchWatchRepo.watches.value.single().candidates.single().navAtStart!!, 0.0)
+            switchWatchRepo.linkSellTransaction(watchId, transactionId = 99, proceedsKr = 9_000.0, soldAtEpochDay = movedTo)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val candidate = switchWatchRepo.watches.value.single().candidates.single()
+        assertEquals(80.0, candidate.navAtStart!!, 0.0)
+        assertEquals(movedTo, candidate.navAtStartEpochDay)
+        assertEquals(listOf("SE_B", "SE_B"), historyCalls)
+    }
+
+    @Test
+    fun `en stangd bevakning byter varken niva eller filter`() = runTest(dispatcher) {
+        val watchId = startWatch(targetLevel = 5, candidates = listOf(auto("SE_A", 0)))
+        switchWatchRepo.close(watchId, SwitchWatchCloseReason.AVBRUTEN, today)
+        val vm = viewModel(watchId)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            assertFalse(expectMostRecentItem().canChangeSelection)
+            vm.onSelectTargetLevel(3)
+            vm.onIndexOnlyChanged(true)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val stored = switchWatchRepo.watches.value.single()
+        assertEquals(5, stored.targetLevel)
+        assertFalse(stored.indexOnly)
+        assertEquals(listOf("SE_A"), stored.candidates.map { it.isin })
+        assertTrue(metadataRepo.switchCandidateCalls.isEmpty())
+        assertEquals(0, scheduler.switchPlanScans)
     }
 }

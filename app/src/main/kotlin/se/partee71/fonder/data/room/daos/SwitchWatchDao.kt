@@ -138,6 +138,33 @@ interface SwitchWatchDao {
     suspend fun fillMissingTargetLevel(id: Long, targetLevel: Int): Int
 
     /**
+     * Användarens val av målnivå (ANA-13, issue #150) — skrivs över oavsett tidigare nivå, men bara
+     * på en **öppen** bevakning och bara när nivån faktiskt ändras: en stängd bevakning bär vad som
+     * hände, och ett val av samma nivå ska inte byta ut förslagen.
+     *
+     * @return 1 när nivån ändrades nu, 0 när den redan var den, bevakningen är stängd eller inte finns.
+     */
+    @Query(
+        """
+        UPDATE switch_watches SET targetLevel = :targetLevel
+        WHERE id = :id AND closedAtEpochDay IS NULL AND (targetLevel IS NULL OR targetLevel <> :targetLevel)
+        """,
+    )
+    suspend fun setTargetLevel(id: Long, targetLevel: Int): Int
+
+    /** Filtret "bara indexfonder" (ANA-13, issue #150) — samma villkor som [setTargetLevel]. */
+    @Query("UPDATE switch_watches SET indexOnly = :indexOnly WHERE id = :id AND closedAtEpochDay IS NULL AND indexOnly <> :indexOnly")
+    suspend fun setIndexOnly(id: Long, indexOnly: Boolean): Int
+
+    /**
+     * Tar bort appens förslag men behåller de handplockade (ANA-13) — vid byte av nivå eller filter.
+     * Villkoret är "inte [manualSource]" i stället för "AUTO", så en okänd källa (som läses som AUTO,
+     * se [SwitchWatchCandidateEntity.toDomain]) också räknas som appens.
+     */
+    @Query("DELETE FROM switch_watch_candidates WHERE watchId = :watchId AND source <> :manualSource")
+    suspend fun deleteAutoCandidates(watchId: Long, manualSource: String)
+
+    /**
      * Nollar **bara** nollpunkten för bevakningens kandidater — raderna, inklusive de manuellt
      * tillagda, ligger kvar och ankras om nästa gång historiken hämtas (ANA-12).
      */

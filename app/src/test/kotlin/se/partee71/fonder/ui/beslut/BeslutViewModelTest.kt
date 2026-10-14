@@ -53,6 +53,7 @@ import se.partee71.fonder.domain.usecase.SwitchOrigin
 import se.partee71.fonder.domain.usecase.SwitchRowState
 import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.testing.testPreferencesRepository
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
@@ -88,7 +89,10 @@ class BeslutViewModelTest {
         ),
         FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
         preferencesRepository,
-        RecordTransaction(transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler),
+        RecordTransaction(
+            transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
+            testTargetLevelPreselection(transactionRepo, switchWatchRepo),
+        ),
         dismissalRepo,
         scheduler,
     )

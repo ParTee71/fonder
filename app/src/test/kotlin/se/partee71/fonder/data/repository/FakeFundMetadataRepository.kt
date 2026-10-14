@@ -54,8 +54,14 @@ open class FakeFundMetadataRepository(
     /** Fördröjning i [searchSwitchCandidates] — håller en autofyllning pågående i test av dubbeltryck. */
     var switchSearchDelayMs: Long = 0
 
-    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>): SwitchPlanCalc.CandidateSearch {
+    /** Filtret i varje `searchSwitchCandidates`-anrop, i ordning — driver bevakningens indexfilter (issue #150). */
+    val switchSearchIndexOnly = mutableListOf<Boolean>()
+
+    /** Som källan: [indexOnly] sållar bort fonder som inte är indexfonder, nivån filtrerar inte (testerna styr poolen). */
+    override suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>, indexOnly: Boolean): SwitchPlanCalc.CandidateSearch {
         if (switchSearchDelayMs > 0) delay(switchSearchDelayMs)
-        return SwitchPlanCalc.CandidateSearch(findSwitchCandidates(level, excludeIsins), lookupFailed = switchLookupFailed)
+        switchSearchIndexOnly += indexOnly
+        val found = findSwitchCandidates(level, excludeIsins).filter { !indexOnly || it.metadata.indexFund }
+        return SwitchPlanCalc.CandidateSearch(found, lookupFailed = switchLookupFailed)
     }
 }

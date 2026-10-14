@@ -52,6 +52,7 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import java.time.LocalDate
@@ -186,7 +187,10 @@ class FondDetaljViewModelTest {
         preferencesRepository,
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
-        RecordTransaction(fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo, scheduler),
+        RecordTransaction(
+            fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo, scheduler,
+            testTargetLevelPreselection(fakeTransactionRepo, fakeSwitchWatchRepo),
+        ),
         DismissedPlanSource(fakeSuggestionRecordRepo, fakeDismissalRepo, preferencesRepository, fakeFundMetadataRepo),
         InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
     )

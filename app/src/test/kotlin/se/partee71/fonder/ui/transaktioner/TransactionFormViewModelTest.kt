@@ -45,6 +45,7 @@ import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testSwitchChoicesSource
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import java.time.LocalDate
@@ -117,7 +118,10 @@ class TransactionFormViewModelTest {
     private val suggestionRepo = FakeSuggestionRecordRepository()
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
-    private val recordTransaction = RecordTransaction(fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler)
+    private val recordTransaction = RecordTransaction(
+        fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
+        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo),
+    )
 
     private fun viewModel(key: TransactionFormKey = TransactionFormKey()) = TransactionFormViewModel(
         key, fakeTransactionRepo, fakePriceRepo, recordTransaction,

@@ -39,6 +39,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
+import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.transaktioner.SwitchOptionLabel
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testSwitchChoicesSource
@@ -108,7 +109,10 @@ class ImportOrdersViewModelTest {
     private val suggestionRepo = FakeSuggestionRecordRepository()
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
-    private val recordTransaction = RecordTransaction(fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler)
+    private val recordTransaction = RecordTransaction(
+        fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
+        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo),
+    )
 
     private fun viewModel(extractor: PdfTextExtractor, priceRepo: FundPriceRepository = fakePriceRepo) =
         ImportOrdersViewModel(

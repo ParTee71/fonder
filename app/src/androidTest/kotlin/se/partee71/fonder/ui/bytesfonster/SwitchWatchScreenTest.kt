@@ -1,6 +1,9 @@
 package se.partee71.fonder.ui.bytesfonster
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -266,5 +269,93 @@ class SwitchWatchScreenTest {
         composeRule.onNodeWithText(
             "Du kan bevaka högst ${SwitchWatchCalc.MAX_CANDIDATES} alternativ åt gången.",
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun nivavaljaren_visar_vald_niva_och_saljfondens_niva_och_ger_nytt_val() {
+        var chosen: Int? = null
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(
+                    state = state().copy(targetLevel = 4, sellLevel = 6),
+                    onSelectTargetLevel = { chosen = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Köp på risknivå").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Risknivå 4 av 7").assertIsSelected()
+        // Ramen bär en betydelse och får aldrig vara ensam om den (UI-3).
+        composeRule.onNodeWithContentDescription("Risknivå 6 av 7, säljfondens nivå").assertIsDisplayed()
+        composeRule.onNodeWithText("Ramen på 6 är säljfondens egen nivå", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Risknivå 2 av 7").performClick()
+
+        assertEquals(2, chosen)
+    }
+
+    @Test
+    fun forklaringen_foljer_riskprofilen_och_rubriken_namner_niva_och_filter() {
+        // Issue #150: profilens nivå med gapet, och ramen på säljfondens nivå. Neutral text (granskningen):
+        // skärmen vet inte om nivån förvaldes av profilen eller valdes av användaren.
+        val profile = mutableStateOf(state().copy(targetLevel = 4, sellLevel = 6, profileSuggestedLevel = 4, profileGapPp = 9))
+        composeRule.setContent {
+            FonderTheme { SwitchWatchContent(state = profile.value) }
+        }
+
+        composeRule.onNodeWithText(
+            "Nivå 4: din riskprofil har 9 procentenheter för lite där. Ramen på 6 är säljfondens egen nivå.",
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Sedan säljdagen · nivå 4").assertExists()
+
+        // Användaren har valt en annan nivå, med filtret på.
+        profile.value = profile.value.copy(targetLevel = 2, indexOnly = true)
+        composeRule.onNodeWithText("Vald nivå 2. Riskprofilen saknar mest på nivå 4.").assertIsDisplayed()
+        composeRule.onNodeWithText("Sedan säljdagen · nivå 2 · indexfonder").assertExists()
+    }
+
+    @Test
+    fun bara_indexfonder_vaxlar_filtret() {
+        var indexOnly: Boolean? = null
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(
+                    state = state().copy(targetLevel = 4, indexOnly = true),
+                    onIndexOnlyChanged = { indexOnly = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Bara indexfonder").assertIsOn().performClick()
+
+        assertEquals(false, indexOnly)
+    }
+
+    @Test
+    fun inga_kopbara_indexfonder_sags_med_filtret_som_orsak() {
+        composeRule.setContent {
+            FonderTheme {
+                SwitchWatchContent(
+                    state = state(rows = emptyList()).copy(
+                        targetLevel = 2,
+                        indexOnly = true,
+                        emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Inga köpbara indexfonder på nivå 2").assertIsDisplayed()
+        composeRule.onNodeWithText("Stäng av ”Bara indexfonder”", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Ingen av de bästa fonderna på risknivå", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun en_stangd_bevakning_visar_ingen_nivavaljare() {
+        composeRule.setContent {
+            FonderTheme { SwitchWatchContent(state = state(closed = true).copy(targetLevel = 4)) }
+        }
+
+        composeRule.onNodeWithText("Köp på risknivå").assertDoesNotExist()
+        composeRule.onNodeWithText("Bara indexfonder").assertDoesNotExist()
     }
 }

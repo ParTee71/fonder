@@ -38,6 +38,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Väntesnurra / bakgrundsjobb | `WorkingIndicator`, `WorkerStatusIcon` | `WorkingIndicator` är M3 Expressives formskiftande `LoadingIndicator` i kort och diagram; `WorkerStatusIcon` sitter i flikrubrikens och topprads åtgärder (`AppNavigation`) och renderar ingenting i vila. |
 | Dra ned för att uppdatera | `PullToRefreshContainer` | Varje skärm med hämtad data (Hem, Portfölj, Fonddetalj, Fondsök, Facit, Bytesfönster). `refreshing` drivs av samma körstatus som kortens snurror, aldrig av en lokal flagga (UI-11). Indikatorn är `PullToRefreshDefaults.LoadingIndicator`. |
 | Ett val bland några (knappgrupp) | `ChoiceChipRow`, `ConnectedChoiceButton` | Tema, kontotyp (Inställningar), riskenkäten, Händelsers filter Alla/Köp/Sälj; `ConnectedChoiceButton` även i `FundLineChart`s periodrad. Sammanhängande M3E-knappgrupp (`ToggleButton` med `ButtonGroupDefaults`-former), läses som radioval (UI-12); `enabled = false` låser valet (förifyllt formulär). `optionLabel` är `@Composable`; horisontellt skrollbar så inget val klipps (UI-5). |
+| Risknivåväljare | `RiskLevelPicker` | Pågående byte (ANA-13, köpnivån). Sju lika breda knappar 1–7 utan skroll, samma färger som `ChoiceChipRow` (`choiceButtonColors`); vald = fylld och helt rund, `marked` = ram (säljfondens nivå) med `markedDescription` för skärmläsaren; läses "Risknivå 4 av 7" som radioval, 48 dp tryckyta; `enabled = false` låser. |
 | Dropdown | `SelectField` | Fondsök, transaktionsformuläret, importerna och bytesväljaren (`SwitchDecisionField` i `ui/transaktioner`, BYT-2). `clearOptionLabel` ger ett "alla/inget"-val överst; `supportingText` en förklaring under fältet; `enabled = false` låser fältet med valet synligt. |
 | Datumfält | `DateField` | Transaktionsformuläret, importerna. Plattformens `DatePickerDialog` med livscykel via `DisposableEffect`; läses som **en** knapp med etikett och värde. |
 | Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster, Händelser (realiserat resultat). kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4). |
@@ -45,6 +46,7 @@ siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/them
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
 | Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
+| Strömbrytarrad | `SwitchRow` | Pågående byte (*Bara indexfonder*, ANA-13). Etikett + M3 `Switch`, `toggleable` på hela raden, en nod med rollen strömbrytare, ≥ 48 dp; `supportingText`, `enabled`. `CheckRow` för en markering i en lista, `SwitchRow` för ett läge som gäller direkt. |
 | "Genomförd"-kvittering | `FollowedToggleRow` | Bara Facit (SET-5) sedan 0.68.0 — Följ på Beslut och Fonddetalj öppnar säljformuläret (BYT-2). En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Tillståndsmärke | `StateChip` (+ `StateChipTone`) | Beslut (BYT-4) och `RiskBadge`. Text i `labelMedium` på tonad behållare i `shapes.small`: `Primary` (Föreslaget), `Accent` (koppar, Sålt), `Gain` (`ReturnColors.gainContainer`, Köpt), `Tertiary` (Avgift), `Neutral` (ytvariant – Avstått/Avbrutet/Utgånget, risknivån). Tillståndet alltid i text (UI-3); `contentDescription` för förkortad text. Inte klickbart. |
 | Risknivå | `RiskBadge` | Fonddetalj, Portfölj, Fondsök, Bytesfönster. "Risk 5/7" i text, `toLevel` ger "Risk 5 → 4" (UI-10). En `StateChip` i `Neutral` med utskriven beskrivning ("Risknivå 5 av 7"). |
@@ -124,7 +126,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 - **Feature-kod** (ui-paket utom `ui/components`, `ui/diagram`, `ui/theme`): nya råa
   Material 3-komponenter som har en delad motsvarighet ovan (`Card`/`Surface`, `ListItem`,
   `AlertDialog`/`Dialog`, knappar och ikonknappar, textfält, datumväljare, `DropdownMenu`, chips,
-  progressindikatorer, `Badge`, `Checkbox`, `NavigationBar`, flytande verktygsrad, `FloatingActionButton`,
+  progressindikatorer, `Badge`, `Checkbox`, `Switch`, `NavigationBar`, flytande verktygsrad, `FloatingActionButton`,
   `TopAppBar`). Kvar: `Scaffold` i `AppNavigation` och `HorizontalDivider`;
   hårdkodade `Color(…)`, `RoundedCornerShape(…)`, `fontSize`/`lineHeight`/`letterSpacing`,
   `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.

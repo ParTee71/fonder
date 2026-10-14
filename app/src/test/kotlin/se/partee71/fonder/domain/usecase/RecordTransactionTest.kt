@@ -6,12 +6,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
@@ -41,7 +44,14 @@ class RecordTransactionTest {
     private val metadata = FakeFundMetadataRepository()
     private val scheduler = FakeFundPriceRefreshScheduler()
 
-    private val useCase = RecordTransaction(transactions, watches, records, metadata, scheduler)
+    /** Riskprofilen förvalet läser (issue #150) — null som i de flesta testerna: då är förvalet säljfondens egen nivå. */
+    private var riskProfile: RiskProfile? = null
+    private val prices = FakeCachedPriceRepository()
+
+    private val useCase = RecordTransaction(
+        transactions, watches, records, metadata, scheduler,
+        TargetLevelPreselection({ riskProfile }, transactions, prices, watches, records),
+    )
 
     private val sellFund = Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SALJ")
     private val buyFund = Fund(fundId = "SE_KOP", name = "Köpt fond", isin = "SE_KOP")
@@ -556,6 +566,48 @@ class RecordTransactionTest {
         assertEquals(5, watch.targetLevel)
         assertNull(watch.sourceRecordId)
         assertEquals(sale.id, watch.sellTransactionId)
+    }
+
+    /**
+     * Portfölj för förvalet (issue #150): säljfonden (nivå 5) och en fond på nivå 2 köpta tidigare,
+     * kurser i cachen och mål 20/50/30 på nivå 2/3/5. Efter säljet (likvid 1 225 kr) är nivå 3 den
+     * mest underviktade — inte säljfondens egen nivå.
+     */
+    private suspend fun setUpProfilePortfolio() {
+        setUpPlan()
+        val other = Fund(fundId = "SHB2", name = "Annan fond", isin = "SE_ANNAN")
+        transactions.upsertFund(other)
+        metadata.metadataByIsin = metadata.metadataByIsin + ("SE_ANNAN" to meta("SE_ANNAN", risk = 2))
+        val earlier = today.minusDays(30).toEpochDay()
+        transactions.addTransaction(purchase(fundId = sellFund.fundId, day = earlier))
+        transactions.addTransaction(purchase(fundId = other.fundId, day = earlier))
+        prices.latestPrices.value = mapOf(
+            sellFund.fundId to FundPrice(sellFund.fundId, today.toEpochDay(), 125.0, "SEK"),
+            other.fundId to FundPrice(other.fundId, today.toEpochDay(), 100.0, "SEK"),
+        )
+        riskProfile = RiskProfile(targetAllocation = mapOf(2 to 0.2, 3 to 0.5, 5 to 0.3))
+    }
+
+    @Test
+    fun `fristaende salj med riskprofil forvaljer den mest underviktade nivan`() = runTest {
+        setUpProfilePortfolio()
+
+        useCase.record(entry(sale(), SwitchDecision.Standalone), today)
+        useCase.startWatchForSale(savedSale(sale(day = today.minusDays(1).toEpochDay())), today)
+
+        // Båda fristående vägarna (väljaren och "Bevaka alternativ" i Händelser) förväljer på samma
+        // sätt. Det första säljets likvid väntar redan på nivå 3 (BYT-3), så när resten av säljfonden
+        // säljs är nivå 5 längst från målet (30 pp mot 22,5 pp) — ett gap, inte reserven.
+        assertEquals(listOf(3, 5), watches.watches.value.map { it.targetLevel })
+    }
+
+    @Test
+    fun `salj for en planrad behaller radens niva aven med riskprofil`() = runTest {
+        setUpProfilePortfolio()
+
+        useCase.record(entry(sale(), SwitchDecision.ForSuggestion(recordId = 7, toLevel = 2)), today)
+
+        assertEquals(2, watches.watches.value.single().targetLevel)
     }
 
     @Test
