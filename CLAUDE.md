@@ -154,6 +154,14 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   alltid en mergekonflikt på den andra. Vid flera issues: ett i taget, sekventiellt.
 - **Kontrollera mergen via GitHub** (`pull_request_read`) innan nästa issue påbörjas –
   inte via antagande. Först när den är mergad startas arbetsbranchen om från `origin/master`.
+- **Förbered releasen i funktions-PR:en.** Varje PR som ändrar appens beteende höjer
+  versionen i samma ändring, så att ingen separat release-PR behövs. Välj semver efter
+  ändringen: **major** = brytande/borttagen funktion eller backupformat som äldre appar inte
+  läser, **minor** = ny funktion, **patch** = fix, chore, refactor. Höj `versionCode` med 1,
+  uppdatera `versionName` i `app/build.gradle.kts` och versionstabellen i README, och skriv versionen i PR-beskrivningen. Ren dokument-,
+  test- eller CI-ändring utan effekt i appen höjer inte. Är versionen redan höjd sedan senaste
+  tagg, höj bara om denna PR är allvarligare. Själva releasen (tagg, bygge, publicering) körs
+  fortfarande bara på uttrycklig begäran (skill **release**) och kräver då ingen ny PR.
 - **Prenumerera automatiskt** på PR-aktivitet (`subscribe_pr_activity`) så fort en PR
   skapas, utan att fråga. Bevaka tills den är mergad eller stängd: fixa CI-fel, hantera
   granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `ci-doktor`
