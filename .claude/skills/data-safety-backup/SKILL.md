@@ -1,6 +1,6 @@
 ---
 name: data-safety-backup
-description: 'Regel 1 i Fonder — backup och restore får aldrig tappa användardata. Ladda alltid när persisterad data läggs till, ändras eller tas bort: Room-entitet eller -kolumn, DataStore-värde, sparad domänmodell, backup/restore/export/import. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, BackupRoundTripTest, fältvakt, formatVersion, DataStore, rundtur, Drive, appDataFolder, DriveBackupRepository, dataförlust.'
+description: 'Regel 1 i Fonder — backup och restore får aldrig tappa användardata. Ladda alltid när persisterad data läggs till, ändras eller tas bort: Room-entitet eller -kolumn, DataStore-värde, sparad domänmodell, backup/restore/export/import. Trigger-ord: backup, restore, återställ, säkerhetskopia, BackupPayload, BackupSerializer, BackupRoundTripTest, fältvakt, formatVersion, DataStore, rundtur, Drive, appDataFolder, DriveBackupRepository, LocalBackupRepository, BackupFingerprint, PreferencesRepository, SAF, molnbackup, gallring, dataförlust.'
 ---
 
 # Datasäkerhet: backup & restore

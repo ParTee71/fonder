@@ -17,7 +17,8 @@ cd "$(dirname "$0")/../.."
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
 if [ -d "$sdk/platforms" ] && [ -d "$sdk/licenses" ]; then
   # Gradle hittar SDK:n via local.properties (gitignorerad).
-  grep -qs '^sdk.dir=' local.properties || echo "sdk.dir=$sdk" >> local.properties
+  f=local.properties
+  grep -qs '^sdk.dir=' "$f" || { [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && echo >> "$f"; echo "sdk.dir=$sdk" >> "$f"; }
   echo "Android SDK: $sdk (Gradle kan köras i sessionen)"
 else
   echo "Android SDK: saknas – installera vid behov med .claude/hooks/install-android-sdk.sh"

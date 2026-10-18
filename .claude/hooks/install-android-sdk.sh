@@ -6,7 +6,12 @@ sdk=/opt/android-sdk
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 # Gradle hittar SDK:n via local.properties (gitignorerad).
 write_sdk_dir() {
-  if ! grep -qs '^sdk.dir=' "$repo/local.properties"; then echo "sdk.dir=$sdk" >> "$repo/local.properties"; fi
+  local f="$repo/local.properties"
+  if ! grep -qs '^sdk.dir=' "$f"; then
+    # Radbrytning först om filen inte slutar med en, så att raden inte klistras ihop med den förra.
+    if [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ]; then echo >> "$f"; fi
+    echo "sdk.dir=$sdk" >> "$f"
+  fi
 }
 if [ -x "$sdk/cmdline-tools/latest/bin/sdkmanager" ] && [ -d "$sdk/licenses" ] && [ -d "$sdk/platforms/android-37.0" ]; then
   write_sdk_dir

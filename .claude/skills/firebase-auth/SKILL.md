@@ -1,6 +1,6 @@
 ---
 name: firebase-auth
-description: Google-inloggning i Fonder — Firebase Auth via Androids Credential Manager (TP-6). Ladda denna när du rör inloggning, utloggning, inloggat tillstånd, AuthRepository, google-services.json eller något som ska hända bara när användaren är inloggad. Covers CredentialManager + GetSignInWithGoogleOption-mönstret, som ersätter utfasade GoogleSignIn. Trigger-ord: inloggning, logga in, logga ut, auth, Firebase, FirebaseAuth, Credential Manager, GoogleIdTokenCredential, AuthRepository, AuthUser, SignInException, google-services.json, default_web_client_id, SHA-1.
+description: 'Google-inloggning i Fonder — Firebase Auth via Androids Credential Manager (TP-6). Ladda denna när du rör inloggning, utloggning, inloggat tillstånd, AuthRepository, google-services.json eller något som ska hända bara när användaren är inloggad. Covers CredentialManager + GetSignInWithGoogleOption-mönstret, som ersätter utfasade GoogleSignIn. Trigger-ord: inloggning, logga in, logga ut, auth, Firebase, FirebaseAuth, Credential Manager, GoogleIdTokenCredential, AuthRepository, AuthUser, SignInException, google-services.json, default_web_client_id, SHA-1.'
 ---
 
 # Google-inloggning (Firebase Auth + Credential Manager)
