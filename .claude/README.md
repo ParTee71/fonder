@@ -35,8 +35,8 @@ agent ta rutindelarna.
 | Flera lager, datamodell, migrering, backup och granskning | Opus |
 | Väldigt komplexa issues – anges då i issuets **Agent · modell · effort** | Fable |
 
-Skills `refine-issue` och `implement-issue` sätter och följer **Agent · modell · effort** per
-issue utifrån den här tabellen.
+Skills `android:refine-issue` och `android:implement-issue` sätter och följer **Agent · modell · effort** per
+issue utifrån den här tabellen (Fonders agenter: `android-projekt` → Issues).
 
 ## Skills (`.claude/skills/`)
 
@@ -48,25 +48,24 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 
 | Skill | När |
 |---|---|
-| `android-projekt` | Fonders delar av pluginens `android:`-skills (se nedan) – ladda alltid tillsammans med dem; mockupens data, länk och skärmdumpar. |
+| `android-projekt` | Fonders delar av pluginens `android:`-skills (se nedan) – ladda alltid tillsammans med dem; mockupens data, länk och skärmdumpar; avsnitten Arbetsflöde, Issues och Release till `android:implement-issue`, `android:refine-issue` och `android:release`. |
 | `android-data-layer` | Repository/Room/DAO/offline-först. |
 | `data-safety-backup` | Regel 1 — persisterad data, backup-kontraktet, rundturen. |
 | `testing-strategy` | Regel 2 — nivåer, fakes, och den flakiness som redan bitit. |
 | `requirements-kravlista` | Regel 3 — ID-serier, hur en kravrad skrivs här, historiken. |
 | `shared-ui-components` | Regel 4 — katalogen i `ui/components/` och `ui/diagram/`. |
 | `room-migrations` | Schemaändringar, defaultvärden och migreringstesterna. |
-| `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt reglerna). |
-| `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt reglerna. |
-| `release` | Endast vid uttrycklig release. |
 | `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
 | `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
 | `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
 
-Tio generella skills kommer från pluginen `android@claude-android` och heter `android:<namn>`
+Tretton generella skills kommer från pluginen `android@claude-android` och heter `android:<namn>`
 i sessionen: `android-dev` (baslinje, ladda alltid), `compose-expert`, `kotlin-coroutines`,
 `kotlin-flows`, `navigation-3`, `accessibility-compose`, `android-gradle-logic`, `firebase-auth`,
-`mockup` (mockup före ny GUI) samt Googles `android-intent-security` (manifest, `PendingIntent`,
+`mockup` (mockup före ny GUI), `refine-issue` (förfina en idé eller bugg till ett planerat
+issue), `implement-issue` (genomföra ett issue hela vägen till PR, med merge-kontroll först),
+`release` (endast vid uttrycklig release; versionshöjningen i funktions-PR:en) samt Googles `android-intent-security` (manifest, `PendingIntent`,
 Intents). Pluginens `firebase-security-rules-auditor` gäller inte – Fonder har ingen Firestore.
 Pluginen är generell; Fonders delar och nuvarande avvikelser står i `android-projekt`, och där
 de krockar gäller projektets regler.

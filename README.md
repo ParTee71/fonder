@@ -129,7 +129,7 @@ läggs upp.
 
 ## Versionshistorik
 
-Tabellen skrivs vid varje release (se `.claude/skills/release`) och sammanfattar det
+Raden skrivs i funktions-PR:en som höjer versionen (CLAUDE.md → PR-flöde) och sammanfattar det
 **användarsynliga** som kommit sedan föregående version. Den är avsiktligt kort — motiven
 bakom besluten står i [KRAVLISTA.md](KRAVLISTA.md), som uppdateras löpande när varje
 ändring landar. Tabellen börjar vid 0.51.0; för allt före det är KRAVLISTAs `Historik`

@@ -56,6 +56,11 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 `concurrency: ci-${{ github.workflow }}-${{ github.ref }}` med `cancel-in-progress` bara för
 `pull_request` – en ny push till PR:en avbryter den förra körningen; `master` avbryts aldrig.
 
+**Körs emulatortesterna måste de vara gröna för merge.** `ci-ok` har `instrumented-tests` i
+`needs` och fäller på allt utom `success` och `skipped`: ett rött eller avbrutet
+`instrumented-tests` gör `ci-ok` rött och blockerar PR:en, ett överhoppat (filtret
+`instrumented` orört) gör det inte.
+
 ## Kända problem
 
 1. ~~Release-bygget (R8) körs i varje PR~~ *(löst i CI-etappen: `quality.yml` veckovis och `release.yml`, NFR-2)*.

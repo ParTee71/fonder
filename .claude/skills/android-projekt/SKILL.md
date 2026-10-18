@@ -1,6 +1,6 @@
 ---
 name: android-projekt
-description: Fonders anpassningar av de generella android:-skillsen från pluginen android@claude-android (android-dev, kotlin-coroutines, kotlin-flows, compose-expert, navigation-3, accessibility-compose, android-gradle-logic, firebase-auth, android-intent-security, mockup). Ladda den alltid tillsammans med en android:-skill – den säger vad som gäller just här och går före pluginens generella råd. Täcker projektets klasser och mönster (Room, DataStore, WorkManager, nätverkskällor), nuvarande avvikelser från pluginen, Gradle-uppsättningen, inloggningen som bara behövs för Drive-backupen, a11y för belopp, procent och diagram, och mockup-processen med påhittad portföljdata. Trigger-ord: Android, Kotlin, ViewModel, Hilt, Compose, coroutine, dispatcher, flöde, StateFlow, händelse, navigering, flik, Översikt, Innehav, Beslut, Händelser, tillgänglighet, TalkBack, belopp, procent, vinst, förlust, Gradle, beroende, Room, DataStore, WorkManager, kursuppdatering, inloggning, logga in, logga ut, Drive, google-services, SHA-1, manifest, Intent, PendingIntent, mockup, skiss, ny skärm, ny komponent, Design-canvas.
+description: Fonders anpassningar av de generella android:-skillsen från pluginen android@claude-android (android-dev, kotlin-coroutines, kotlin-flows, compose-expert, navigation-3, accessibility-compose, android-gradle-logic, firebase-auth, android-intent-security, mockup, implement-issue, refine-issue, release). Ladda den alltid tillsammans med en android:-skill – den säger vad som gäller just här och går före pluginens generella råd. Täcker projektets klasser och mönster (Room, DataStore, WorkManager, nätverkskällor), nuvarande avvikelser från pluginen, Gradle-uppsättningen, inloggningen som bara behövs för Drive-backupen, a11y för belopp, procent och diagram, mockup-processen med påhittad portföljdata, arbetsflödet från issue till PR (repo, lager, Room och backup-kedjan, byggare/arkitekt, kända dubbletter, nätverkskällor, /code-review, commit-områden, APK-länken), issuets repodelar (undersökningspunkter, testplan, Agent · modell · effort) och releasens repodelar (versionen i app/build.gradle.kts, release.yml, debug-snapshot, FORMAT_VERSION). Trigger-ord: Android, Kotlin, ViewModel, Hilt, Compose, coroutine, dispatcher, flöde, StateFlow, händelse, navigering, flik, Översikt, Innehav, Beslut, Händelser, tillgänglighet, TalkBack, belopp, procent, vinst, förlust, Gradle, beroende, Room, DataStore, WorkManager, kursuppdatering, inloggning, logga in, logga ut, Drive, google-services, SHA-1, manifest, Intent, PendingIntent, mockup, skiss, ny skärm, ny komponent, Design-canvas, issue, genomför, implementera, kör #N, kör nästa, förfina, planera, PR, commit, granskning, agent, byggare, arkitekt, modell, effort, release, släpp, ny version, versionshöjning, versionName, versionCode, release.yml, debug-snapshot, bygg APK, signerad APK.
 ---
 
 # Android i Fonder
@@ -208,8 +208,164 @@ Processen (när, hur, visa och vänta) står i pluginen; det här är Fonders de
   eller transaktioner** – inte heller avrundade eller "lite ändrade".
 - **Tumregel:** padding, ordval, ikonbyte eller färgjustering inom temat → ingen mockup;
   skärmdumpsdiffen i PR:en räcker.
-- **Länken** läggs i issuet under rubriken **Design** (skill `refine-issue`); koden skrivs först
-  efter användarens ok (skill `implement-issue`).
+- **Länken** läggs i issuet under rubriken **Design** (skill `android:refine-issue`); koden skrivs
+  först efter användarens ok (skill `android:implement-issue`).
 - **I PR:en:** Roborazzi-skärmdumpar (ljust + mörkt, `captureLightAndDark`) av det byggda bredvid
   mockup-länken; referenserna spelas in lokalt med `./gradlew :app:recordRoborazziDebug` vid
   avsiktlig designändring och checkas in. Länka dessutom debug-snapshoten (CLAUDE.md → Bygg & test).
+
+## Arbetsflöde (android:implement-issue)
+
+Stegen står i pluginen; det här är Fonders delar.
+
+- **Repo:** owner `ParTee71`, repo `fonder`, basbranch `master`. Issues och PR:er läses och
+  skrivs med GitHub MCP.
+- **Lokalt och i CI:** testerna körs lokalt före push när Android SDK finns i `/opt/android-sdk`
+  (session-start-hooken säger om den gör det; annars `.claude/hooks/install-android-sdk.sh`).
+  Går det inte får CI testa – säg det i PR:en. `android.yml` kör `build-and-test` på push och i
+  PR som rör koden, och emulatorjobbet `instrumented-tests` **bara i PR** som rör koden det
+  testar (skill `ci-budget`).
+- **Syskonklasser att följa:** `PortfoljViewModel`, `TransaktionerViewModel`,
+  `FundSearchViewModel`; skärmen är `XScreen(viewModel = hiltViewModel())` → tillståndslös
+  `XContent` (avsnittet Compose ovan).
+- **Kända dubbletter** (skill `shared-ui-components`): rör du `TotalCard`, `ComparisonChart`,
+  importens laddningsdialoger eller en egen listrad – slå ihop den först, som egen commit.
+- **Domänskills:** data → skills `data-safety-backup`, `room-migrations` och
+  `android-data-layer`; diagram → skill `diagram`; loggning, nätverk och Drive → skill
+  `data-privacy-security`.
+- **Nätverkskällor:** `data/network/` (Avanza, Handelsbankens fondlista, Riksbanken) är
+  odokumenterade källor (TP-10, TP-14); håll parsningen isolerad där och läck den inte in i
+  repositories eller ViewModels.
+- **Beräkningar** ligger i `domain/usecase/`, aldrig i ViewModel eller composable.
+- **Lagerkedjan:** `Compose → ViewModel(StateFlow<UiState>) → Repository → Room/DataStore`, Hilt,
+  fel mappas i repository-lagret. Skärmarna anropar ViewModelns publika funktioner – Fonder har
+  inga sealed events (Baslinje ovan), så pluginens anti-mönster om publik `fun` gäller inte här.
+- **Datakedjan** för ett persisterat fält eller en entitet, i samma ändring: `@Entity`, höjd
+  `version`, `MIGRATION_N_N+1` i `MIGRATIONS` och `MigrationXYTest` (skill `room-migrations`);
+  fältet i `BackupPayload` med default, i `export()`/`restore()`, fältvakten i
+  `BackupSerializerTest` och en assertion i `BackupRoundTripTest` (skill `data-safety-backup`).
+  Drive-backupen är en transport och rörs inte av ett nytt fält.
+- **Loggning:** aldrig hela HTTP-svar, innehav, belopp, transaktioner eller tokens;
+  `contentDescription` och 48 dp tryckyta för nya interaktiva element.
+- **Testnivåer:** enhet i `app/src/test` (JUnit, MockK, Turbine, Robolectric, Roborazzi,
+  `UiConsistencyTest`); Room, migrering, rundtur och Compose i `app/src/androidTest`.
+- **Agenter:** huvudsessionen orkestrerar och granskar; agenten `byggare` tar skärmar,
+  komponenter, use cases, nätverkskällor, workers och CI-filer, agenten `arkitekt` Room-schema,
+  migreringar, backup-kedjan, DataStore och arkitekturval, `testskrivare` tester på tre eller
+  fler nivåer, `granskare` diffen (steg 8) och `ci-doktor` rött CI. Går ett steg fel två gånger i
+  rad flyttas det upp en nivå (`byggare` → `arkitekt`, Sonnet → Opus). Saknar issuet
+  **Agent · modell · effort** kompletteras det (avsnittet Issues nedan).
+- **`/code-review` krävs** (efter `granskare`) när ändringen rör `domain/usecase/`, datalagret,
+  Room-schemat, backup-kedjan, en nätverkskälla eller en delad komponent (`ui/components`,
+  `ui/diagram`), eller när diffen är större än ett par filer.
+- **Commit-områden** efter flik, funktion eller lager, t.ex. `hem`, `portfolj`, `fond`,
+  `fondsok`, `beslut`, `transaktioner`, `imports`, `facit`, `bytesfonster`, `riskprofil`,
+  `settings`, `room`, `backup`, `network`, `ci`, `claude` – `feat(transaktioner): …`,
+  `fix(portfolj): …`.
+- **Kommandon:** CLAUDE.md → "Bygg & test" och skill `testing-strategy` → "Innan du anser dig
+  klar". Manifest, resurser, proguard eller byggfiler ändrade → release-bygget och lint lokalt
+  före push, i två Gradle-anrop (`./gradlew :app:assembleRelease` och sedan
+  `./gradlew :app:lintDebug`); de körs inte i PR-flödet (skill `ci-budget`).
+- **I PR:en:** krav-ID:n, testplanen (och vad som inte kunde köras lokalt), versionen
+  (`versionName`/`versionCode` ur `app/build.gradle.kts`, eller "ingen höjning"), byggtidseffekten
+  vid nya beroenden, och för GUI mockup-länken med Roborazzi-skärmdumpar ljust + mörkt
+  (`captureLightAndDark`).
+- **Emulatortesterna:** jobbet `instrumented-tests` körs i PR:er som rör filtret `instrumented`,
+  och `ci-ok` fäller PR:en om det blir rött eller avbryts; ett överhoppat jobb fäller inte (skill
+  `ci-budget`).
+- **APK-länken:** har en körning gett en installerbar APK – debug-snapshoten
+  (`release-debug.yml`, https://github.com/ParTee71/fonder/releases/tag/debug-snapshot), en
+  signerad release eller en artifact – avslutas svaret med länken, commit och `versionName`
+  (CLAUDE.md → Bygg & test). "Bygget är grönt" utan länk när en APK byggts är ett anti-mönster.
+
+## Issues (android:refine-issue)
+
+- **Repo:** owner `ParTee71`, repo `fonder`; dubblettsökning med `mcp__github__search_issues`
+  (`repo:ParTee71/fonder <ord>`).
+- **Extra undersökningspunkter:**
+  - **Skärmar:** `ui/hem`, `ui/portfolj`, `ui/fond`, `ui/fondsok`, `ui/beslut`,
+    `ui/transaktioner`, `ui/imports`, `ui/facit`, `ui/bytesfonster`, `ui/riskprofil`,
+    `ui/settings` – och vilka ViewModels, repositories, use cases (`domain/usecase/`) och workers.
+  - **Kända dubbletter:** `TotalCard`, `ComparisonChart`, importens laddningsdialoger, egna
+    listrader – berörs en, slås den ihop först (skill `shared-ui-components`).
+  - **Externa källor:** `data/network/` (Avanza, Handelsbanken, Riksbanken) är odokumenterade
+    (TP-10, TP-14) – flagga skörheten.
+  - **Import:** `data/imports/` (`HoldingsImportParser`, `AvrakningsnotaPdfParser`) och
+    matchningen (`FundCompanyMatcher`, `FundNameMatcher`, `ImportFundMatcher`).
+  - **Inloggning och molnbackup:** `AuthRepository` (TP-6), `DriveBackupRepository` (TP-7 steg 2,
+    SET-7) och påminnelsen `BackupStatusRepository` (HEM-12).
+- **Datakedjan i DoD:** entitet, `version`, migrering + `MigrationXYTest`; fältet i
+  `BackupPayload` med default, i `export()`/`restore()`, fältvakten i `BackupSerializerTest`
+  uppdaterad och `BackupRoundTripTest` asserterar på det – eller "ingen persisterad ändring", eller
+  motivet till att det är cache.
+- **Integritet och tillgänglighet i DoD:** logga aldrig innehav, belopp, tokens eller hela
+  HTTP-svar; `contentDescription` och 48 dp där det är relevant.
+- **Berörda filer** under `app/src/main/kotlin/se/partee71/fonder/…`.
+- **Testplanens nivåer:** enhet i `app/src/test` (ViewModel med MockK/Turbine, Robolectric,
+  Roborazzi-skärmdumpar, `UiConsistencyTest`); instrument i `app/src/androidTest` (Compose, DAO,
+  migrering, rundtur; i Actions bara i PR som rör koden).
+- **Verifiering**, exempel: `./gradlew :app:testDebugUnitTest --tests "*TransactionViewModel*"`,
+  eller vilka Roborazzi-bilder som ändras.
+- **Acceptanskriterier**, utöver pluginens: `- [ ] Migrering + MigrationXYTest` (om schemat
+  ändras), `- [ ] Backup-kedjan + rundturstest` (om användardata), och alltid
+  `- [ ] UiConsistencyTest och cpdCheck gröna`. Exempel på ett beteende:
+  `- [ ] Sparar en transaktion och den finns kvar efter omstart`.
+- **Titel**, exempel: `Transaktioner: bekräftelsedialog vid borttagning av rad`.
+- **Etiketter:** repot har ingen fast lista här – fråga, och hämta repots verkliga etiketter om du
+  är osäker.
+- **Agent · modell · effort** (obligatoriskt). Modellval i [`.claude/README.md`](../../README.md);
+  standarden är agentens frontmatter:
+
+  | Agent | Tar | Standard |
+  |---|---|---|
+  | `byggare` | skärmar, komponenter, use cases, nätverkskällor, workers, CI-filer | Opus · medium |
+  | `arkitekt` | Room-schema, migreringar, backup-kedjan, DataStore, arkitekturval | Opus · high (Fable vid väldigt komplexa issues) |
+  | `testskrivare` | tester när tre eller fler nivåer berörs | Sonnet · medium |
+  | `granskare` | granskningen i steg 8, alltid med | sessionens modell · medium |
+  | `ci-doktor` | rött CI – startas vid behov, anges inte i förväg | Sonnet · medium |
+
+  Room-schema, migreringar och backup-kedjan minst `arkitekt` · Opus · high. Exempel: `arkitekt` ·
+  Opus · high – migrering och backup-kedjan; `byggare` · Opus · medium – skärmen.
+
+## Release (android:release)
+
+- **Versionsfilen** är `app/build.gradle.kts`: `versionCode = <n>` och
+  `versionName = versionNameOverride ?: "<version>"`. Ändra bara strängen – `versionNameOverride`
+  sätts enbart av workflowernas `-PversionNameOverride`. README har två ställen: versionsraden
+  överst (`> Version: <version> …`) och raden under "Versionshistorik". Alla höjs och skrivs i
+  funktions-PR:en.
+- **Workflow:** `release.yml` (owner `ParTee71`, repo `fonder`), ett jobb `release`: löser taggen
+  (push av tagg `v*`, eller `workflow_dispatch` med `publish_release` – då skapas taggen på den
+  dispatchade commiten, och workflowen vägrar om den redan finns), avkodar keystoren `fonder.jks`
+  ur `SIGNING_KEYSTORE_BASE64` (konverterad till legacy PKCS12), kör `:app:assembleRelease` (med
+  `-PversionNameOverride` när `version_name` anges), laddar upp artifacten `fonder-release`,
+  publicerar GitHub Release `Fonder v<version>` med automatisk changelog och raderar keystoren.
+- **Nuvarande läge, avviker från pluginen:** `release.yml` saknar testgrindar – den kör inga
+  tester, ingen lint och kontrollerar inte att `ci-ok` är grönt på commiten. Det rättas i en egen
+  PR (Mats beslut 2026-10-18). Till dess: starta releasen först när `android.yml` är grönt på
+  `master`-HEAD; master-pushen kör inte emulatortesterna, så de gröna instrumenttesterna är
+  PR:ernas.
+- **Secrets:** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`,
+  `SIGNING_KEY_PASSWORD`. `app/google-services.json` är incheckad och behöver ingen secret.
+- **Har `BackupPayload.FORMAT_VERSION` höjts sedan förra releasen:** nämn det tydligt – en äldre
+  app avvisar då nya säkerhetskopior (skill `data-safety-backup`), och höjningen är major om
+  äldre appar inte kan läsa formatet.
+- **Kravlistan:** TP-kraven matchar SDK-nivåerna i `app/build.gradle.kts` (`compileSdk`,
+  `minSdk`, `targetSdk`).
+- **Dispatch:** `workflow_id: release.yml`, `ref: master`,
+  `inputs: { version_name: "<version>", publish_release: "true" }` – `version_name` utan `v`,
+  `publish_release` som sträng (standard `false`, valfri). Med bara `version_name` blir det ett
+  testbygge: den signerade APK:n som artifacten `fonder-release`, ingen tagg och ingen Release –
+  länka artifacten.
+- **Debug-snapshot:** `release-debug.yml` (bara `workflow_dispatch`, valfri `version_name` →
+  `-PversionNameOverride`) bygger en debug-APK, signerad med den incheckade `app/debug.keystore`,
+  och publicerar den som rullande pre-release under taggen `debug-snapshot`, som skrivs över vid
+  varje körning (artifact `fonder-debug`). Ingen versionshöjning, ingen tagg `v*`. Länka
+  https://github.com/ParTee71/fonder/releases/tag/debug-snapshot med commit och `versionName`.
+- **APK:n** heter `fonder-<versionName>-<tidsstämpel>.apk`; sammanfattningen börjar
+  `Släppt: Fonder v<version>`.
+- **Lokal reserv:** `./gradlew :app:assembleRelease` kräver `fonder.jks` i `app/` och
+  signeringslösenord via `local.properties` (`signing.storePassword`, `signing.keyAlias`,
+  `signing.keyPassword`) eller `SIGNING_*`-miljövariabler – saknas de byggs `release` osignerat.
+  APK:n hamnar i `app/build/outputs/apk/release/`. Checka aldrig in keystoren (skill
+  `data-privacy-security`).

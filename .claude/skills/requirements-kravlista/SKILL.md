@@ -94,10 +94,11 @@ eller en vanlig ändring får ingen historikpost – det är vad git och README:
 
 - **README** – funktionslistan under "Status" bockas av när en funktion landar;
   arkitekturavsnittet uppdateras när en ny klass eller ett nytt paket tillkommit.
-- **`versionName`** i `app/build.gradle.kts` följer med när funktionsomfånget ändras (CLAUDE.md
-  regel 3). Själva releasen görs separat och bara på uttrycklig begäran.
-- **Versionshistorik-tabellen i README** fylls vid releasen av skill `release`, inte av
-  funktions-PR:en.
+- **`versionName` och `versionCode`** i `app/build.gradle.kts` höjs i funktions-PR:en (CLAUDE.md
+  → PR-flöde, skill `android:release` → Versionshöjning). Själva releasen görs separat och bara
+  på uttrycklig begäran.
+- **Versionshistorik-tabellen i README** och versionsraden överst skrivs i funktions-PR:en, inte
+  vid releasen – raden med de användarsynliga ändringarna och `(#NN)`.
 
 **Ändra aldrig KRAVLISTA.md på eget initiativ** utanför den PR som ändrar beteendet – en
 omskrivning av befintliga rader är ett eget issue.
@@ -109,7 +110,7 @@ omskrivning av befintliga rader är ett eget issue.
 - [ ] Inga ID:n återanvända eller raderade.
 - [ ] Raden beskriver beteende – motiv och implementation ligger i PR/issue/README.
 - [ ] Gemensamma beteenden refererade, inte upprepade.
-- [ ] README och `versionName` uppdaterade om funktionsomfånget ändrats.
+- [ ] Versionen höjd och README:s versionsrad och versionstabell uppdaterade om appens beteende ändrats.
 - [ ] Historikpost bara om ett tidigare antagande rättas.
 - [ ] Ett test bevisar det nya/ändrade kravet.
 - [ ] Krav-ID:n står i PR-beskrivningen.
