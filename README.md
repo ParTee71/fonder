@@ -80,7 +80,7 @@ semantisk färg **och** tecken/pil (aldrig färg ensam).
 
 ### Förutsättningar
 
-- Android Studio (senaste), JDK 17, Android SDK API 37 (compileSdk), minSdk 30
+- Android Studio (senaste), JDK 21, Android SDK API 37 (compileSdk), minSdk 30
 
 ### Bygg och kör
 

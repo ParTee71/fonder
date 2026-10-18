@@ -76,6 +76,7 @@ jobs:
               - 'gradle/**'
               - 'gradle.properties'
               - '.github/workflows/android.yml'
+              - '.github/actions/**'
             instrumented:
               - 'app/src/main/**'
               - 'app/src/androidTest/**'
@@ -132,18 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # JDK 21: Robolectric kräver det för SDK 36. Koden byggs fortfarande för Java 17.
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      # Beroende- och build cache skrivs bara från master och läses i PR.
-      - name: Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - uses: ./.github/actions/setup-android
 
       # Robolectric hämtar sin SDK-jar (android-all-instrumented) till ~/.m2 utanför Gradles cache.
       - name: Cache för Robolectrics SDK-jar
