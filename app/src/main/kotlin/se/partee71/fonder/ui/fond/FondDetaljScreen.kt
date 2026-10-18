@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,9 +76,10 @@ fun FondDetaljScreen(
 
     // Samma mönster som Hem (HEM-11): en nystartad bevakning öppnas direkt, annars ser knappen
     // ut som om den inte gjorde något — bevakningen är tom tills kandidaterna hämtats.
+    val openSwitchWatch by rememberUpdatedState(onOpenSwitchWatch)
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
-            onOpenSwitchWatch(watchId)
+            openSwitchWatch(watchId)
             viewModel.onSwitchWatchOpened()
         }
     }

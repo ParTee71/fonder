@@ -41,7 +41,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Tester: JUnit, MockK, Turbine, Robolectric + Roborazzi i JVM, Konsist (`UiConsistencyTest`);
   Room- och Compose-tester även i `androidTest/` (skill `testing-strategy`).
 - **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
-  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); åtta compose-rules-regler som kräver API-ändringar i befintliga komponenter är avstängda i ktlint (`parameter-naming`, `lambda-param-event-trailing`, `lambda-param-in-effect`, `content-slot-reused`, `multiple-emitters-check`, `modifier-naming`, `modifier-missing-check`, `param-order-check`) och `vm-injection-check` för att dess autorättning bryter `AppNavigation` (två `hiltViewModel()`); ingen Renovate eller Dependabot;
+  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); sex compose-rules-regler som kräver API-ändringar i befintliga komponenter är avstängda i ktlint (`parameter-naming`, `lambda-param-event-trailing`, `multiple-emitters-check`, `modifier-naming`, `modifier-missing-check`, `param-order-check`) och `vm-injection-check` för att dess autorättning bryter `AppNavigation` (två `hiltViewModel()`); ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
   pluginen (beta), men utan kommentar i katalogen om varför. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.

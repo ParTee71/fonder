@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -64,9 +65,10 @@ fun TransaktionerScreen(
 
     // En nystartad bevakning öppnas direkt (SLD-5) — samma skäl som på Beslut: den är tom tills
     // kandidaterna hämtats, och att bli kvar här hade sett ut som att knappen inte gjorde något.
+    val openSwitchWatch by rememberUpdatedState(onOpenSwitchWatch)
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
-            onOpenSwitchWatch(watchId)
+            openSwitchWatch(watchId)
             viewModel.onSwitchWatchOpened()
         }
     }

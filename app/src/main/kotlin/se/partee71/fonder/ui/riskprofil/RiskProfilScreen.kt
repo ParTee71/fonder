@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -38,9 +39,10 @@ fun RiskProfilScreen(
     viewModel: RiskProfilViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val notifySaved by rememberUpdatedState(onSaved)
     LaunchedEffect(state.saved) {
         if (state.saved) {
-            onSaved()
+            notifySaved()
             viewModel.onSavedHandled()
         }
     }
