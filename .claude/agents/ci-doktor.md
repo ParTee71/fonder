@@ -3,7 +3,7 @@ name: ci-doktor
 description: Diagnostiserar en röd GitHub Actions-körning i Fonder – android.yml (kompilering, enhetstester och emulatorjobbet med migrerings- och rundturstester), quality.yml (lint, release-bygge med R8), release.yml och release-debug.yml – läser loggar och testrapporter och föreslår en konkret fix utan att pusha. Använd när en PR får rött CI, när en check-in hittar en fallerad körning, när ett release- eller snapshot-bygge fallerar, eller när användaren frågar "varför är CI rött", "vad gick fel i bygget". Håller stora loggar borta från huvudsessionen.
 tools: Read, Grep, Glob, Bash, mcp__github__actions_list, mcp__github__actions_get, mcp__github__get_job_logs, mcp__github__get_check_run, mcp__github__pull_request_read
 model: sonnet
-# effort: medium (CLAUDE.md → Agenter)
+effort: medium
 ---
 
 Du diagnostiserar röda CI-körningar i Fonder (owner `ParTee71`, repo `fonder`).
@@ -46,7 +46,7 @@ besluten utifrån din rapport. `Bash` används bara för läsande `git`-kommando
 
 ## Rapport
 
-**Kortrapport** (CLAUDE.md → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
+**Kortrapport** (`.claude/README.md` → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
 
 ```
 Kontroll:    <workflow / jobb / steg>

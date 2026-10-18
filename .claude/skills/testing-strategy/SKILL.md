@@ -134,12 +134,24 @@ node --test .claude/hooks/test/*.test.mjs      # hooken regel4-check och baslinj
 
 **Kör det du ändrat lokalt innan varje push** när Android SDK finns (session-start-hooken
 säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
-taget och sätt `LC_ALL=C.UTF-8` (testnamn med å/ä/ö). Saknas SDK: installera den (`.claude/hooks/install-android-sdk.sh`, CLAUDE.md → Bygg & test); går inte det får CI bekräfta – säg det i
-PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
+taget. `LC_ALL=C.UTF-8` (testnamn med å/ä/ö) sätts av `.claude/settings.json`. Saknas SDK:
+installera den – det är alltid ok att installera Android SDK och liknande verktyg i sessionen
+(`.claude/hooks/install-android-sdk.sh`, ≈450 MB, några minuter; skriptet skriver också
+`sdk.dir` i `local.properties`). Går det inte får CI bekräfta – säg det i PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
 emulatortesterna (`instrumented-tests`) **bara i PR** som rör `app/src/main`,
 `app/src/androidTest` eller byggfilerna – en ren push ger ingen instrumenttäckning (skill
 `ci-budget`). Vid rött CI – låt
 agenten `ci-doktor` diagnostisera.
+
+## Fallgropar
+
+- **Första Gradle-körningen i en ny session** hämtar Gradle och beroendena (flera minuter).
+  Kör den i bakgrunden och fortsätt med annat.
+- **Plattformspaketet heter `android-37.0`**, inte `android-37`, från API 37.
+- **Maven Central svarar 429** när många beroenden hämtas samtidigt – kör om med
+  `--no-parallel --max-workers=2`, inte i en slinga.
+- **Två Gradle-körningar samtidigt** låser varandra eller ger förvirrande cachefel – vänta in
+  den första.
 
 ## Anti-mönster
 

@@ -35,8 +35,9 @@ Sök efter dubbletter först: `mcp__github__search_issues` (`repo:ParTee71/fonde
 
 ## Steg 2 – Klargör avsikt
 
-Fråga bara det som inte går att härleda ur begäran eller koden. `AskUserQuestion` vid
-konkreta val. Bugg: steg, förväntat/faktiskt, enhet/Android-version, logcat. Hoppa över
+Fråga bara det som inte går att härleda ur begäran eller koden. Konkreta val ställs som en
+fråga med alternativ – `AskUserQuestion` där det finns, annars ett beslutskort eller en kort
+fråga i tråden. Bugg: steg, förväntat/faktiskt, enhet/Android-version, logcat. Hoppa över
 steget om begäran redan är entydig.
 
 ## Steg 3 – Undersök koden
@@ -126,6 +127,10 @@ en regel inte, skriv varför. Stort arbete → föreslå uppdelning i under-issu
 - Enhet (`app/src/test`): …
 - Instrument (`app/src/androidTest`): … (Compose, DAO, migrering, rundtur)
 
+## Verifiering
+<kommandona som bevisar att issuet är klart, t.ex.
+`./gradlew :app:testDebugUnitTest --tests "*TransactionViewModel*"` eller vilka skärmdumpar som ändras>
+
 ## Acceptanskriterier
 - [ ] <beteende>
 - [ ] Mockup godkänd (om GUI)
@@ -149,8 +154,9 @@ För **buggar**: byt Föreslaget upplägg mot **Steg för att återskapa**, **F�
 **Faktiskt**, **Miljö**, och kräv regressionstestet.
 
 **Agent · modell · effort är obligatoriskt.** Varje del anger agent (`byggare`, `arkitekt`,
-`testskrivare` …), modell och effort, utifrån agenttabellen i CLAUDE.md; Room-schema,
-migreringar och backup-kedjan minst `arkitekt` · high. Ett issue utan avsnittet är inte
+`testskrivare` …), modell och effort, utifrån agenttabellen och modellvalet i
+[`.claude/README.md`](../../README.md); Room-schema, migreringar och backup-kedjan minst
+`arkitekt` · Opus · high, och Fable bara för väldigt komplexa issues. Ett issue utan avsnittet är inte
 färdigförfinat.
 
 Titel: `<område>: <sammanfattning i imperativ>` (t.ex. `Transaktioner: bekräftelsedialog vid
@@ -169,5 +175,6 @@ Rapportera nummer och länk.
 
 ## Steg 8 – Nästa steg
 
-Erbjud kort: genomför nu (`implement-issue`), skapa uppföljande issues för det som låg
+Erbjud kort: genomför nu (`implement-issue`, helst i en ny session eller tråd så att
+implementationen får ren kontext med issuet som underlag), skapa uppföljande issues för det som låg
 utanför omfånget, eller låt det ligga planerat.

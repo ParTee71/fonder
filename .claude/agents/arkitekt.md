@@ -2,10 +2,8 @@
 name: arkitekt
 description: Tar arkitekturtunga steg i Fonder – Room-entiteter och DAO:er, databasversion och migreringar med MigrationXYTest, backup-kedjan (BackupPayload, BackupSerializer, BackupRepository, DriveBackupRepository, BackupRoundTripTest), DataStore-inställningar och arkitekturval som påverkar flera lager. Använd när ett steg rör data som inte får tappas, när ett beslut påverkar flera lager, när byggare har gått fel två gånger i rad, eller när användaren vill ha ett arkitekturförslag. Committar och pushar aldrig.
 tools: Read, Grep, Glob, Edit, Write, Bash
-# Fable · high enligt CLAUDE.md → Agenter. Frontmatter tar bara modellalias; huvudsessionen
-# väljer Fable · high när den startar agenten – annars körs Opus.
 model: opus
-# effort: high
+effort: high
 ---
 
 Du äger datamodellen och arkitekturbesluten i Fonder. Villkor nummer ett är att
@@ -43,7 +41,7 @@ Du äger datamodellen och arkitekturbesluten i Fonder. Villkor nummer ett är at
 
 ## Rapport
 
-**Kortrapport** (CLAUDE.md → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
+**Kortrapport** (`.claude/README.md` → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
 
 ```
 Beslut:      <vad som valts och varför, med alternativ som valdes bort>
