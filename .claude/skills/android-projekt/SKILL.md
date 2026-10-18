@@ -41,8 +41,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Tester: JUnit, MockK, Turbine, Robolectric + Roborazzi i JVM, Konsist (`UiConsistencyTest`);
   Room- och Compose-tester även i `androidTest/` (skill `testing-strategy`).
 - **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
-  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); targetSdk 35
-  (pluginen säger 36; compileSdk 37, TP-1); ingen Spotless/ktlint (ingen `.editorconfig`); ingen Renovate eller Dependabot;
+  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); ingen Spotless/ktlint (ingen `.editorconfig`); ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
   pluginen (beta), men utan kommentar i katalogen om varför. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.
@@ -130,7 +129,7 @@ UI-10 (risknivå i text). Semantiken ligger i komponenten, aldrig hos anroparen.
 
 ## Gradle (android:android-gradle-logic)
 
-Versioner och SDK-nivåer: KRAVLISTA TP-1 (minSdk 30, targetSdk 35, compileSdk 37) och
+Versioner och SDK-nivåer: KRAVLISTA TP-1 (minSdk 30, targetSdk 36, compileSdk 37) och
 `gradle/libs.versions.toml` (AGP 9.4.1, Kotlin 2.4.21, Gradle 9.8.1). En höjning som ändrar
 SDK-nivåer uppdaterar TP-1 i samma PR.
 

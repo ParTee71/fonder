@@ -32,7 +32,7 @@ android {
     defaultConfig {
         applicationId = "se.partee71.fonder"
         minSdk = 30
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 84
         versionName = versionNameOverride ?: "0.72.1"
 
