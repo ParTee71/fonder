@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -75,9 +76,10 @@ fun BeslutScreen(
 
     // En nystartad bevakning öppnas direkt: den är tom tills kandidaterna hämtats, och att
     // lämna användaren kvar på Beslut hade sett ut som att knappen inte gjorde något.
+    val openSwitchWatch by rememberUpdatedState(onOpenSwitchWatch)
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
-            onOpenSwitchWatch(watchId)
+            openSwitchWatch(watchId)
             viewModel.onSwitchWatchOpened()
         }
     }

@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -167,10 +168,11 @@ fun SettingsContent(
     // Hems påminnelse (HEM-12) landar här: säkerhetskopieringen ligger långt ned, så den
     // skrollas fram och begäran kvitteras — en gång, inte vid varje återbesök.
     val backupBringIntoView = remember { BringIntoViewRequester() }
+    val scrolledToBackup by rememberUpdatedState(onScrolledToBackup)
     LaunchedEffect(scrollToBackup) {
         if (scrollToBackup) {
             backupBringIntoView.bringIntoView()
-            onScrolledToBackup()
+            scrolledToBackup()
         }
     }
 
