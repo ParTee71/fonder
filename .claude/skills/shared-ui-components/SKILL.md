@@ -1,6 +1,6 @@
 ---
 name: shared-ui-components
-description: 'Fonders återbruksregel (regel 4) — samma typ av element ser likadant ut och beter sig likadant överallt, och varje sak finns på ett ställe. Enda källan för komponent- och byggstenstabellerna, de kända dubbletterna och förbudslistan. Ladda denna ALLTID när du bygger eller ändrar UI, en skärm, en komponent, ett interaktionsmönster, en ViewModel med formulär eller lista, ett repository, en beräkning eller när du ser liknande kod på två ställen. Trigger-ord: composable, komponent, UI, skärm, vy, knapp, kort, card, lista, listrad, rad, kryss, fält, datum, väljare, dropdown, chip, badge, dialog, laddning, tomt tillstånd, empty state, utfällbar, foldout, diagram, graf, chart, dra för att uppdatera, återbruk, dubbelkod, duplicering, kopiera, likadant, enhetligt, konsekvent, mönster, TotalCard, ComparisonChart, cpdCheck, UiConsistencyTest, allowlist.'
+description: 'Regel 4 i Fonder — samma elementtyp ser ut och beter sig likadant överallt och varje sak finns på ett ställe. Enda källan för komponent- och byggstenstabellerna, de kända dubbletterna och förbudslistan. Ladda alltid vid UI, skärmar, komponenter, interaktionsmönster, formulär, listor, beräkningar eller liknande kod på två ställen. Trigger-ord: komponent, skärm, knapp, kort, lista, listrad, fält, dialog, laddning, tomt tillstånd, diagram, dra för att uppdatera, dubbelkod, återbruk, TotalCard, ComparisonChart, UiConsistencyTest, cpdCheck, allowlist.'
 ---
 
 # Enhetligt och utan dubbelkod

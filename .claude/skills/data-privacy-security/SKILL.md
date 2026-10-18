@@ -1,6 +1,6 @@
 ---
 name: data-privacy-security
-description: 'Fonders integritets- och säkerhetsregler — innehav, belopp, transaktioner och avräkningsnotor är ekonomisk persondata som aldrig loggas eller skickas till nätverkskällorna; inga nycklar i repot; Drive-backupen delar appDataFolder med Dagboken. Ladda denna ALLTID när du rör loggning, backup/restore, Drive, import av avräkningsnotor/exportfiler, nätverkskällor (Avanza, Handelsbanken, Riksbanken), autentisering, hemligheter, signering, release/minify eller Androids egen backup. Trigger-ord: integritet, säkerhet, privacy, GDPR, persondata, ekonomisk data, innehav, belopp, transaktion, avräkningsnota, PII, logga, Log, secret, hemlighet, nyckel, keystore, jks, signering, google-services, service account, token, Drive, appDataFolder, fonder-backup-, backup, export, import, Avanza, Handelsbanken, Riksbanken, nätverk, minify, R8, ProGuard, allowBackup.'
+description: 'Integritet och säkerhet i Fonder — innehav, belopp, transaktioner och avräkningsnotor är ekonomisk persondata som aldrig loggas eller skickas till nätverkskällorna; inga nycklar i repot. Ladda alltid vid loggning, backup, Drive, import, nätverkskällor, inloggning, hemligheter, signering eller release/minify. Trigger-ord: integritet, säkerhet, GDPR, persondata, PII, logga, hemlighet, keystore, jks, google-services, token, Drive, appDataFolder, Avanza, Handelsbanken, Riksbanken, R8, ProGuard, allowBackup.'
 ---
 
 # Datasäkerhet & integritet

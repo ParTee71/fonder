@@ -170,6 +170,9 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `arkitekt`
   Room-schema, migreringar, backup-kedjan och arkitekturval. Går ett steg fel två gånger i
   rad flyttas det upp en nivå.
+- **Modell efter uppgift:** sessionen och varje agent väljer modell och effort efter uppgiftens
+  komplexitet – Opus är standard; byt via `/model` eller låt en billigare agent ta rutindelar,
+  och starta agenter med `model` efter uppgiften ([.claude/README.md](.claude/README.md) → Modellval).
 - **Varje issue anger Agent · modell · effort** (skill `refine-issue`), och agenten körs med
   just den modellen och effort (skill `implement-issue`).
 
@@ -183,47 +186,12 @@ Detaljer i [README.md](README.md).
 
 ---
 
-## Agenter (`.claude/agents/`)
+## Agenter, modellval och skills
 
-| Agent | När |
-|---|---|
-| `byggare` | Skärmar, komponenter, use cases, nätverkskällor, workers och CI-filer enligt en klar plan (Opus · medium). |
-| `arkitekt` | Room-entiteter, migreringar, backup-kedjan, DataStore och arkitekturval (Fable/Opus · high). |
-| `granskare` | Före varje PR: granskar diffen mot de fem reglerna och mockup-regeln, rapporterar i en tabell (Sonnet · medium). |
-| `ci-doktor` | Vid rött CI: läser loggar och testrapporter, föreslår fix (Sonnet · medium). |
-| `testskrivare` | Skriver/utökar tester och fixturer – när tre eller fler testnivåer berörs (Sonnet · medium). |
-
-**Kortrapport:** agenternas svar hamnar i huvudsessionens kontext och kostar där. Varje agent svarar bara med mallen i sin fil – inga referat av det den läst, ingen upprepning av uppdraget, högst ~15 rader om inte fynden kräver mer. Effort står som kommentar i frontmatter och styr inte körningen; huvudsessionen anger den när agenten startas.
-
-## Skills i detta repo (`.claude/skills/`)
-
-Generella Android/Kotlin-skills är kopierade från Dagboken. De projektspecifika är
-**anpassade till Fonder**, inte kopierade rakt av — Dagbokens backup går mot Drive och
-dess migreringstester mot `MigrationTestHelper`, medan Fonders kontrakt är
-`BackupPayload` mot en lokal fil och migreringstesterna bygger det gamla schemat för
-hand. Läs skillen, inte Dagbokens motsvarighet.
-
-| Skill | När |
-|---|---|
-| `android-dev` | Baslinje för all Android/Kotlin-utveckling (ladda alltid). |
-| `android-data-layer` | Repository/Room/DAO/offline-först. |
-| `compose-expert` · `kotlin-coroutines` · `kotlin-flows` | Compose-, coroutine- och flow-detaljer. |
-| `android-gradle-logic` | Gradle/version catalogs/build-konfiguration. |
-| `data-safety-backup` | Regel 1 — persisterad data, backup-kontraktet, rundturen. |
-| `testing-strategy` | Regel 2 — nivåer, fakes, och den flakiness som redan bitit. |
-| `requirements-kravlista` | Regel 3 — ID-serier, hur en kravrad skrivs här, historiken. |
-| `shared-ui-components` | Regel 4 — katalogen i `ui/components/` och `ui/diagram/`. |
-| `room-migrations` | Schemaändringar, defaultvärden och migreringstesterna. |
-| `firebase-auth` | Google-inloggning (TP-6) — Credential Manager, `AuthRepository`. |
-| `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt reglerna). |
-| `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt reglerna. |
-| `release` | Endast vid uttrycklig release. |
-| `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
-| `mockup` | Ny skärm, komponent eller ändrat utseende: mockup före kod. |
-| `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
-| `accessibility-compose` | TalkBack, belopp och procent som läses begripligt, tryckytor, dynamisk text. |
-| `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
-| `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
+Agenterna (`byggare`, `arkitekt`, `granskare`, `ci-doktor`, `testskrivare`), modellvalet och
+alla skills, med när de används, står i [.claude/README.md](.claude/README.md). Agenterna
+svarar med kortrapporten i sin fil. Vid komprimering av en lång session: behåll ändrade filer,
+issue- och PR-nummer, körda testkommandon med resultat och öppna ❌ från granskningen.
 
 > Reglerna gäller både i Claude Android-appen och i Claude inuti Android Studio —
 > båda läser denna fil och `.claude/`. Skill-filerna är vanlig Markdown och kan läsas

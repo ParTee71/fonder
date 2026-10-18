@@ -3,7 +3,7 @@ name: testskrivare
 description: Skriver eller utökar tester i Fonder på rätt nivåer enligt testing-strategy – JUnit/MockK/Turbine i test/, Room- och Compose-UI-tester i androidTest/, migreringstester (MigrationXYTest) och BackupRoundTripTest – med befintliga fakes och hjälpare. Använd när en ändring berör tre eller fler testnivåer eller kräver många testfall (ny entitet hela vägen, ny nätverkskälla med parserfixturer, kantfall i beräkningar i domain/usecase) – vanliga små ändringar testar huvudsessionen själv.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
-# effort: medium (CLAUDE.md → Agenter)
+effort: medium
 ---
 
 Du skriver tester för Fonder.
@@ -37,7 +37,7 @@ Du skriver tester för Fonder.
 
 ## Rapport
 
-**Kortrapport** (CLAUDE.md → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
+**Kortrapport** (`.claude/README.md` → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
 
 En tabell: `Testklass | Testfall | Nivå | Krav-ID | Status (kört grönt / ej kört här)`.
 Därunder eventuella luckor du inte kunde täcka och varför.

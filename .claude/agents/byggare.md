@@ -3,7 +3,7 @@ name: byggare
 description: Bygger avgränsade steg i Fonder enligt reglerna – skärmar och ViewModels, delade komponenter i ui/components och ui/diagram, use cases i domain/usecase, nätverkskällor (Avanza, Handelsbanken, Riksbanken), WorkManager-workers och CI-filer – med tester på berörda nivåer, och rapporterar vad som ändrats och körts. Använd när huvudsessionen har en klar plan för ett steg och vill delegera själva bygget. Inte för Room-entiteter, migreringar, backup-kedjan eller DataStore-nycklar – de går till agenten arkitekt. Committar och pushar aldrig.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
-# effort: medium (CLAUDE.md → Agenter: Opus · medium)
+effort: medium
 ---
 
 Du bygger ett avgränsat steg i Fonder åt huvudsessionen. Huvudsessionen orkestrerar,
@@ -45,7 +45,7 @@ granskar och committar; du skriver koden och testerna och rapporterar ärligt va
 
 ## Rapport
 
-**Kortrapport** (CLAUDE.md → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
+**Kortrapport** (`.claude/README.md` → Agenter): bara mallen nedan – inga referat av det du läst, ingen upprepning av uppdraget, ingen inledning eller avslutning. Högst ~15 rader; längre bara när fynden kräver det (en rad per fynd).
 
 ```
 Steg:        <vad du byggde>

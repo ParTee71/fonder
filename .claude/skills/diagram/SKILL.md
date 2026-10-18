@@ -1,6 +1,6 @@
 ---
 name: diagram
-description: 'Fonders diagram — det delade linjediagrammet FundLineChart i ui/diagram (Vico 3.3.1) och diagrammatematiken i domain/usecase (ChartPeriodFilter, ChartSeriesNormalizer, PortfolioReturnSeriesCalc, PurchaseMarkerFilter, MovingAverageCalc). Ladda denna när du ritar, ändrar eller använder ett diagram, en kurva, en period, en jämförelse, köpmarkörer, en axel eller avkastning över tid, och tillsammans med shared-ui-components. Trigger-ord: diagram, graf, kurva, linjediagram, kurshistorik, avkastningskurva, period, periodväljare, 1 mån, Allt, jämförelse, index, indexera, nollställ, referensfond, benchmark, köpmarkör, y-axel, axel, zoom, Vico, teckenförklaring, legend, glidande medel, 200-dagarssnitt, snittlinje, MovingAverageCalc, ComparisonChart, FundLineChart.'
+description: 'Fonders diagram — FundLineChart i ui/diagram (Vico 3.3.1) och diagrammatematiken i domain/usecase. Ladda när du ritar, ändrar eller använder ett diagram, en kurva, en period, en jämförelse, köpmarkörer eller avkastning över tid, och tillsammans med shared-ui-components. Trigger-ord: diagram, graf, kurva, kurshistorik, period, jämförelse, index, referensfond, köpmarkör, axel, zoom, Vico, glidande medel, MovingAverageCalc, ComparisonChart, FundLineChart.'
 ---
 
 # Diagram

@@ -69,7 +69,8 @@ innan kod.
 ## Steg 5 – Planera och delegera
 
 Kort plan: filer, ordning, tester, migrering och backup-kedjan, krav. Arkitektoniskt
-betydande eller tvetydigt → bekräfta med `AskUserQuestion` innan kod.
+betydande eller tvetydigt → fråga användaren innan kod (`AskUserQuestion` där det finns,
+annars ett beslutskort eller en kort fråga i tråden).
 
 **Delegera på rätt nivå:** skärmar, komponenter, use cases, nätverkskällor, workers och
 CI-filer till agenten `byggare`; Room-schema, migreringar, backup-kedjan, DataStore och
@@ -78,7 +79,8 @@ Huvudsessionen orkestrerar och granskar. Går ett steg fel två gånger i rad fl
 
 **Kör agenten som issuet anger.** Läs avsnittet **Agent · modell · effort** och starta varje
 del med just den agenten, modellen och effort. Saknas avsnittet: komplettera issuet först
-(skill `refine-issue`). Avvikelse bara uppåt, och motiveras i PR-beskrivningen.
+(skill `refine-issue`). Avvikelse bara uppåt, och motiveras i PR-beskrivningen. Hur modellen
+väljs efter uppgiften står i [`.claude/README.md`](../../README.md) → Modellval.
 
 ## Steg 6 – Implementera (tester samtidigt, inte efter)
 
@@ -104,8 +106,9 @@ komponenter får ett Compose-test (och skärmdump ljust + mörkt när Roborazzi 
 
 ## Steg 8 – Självgranskning
 
-Kör agenten **`granskare`** på diffen och åtgärda varje ⚠️/❌ i dess tabell. Spåra varje
-acceptanskriterium till kod eller test. Kan du inte det är du inte klar.
+Kör agenten **`granskare`** på diffen. Varje ❌ åtgärdas; ett ⚠️ åtgärdas om det är litet,
+annars nämns det i PR:en. Spåra varje acceptanskriterium till kod eller test och till
+issuets **Verifiering** – kör de kommandona. Kan du inte det är du inte klar.
 
 Rör ändringen `domain/usecase/`, datalagret, Room-schemat, backup-kedjan, en nätverkskälla
 eller en delad komponent – eller är diffen större än ett par filer – kör dessutom
@@ -114,7 +117,9 @@ reglerna; `/code-review` letar buggar. Verifiera varje fynd och åtgärda de ver
 dokument- och strängändringar behöver den inte.
 
 Ändras koden efter granskningen granskas rättningarna igen – `granskare` och `/code-review`
-på det som ändrats – innan push. En PR går aldrig ut med kod som ingen granskning sett.
+på bara det som ändrats sedan förra rundan, och bara mot ❌ och buggar – innan push. Rundorna
+slutar när en runda inte hittar något ❌; ⚠️ i en senare runda nämns i PR:en i stället för att
+starta en ny. En PR går aldrig ut med kod som ingen granskning sett.
 
 ## Steg 9 – Commit och push
 

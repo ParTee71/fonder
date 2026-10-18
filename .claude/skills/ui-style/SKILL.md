@@ -1,6 +1,6 @@
 ---
 name: ui-style
-description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i Material 3 Expressive, rubriker och UI i Space Grotesk, belopp med tabulära siffror, fast palett utan dynamisk färg, ljust/mörkt/auto. Ladda denna när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill mockup. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, blå, koppar, M3 Expressive, vinst, förlust, grön, röd, typsnitt, font, Space Grotesk, tabulära siffror, tnum, belopp, hörn, rundad, form, kort, ikon, text, formulering, tomt tillstånd, kontrast, snyggt.'
+description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i Material 3 Expressive, Space Grotesk, belopp med tabulära siffror, fast palett, ljust/mörkt/auto. Ladda när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill mockup. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, blå, koppar, vinst, förlust, typsnitt, Space Grotesk, tabulära siffror, tnum, belopp, hörn, ikon, formulering, tomt tillstånd, kontrast.'
 ---
 
 # Designspråket · nordisk blå och koppar

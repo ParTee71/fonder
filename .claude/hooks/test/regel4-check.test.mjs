@@ -248,3 +248,103 @@ test('hook-kommandona i settings.json hittar skripten både i repot och från en
   });
   assert.equal(none.status, 0, 'utan hook i projektet ska kommandot vara tyst');
 });
+
+/** Tillfälligt git-repo med hooken där origin/master pekar på första committen. */
+function makeGitProject(name = 'fonder', parent) {
+  const made = makeProject();
+  let dir = made.dir;
+  if (parent) {
+    dir = path.join(parent, name);
+    mkdirSync(path.join(dir, 'app/src/test/resources'), { recursive: true });
+    mkdirSync(path.join(dir, '.claude/hooks'), { recursive: true });
+    for (const rel of [patternsRel, allowRel]) copyFileSync(path.join(made.dir, rel), path.join(dir, rel));
+    for (const f of hookFiles) copyFileSync(path.join(repoRoot, '.claude/hooks', f), path.join(dir, '.claude/hooks', f));
+  }
+  const git = (...args) => {
+    const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  git('init', '-q');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'bas');
+  git('update-ref', 'refs/remotes/origin/master', 'HEAD');
+  return { dir, parent: parent ?? made.parent, git };
+}
+
+function runStop(projectDir, { input = {}, hookRoot = projectDir } = {}) {
+  return spawnSync('node', [path.join(hookRoot, '.claude/hooks/regel4-check.mjs'), '--stop'], {
+    input: JSON.stringify({ hook_event_name: 'Stop', ...input }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir },
+    encoding: 'utf8',
+  });
+}
+
+test('Stop blockerar när en ändrad eller ny fil har förbjudna mönster', () => {
+  const { dir } = makeGitProject();
+  writeKt(dir, featureFileRel, featureCard);
+  const r = runStop(dir);
+  assert.equal(r.status, 0);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.decision, 'block');
+  assert.match(out.reason, /FundRow\.kt:5/);
+  assert.ok(out.reason.includes(cardReplacement()));
+});
+
+test('Stop ser även filer som redan committats på branchen', () => {
+  const { dir, git } = makeGitProject();
+  writeKt(dir, featureFileRel, featureCard);
+  git('add', '.');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'rad');
+  assert.equal(JSON.parse(runStop(dir).stdout).decision, 'block');
+});
+
+test('Stop är tyst för oförändrade filer, rena ändringar och när den redan blockerat en gång', () => {
+  const { dir, git } = makeGitProject();
+  writeKt(dir, featureFileRel, featureCard);
+  git('add', '.');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'på master');
+  git('update-ref', 'refs/remotes/origin/master', 'HEAD');
+  writeKt(dir, `${pkg}/ui/hem/FundList.kt`, 'package x\n\nfun ok() = Unit\n');
+  assert.equal(runStop(dir).stdout, '', 'gamla träffar på master hör inte till den här ändringen');
+
+  writeKt(dir, `${pkg}/ui/hem/FundRow2.kt`, featureCard);
+  assert.equal(runStop(dir, { input: { stop_hook_active: true } }).stdout, '', 'blockerar högst en gång i följd');
+});
+
+test('Stop-kommandot i settings.json hittar skriptet både i repot och från en föräldrakatalog', () => {
+  const settings = JSON.parse(readFileSync(path.join(repoRoot, '.claude/settings.json'), 'utf8'));
+  const stopCmd = settings.hooks.Stop[0].hooks[0].command;
+  const { dir, parent } = makeGitProject();
+  writeKt(dir, featureFileRel, featureCard);
+  for (const projectDir of [dir, parent]) {
+    const r = spawnSync('bash', ['-c', stopCmd], {
+      input: '{}', env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir }, encoding: 'utf8',
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /"decision":"block"/, `projektrot ${projectDir}`);
+  }
+});
+
+test('Stop blockerar när undantagsfilen är trasig', () => {
+  const { dir } = makeGitProject();
+  writeFileSync(path.join(dir, allowRel), 'saknar-symbol\n');
+  const out = JSON.parse(runStop(dir).stdout);
+  assert.equal(out.decision, 'block');
+  assert.match(out.reason, /Regel 4:.*rad 1/);
+});
+
+test('Stop kontrollerar varje repo med dess egen hook när projektroten har flera repon', () => {
+  const { dir, parent } = makeGitProject();
+  writeKt(dir, featureFileRel, featureCard);
+  const other = makeGitProject('Annat', parent).dir;
+  writeKt(other, `${pkg}/ui/hem/OtherRow.kt`, featureCard);
+  const utanHook = path.join(parent, 'UtanHook');
+  mkdirSync(path.join(utanHook, 'app/src/test/resources'), { recursive: true });
+  copyFileSync(path.join(dir, patternsRel), path.join(utanHook, patternsRel));
+  writeKt(utanHook, `${pkg}/ui/hem/Ignorerad.kt`, featureCard);
+
+  const out = JSON.parse(runStop(parent, { hookRoot: dir }).stdout);
+  assert.equal(out.decision, 'block');
+  assert.match(out.reason, /fonder\/.*FundRow\.kt:5/);
+  assert.match(out.reason, /OtherRow\.kt:5/);
+  assert.doesNotMatch(out.reason, /Ignorerad/, 'ett repo utan egen hook har egna regler och lämnas därhän');
+});

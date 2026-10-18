@@ -1,4 +1,7 @@
 {
+  "env": {
+    "LC_ALL": "C.UTF-8"
+  },
   "permissions": {
     "allow": [
       "mcp__github__subscribe_pr_activity",
@@ -29,7 +32,23 @@
       "mcp__Claude_Code_Remote__fire_trigger",
       "mcp__Claude_Code_Remote__list_repos",
       "Bash(node --test .claude/hooks/test/*.test.mjs)",
-      "Bash(node tools/regel4-baseline.mjs:*)"
+      "Bash(node tools/regel4-baseline.mjs:*)",
+      "mcp__claude-code-remote__subscribe_pr_activity",
+      "mcp__claude-code-remote__unsubscribe_pr_activity",
+      "mcp__claude-code-remote__send_later",
+      "mcp__claude-code-remote__create_trigger",
+      "mcp__claude-code-remote__update_trigger",
+      "mcp__claude-code-remote__delete_trigger",
+      "mcp__claude-code-remote__list_triggers",
+      "mcp__claude-code-remote__fire_trigger",
+      "mcp__claude-code-remote__list_repos"
+    ],
+    "deny": [
+      "Read(**/*.jks)",
+      "Read(**/keystore.properties)",
+      "Read(**/*service-account*.json)",
+      "Read(./.env)",
+      "Read(./.env.*)"
     ]
   },
   "hooks": {
@@ -51,6 +70,17 @@
             "type": "command",
             "command": "f=$(ls \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/regel4-check.mjs \"$CLAUDE_PROJECT_DIR\"/fonder/.claude/hooks/regel4-check.mjs 2>/dev/null | head -n1); [ -z \"$f\" ] || node \"$f\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(ls \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/regel4-check.mjs \"$CLAUDE_PROJECT_DIR\"/fonder/.claude/hooks/regel4-check.mjs 2>/dev/null | head -n1); [ -z \"$f\" ] || node \"$f\" --stop",
+            "timeout": 20
           }
         ]
       }
