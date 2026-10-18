@@ -119,7 +119,7 @@ Beräkningar ligger i `domain/usecase/`, aldrig i en ViewModel eller composable.
 ## Förbjudet
 
 Mönstren står i **en** fil, `app/src/test/resources/ui-forbidden.txt` (regex + vad som ska
-användas i stället, per scope `feature`, `component-only`, `vico` och `dispatchers`); den här listan
+användas i stället, per scope `feature`, `component-only`, `vico`, `dispatchers` och `events`); den här listan
 sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 (`fil:symbol – motivering`, användarens ok i PR:en).
 
@@ -135,6 +135,10 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 - **All kod utom `di/`:** `Dispatchers.IO`/`Default`/`Main`/`Unconfined`. Klassen tar en
   `CoroutineDispatcher` med `@IoDispatcher`, `@DefaultDispatcher` eller `@MainDispatcher` från
   `di/DispatchersModule` (skill `android:kotlin-coroutines`).
+- **All kod i `ui/`** – även `ui/components/`, `ui/diagram/` och `ui/theme/`: `Channel(` och
+  `.receiveAsFlow(` för engångshändelser. Händelsen blir ett fält i tillståndet som skärmen agerar
+  på i en `LaunchedEffect` nyckelad på värdet och kvitterar till ViewModel:n (`saved` +
+  `onSavedHandled()`, `startedSwitchWatchId` + `onSwitchWatchOpened()`; skill `android-projekt`, Flöden).
 - **UiState-typer** (icke-privata data classes som heter `*State` och sealed interfaces `*UiState` i `ui/`)
   utan `@Immutable` eller `@Stable`. Listor, kartor och mängder i dem är `ImmutableList`/`ImmutableMap`/`ImmutableSet`;
   domänmodellerna, de beräkningsresultat som ligger i tillstånden och datum-/tidstyperna räknas som stabila via `app/compose-stability.conf` (skill `android:compose-expert`).

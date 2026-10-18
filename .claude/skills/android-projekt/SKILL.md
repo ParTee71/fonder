@@ -67,9 +67,16 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   `riskProfile`, `benchmark` …) ur ett gemensamt `dataStore.data.catch { … }`.
 - Room-DAO:ernas `observe…(): Flow<List<…>>` är dataflödena; repositories exponerar dem.
 - ViewModels: `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), …)`.
-- Engångsmeddelanden är redan state med kvittens, som pluginen säger: inget `Channel` eller
-  `SharedFlow` i `app/src/main` (t.ex. `SwitchWatchViewModel.onMessageShown()`,
-  `backupProgress.message = null` i `SettingsViewModel`).
+- Händelser från en ViewModel är fält i tillståndet som skärmen kvitterar (pluginen, Googles råd):
+  meddelanden (`SwitchWatchViewModel.onMessageShown()`, `backupProgress.message = null` i
+  `SettingsViewModel`), navigering efter sparat (`saved` + `onSavedHandled()` i `RiskProfilViewModel`
+  och `TransactionFormViewModel`) och en nystartad bevakning (`startedSwitchWatchId` +
+  `onSwitchWatchOpened()` på Beslut, Händelser och Fonddetalj). Skärmen agerar i en `LaunchedEffect`
+  nyckelad på värdet och kvitterar efteråt, så att inget upprepas vid rotation eller tappas när
+  skärmen inte visas. Ingen `Channel` eller `receiveAsFlow` i `ui/` – scopet `[events]` i
+  `ui-forbidden.txt` kontrollerar det; inget `SharedFlow` heller. Fonder har inget delat
+  formulärmönster (`EditorState`). `SwitchWatchUiState.closed` är ett bestående tillstånd, ingen
+  händelse: skärmen lämnas med `popIfTop`, som inte gör något om skärmen redan lämnats.
 - **Nuvarande läge, avviker från pluginen:** Drive-auktoriseringens `PendingIntent` lämnas via en
   callback-parameter (`backupToDrive(onNeedsAuthorization)`), inte via state – medvetet, så att den
   inte spelas upp igen vid rotation. Om den ska bli state med kvittens avgörs i en egen PR senare.

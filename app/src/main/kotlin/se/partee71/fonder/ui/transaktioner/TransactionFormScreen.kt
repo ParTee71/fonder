@@ -46,7 +46,10 @@ fun TransactionFormScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.saved) {
-        if (state.saved) onSaved()
+        if (state.saved) {
+            onSaved()
+            viewModel.onSavedHandled()
+        }
     }
 
     TransactionFormContent(

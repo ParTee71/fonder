@@ -56,6 +56,10 @@ data class TransactionFormUiState(
     val feeText: String = "",
     /** Fälten är giltiga (fond, antal, kurs, datum, avgift) — bytesfrågan räknas i [canSave]. */
     val valid: Boolean = false,
+    /**
+     * Transaktionen är sparad — en händelse till skärmen, som går tillbaka och kvitterar med
+     * [TransactionFormViewModel.onSavedHandled], så att navigeringen sker exakt en gång (även vid rotation).
+     */
     val saved: Boolean = false,
     /**
      * Transaktionen sparades, men bevakningen som skulle kopplas ([SwitchDecision.LinksWatch]) hann
@@ -341,6 +345,11 @@ class TransactionFormViewModel @AssistedInject constructor(
                 saved.value = true
             }
         }
+    }
+
+    /** Kvitterar [TransactionFormUiState.saved] när skärmen gått tillbaka, så att det inte upprepas. */
+    fun onSavedHandled() {
+        saved.value = false
     }
 
     /** Tomt avgiftsfält tolkas som 0.0 (ingen känd avgift) — annars måste texten vara ett giltigt tal. */

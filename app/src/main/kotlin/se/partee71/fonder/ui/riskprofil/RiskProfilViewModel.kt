@@ -42,6 +42,10 @@ data class RiskProfilUiState(
     val suggestedAllocation: ImmutableMap<Int, Double>? = null,
     /** Icke-null så fort användaren rör en enskild andel — vinner då alltid över [suggestedAllocation] i sin helhet. */
     val manualAllocationText: ImmutableMap<Int, String>? = null,
+    /**
+     * Profilen är sparad — en händelse till skärmen, som går tillbaka och kvitterar med
+     * [RiskProfilViewModel.onSavedHandled], så att navigeringen sker exakt en gång (även vid rotation).
+     */
     val saved: Boolean = false,
 ) {
     /** Text att visa per tillgänglig nivås inmatningsfält — förslaget (rundat till heltalsprocent) tills ett eget värde skrivits in, annars de egna värdena (saknad nivå defaultar till "0"). */
@@ -171,4 +175,7 @@ class RiskProfilViewModel @Inject constructor(
             if (allocation != previousAllocation) fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
+
+    /** Kvitterar [RiskProfilUiState.saved] när skärmen gått tillbaka, så att det inte upprepas. */
+    fun onSavedHandled() = form.update { it.copy(saved = false) }
 }

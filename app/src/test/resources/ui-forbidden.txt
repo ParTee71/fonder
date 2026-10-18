@@ -7,6 +7,7 @@
 #                    delade komponenten får linda in)
 # [vico]           = all Kotlin under app/src/main utom ui/diagram/ (diagrambiblioteket bara i FundLineChart, TP-12)
 # [dispatchers]    = all Kotlin under app/src/main utom di/ (skill android:kotlin-coroutines)
+# [events]         = all Kotlin under ui/, även ui/components, ui/diagram och ui/theme (skill android:kotlin-flows)
 # Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
 # padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
 # kontrolleras därför inte (skill shared-ui-components → Förbjudet).
@@ -56,3 +57,7 @@
 
 [dispatchers]
 \bDispatchers\.(IO|Default|Main|Unconfined)\b	injicerad CoroutineDispatcher (@IoDispatcher/@DefaultDispatcher/@MainDispatcher från di/DispatchersModule)
+
+[events]
+\bChannel\s*(<[^()]*>)?\s*\(	händelsen som fält i UiState som skärmen kvitterar i en LaunchedEffect (t.ex. saved + onSavedHandled())
+\.receiveAsFlow\(	händelsen som fält i UiState som skärmen kvitterar i en LaunchedEffect (t.ex. saved + onSavedHandled())

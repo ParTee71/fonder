@@ -14,6 +14,9 @@
 # allowlist-fel = allowlist-rader som ska avvisas (saknar symbol eller motivering)
 
 [ok]
+manager.createNotificationChannel(channel)
+val saved: Boolean = false,
+LaunchedEffect(state.saved) { if (state.saved) { onSaved(); viewModel.onSavedHandled() } }
 withContext(io) {
 import kotlinx.coroutines.Dispatchers
 EmptyState(title = "Ingen portfölj ännu", body = "")
@@ -66,6 +69,9 @@ import androidx.compose.material3.Card
  * Card(modifier) i en KDoc
 
 [stopp]
+private val _events = Channel<FormEvent>(Channel.BUFFERED)
+private val saved = Channel<Unit>()
+val events: Flow<FormEvent> = _events.receiveAsFlow()
 withContext(Dispatchers.IO) {
 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 withContext(Dispatchers.Main) { }
@@ -158,12 +164,12 @@ README.md
 app/src/main/kotlin/se/partee71/fonder/ui/hem/notes.md
 app/src/test/kotlin/X.kt
 app/src/main/kotlin/se/partee71/fonder/data/repository/FundRepository.kt	component-only,vico,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/theme/Theme.kt	component-only,vico,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/components/PullToRefreshContainer.kt	vico,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/diagram/FundLineChart.kt	component-only,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt	feature,component-only,vico,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/navigation/AppNavigation.kt	feature,component-only,vico,dispatchers
-app/src/main/kotlin/se/partee71/fonder/ui/MainViewModel.kt	feature,component-only,vico,dispatchers
+app/src/main/kotlin/se/partee71/fonder/ui/theme/Theme.kt	component-only,vico,dispatchers,events
+app/src/main/kotlin/se/partee71/fonder/ui/components/PullToRefreshContainer.kt	vico,dispatchers,events
+app/src/main/kotlin/se/partee71/fonder/ui/diagram/FundLineChart.kt	component-only,dispatchers,events
+app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt	feature,component-only,vico,dispatchers,events
+app/src/main/kotlin/se/partee71/fonder/ui/navigation/AppNavigation.kt	feature,component-only,vico,dispatchers,events
+app/src/main/kotlin/se/partee71/fonder/ui/MainViewModel.kt	feature,component-only,vico,dispatchers,events
 app/src/main/kotlin/se/partee71/fonder/MainActivity.kt	component-only,vico,dispatchers
 app/src/main/kotlin/se/partee71/fonder/di/AppModule.kt	component-only,vico
 

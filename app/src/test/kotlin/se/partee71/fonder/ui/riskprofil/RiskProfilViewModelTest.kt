@@ -225,6 +225,28 @@ class RiskProfilViewModelTest {
     }
 
     @Test
+    fun `sparat kvitteras och kommer inte tillbaka`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.availableLevels.isEmpty()) state = awaitItem()
+            vm.onAllocationPercentChanged(3, "100")
+            state = awaitItem()
+            assertTrue(state.canSave)
+
+            vm.save()
+            while (!state.saved) state = awaitItem()
+
+            // Skärmen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
+            vm.onSavedHandled()
+            assertFalse(awaitItem().saved)
+            dispatcher.scheduler.advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `en tidigare sparad profil forifyller enkaten och fordelningen`() = runTest(dispatcher) {
         preferencesRepository.setRiskProfile(
             RiskProfile(

@@ -283,6 +283,29 @@ class TransactionFormViewModelTest {
     }
 
     @Test
+    fun `sparat kvitteras och kommer inte tillbaka`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (!state.loaded()) state = awaitItem()
+            vm.onFundSelected(fund)
+            vm.onSharesTextChange("2")
+            vm.onPriceTextChange("150")
+            while (!state.valid) state = awaitItem()
+
+            vm.save()
+            while (!state.saved) state = awaitItem()
+
+            // Skärmen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
+            vm.onSavedHandled()
+            assertFalse(awaitItem().saved)
+            expectNoEvents()
+            assertEquals(1, addedTransactions.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `tomt avgiftsfalt sparas som 0 avgift`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
