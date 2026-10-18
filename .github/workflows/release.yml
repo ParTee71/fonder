@@ -1,3 +1,12 @@
+# Release (skill android:release, Fonders delar i android-projekt → Release; kostnaden i skill
+# ci-budget). Mats beslut 2026-10-18: releasens grindar kör testerna, utom när samma kod redan
+# testats grönt.
+# - gate (sekunder): commiten ligger på master, android.yml (`ci-ok`) är grönt på exakt den
+#   commiten – master-pushen har kört enhetstester, Robolectric, skärmdumpar och cpdCheck; de
+#   körs inte om här – och taggen. Fel stoppar allt.
+# - instrumented: emulatortesterna (instrumented.yml) – bara om koden de testar (filtret
+#   `instrumented` i android.yml) inte redan var grön i en PR med samma innehåll.
+# - release: när båda är klara – signerat release-bygge, lint, artifact, tagg och GitHub Release.
 name: Release Build
 
 on:
@@ -17,14 +26,36 @@ on:
         type: boolean
 
 permissions:
-  contents: write   # required to create a GitHub Release on tag push
+  contents: read
 
 jobs:
-  release:
+  gate:
+    name: gate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read  # ci-ok och instrumenttesternas check-runs
+      actions: read # PR-körningarna av android.yml
+    outputs:
+      publish: ${{ steps.release_tag.outputs.publish }}
+      name: ${{ steps.release_tag.outputs.name }}
+      run_instrumented: ${{ steps.instrumented.outputs.run }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Release bara från master: dispatch på master, eller en tagg på en commit i master.
+      - name: Commiten ligger på master
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Commiten $GITHUB_SHA ligger inte på master – release görs bara från master (skill android:release)."
+            exit 1
+          fi
 
       # En release startas antingen genom att pusha taggen vX.Y.Z, eller — när
       # tag-push inte är möjlig (agentsessioner får HTTP 403 på refs/tags/*) —
@@ -54,6 +85,74 @@ jobs:
           fi
           echo "publish=true" >> "$GITHUB_OUTPUT"
           echo "name=$tag" >> "$GITHUB_OUTPUT"
+
+      # Enhetstester, skärmdumpar och cpdCheck har redan körts av android.yml på samma commit
+      # (master-pushen) – kontrollera resultatet i stället för att köra om dem. Starta releasen
+      # först när CI på master är klart; annars stannar den här.
+      - name: CI grönt på commiten
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          result="$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" -f check_name=ci-ok \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions")][0] | "\(.status) \(.conclusion)"')"
+          if [ "$result" != "completed success" ]; then
+            echo "::error::ci-ok på $GITHUB_SHA är inte grönt ($result). Vänta tills android.yml på master är klart och starta releasen igen."
+            exit 1
+          fi
+
+      # Master-pushen kör inte emulatortesterna; PR:en gör det. Hoppa över dem bara om en PR-commit
+      # med grönt instrumenttestjobb har samma innehåll i de sökvägar som startar dem (en källa:
+      # filtret `instrumented` i android.yml, läst med runnerns yq). Kan något inte avgöras körs de.
+      - name: Redan instrumenttestat i en PR?
+        id: instrumented
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t paths < <(yq '.jobs.changes.steps[] | select(.id == "filter") | .with.filters' \
+            .github/workflows/android.yml | yq '.instrumented[] | ":(glob)" + .')
+          run=true
+          if [ "${#paths[@]}" -eq 0 ]; then
+            echo "::warning::Filtret instrumented hittades inte i android.yml – instrumenttesterna körs."
+            shas=""
+          else
+            shas="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/android.yml/runs?event=pull_request&status=success&per_page=30" \
+              --jq '.workflow_runs[].head_sha')" || { echo "::warning::Kunde inte läsa PR-körningarna – instrumenttesterna körs."; shas=""; }
+          fi
+          for sha in $shas; do
+            git cat-file -e "$sha^{commit}" 2>/dev/null || continue
+            # Jobbets namn före och efter utbrytningen till instrumented.yml.
+            green="$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs" -f per_page=100 \
+              --jq '[.check_runs[] | select((.name == "instrumented-tests" or .name == "instrumented-tests / instrumented") and .conclusion == "success")] | length')"
+            [ "$green" -gt 0 ] || continue
+            if git diff --quiet "$sha" "$GITHUB_SHA" -- "${paths[@]}"; then
+              run=false
+              echo "Instrumenttesterna var gröna i PR-commiten $sha och koden är oförändrad – körs inte igen." >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  instrumented:
+    needs: gate
+    if: needs.gate.outputs.run_instrumented == 'true'
+    uses: ./.github/workflows/instrumented.yml
+
+  release:
+    name: release
+    needs: [gate, instrumented]
+    # Hoppade instrumenttester (redan gröna i en PR) stoppar inte releasen; fallerade gör det.
+    if: >-
+      !cancelled() && needs.gate.result == 'success'
+      && (needs.instrumented.result == 'success' || needs.instrumented.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # skapa taggen och GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -94,6 +193,19 @@ jobs:
             ./gradlew :app:assembleRelease
           fi
 
+      # Lint i ett eget Gradle-anrop efter bygget, som i quality.yml: i samma anrop skrev
+      # kspDebugKotlin och kspReleaseKotlin samtidigt Room-schemat och krockade.
+      - name: Lint
+        run: ./gradlew :app:lintDebug
+
+      - name: Lintrapport
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -105,11 +217,11 @@ jobs:
       # Vid tag-push, och vid workflow_dispatch med publish_release ikryssad
       # (taggen skapas då här). Övriga dispatch-körningar är artifact-only.
       - name: Publish GitHub Release
-        if: steps.release_tag.outputs.publish == 'true'
+        if: needs.gate.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: Fonder ${{ steps.release_tag.outputs.name }}
-          tag_name: ${{ steps.release_tag.outputs.name }}
+          name: Fonder ${{ needs.gate.outputs.name }}
+          tag_name: ${{ needs.gate.outputs.name }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: app/build/outputs/apk/release/*.apk

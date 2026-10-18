@@ -122,7 +122,8 @@ signing.keyPassword=<lösenord>
 **GitHub Secrets (CI):** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`,
 `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. `.github/workflows/release.yml` avkodar
 keystoren, bygger och publicerar en signerad APK — hela släppet går därmed att köra från
-telefonen. Se [docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md) för hur nyckeln skapas och
+telefonen. Releasen görs bara från `master` när CI (`ci-ok`) är grönt på commiten, och kör lint
+och instrumenttesterna om de inte redan körts gröna för samma kod (skill `ci-budget`). Se [docs/GOOGLE-SETUP.md](docs/GOOGLE-SETUP.md) för hur nyckeln skapas och
 läggs upp.
 
 ---

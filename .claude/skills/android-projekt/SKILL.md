@@ -334,17 +334,20 @@ Stegen står i pluginen; det här är Fonders delar.
   sätts enbart av workflowernas `-PversionNameOverride`. README har två ställen: versionsraden
   överst (`> Version: <version> …`) och raden under "Versionshistorik". Alla höjs och skrivs i
   funktions-PR:en.
-- **Workflow:** `release.yml` (owner `ParTee71`, repo `fonder`), ett jobb `release`: löser taggen
-  (push av tagg `v*`, eller `workflow_dispatch` med `publish_release` – då skapas taggen på den
-  dispatchade commiten, och workflowen vägrar om den redan finns), avkodar keystoren `fonder.jks`
-  ur `SIGNING_KEYSTORE_BASE64` (konverterad till legacy PKCS12), kör `:app:assembleRelease` (med
-  `-PversionNameOverride` när `version_name` anges), laddar upp artifacten `fonder-release`,
-  publicerar GitHub Release `Fonder v<version>` med automatisk changelog och raderar keystoren.
-- **Nuvarande läge, avviker från pluginen:** `release.yml` saknar testgrindar – den kör inga
-  tester, ingen lint och kontrollerar inte att `ci-ok` är grönt på commiten. Det rättas i en egen
-  PR (Mats beslut 2026-10-18). Till dess: starta releasen först när `android.yml` är grönt på
-  `master`-HEAD; master-pushen kör inte emulatortesterna, så de gröna instrumenttesterna är
-  PR:ernas.
+- **Workflow:** `release.yml` (owner `ParTee71`, repo `fonder`), tre jobb (detaljer och kostnad i
+  skill `ci-budget`):
+  - `gate` (sekunder) stannar om commiten inte ligger på `master` eller om `ci-ok` i `android.yml`
+    inte är grönt på exakt den commiten – enhetstester, skärmdumpar och `cpdCheck` körs alltså inte
+    om. Löser taggen (push av tagg `v*`, eller `workflow_dispatch` med `publish_release` – då skapas
+    taggen på den dispatchade commiten, och workflowen vägrar om den redan finns).
+  - `instrumented` kör emulatortesterna (`instrumented.yml`) om de inte redan var gröna i en PR
+    vars kod i filtret `instrumented` är densamma.
+  - `release` avkodar keystoren `fonder.jks` ur `SIGNING_KEYSTORE_BASE64` (konverterad till legacy
+    PKCS12), kör `:app:assembleRelease` (med `-PversionNameOverride` när `version_name` anges) och
+    sedan `:app:lintDebug`, laddar upp artifacten `fonder-release`, publicerar GitHub Release
+    `Fonder v<version>` med automatisk changelog och raderar keystoren.
+- **Starta releasen först när `android.yml` är klart och grönt på `master`-HEAD** – annars stannar
+  `gate`. Ett testbygge går bara från `master`.
 - **Secrets:** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`,
   `SIGNING_KEY_PASSWORD`. `app/google-services.json` är incheckad och behöver ingen secret.
 - **Har `BackupPayload.FORMAT_VERSION` höjts sedan förra releasen:** nämn det tydligt – en äldre
