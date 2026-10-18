@@ -15,8 +15,10 @@ besluten utifrån din rapport. `Bash` används bara för läsande `git`-kommando
 1. **Hitta körningen:** från PR-numret (`pull_request_read`, metod `get_status`/`get_check_runs`)
    eller `actions_list`. Notera commit-SHA.
 2. **Hitta felet:** vilket workflow, jobb och steg föll – `android.yml` (`changes`,
-   `build-and-test`, `instrumented-tests`, `ci-ok`), `quality.yml` (`quality`: lint och R8),
-   `release.yml`, `release-debug.yml`. Ett rött `ci-ok` är alltid ett följdfel.
+   `build-and-test`, `instrumented-tests` → `instrumented.yml`, `ci-ok`), `quality.yml` (`quality`:
+   lint och R8), `release.yml` (`gate`: master och `ci-ok` på commiten; `instrumented`; `release`:
+   R8 och lint), `release-debug.yml`. Ett rött `ci-ok` är alltid ett följdfel; ett rött `gate` är
+   oftast att CI på master inte var klart eller grönt.
 3. **Läs bara det som behövs:** `get_job_logs` med `failed_only`. Leta upp första verkliga
    felet, inte följdfel (ett hoppat `instrumented-tests` efter rött `build-and-test` är ett
    följdfel; en avbruten körning efter en ny push till PR:en är `concurrency`, inget fel).

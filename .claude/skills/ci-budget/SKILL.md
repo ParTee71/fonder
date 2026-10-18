@@ -20,6 +20,8 @@ att inte skriva det (regel 2).
 | … och `app/src/main/**`, `app/src/androidTest/**` eller byggfiler | dessutom `instrumented-tests` | +~10–15 |
 | Push till `master` | `changes` + `build-and-test` + `ci-ok` | ~6–7 |
 | Veckovis `quality.yml` (bara om `master` ändrats) | `quality` | ~8–12 |
+| Release (`release.yml`) | `gate` + `release` (signerat R8-bygge och `lintDebug`) | ~9–12 (före grindarna ~6–8) |
+| … och instrumenttesternas kod inte grön i en PR med samma innehåll | dessutom `instrumented` (`instrumented.yml`) | +~10–15 |
 
 Före CI-etappen kostade varje PR-push ~17–20 minuter (`build-and-test` + `release-build` +
 emulatorn i `instrumented.yml`, oavsett vad PR:en ändrade). Siffrorna ovan är uppskattningar –
@@ -46,11 +48,14 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 |---|---|---|---|
 | `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); hooktest `node --test .claude/hooks/test/*.test.mjs` (regel4-hooken, baslinjen i `ui-allowlist.txt`, hookkommandona); i PR `dorny/paths-filter@v3` med filtren `app` (`app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
 | `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-java` 17, `gradle/actions/setup-gradle@v4` (cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `verifyRoborazziDebug` kör `testDebugUnitTest` (alla enhetstester, Robolectric-testerna och `UiConsistencyTest`) **en gång** med skärmdumpsjämförelsen mot `app/src/test/screenshots/` påslagen (tolerans 0,1 % pixlar i `captureLightAndDark`); testrapport och CPD-rapport som artifact (`test-results`, `if: always()`), vid fel även diffbilderna (`screenshot-diffs`: `app/build/outputs/roborazzi/`, `app/build/test-results/roborazzi/`, `app/build/reports/roborazzi/`; `if: failure()`, 7 dagar) |
-| `android.yml` · `instrumented-tests` (timeout 18) | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | `setup-java` 17, `setup-gradle`, KVM, `reactivecircus/android-emulator-runner@v2` (API 34, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
+| `android.yml` · `instrumented-tests` | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | anropar `instrumented.yml` (check-run `instrumented-tests / instrumented`) |
+| `instrumented.yml` · `instrumented` (timeout 18) | bara `workflow_call` (från `android.yml` och `release.yml`) | – | `setup-java` 17, `setup-gradle`, KVM, `reactivecircus/android-emulator-runner@v2` (API 34, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
 | `android.yml` · `ci-ok` (timeout 2) | som ovan | alltid (`if: always()`) | grönt när alla jobb ovan blivit `success` eller `skipped` – **enda obligatoriska statuskravet** |
 | `quality.yml` · `quality` (timeout 20) | `schedule` måndagar 04:23 UTC, `workflow_dispatch` | schemalagd körning hoppas över om senaste gröna `quality.yml` gällde samma commit | `setup-java` 17, `setup-gradle` (bara läsning), `:app:assembleRelease` osignerat och sedan `:app:lintDebug` (separata anrop – i samma anrop krockade debug- och release-KSP om Room-schemat) (R8 + resursskrympning); lintrapport som artifact vid fel |
 | `release-debug.yml` · `release-debug` | bara `workflow_dispatch` | – | `:app:assembleDebug` (valfritt `-PversionNameOverride`), ersätter den rullande releasen `debug-snapshot` |
-| `release.yml` · `release` | tagg `v*` eller `workflow_dispatch` (`publish_release`) | – | avkodar keystore ur secrets, `:app:assembleRelease` signerat, artifact, GitHub Release, raderar keystore |
+| `release.yml` · `gate` (timeout 5) | tagg `v*` eller `workflow_dispatch` (`version_name`, `publish_release`) | alltid | stannar om commiten inte ligger på `master` eller om check-run `ci-ok` på exakt commiten inte är `completed success`; löser taggen (vägrar om den finns); `run_instrumented=false` bara om en grön PR-körning av `android.yml` har ett grönt instrumenttestjobb på en commit vars sökvägar i filtret `instrumented` (läst ur `android.yml` med `yq`) är oförändrade |
+| `release.yml` · `instrumented` | som ovan | `gate`: `run_instrumented` | anropar `instrumented.yml` |
+| `release.yml` · `release` (timeout 30) | som ovan | `gate` grön och `instrumented` `success` eller `skipped` | avkodar keystore ur secrets, `:app:assembleRelease` signerat, sedan `:app:lintDebug` i eget anrop (KSP-krocken om Room-schemat), lintrapport vid fel, artifact, GitHub Release, raderar keystore. Enhetstester och skärmdumpar körs inte om – `ci-ok` på commiten är beviset |
 <!-- ci-table:end -->
 
 `concurrency: ci-${{ github.workflow }}-${{ github.ref }}` med `cancel-in-progress` bara för
@@ -71,7 +76,7 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 6. ~~Ingen `setup-gradle` och ingen build cache~~ *(löst; configuration cache är fortfarande av – prövas separat)*.
 7. Setup-stegen (checkout, JDK, `setup-gradle`, `chmod +x gradlew`) är kopierade mellan
    workflows – ska bli en composite action (`.github/actions/setup-android`, som i Dagboken).
-8. `release.yml` kör varken lint eller instrumenttester; lint körs bara veckovis i `quality.yml`.
+8. ~~`release.yml` kör varken lint eller instrumenttester~~ *(löst: grinden `gate`, `instrumented.yml` och `lintDebug` i `release`, Mats beslut 2026-10-18)*.
 9. Inget kontrollskript håller tabellen ovan i synk med workflowfilerna.
 
 ## Tekniker som håller tiden nere

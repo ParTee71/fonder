@@ -108,8 +108,9 @@ Workflowet konverterar keystoren till legacy-PKCS12 innan bygget (`keystore.pkcs
 — JDK 17 skriver PKCS12 med ett nyare krypto som AGP:s signerare inte läser. Det steget
 finns redan och behöver inget av dig.
 
-Verifiera genom att köra **Release Build** via workflow_dispatch utan att kryssa
-`publish_release`: den bygger och laddar upp APK:n som artifact utan att skapa någon tagg.
+Verifiera genom att köra **Release Build** via workflow_dispatch på `master` utan att kryssa
+`publish_release`: den bygger och laddar upp APK:n som artifact utan att skapa någon tagg. Den
+startar bara när CI (`ci-ok`) är grönt på `master`-HEAD.
 
 ---
 
