@@ -74,6 +74,12 @@ metod på ett interface måste **alla** fakes uppdateras, annars bryts testbygge
   ViewModel/Hilt (`SettingsContent`, #27); testerna renderar den.
 - **Injicera dispatcher**; kalla aldrig `Dispatchers.IO` direkt i testbar kod.
 - **Turbine** för `StateFlow`/`Flow`, inte manuell `collect`.
+- **Händelser är fält i tillståndet** (`saved`, `startedSwitchWatchId`): ViewModel-testet väntar i
+  `uiState.test { … }` tills fältet är satt, kvitterar (`onSavedHandled()`) och visar att det är
+  borta och inte kommer tillbaka (`expectNoEvents()`). Skärmens kvittering testas med Robolectric mot
+  den ViewModel-kopplade skärmen: exakt en navigering, ingen ny efter
+  `StateRestorationTester.emulateSavedInstanceStateRestore()` (rotation), och en händelse som kom
+  medan skärmen inte visades utförs när den visas (`RiskProfilScreenSavedTest`).
 - **Testnamn:** svenska meningar i backticks i `app/src/test`; i `androidTest` vanliga
   identifierare (`snake_case`) utan kommatecken – D8 dexar inte sådana metodnamn.
 

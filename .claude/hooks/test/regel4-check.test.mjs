@@ -203,11 +203,12 @@ test('tom eller trasig indata ger exit 0', () => {
 
 test('mönsterfilen har alla scope, giltiga regexar och en ersättning per rad', () => {
   const scopes = parsePatterns(readPatterns());
-  assert.deepEqual(Object.keys(scopes).sort(), ['component-only', 'dispatchers', 'feature', 'vico']);
+  assert.deepEqual(Object.keys(scopes).sort(), ['component-only', 'dispatchers', 'events', 'feature', 'vico']);
   assert.ok(scopes.feature.length >= 15);
   assert.ok(scopes['component-only'].length >= 2);
   assert.ok(scopes.vico.length >= 3);
   assert.ok(scopes.dispatchers.length >= 1);
+  assert.ok(scopes.events.length >= 2);
   for (const rule of Object.values(scopes).flat()) assert.ok(rule.replacement, rule.source);
 });
 

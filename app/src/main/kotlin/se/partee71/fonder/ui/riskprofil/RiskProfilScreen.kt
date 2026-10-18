@@ -38,7 +38,12 @@ fun RiskProfilScreen(
     viewModel: RiskProfilViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.saved) { if (state.saved) onSaved() }
+    LaunchedEffect(state.saved) {
+        if (state.saved) {
+            onSaved()
+            viewModel.onSavedHandled()
+        }
+    }
     RiskProfilContent(
         state = state,
         onHorizonSelected = viewModel::onHorizonSelected,
