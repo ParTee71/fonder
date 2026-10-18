@@ -13,17 +13,18 @@ granskar och committar; du skriver koden och testerna och rapporterar ärligt va
 
 1. Läs `CLAUDE.md` (de fem reglerna, mockup-regeln) och `README.md` (arkitekturen). Läs
    `KRAVLISTA.md` för de krav-ID:n uppdraget nämner.
-2. Ladda de skills som berörs: alltid `android-dev`; UI → `shared-ui-components`,
-   `compose-expert`, `ui-style` och `accessibility-compose` (när de finns); flöden och
-   coroutines → `kotlin-flows`, `kotlin-coroutines`; repository → `android-data-layer`;
-   CI → `ci-budget` (när den finns); tester → `testing-strategy`; Gradle → `android-gradle-logic`.
+2. Ladda de skills som berörs: alltid `android:android-dev` (pluginen) och `android-projekt`;
+   UI → `shared-ui-components`, `android:compose-expert`, `ui-style` och
+   `android:accessibility-compose`; flöden och coroutines → `android:kotlin-flows`,
+   `android:kotlin-coroutines`; repository → `android-data-layer`; CI → `ci-budget`;
+   tester → `testing-strategy`; Gradle → `android:android-gradle-logic`.
 3. Sök efter befintligt mönster innan du skriver något nytt: en sibling-ViewModel i
    `ui/<feature>/`, `ui/components/`, `ui/diagram/`, `domain/usecase/`, `data/repository/`,
    `data/network/` och fakes i `app/src/test/.../data/repository/`.
 
 ## Regler
 
-- **Ny GUI kräver godkänd mockup** (skill `mockup` när den finns, annars CLAUDE.md →
+- **Ny GUI kräver godkänd mockup** (skill `android:mockup` och `android-projekt` → "Mockup", samt CLAUDE.md →
   Processregel). Finns ingen länk i uppdraget: stanna och säg det i rapporten i stället för
   att gissa ett utseende.
 - Feature-kod använder delade komponenter i `ui/components/` och `ui/diagram/` och färger,

@@ -68,7 +68,7 @@ ett nytt sådant beroende får sina regler i samma PR. R8 verifieras veckovis oc
 (skill `ci-budget`, NFR-2).
 
 ### 6. Autentisering och behörigheter
-- Inloggning via `AuthRepository` (Credential Manager + Firebase, skill `firebase-auth`) – aldrig
+- Inloggning via `AuthRepository` (Credential Manager + Firebase, skill `android:firebase-auth` och `android-projekt` → "Inloggning") – aldrig
   direkt från UI. Avbruten inloggning är inte ett fel.
 - Appen begär i dag bara `INTERNET`. Nya behörigheter bara vid tydligt behov och först när de behövs.
 
@@ -80,5 +80,5 @@ ett nytt sådant beroende får sina regler i samma PR. R8 verifieras veckovis oc
 - [ ] Ny persisterad fil: med i båda Auto Backup-listorna och i backup-kontraktet – eller medvetet utanför.
 - [ ] Inga hemligheter incheckade, utskrivna eller efterfrågade.
 - [ ] Nytt bibliotek har keep-regler så R8 inte går sönder.
-- [ ] Ny exporterad komponent eller ny Intent-hantering granskad (skill `android-intent-security`
-  finns i Dagboken, inte här än).
+- [ ] Ny exporterad komponent eller ny Intent-hantering granskad med Googles skill `android:android-intent-security`
+  (projektets delar: `android-projekt` → "Intent-säkerhet").

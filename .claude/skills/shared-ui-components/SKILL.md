@@ -157,7 +157,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 2. Räcker det inte → **utöka** med en parameter vars default bevarar nuvarande utseende och
    beteende (jfr `PeriodRow.stackValue`, `RiskBadge.toLevel`). Befintliga anropare ändras inte.
 3. Något nytt behövs → ny delad del i `ui/components/` eller `ui/diagram/`, rad i tabellen,
-   instrumenterat Compose-test i `androidTest/…/ui/components/` – och mockup först (skill `mockup`).
+   instrumenterat Compose-test i `androidTest/…/ui/components/` – och mockup först (skill `android:mockup` och `android-projekt` → "Mockup").
 4. Delade delar utökas eller slås ihop i en egen commit **före** featuren som behöver dem.
 5. Två ställen gör nästan samma sak → bryt ut innan det tredje kommer.
 6. Komponenten är **stateless**: värde + callback in, state hoistat till anroparen.

@@ -1,6 +1,6 @@
 ---
 name: ui-style
-description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i Material 3 Expressive, Space Grotesk, belopp med tabulära siffror, fast palett, ljust/mörkt/auto. Ladda när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill mockup. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, blå, koppar, vinst, förlust, typsnitt, Space Grotesk, tabulära siffror, tnum, belopp, hörn, ikon, formulering, tomt tillstånd, kontrast.'
+description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i Material 3 Expressive, Space Grotesk, belopp med tabulära siffror, fast palett, ljust/mörkt/auto. Ladda när du bygger eller ändrar tema, färger, typografi, former, texter, ikoner, tomma tillstånd eller en komponents utseende, och tillsammans med skill android:mockup och android-projekt. Trigger-ord: design, stil, utseende, färg, palett, tema, mörkt läge, ljust läge, blå, koppar, vinst, förlust, typsnitt, Space Grotesk, tabulära siffror, tnum, belopp, hörn, ikon, formulering, tomt tillstånd, kontrast.'
 ---
 
 # Designspråket · nordisk blå och koppar
@@ -73,7 +73,7 @@ En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett
 
 ## Layout
 
-- Tryckytor minst 48 dp (skill `accessibility-compose`).
+- Tryckytor minst 48 dp (skill `android:accessibility-compose` och `android-projekt` → "Tillgänglighet").
 - Etiketten kapas, aldrig värdet (UI-6); allt som kan växa skrollar (UI-5).
 - Bakgrundsarbete visas med den delade formskiftande laddningsindikatorn i rubrikraden (`CardTitleRow`/`WorkingIndicator`,
   NAV-6), aldrig som ett blockerande överlägg.
@@ -95,4 +95,4 @@ Ny kod väljer bland 4/8/12/16/24 dp tills `Spacing` finns.
 
 ## Tillgänglighet
 
-Enligt skill `accessibility-compose`.
+Enligt skill `android:accessibility-compose` och `android-projekt` → "Tillgänglighet".
