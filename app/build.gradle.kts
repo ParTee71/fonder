@@ -109,7 +109,11 @@ android {
             // Robolectric läser appens resurser (strängar, tema) – krävs för Compose-tester i JVM.
             isIncludeAndroidResources = true
             // Riktig rendering i Robolectric, så att Roborazzi kan ta skärmdumpar.
-            all { it.systemProperty("robolectric.graphicsMode", "NATIVE") }
+            all {
+                it.systemProperty("robolectric.graphicsMode", "NATIVE")
+                // Robolectric 4.17 på SDK 36 skriver i FileDescriptor via jdk.internal.access.
+                it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+            }
         }
     }
 
