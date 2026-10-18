@@ -40,21 +40,21 @@ class Migration1314Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "CREATE TABLE `fx_rates` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))"
             )
             // Version 13:s fund_metadata — med jämförelsefälten, utan listan över visade alternativ.
             db.execSQL(
@@ -70,7 +70,7 @@ class Migration1314Test {
                     `comparisonResolvedAtEpochDay` INTEGER, `developmentOneYear` REAL,
                     PRIMARY KEY(`isin`)
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 """
@@ -87,7 +87,7 @@ class Migration1314Test {
                     `batchEpochMillis` INTEGER NOT NULL DEFAULT 0,
                     `kind` TEXT NOT NULL DEFAULT 'RISK_PLAN'
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 "INSERT INTO fund_metadata (isin, name, orderbookId, totalFee, managementFee, category, " +
@@ -95,7 +95,7 @@ class Migration1314Test {
                     "availableAtHandelsbanken, availabilityResolvedAtEpochDay, fetchedAtEpochDay, " +
                     "cheapestAlternativeIsin, cheapestAlternativeFee, comparisonResolvedAtEpochDay, developmentOneYear) " +
                     "VALUES ('SE0000582033', 'Innehavet', 'ob-1', 1.4, 1.3, 'Sverige', 'EQUITY_FUND', " +
-                    "'Bolaget', 6, 0, NULL, NULL, '[]', 1, 20650, 20658, 'SE0001466368', 0.21, 20658, 0.083)",
+                    "'Bolaget', 6, 0, NULL, NULL, '[]', 1, 20650, 20658, 'SE0001466368', 0.21, 20658, 0.083)"
             )
             db.version = 13
         }
@@ -116,11 +116,11 @@ class Migration1314Test {
 
         // Nya rader bär hela listan.
         db.fundMetadataDao().upsert(
-            existing.copy(shownAlternativeIsinsJson = """["SE0001466368","SE0004617590"]"""),
+            existing.copy(shownAlternativeIsinsJson = """["SE0001466368","SE0004617590"]""")
         )
         assertEquals(
             listOf("SE0001466368", "SE0004617590"),
-            db.fundMetadataDao().getByIsin("SE0000582033")!!.toDomain().shownAlternativeIsins,
+            db.fundMetadataDao().getByIsin("SE0000582033")!!.toDomain().shownAlternativeIsins
         )
 
         db.close()

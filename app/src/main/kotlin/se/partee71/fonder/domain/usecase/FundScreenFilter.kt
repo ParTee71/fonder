@@ -32,10 +32,9 @@ object FundScreenFilter {
     const val SORT_FIELD_DEVELOPMENT_ONE_YEAR = "developmentOneYear"
 
     /** Filtrerar, sorterar och sidbryter [all] enligt [query] — samma resultatform som ett källsvar. */
-    fun apply(all: List<FundMetadata>, query: FundScreenQuery): List<FundMetadata> =
-        sort(all.filter { matches(it, query) }, query)
-            .drop(query.startIndex)
-            .take(PAGE_SIZE)
+    fun apply(all: List<FundMetadata>, query: FundScreenQuery): List<FundMetadata> = sort(all.filter { matches(it, query) }, query)
+        .drop(query.startIndex)
+        .take(PAGE_SIZE)
 
     /** Sant om [metadata] matchar samtliga satta filter i [query]. */
     fun matches(metadata: FundMetadata, query: FundScreenQuery): Boolean {
@@ -61,8 +60,7 @@ object FundScreenFilter {
         return true
     }
 
-    private fun hasTag(metadata: FundMetadata, category: String, allowedTitles: List<String>): Boolean =
-        metadata.tags.any { it.category == category && it.title in allowedTitles }
+    private fun hasTag(metadata: FundMetadata, category: String, allowedTitles: List<String>): Boolean = metadata.tags.any { it.category == category && it.title in allowedTitles }
 
     /**
      * Sorterar som källan gör. Två fällor som båda gav tyst fel urval — offline-vägen

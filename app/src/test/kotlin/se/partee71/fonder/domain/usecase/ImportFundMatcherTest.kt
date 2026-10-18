@@ -25,7 +25,7 @@ class ImportFundMatcherTest {
         catalogFunds: List<Fund> = listOf(katalogFond),
         trackedFunds: List<Fund> = emptyList(),
         findFundByIsin: suspend (String) -> Fund? = { null },
-        lookupIsin: suspend (String) -> String? = { null },
+        lookupIsin: suspend (String) -> String? = { null }
     ) = ImportFundMatcher.match(
         isin = isin,
         fundName = fundName,
@@ -33,7 +33,7 @@ class ImportFundMatcherTest {
         catalogFunds = catalogFunds,
         trackedFunds = trackedFunds,
         findFundByIsin = findFundByIsin,
-        lookupIsin = lookupIsin,
+        lookupIsin = lookupIsin
     )
 
     @Test
@@ -43,7 +43,7 @@ class ImportFundMatcherTest {
         val result = match(
             trackedFunds = listOf(bevakad),
             findFundByIsin = { avanzaFond },
-            lookupIsin = { "SE0004297927" },
+            lookupIsin = { "SE0004297927" }
         )
 
         assertEquals(bevakad, result?.fund)
@@ -55,8 +55,11 @@ class ImportFundMatcherTest {
         var avanzaAnropad = false
 
         val result = match(
-            findFundByIsin = { avanzaAnropad = true; avanzaFond },
-            lookupIsin = { fundId -> if (fundId == "SHB0000442") "SE0004297927" else null },
+            findFundByIsin = {
+                avanzaAnropad = true
+                avanzaFond
+            },
+            lookupIsin = { fundId -> if (fundId == "SHB0000442") "SE0004297927" else null }
         )
 
         // Riktigt FundId från katalogen, inte ISIN:et som identitet.
@@ -72,7 +75,7 @@ class ImportFundMatcherTest {
         // för att tyst acceptera en felaktig fond.
         val result = match(
             findFundByIsin = { avanzaFond },
-            lookupIsin = { "SE0009999999" },
+            lookupIsin = { "SE0009999999" }
         )
 
         assertEquals(avanzaFond, result?.fund)
@@ -103,7 +106,10 @@ class ImportFundMatcherTest {
         match(
             fundName = "Helt Okänd Fond",
             catalogFunds = emptyList(),
-            lookupIsin = { uppslag++; "SE0004297927" },
+            lookupIsin = {
+                uppslag++
+                "SE0004297927"
+            }
         )
 
         assertEquals(0, uppslag)
@@ -124,8 +130,11 @@ class ImportFundMatcherTest {
             isin = "SE0000582033",
             fundName = "Handelsbanken Sverige (A1 SEK)",
             catalogFunds = listOf(a10, basfond),
-            findFundByIsin = { avanzaAnropad = true; null },
-            lookupIsin = { fundId -> if (fundId == "0P00000F8J") "SE0000582033" else null },
+            findFundByIsin = {
+                avanzaAnropad = true
+                null
+            },
+            lookupIsin = { fundId -> if (fundId == "0P00000F8J") "SE0000582033" else null }
         )
 
         assertEquals("0P00000F8J", result?.fund?.fundId)

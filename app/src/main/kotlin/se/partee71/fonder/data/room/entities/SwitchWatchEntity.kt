@@ -51,7 +51,7 @@ data class SwitchWatchEntity(
      * migrerad har samma schema och Rooms validering prövar defaulten — se [SwitchWatch.indexOnly].
      */
     @ColumnInfo(defaultValue = "0")
-    val indexOnly: Boolean = false,
+    val indexOnly: Boolean = false
 ) {
     companion object {
         /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
@@ -70,10 +70,10 @@ data class SwitchWatchEntity(
             entity = SwitchWatchEntity::class,
             parentColumns = ["id"],
             childColumns = ["watchId"],
-            onDelete = ForeignKey.CASCADE,
-        ),
+            onDelete = ForeignKey.CASCADE
+        )
     ],
-    indices = [Index("watchId")],
+    indices = [Index("watchId")]
 )
 data class SwitchWatchCandidateEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -84,7 +84,7 @@ data class SwitchWatchCandidateEntity(
     val navAtStartEpochDay: Long?,
     /** [SwitchWatchCandidateSource] som text — se [SwitchWatchEntity.closeReason] för varför. */
     val source: String = SwitchWatchCandidateSource.AUTO.name,
-    val position: Int = 0,
+    val position: Int = 0
 ) {
     fun toDomain() = SwitchWatchCandidate(
         id = id,
@@ -95,24 +95,23 @@ data class SwitchWatchCandidateEntity(
         navAtStartEpochDay = navAtStartEpochDay,
         source = runCatching { SwitchWatchCandidateSource.valueOf(source) }
             .getOrDefault(SwitchWatchCandidateSource.AUTO),
-        position = position,
+        position = position
     )
 
     companion object {
         /** Tabellnamnet — ett ställe, så backup-kontraktets ändringssignal (HEM-12) inte kan glida isär från schemat. */
         const val TABLE_NAME = "switch_watch_candidates"
 
-        fun fromDomain(candidate: SwitchWatchCandidate, watchId: Long = candidate.watchId) =
-            SwitchWatchCandidateEntity(
-                id = candidate.id,
-                watchId = watchId,
-                isin = candidate.isin,
-                name = candidate.name,
-                navAtStart = candidate.navAtStart,
-                navAtStartEpochDay = candidate.navAtStartEpochDay,
-                source = candidate.source.name,
-                position = candidate.position,
-            )
+        fun fromDomain(candidate: SwitchWatchCandidate, watchId: Long = candidate.watchId) = SwitchWatchCandidateEntity(
+            id = candidate.id,
+            watchId = watchId,
+            isin = candidate.isin,
+            name = candidate.name,
+            navAtStart = candidate.navAtStart,
+            navAtStartEpochDay = candidate.navAtStartEpochDay,
+            source = candidate.source.name,
+            position = candidate.position
+        )
     }
 }
 
@@ -124,7 +123,7 @@ data class SwitchWatchCandidateEntity(
 data class SwitchWatchWithCandidates(
     @Embedded val watch: SwitchWatchEntity,
     @Relation(parentColumn = "id", entityColumn = "watchId")
-    val candidates: List<SwitchWatchCandidateEntity>,
+    val candidates: List<SwitchWatchCandidateEntity>
 ) {
     fun toDomain() = SwitchWatch(
         id = watch.id,
@@ -144,7 +143,7 @@ data class SwitchWatchWithCandidates(
             .map(SwitchWatchCandidateEntity::toDomain),
         sellTransactionId = watch.sellTransactionId,
         buyTransactionId = watch.buyTransactionId,
-        indexOnly = watch.indexOnly,
+        indexOnly = watch.indexOnly
     )
 
     companion object {
@@ -162,9 +161,9 @@ data class SwitchWatchWithCandidates(
                 closeReason = watch.closeReason?.name,
                 sellTransactionId = watch.sellTransactionId,
                 buyTransactionId = watch.buyTransactionId,
-                indexOnly = watch.indexOnly,
+                indexOnly = watch.indexOnly
             ),
-            candidates = watch.candidates.map { SwitchWatchCandidateEntity.fromDomain(it, watch.id) },
+            candidates = watch.candidates.map { SwitchWatchCandidateEntity.fromDomain(it, watch.id) }
         )
     }
 }

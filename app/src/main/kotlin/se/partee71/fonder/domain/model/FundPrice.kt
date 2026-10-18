@@ -16,7 +16,7 @@ data class FundPrice(
     val fundId: String,
     val epochDay: Long,
     val nav: Double,
-    val currency: String = VALUE_CURRENCY,
+    val currency: String = VALUE_CURRENCY
 ) {
     companion object {
         /** Valutan appens värdeberäkningar förutsätter. Kurser i andra valutor cachas inte. */

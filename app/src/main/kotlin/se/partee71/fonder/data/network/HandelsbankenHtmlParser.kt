@@ -1,11 +1,11 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import org.jsoup.Jsoup
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.model.FundPrice
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 /**
  * Ren HTML-parsning av handelsbanken.fondlista.se (se issue #2/#3, beslut och verifierad
@@ -82,6 +82,5 @@ object HandelsbankenHtmlParser {
     private val isinToken = Regex("""(?<![A-Z0-9])$ISIN_PATTERN(?![A-Z0-9])""")
 
     /** Svenskt talformat: mellanslag (vanligt eller hårt,  ) som tusentalsavgränsare, komma som decimal. */
-    internal fun parseSwedishNumber(raw: String): Double? =
-        se.partee71.fonder.domain.usecase.SwedishNumberFormat.parse(raw)
+    internal fun parseSwedishNumber(raw: String): Double? = se.partee71.fonder.domain.usecase.SwedishNumberFormat.parse(raw)
 }

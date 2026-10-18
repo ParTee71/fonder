@@ -44,7 +44,7 @@ object FundNameMatcher {
     fun bestMatch(
         importedFundName: String,
         candidates: List<Fund>,
-        importedCompanyName: String? = null,
+        importedCompanyName: String? = null
     ): Match? = rankedMatches(importedFundName, candidates, importedCompanyName).firstOrNull()
 
     /**
@@ -63,7 +63,7 @@ object FundNameMatcher {
     fun rankedMatches(
         importedFundName: String,
         candidates: List<Fund>,
-        importedCompanyName: String? = null,
+        importedCompanyName: String? = null
     ): List<Match> {
         val targetTokens = tokenize(importedFundName)
         if (targetTokens.isEmpty()) return emptyList()
@@ -93,10 +93,9 @@ object FundNameMatcher {
         return (a intersect b).size.toDouble() / union.size
     }
 
-    internal fun tokenize(name: String): Set<String> =
-        name.lowercase()
-            .replace(Regex("[^a-zåäö0-9 ]"), " ")
-            .split(" ")
-            .filter { it.length > 1 }
-            .toSet()
+    internal fun tokenize(name: String): Set<String> = name.lowercase()
+        .replace(Regex("[^a-zåäö0-9 ]"), " ")
+        .split(" ")
+        .filter { it.length > 1 }
+        .toSet()
 }

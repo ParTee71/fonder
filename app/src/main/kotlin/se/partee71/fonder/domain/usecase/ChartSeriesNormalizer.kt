@@ -38,7 +38,7 @@ object ChartSeriesNormalizer {
         val series: List<List<Pair<Long, Double>>>,
         val indexed: Boolean,
         val partial: Boolean,
-        val baseEpochDay: Long?,
+        val baseEpochDay: Long?
     )
 
     /**

@@ -12,5 +12,5 @@ import androidx.room.Entity
 data class FxRateEntity(
     val currency: String,
     val epochDay: Long,
-    val rate: Double,
+    val rate: Double
 )

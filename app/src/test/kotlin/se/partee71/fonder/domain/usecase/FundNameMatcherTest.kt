@@ -23,12 +23,12 @@ class FundNameMatcherTest {
         val fund = Fund(fundId = "0P00009XYZ", name = "Franklin Gold and Precious Metals Fund")
         val candidates = listOf(
             fund,
-            Fund(fundId = "0P0000AAA", name = "Handelsbanken Sverige (A1 SEK)"),
+            Fund(fundId = "0P0000AAA", name = "Handelsbanken Sverige (A1 SEK)")
         )
 
         val match = FundNameMatcher.bestMatch(
             "Franklin Templeton Franklin Gold and Precious Metals Fund",
-            candidates,
+            candidates
         )
 
         assertEquals(fund, match?.fund)
@@ -59,7 +59,7 @@ class FundNameMatcherTest {
         val match = FundNameMatcher.bestMatch(
             importedFundName = "Fond Sverige",
             candidates = listOf(fundA, fundB),
-            importedCompanyName = "Aktiebolag Ett AB",
+            importedCompanyName = "Aktiebolag Ett AB"
         )
 
         assertEquals(fundA, match?.fund)
@@ -76,7 +76,7 @@ class FundNameMatcherTest {
         val match = FundNameMatcher.bestMatch(
             importedFundName = "Sverige",
             candidates = listOf(correct, distractor),
-            importedCompanyName = "Handelsbanken Fonder AB",
+            importedCompanyName = "Handelsbanken Fonder AB"
         )
 
         assertEquals(correct, match?.fund)
@@ -89,7 +89,7 @@ class FundNameMatcherTest {
         val match = FundNameMatcher.bestMatch(
             importedFundName = "Handelsbanken Sverige (A1 SEK)",
             candidates = listOf(fund),
-            importedCompanyName = "Ett bolag som inte finns i katalogen",
+            importedCompanyName = "Ett bolag som inte finns i katalogen"
         )
 
         assertEquals(fund, match?.fund)
@@ -110,7 +110,7 @@ class FundNameMatcherTest {
 
         val ranked = FundNameMatcher.rankedMatches(
             importedFundName = "Handelsbanken Sverige (A1 SEK)",
-            candidates = listOf(basfond, a10, a9, b1),
+            candidates = listOf(basfond, a10, a9, b1)
         )
 
         assertTrue("basfonden ska vara med bland de rankade kandidaterna", ranked.any { it.fund == basfond })

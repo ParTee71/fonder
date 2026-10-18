@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
@@ -29,7 +30,6 @@ import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.usecase.FundNameKey
-import javax.inject.Inject
 
 @Immutable
 data class FundSearchUiState(
@@ -62,7 +62,7 @@ data class FundSearchUiState(
      * ([FundMetadataRepository.cachedRiskByFundName]) — en fond som inte hunnit hamna i cachen
      * saknas i kartan och visas som okänd risk, aldrig gissad.
      */
-    val riskLevels: ImmutableMap<String, Int> = persistentMapOf(),
+    val riskLevels: ImmutableMap<String, Int> = persistentMapOf()
 )
 
 /**
@@ -79,7 +79,7 @@ data class FundSearchUiState(
 class FundSearchViewModel @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val transactionRepository: TransactionRepository,
-    private val fundMetadataRepository: FundMetadataRepository,
+    private val fundMetadataRepository: FundMetadataRepository
 ) : ViewModel() {
 
     private val allFunds = MutableStateFlow<List<Fund>>(emptyList())
@@ -87,6 +87,7 @@ class FundSearchViewModel @Inject constructor(
     private val companies = MutableStateFlow<List<FundCompany>>(emptyList())
     private val selectedCompany = MutableStateFlow<FundCompany?>(null)
     private val query = MutableStateFlow("")
+
     /**
      * Katalogens hämtningstillstånd i **ett** värde, inte tre flöden: de tre flaggorna beskriver
      * samma hämtning, och delade de på var sitt `MutableStateFlow` gick det att observera ett
@@ -98,7 +99,7 @@ class FundSearchViewModel @Inject constructor(
         val loading: Boolean = true,
         val loadFailed: Boolean = false,
         /** Bara den användarstyrda omhämtningen (UI-11), inte första laddningen. */
-        val refreshing: Boolean = false,
+        val refreshing: Boolean = false
     )
 
     private val catalogState = MutableStateFlow(CatalogState())
@@ -138,21 +139,21 @@ class FundSearchViewModel @Inject constructor(
                 query = query,
                 companies = companies.toImmutableList(),
                 selectedCompany = selected,
-                results = filtered.toImmutableList(),
+                results = filtered.toImmutableList()
             )
         }.combine(riskByNameKey) { state, riskByName ->
             state.copy(
                 riskLevels = state.results.mapNotNull { fund ->
                     val risk = riskByName[FundNameKey.of(fund.name)] ?: return@mapNotNull null
                     fund.fundId to risk
-                }.toMap().toImmutableMap(),
+                }.toMap().toImmutableMap()
             )
         }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
             state.copy(addedFundIds = added.toImmutableSet())
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = FundSearchUiState(),
+            initialValue = FundSearchUiState()
         )
 
     /**

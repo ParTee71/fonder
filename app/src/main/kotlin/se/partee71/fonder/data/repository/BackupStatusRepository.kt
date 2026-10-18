@@ -1,5 +1,7 @@
 package se.partee71.fonder.data.repository
 
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -13,8 +15,6 @@ import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.usecase.BackupContentState
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Har något ändrats sedan senaste säkerhetskopian (HEM-12, SET-7)? Säkerhetskopieringen är
@@ -28,7 +28,7 @@ import javax.inject.Singleton
 @Singleton
 class BackupStatusRepository @Inject constructor(
     private val backupRepository: BackupRepository,
-    private val preferences: PreferencesRepository,
+    private val preferences: PreferencesRepository
 ) {
 
     /** Senaste kopian eller återställningen på den här enheten, null om ingen gjorts. */
@@ -68,15 +68,15 @@ class BackupStatusRepository @Inject constructor(
                 epochMillis = nowEpochMillis,
                 target = target,
                 fingerprint = state.fingerprint,
-                transactionCount = state.transactionCount,
-            ),
+                transactionCount = state.transactionCount
+            )
         )
     }
 
     private fun contentState(payload: BackupPayload) = BackupContentState(
         fingerprint = BackupFingerprint.of(payload),
         transactionCount = payload.transactions.size,
-        hasData = payload.funds.isNotEmpty() || payload.transactions.isNotEmpty(),
+        hasData = payload.funds.isNotEmpty() || payload.transactions.isNotEmpty()
     )
 
     companion object {

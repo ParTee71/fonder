@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.navigation
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -13,8 +14,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -27,7 +28,6 @@ import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.testing.testPreferencesRepository
-import java.time.LocalDate
 
 /** Kopparmärket på Beslut (NAV-9) följer den delade källans antal — samma tal som fliken och "Att besluta". */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -56,7 +56,7 @@ class DecisionBadgeViewModelTest {
             FakeCachedPriceRepository(),
             metadata,
             DismissedPlanSource(records, dismissals, preferences, metadata),
-            InProgressSwitches(switchWatchRepo, records),
+            InProgressSwitches(switchWatchRepo, records)
         )
         return DecisionBadgeViewModel(source)
     }
@@ -82,13 +82,13 @@ class DecisionBadgeViewModelTest {
         // BYT-4: Sålt-raden ersätter avgiftsraden, så märket (= "Att besluta", HEM-13) räknar bytet en gång.
         metadata.metadataByIsin = mapOf(
             "SE_DYR" to meta("SE_DYR", "Dyr fond", fee = 1.4).copy(shownAlternativeIsins = listOf("SE_BILLIG")),
-            "SE_BILLIG" to meta("SE_BILLIG", "Billig fond", fee = 0.4),
+            "SE_BILLIG" to meta("SE_BILLIG", "Billig fond", fee = 0.4)
         )
         records.records.value = listOf(
             SuggestionRecord(
                 id = 77, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0, sellIsin = "SE_DYR", buyIsin = "SE_BILLIG",
-                sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 100.0, switchValueKr = 10_000.0, kind = SuggestionKind.FEE,
-            ),
+                sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 100.0, switchValueKr = 10_000.0, kind = SuggestionKind.FEE
+            )
         )
         val vm = viewModel()
 
@@ -98,7 +98,7 @@ class DecisionBadgeViewModelTest {
             assertEquals(1, count)
 
             val id = switchWatchRepo.start(
-                SwitchWatch(sellIsin = "SE_DYR", sellFundName = "Dyr fond", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 77),
+                SwitchWatch(sellIsin = "SE_DYR", sellFundName = "Dyr fond", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 77)
             )
             // Avgiftsraden blir Sålt — fortfarande ett byte, och märket blinkar aldrig till 2.
             dispatcher.scheduler.advanceUntilIdle()
@@ -117,6 +117,6 @@ class DecisionBadgeViewModelTest {
     private fun meta(isin: String, name: String, fee: Double) = FundMetadata(
         isin = isin, name = name, orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = 5, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 }

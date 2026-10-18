@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
 
 /**
  * Ett billigare, likvärdigt alternativ (ANA-9) som ett eget förslag på Beslut (NAV-9) — läst ur
@@ -18,7 +18,7 @@ data class CheaperAlternative(
     /** Innehavets totalavgift i procent (TP-21). */
     val sellFeePercent: Double,
     /** Alternativets totalavgift i procent — alltid lägre än [sellFeePercent]. */
-    val buyFeePercent: Double,
+    val buyFeePercent: Double
 ) {
     /**
      * Besparing per år i kronor vid det inspelade innehavsvärdet — samma räknestycke som ANA-9-kortet
@@ -52,15 +52,14 @@ object CheaperAlternatives {
      * gälla det senaste rådet, inte ett halvår gammalt som råkar nämna samma par. Ordningen är
      * nyast först oavsett i vilken ordning [records] kom.
      */
-    fun latestPerPair(records: List<SuggestionRecord>): List<SuggestionRecord> =
-        records
-            .filter { it.kind == SuggestionKind.FEE }
-            .sortedWith(
-                compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
-                    .thenByDescending { it.batchEpochMillis }
-                    .thenByDescending { it.id },
-            )
-            .distinctBy { it.sellIsin to it.buyIsin }
+    fun latestPerPair(records: List<SuggestionRecord>): List<SuggestionRecord> = records
+        .filter { it.kind == SuggestionKind.FEE }
+        .sortedWith(
+            compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                .thenByDescending { it.batchEpochMillis }
+                .thenByDescending { it.id }
+        )
+        .distinctBy { it.sellIsin to it.buyIsin }
 
     /**
      * De billigare alternativ som väntar på ett beslut, störst årsbesparing först. Ett alternativ
@@ -76,12 +75,11 @@ object CheaperAlternatives {
     fun resolve(
         records: List<SuggestionRecord>,
         metadataByIsin: Map<String, FundMetadata>,
-        today: LocalDate,
-    ): List<CheaperAlternative> =
-        latestPerPair(records)
-            .filterNot { FundMetadataFreshness.isStale(it.suggestedAtEpochDay, today, TTL_DAYS) }
-            .mapNotNull { record -> record.toAlternative(metadataByIsin) }
-            .sortedWith(compareBy(nullsLast(reverseOrder())) { it.annualSavingsKr })
+        today: LocalDate
+    ): List<CheaperAlternative> = latestPerPair(records)
+        .filterNot { FundMetadataFreshness.isStale(it.suggestedAtEpochDay, today, TTL_DAYS) }
+        .mapNotNull { record -> record.toAlternative(metadataByIsin) }
+        .sortedWith(compareBy(nullsLast(reverseOrder())) { it.annualSavingsKr })
 
     private fun SuggestionRecord.toAlternative(metadataByIsin: Map<String, FundMetadata>): CheaperAlternative? {
         val sell = metadataByIsin[sellIsin] ?: return null
@@ -105,10 +103,10 @@ object CheaperAlternatives {
                 feeDeltaPercent = buyFee - sellFee,
                 switchValueKr = switchValueKr,
                 followed = followed == true,
-                kind = SuggestionKind.FEE,
+                kind = SuggestionKind.FEE
             ),
             sellFeePercent = sellFee,
-            buyFeePercent = buyFee,
+            buyFeePercent = buyFee
         )
     }
 }

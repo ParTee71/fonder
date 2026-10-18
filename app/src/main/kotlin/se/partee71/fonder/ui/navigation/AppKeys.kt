@@ -64,7 +64,7 @@ data class TransactionFormKey(
     val type: TransactionType? = null,
     val suggestionRecordId: Long? = null,
     val watchId: Long? = null,
-    val prefillAmountKr: Double? = null,
+    val prefillAmountKr: Double? = null
 ) : AppKey {
     /** Förifyllt från ett förslag eller en bevakning — formuläret registrerar då en redan gjord affär. */
     val prefilled: Boolean get() = type != null && (fundId != null || fundIsin != null)
@@ -75,7 +75,7 @@ data class TransactionFormKey(
             fundIsin = suggestion.sellIsin,
             type = TransactionType.SALJ,
             suggestionRecordId = suggestion.recordId,
-            prefillAmountKr = suggestion.switchValueKr,
+            prefillAmountKr = suggestion.switchValueKr
         )
 
         /** **Följ** på ett inspelat billigare alternativ i Fonddetalj (ANA-9/ANA-10): säljet av fonden [fundId]; beloppet tas ur förslaget. */

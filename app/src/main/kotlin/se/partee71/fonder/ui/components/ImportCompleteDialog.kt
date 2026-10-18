@@ -18,6 +18,6 @@ fun ImportCompleteDialog(importedCount: Int, onDismiss: () -> Unit, notice: Stri
         body = listOfNotNull(stringResource(R.string.format_import_success_body, importedCount), notice).joinToString("\n\n"),
         onDismissRequest = onDismiss,
         confirmLabel = stringResource(R.string.close),
-        onConfirm = onDismiss,
+        onConfirm = onDismiss
     )
 }

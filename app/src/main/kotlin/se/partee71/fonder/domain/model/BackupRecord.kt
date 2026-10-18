@@ -20,5 +20,5 @@ data class BackupRecord(
     val epochMillis: Long,
     val target: BackupTarget?,
     val fingerprint: String?,
-    val transactionCount: Int?,
+    val transactionCount: Int?
 )

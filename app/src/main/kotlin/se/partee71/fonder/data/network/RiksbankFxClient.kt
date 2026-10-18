@@ -1,15 +1,15 @@
 package se.partee71.fonder.data.network
 
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import se.partee71.fonder.di.IoDispatcher
 import java.io.IOException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import se.partee71.fonder.di.IoDispatcher
 
 /**
  * Historiska växelkurser mot kronor från **Riksbankens SWEA-API** (se KRAVLISTA TP-20).
@@ -25,23 +25,22 @@ import javax.inject.Singleton
 @Singleton
 class RiksbankFxClient @Inject constructor(
     private val httpClient: OkHttpClient,
-    @param:IoDispatcher private val io: CoroutineDispatcher,
+    @param:IoDispatcher private val io: CoroutineDispatcher
 ) : FxRateSource {
 
-    override suspend fun fetchRates(currency: String, from: LocalDate, to: LocalDate): List<FxRatePoint> =
-        withContext(io) {
-            val url = seriesUrl(currency, from, to)
-            val request = Request.Builder().url(url).build()
-            httpClient.newCall(request).execute().use { response ->
-                // 204 = serien finns inte / inga observationer i intervallet. Inte ett fel.
-                if (response.code == HTTP_NO_CONTENT) return@use emptyList()
-                if (!response.isSuccessful) {
-                    throw IOException("Oväntat svar (${response.code}) från $url")
-                }
-                val body = response.body?.string() ?: throw IOException("Tomt svar från $url")
-                RiksbankJsonParser.parseObservations(body)
+    override suspend fun fetchRates(currency: String, from: LocalDate, to: LocalDate): List<FxRatePoint> = withContext(io) {
+        val url = seriesUrl(currency, from, to)
+        val request = Request.Builder().url(url).build()
+        httpClient.newCall(request).execute().use { response ->
+            // 204 = serien finns inte / inga observationer i intervallet. Inte ett fel.
+            if (response.code == HTTP_NO_CONTENT) return@use emptyList()
+            if (!response.isSuccessful) {
+                throw IOException("Oväntat svar (${response.code}) från $url")
             }
+            val body = response.body?.string() ?: throw IOException("Tomt svar från $url")
+            RiksbankJsonParser.parseObservations(body)
         }
+    }
 
     internal companion object {
         const val BASE_URL = "https://api.riksbank.se/swea/v1/Observations"
@@ -51,7 +50,6 @@ class RiksbankFxClient @Inject constructor(
         /** Serie-id för en valuta, t.ex. USD → `SEKUSDPMI`. */
         fun seriesId(currency: String): String = "SEK${currency.uppercase()}PMI"
 
-        fun seriesUrl(currency: String, from: LocalDate, to: LocalDate): String =
-            "$BASE_URL/${seriesId(currency)}/${from.format(DATE_FORMAT)}/${to.format(DATE_FORMAT)}"
+        fun seriesUrl(currency: String, from: LocalDate, to: LocalDate): String = "$BASE_URL/${seriesId(currency)}/${from.format(DATE_FORMAT)}/${to.format(DATE_FORMAT)}"
     }
 }

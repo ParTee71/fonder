@@ -1,6 +1,12 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -24,12 +30,6 @@ import se.partee71.fonder.domain.model.IsinPricePoint
 import se.partee71.fonder.domain.usecase.CurrencyConverter
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.NavCalendar
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Kontrakt för fondkurser (NAV). Källa: handelsbanken.fondlista.se, beslutad i spike-issue
@@ -168,7 +168,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     private val fxRateDao: FxRateDao,
     private val fxRateSource: FxRateSource,
     private val isinSources: List<@JvmSuppressWildcards IsinPriceHistorySource>,
-    @param:DefaultDispatcher private val computation: CoroutineDispatcher,
+    @param:DefaultDispatcher private val computation: CoroutineDispatcher
 ) : FundPriceRepository {
 
     /** Katalogen memoiserad en kort stund — se [catalogFunds]. */
@@ -177,19 +177,16 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     /** Fonder som saknar motsvarighet i katalogen — se [fondlistaKeyFor]. */
     private val unresolvableFundIds = mutableSetOf<String>()
 
-    override suspend fun latestPrice(fundId: String): FundPrice? =
-        dao.getLatest(fundId)?.toDomain()
+    override suspend fun latestPrice(fundId: String): FundPrice? = dao.getLatest(fundId)?.toDomain()
 
     override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> {
         if (fundIds.isEmpty()) return flowOf(emptyMap())
         return dao.observeLatest(fundIds).map { list -> list.associateBy({ it.fundId }, { it.toDomain() }) }
     }
 
-    override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
-        dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
+    override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
 
-    override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> =
-        dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
+    override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
 
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
         val to = LocalDate.now()
@@ -227,22 +224,21 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         sourceFundId: String,
         cacheFundId: String = sourceFundId,
         from: LocalDate,
-        to: LocalDate,
-    ): List<FundPrice>? =
-        runCatching {
-            val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
-            // Parsningen (inte bara HTTP-anropet) måste av anroparens tråd: en backfill kan vara
-            // flera MB HTML, och FondDetalj/Portfölj anropar det här från viewModelScope
-            // (Main.immediate) — DOM-bygget och radselektionen frös då UI:t i sekunder.
-            val prices = withContext(computation) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
-            toValueCurrency(prices)
-        }.onSuccess { prices ->
-            if (prices.isNotEmpty()) {
-                dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
-            }
-        }.onFailure { e ->
-            Log.w(TAG, "Kunde inte uppdatera kurser för fund $cacheFundId, behåller cache", e)
-        }.getOrNull()
+        to: LocalDate
+    ): List<FundPrice>? = runCatching {
+        val html = client.fetchHistoryPage(fundId = sourceFundId, company = null, from = from, to = to)
+        // Parsningen (inte bara HTTP-anropet) måste av anroparens tråd: en backfill kan vara
+        // flera MB HTML, och FondDetalj/Portfölj anropar det här från viewModelScope
+        // (Main.immediate) — DOM-bygget och radselektionen frös då UI:t i sekunder.
+        val prices = withContext(computation) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
+        toValueCurrency(prices)
+    }.onSuccess { prices ->
+        if (prices.isNotEmpty()) {
+            dao.upsertAll(prices.map(FundPriceEntity::fromDomain))
+        }
+    }.onFailure { e ->
+        Log.w(TAG, "Kunde inte uppdatera kurser för fund $cacheFundId, behåller cache", e)
+    }.getOrNull()
 
     /**
      * Räknar om kurser som inte är i [FundPrice.VALUE_CURRENCY] till kronor (KRAVLISTA
@@ -376,7 +372,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
                 sourceFundId = fondlistaKey,
                 cacheFundId = fundId,
                 from = historyStart(fundId, since, to),
-                to = to,
+                to = to
             )
             if (prices?.isNotEmpty() == true) return true
         }
@@ -415,8 +411,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         }
     }
 
-    private fun IsinPricePoint.toEntity(fundId: String) =
-        FundPriceEntity(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
+    private fun IsinPricePoint.toEntity(fundId: String) = FundPriceEntity(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
 
     /**
      * Kurshistorik för en fond appen **inte** äger — ingen cache-skrivning, se gränssnittets
@@ -463,41 +458,37 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         return null
     }
 
-    override suspend fun lookupIsin(fundId: String): String? =
-        runCatching {
-            val html = fundPageClient.fetchFundPage(fundId)
-            withContext(computation) { HandelsbankenHtmlParser.parseIsin(html) }
-        }
-            .onFailure { e -> Log.w(TAG, "Kunde inte slå upp ISIN för fund $fundId", e) }
-            .getOrNull()
+    override suspend fun lookupIsin(fundId: String): String? = runCatching {
+        val html = fundPageClient.fetchFundPage(fundId)
+        withContext(computation) { HandelsbankenHtmlParser.parseIsin(html) }
+    }
+        .onFailure { e -> Log.w(TAG, "Kunde inte slå upp ISIN för fund $fundId", e) }
+        .getOrNull()
 
     // Utan `company` levererar källan hela plattformens katalog, inte bara Handelsbankens egna
     // fonder (KRAVLISTA TP-18) — bolagslistan finns med i samma svar.
     // Parsningen körs av anroparens tråd, se fetchAndCacheFromFondlista — katalogsvaret är
     // drygt hundra kilobyte HTML och hämtas från Fondsöks viewModelScope.
-    override suspend fun fetchFundCatalog(): FundCatalog? =
-        fetchCatalogPage(company = null)?.let { html ->
-            withContext(computation) {
-                FundCatalog(
-                    companies = HandelsbankenHtmlParser.parseFundCompanies(html),
-                    funds = HandelsbankenHtmlParser.parseFundCatalog(html),
-                )
-            }
+    override suspend fun fetchFundCatalog(): FundCatalog? = fetchCatalogPage(company = null)?.let { html ->
+        withContext(computation) {
+            FundCatalog(
+                companies = HandelsbankenHtmlParser.parseFundCompanies(html),
+                funds = HandelsbankenHtmlParser.parseFundCatalog(html)
+            )
         }
+    }
 
-    override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
-        fetchCatalogPage(company = companyId)?.let { html ->
-            withContext(computation) { HandelsbankenHtmlParser.parseFundCatalog(html) }
-        }
+    override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = fetchCatalogPage(company = companyId)?.let { html ->
+        withContext(computation) { HandelsbankenHtmlParser.parseFundCatalog(html) }
+    }
 
     /** Katalogsidan för ett (eller inget) fondbolag. Null vid fel — anroparen behåller då sin nuvarande lista. */
-    private suspend fun fetchCatalogPage(company: String?): String? =
-        runCatching {
-            val today = LocalDate.now()
-            client.fetchHistoryPage(fundId = null, company = company, from = today, to = today)
-        }.onFailure { e ->
-            Log.w(TAG, "Kunde inte hämta fondkatalogen (fondbolag=$company)", e)
-        }.getOrNull()
+    private suspend fun fetchCatalogPage(company: String?): String? = runCatching {
+        val today = LocalDate.now()
+        client.fetchHistoryPage(fundId = null, company = company, from = today, to = today)
+    }.onFailure { e ->
+        Log.w(TAG, "Kunde inte hämta fondkatalogen (fondbolag=$company)", e)
+    }.getOrNull()
 
     private companion object {
         const val TAG = "FundPriceRepository"

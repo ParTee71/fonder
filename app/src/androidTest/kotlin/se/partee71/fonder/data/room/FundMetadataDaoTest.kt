@@ -25,7 +25,7 @@ class FundMetadataDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dao = db.fundMetadataDao()
     }
@@ -36,14 +36,14 @@ class FundMetadataDaoTest {
     private fun entity(
         isin: String,
         name: String = isin,
-        availableAtHandelsbanken: Boolean? = null,
+        availableAtHandelsbanken: Boolean? = null
     ) = FundMetadataEntity(
         isin = isin, name = name, orderbookId = isin, totalFee = 0.21, managementFee = 0.2,
         category = "Sverige", fundType = "EQUITY_FUND", companyName = "Länsförsäkringar", risk = 4,
         indexFund = true, startDateEpochDay = 12000, minimumBuy = 100.0,
         tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""",
         availableAtHandelsbanken = availableAtHandelsbanken, availabilityResolvedAtEpochDay = null,
-        fetchedAtEpochDay = 20000,
+        fetchedAtEpochDay = 20000
     )
 
     @Test
@@ -122,8 +122,8 @@ class FundMetadataDaoTest {
             entity("SE1").copy(
                 cheapestAlternativeIsin = "SE2",
                 cheapestAlternativeFee = 0.21,
-                comparisonResolvedAtEpochDay = 20100,
-            ),
+                comparisonResolvedAtEpochDay = 20100
+            )
         )
 
         val loaded = dao.getByIsin("SE1")

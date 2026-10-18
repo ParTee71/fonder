@@ -30,8 +30,8 @@ class BackupStatusRepositoryTest {
     private fun preferences() = PreferencesRepository(
         PreferenceDataStoreFactory.create(
             scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("backup_status.preferences_pb") },
-        ),
+            produceFile = { tempFolder.newFile("backup_status.preferences_pb") }
+        )
     )
 
     private val withData = BackupPayload(exportedAtEpochMillis = 0, funds = listOf(Fund(fundId = "SHB1", name = "Fond A")))

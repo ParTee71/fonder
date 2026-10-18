@@ -1,6 +1,8 @@
 package se.partee71.fonder.data.repository
 
 import androidx.room.withTransaction
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.room.AppDatabase
@@ -14,8 +16,6 @@ import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.TransactionEntity
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Transaction
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Kontrakt för fonder och deras transaktioner (single source of truth = Room). */
 interface TransactionRepository {
@@ -32,6 +32,7 @@ interface TransactionRepository {
      * [se.partee71.fonder.data.repository.FundMetadataRepository]s `toEntityPreservingDerivedState`.
      */
     suspend fun upsertFund(fund: Fund)
+
     /**
      * Skriver raden — **bara** raden. Skärmar och importer ska inte anropa den här direkt utan gå
      * via [se.partee71.fonder.domain.usecase.RecordTransaction] (BYT-2), som också driver bytets
@@ -66,17 +67,14 @@ class RoomTransactionRepository @Inject constructor(
     private val fundPriceDao: FundPriceDao,
     private val suggestionRecordDao: SuggestionRecordDao,
     private val switchWatchDao: SwitchWatchDao,
-    private val suggestionDismissalDao: SuggestionDismissalDao,
+    private val suggestionDismissalDao: SuggestionDismissalDao
 ) : TransactionRepository {
 
-    override fun observeFunds(): Flow<List<Fund>> =
-        fundDao.observeAll().map { list -> list.map(FundEntity::toDomain) }
+    override fun observeFunds(): Flow<List<Fund>> = fundDao.observeAll().map { list -> list.map(FundEntity::toDomain) }
 
-    override fun observeTransactions(): Flow<List<Transaction>> =
-        transactionDao.observeAll().map { list -> list.map(TransactionEntity::toDomain) }
+    override fun observeTransactions(): Flow<List<Transaction>> = transactionDao.observeAll().map { list -> list.map(TransactionEntity::toDomain) }
 
-    override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> =
-        transactionDao.observeForFund(fundId).map { list -> list.map(TransactionEntity::toDomain) }
+    override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactionDao.observeForFund(fundId).map { list -> list.map(TransactionEntity::toDomain) }
 
     override suspend fun upsertFund(fund: Fund) {
         val stored = fundDao.getByFundId(fund.fundId)
@@ -84,14 +82,13 @@ class RoomTransactionRepository @Inject constructor(
             FundEntity.fromDomain(
                 fund.copy(
                     isin = fund.isin ?: stored?.isin,
-                    fondlistaFundId = fund.fondlistaFundId ?: stored?.fondlistaFundId,
-                ),
-            ),
+                    fondlistaFundId = fund.fondlistaFundId ?: stored?.fondlistaFundId
+                )
+            )
         )
     }
 
-    override suspend fun addTransaction(tx: Transaction): Long =
-        transactionDao.insert(TransactionEntity.fromDomain(tx))
+    override suspend fun addTransaction(tx: Transaction): Long = transactionDao.insert(TransactionEntity.fromDomain(tx))
 
     override suspend fun deleteTransaction(id: Long) {
         database.withTransaction {

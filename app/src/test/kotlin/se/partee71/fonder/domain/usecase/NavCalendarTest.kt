@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class NavCalendarTest {
 

@@ -51,16 +51,16 @@ fun RiskLevelPicker(
     marked: Int? = null,
     markedDescription: String? = null,
     enabled: Boolean = true,
-    levels: IntRange = RISK_LEVELS,
+    levels: IntRange = RISK_LEVELS
 ) {
     val shapes = ToggleButtonShapes(
         shape = MaterialTheme.shapes.extraSmall,
         pressedShape = MaterialTheme.shapes.small,
-        checkedShape = CircleShape,
+        checkedShape = CircleShape
     )
     Row(
         modifier = modifier.fillMaxWidth().selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         levels.forEach { level ->
             val isSelected = level == selected
@@ -82,13 +82,13 @@ fun RiskLevelPicker(
                 shapes = shapes,
                 colors = choiceButtonColors(),
                 border = if (isMarked) BorderStroke(2.dp, MaterialTheme.colorScheme.onSurfaceVariant) else null,
-                contentPadding = PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
                 Text(
                     level.toString(),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.titleSmall),
                     maxLines = 1,
-                    modifier = Modifier.clearAndSetSemantics { },
+                    modifier = Modifier.clearAndSetSemantics { }
                 )
             }
         }

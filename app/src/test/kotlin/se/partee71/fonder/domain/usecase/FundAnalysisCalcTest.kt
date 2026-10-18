@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,19 +9,16 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
-import java.time.LocalDate
 
 class FundAnalysisCalcTest {
 
     private val fond = Fund(fundId = "SHB0000442", name = "Fond A")
     private val today = LocalDate.of(2026, 7, 31)
 
-    private fun price(daysAgo: Long, nav: Double) =
-        FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = nav)
+    private fun price(daysAgo: Long, nav: Double) = FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = nav)
 
     /** Daglig historik 4 år tillbaka, NAV stiger linjärt från 50 till 120 (dagens kurs). */
-    private fun longHistory(): List<FundPrice> =
-        (0..1460L step 1).map { daysAgo -> price(daysAgo, nav = 120.0 - daysAgo * (70.0 / 1460.0)) }
+    private fun longHistory(): List<FundPrice> = (0..1460L step 1).map { daysAgo -> price(daysAgo, nav = 120.0 - daysAgo * (70.0 / 1460.0)) }
 
     @Test
     fun `periodavkastning berknas fran senaste kanda NAV pa eller fore periodens start`() {
@@ -34,7 +32,7 @@ class FundAnalysisCalcTest {
             priceHistory = history,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = 1200.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         val threeMonths = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.TRE_MANADER }
@@ -53,7 +51,7 @@ class FundAnalysisCalcTest {
             priceHistory = history,
             firstPurchaseDate = today.minusDays(30),
             portfolioTotalValue = 1200.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         val threeYears = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.TRE_AR }
@@ -72,7 +70,7 @@ class FundAnalysisCalcTest {
             priceHistory = history,
             firstPurchaseDate = today.minusMonths(6),
             portfolioTotalValue = 1200.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertNull(analysis.keyFigures.cagr)
@@ -91,7 +89,7 @@ class FundAnalysisCalcTest {
             priceHistory = history,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = 2000.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertEquals(kotlin.math.sqrt(2.0) - 1.0, analysis.keyFigures.cagr!!, 1e-3)
@@ -108,7 +106,7 @@ class FundAnalysisCalcTest {
             priceHistory = history,
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 1200.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertEquals(80.0, analysis.keyFigures.gavPerShare, 1e-9) // 800 / 10
@@ -125,7 +123,7 @@ class FundAnalysisCalcTest {
             priceHistory = longHistory(),
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 4800.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertEquals(0.25, analysis.keyFigures.portfolioShareFraction!!, 1e-9) // 1200/4800
@@ -140,7 +138,7 @@ class FundAnalysisCalcTest {
             priceHistory = longHistory(),
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 0.0,
-            otherHoldingsAverageThreeMonthReturn = null,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertNull(analysis.keyFigures.portfolioShareFraction)
@@ -152,21 +150,36 @@ class FundAnalysisCalcTest {
 
         fun historyWithHighAndCurrent(high: Double, current: Double) = listOf(
             price(daysAgo = 364, nav = high),
-            price(daysAgo = 0, nav = current),
+            price(daysAgo = 0, nav = current)
         )
 
         val gron = FundAnalysisCalc.analyze(
-            today, holding, historyWithHighAndCurrent(100.0, 95.0), today.minusYears(2), 950.0, null,
+            today,
+            holding,
+            historyWithHighAndCurrent(100.0, 95.0),
+            today.minusYears(2),
+            950.0,
+            null
         )!!.distanceFromHigh!!
         assertEquals(FundAnalysisCalc.SignalLevel.GRON, gron.level)
 
         val gul = FundAnalysisCalc.analyze(
-            today, holding, historyWithHighAndCurrent(100.0, 89.0), today.minusYears(2), 890.0, null,
+            today,
+            holding,
+            historyWithHighAndCurrent(100.0, 89.0),
+            today.minusYears(2),
+            890.0,
+            null
         )!!.distanceFromHigh!!
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, gul.level)
 
         val rod = FundAnalysisCalc.analyze(
-            today, holding, historyWithHighAndCurrent(100.0, 79.0), today.minusYears(2), 790.0, null,
+            today,
+            holding,
+            historyWithHighAndCurrent(100.0, 79.0),
+            today.minusYears(2),
+            790.0,
+            null
         )!!.distanceFromHigh!!
         assertEquals(FundAnalysisCalc.SignalLevel.ROD, rod.level)
     }
@@ -221,7 +234,7 @@ class FundAnalysisCalcTest {
         assertEquals(
             310.0 / 3,
             MovingAverageCalc.averageAt(history.map { it.epochDay to it.nav }, today.toEpochDay())!!,
-            1e-9,
+            1e-9
         )
     }
 
@@ -231,8 +244,12 @@ class FundAnalysisCalcTest {
         val history = listOf(price(100, 100.0), price(0, 90.0)) // -10 % senaste 3 mån
 
         val analysis = FundAnalysisCalc.analyze(
-            today, holding, history, today.minusYears(1), 900.0,
-            otherHoldingsAverageThreeMonthReturn = 0.0, // portföljsnitt 0 %, denna fond -10 % -> -10 p.e.
+            today,
+            holding,
+            history,
+            today.minusYears(1),
+            900.0,
+            otherHoldingsAverageThreeMonthReturn = 0.0 // portföljsnitt 0 %, denna fond -10 % -> -10 p.e.
         )!!
 
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, analysis.momentum!!.level)
@@ -245,7 +262,12 @@ class FundAnalysisCalcTest {
         val history = listOf(price(100, 100.0), price(0, 90.0))
 
         val analysis = FundAnalysisCalc.analyze(
-            today, holding, history, today.minusYears(1), 900.0, otherHoldingsAverageThreeMonthReturn = null,
+            today,
+            holding,
+            history,
+            today.minusYears(1),
+            900.0,
+            otherHoldingsAverageThreeMonthReturn = null
         )!!
 
         assertNull(analysis.momentum)
@@ -295,7 +317,7 @@ class FundAnalysisCalcTest {
 
         val average = FundAnalysisCalc.averageThreeMonthReturn(
             today,
-            mapOf("A" to history, "B" to listOf(price(100, 100.0), price(0, 90.0))),
+            mapOf("A" to history, "B" to listOf(price(100, 100.0), price(0, 90.0)))
         )
         assertEquals(0.0, average!!, 1e-9) // (+10 % + -10 %) / 2
     }
@@ -315,12 +337,11 @@ class FundAnalysisCalcTest {
         priceHistory = history,
         firstPurchaseDate = today.minusYears(1),
         portfolioTotalValue = 1200.0,
-        otherHoldingsAverageThreeMonthReturn = null,
+        otherHoldingsAverageThreeMonthReturn = null
     )!!
 
     /** [nDays]+1 punkter med kurser som växlar mellan [low] och [high] varje dag. */
-    private fun alternating(nDays: Long, low: Double, high: Double) =
-        (0..nDays).map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) high else low) }
+    private fun alternating(nDays: Long, low: Double, high: Double) = (0..nDays).map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) high else low) }
 
     @Test
     fun `platt kurshistorik ger nollvolatilitet och ingen Sharpe (ingen division med noll)`() {
@@ -361,7 +382,12 @@ class FundAnalysisCalcTest {
     fun `S4 vinstsignal triggas vid gavFraction minst plus 50 procent`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 800.0, currentValue = 1200.0)
         val analysis = FundAnalysisCalc.analyze(
-            today, holding, listOf(price(daysAgo = 0, nav = 120.0)), today.minusYears(2), 1200.0, null,
+            today,
+            holding,
+            listOf(price(daysAgo = 0, nav = 120.0)),
+            today.minusYears(2),
+            1200.0,
+            null
         )!!
 
         assertEquals(0.5, analysis.profitTake!!.gainFraction, 1e-9) // (120-80)/80
@@ -372,7 +398,12 @@ class FundAnalysisCalcTest {
     fun `S4 vinstsignal triggas inte strax under plus 50 procent`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1490.0)
         val analysis = FundAnalysisCalc.analyze(
-            today, holding, listOf(price(daysAgo = 0, nav = 149.0)), today.minusYears(2), 1490.0, null,
+            today,
+            holding,
+            listOf(price(daysAgo = 0, nav = 149.0)),
+            today.minusYears(2),
+            1490.0,
+            null
         )!!
 
         assertFalse(analysis.profitTake!!.triggered)
@@ -382,7 +413,12 @@ class FundAnalysisCalcTest {
     fun `S4 ar null nar gavFraction ar null (samma gate som nyckeltalet)`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 0.0, currentValue = 500.0)
         val analysis = FundAnalysisCalc.analyze(
-            today, holding, listOf(price(daysAgo = 0, nav = 50.0)), today.minusYears(2), 500.0, null,
+            today,
+            holding,
+            listOf(price(daysAgo = 0, nav = 50.0)),
+            today.minusYears(2),
+            500.0,
+            null
         )!!
 
         assertNull(analysis.keyFigures.gavFraction)

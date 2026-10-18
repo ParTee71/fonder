@@ -24,6 +24,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
@@ -45,8 +47,6 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -69,7 +69,7 @@ fun FondDetaljScreen(
     onOpenSwitchWatch: (Long) -> Unit,
     onOpenTransactionForm: (TransactionFormKey) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: FondDetaljViewModel = hiltViewModel<FondDetaljViewModel, FondDetaljViewModel.Factory> { it.create(fundId) },
+    viewModel: FondDetaljViewModel = hiltViewModel<FondDetaljViewModel, FondDetaljViewModel.Factory> { it.create(fundId) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -90,7 +90,7 @@ fun FondDetaljScreen(
         onFollow = { suggestion -> onOpenTransactionForm(TransactionFormKey.follow(suggestion)) },
         onFollowFee = { recordId -> onOpenTransactionForm(TransactionFormKey.follow(fundId, recordId)) },
         onStartSwitchWatch = viewModel::startSwitchWatch,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -104,13 +104,13 @@ fun FondDetaljContent(
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onFollowFee: (Long) -> Unit = {},
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     when {
         state.isEmpty -> EmptyState(
             title = state.fundName ?: stringResource(R.string.fond_title),
             body = stringResource(R.string.fond_history_empty_body),
-            modifier = modifier,
+            modifier = modifier
         )
 
         // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här är en ren
@@ -131,7 +131,7 @@ fun FondDetaljContent(
             PullToRefreshContainer(
                 refreshing = state.priceRefreshing,
                 onRefresh = onRefresh,
-                modifier = modifier,
+                modifier = modifier
             ) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item {
@@ -148,7 +148,7 @@ fun FondDetaljContent(
                                 onFollow = onFollow,
                                 onFollowFee = onFollowFee,
                                 onStartSwitchWatch = onStartSwitchWatch,
-                                modifier = Modifier.padding(vertical = 16.dp),
+                                modifier = Modifier.padding(vertical = 16.dp)
                             )
                             HorizontalDivider()
                             FundLineChart(
@@ -156,21 +156,21 @@ fun FondDetaljContent(
                                 purchaseEpochDays = state.purchaseEpochDays,
                                 movingAverage = state.movingAverage,
                                 working = state.chartWorking,
-                                modifier = Modifier.padding(top = 16.dp),
+                                modifier = Modifier.padding(top = 16.dp)
                             )
                             // Allt förklarande material ligger hopfällt (ANA-10): analysen och
                             // ordlistan är referens man slår upp, inte det man öppnar kortet för.
                             if (state.analysis != null) {
                                 ExpandableSection(
                                     title = stringResource(R.string.analys_section_title),
-                                    modifier = Modifier.padding(top = 8.dp),
+                                    modifier = Modifier.padding(top = 8.dp)
                                 ) {
                                     AnalysisSection(analysis = state.analysis!!)
                                 }
                             }
                             ExpandableSection(
                                 title = stringResource(R.string.analys_glossary_title),
-                                modifier = Modifier.padding(top = 8.dp),
+                                modifier = Modifier.padding(top = 8.dp)
                             ) {
                                 AnalysisGlossary()
                             }
@@ -178,7 +178,7 @@ fun FondDetaljContent(
                                 IsinInput(
                                     suggestedIsin = state.suggestedIsin,
                                     onConfirm = onIsinConfirmed,
-                                    modifier = Modifier.padding(vertical = 16.dp),
+                                    modifier = Modifier.padding(vertical = 16.dp)
                                 )
                             }
                         }
@@ -200,7 +200,7 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f, fill = false)
             )
             state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
             RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = 8.dp))
@@ -209,7 +209,7 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
             WorkingIndicator(
                 working = state.chartWorking,
                 contentDescription = stringResource(R.string.format_card_working, state.fundName ?: ""),
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
         val firstPurchaseEpochDay = state.firstPurchaseEpochDay
@@ -219,11 +219,11 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
                 stringResource(
                     R.string.format_holding_first_purchase,
                     LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
-                    MoneyFormat.kr(netInvested),
+                    MoneyFormat.kr(netInvested)
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }
@@ -251,7 +251,7 @@ private fun SwitchDecisionSection(
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onFollowFee: (Long) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         Text(stringResource(R.string.switch_section_title), style = MaterialTheme.typography.titleMedium)
@@ -259,7 +259,7 @@ private fun SwitchDecisionSection(
             stringResource(R.string.switch_section_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
         )
 
         if (state.switchPlan.isNotEmpty()) {
@@ -273,7 +273,7 @@ private fun SwitchDecisionSection(
                     onSuggestionExpanded = onSuggestionExpanded,
                     onFollow = onFollow,
                     watched = suggestion.sellIsin in state.watchedSellIsins,
-                    onStartSwitchWatch = onStartSwitchWatch,
+                    onStartSwitchWatch = onStartSwitchWatch
                 )
             }
         }
@@ -287,14 +287,18 @@ private fun SwitchDecisionSection(
                 stringResource(R.string.fee_comparison_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(bottom = 4.dp)
             )
         }
         when (val feeComparison = state.feeComparison) {
             null -> Unit
+
             FeeComparisonUiState.Loading -> SwitchWorkingMessage(stringResource(R.string.fee_comparison_loading))
+
             FeeComparisonUiState.Unavailable -> SwitchMessage(stringResource(R.string.fee_comparison_unavailable))
+
             FeeComparisonUiState.NoCheaperAlternative -> SwitchMessage(stringResource(R.string.fee_comparison_none_cheaper))
+
             is FeeComparisonUiState.Found -> feeComparison.alternatives.forEach { alternative ->
                 FeeAlternativeRow(
                     alternative = alternative,
@@ -302,7 +306,7 @@ private fun SwitchDecisionSection(
                     comparison = state.comparisons[alternative.candidate.isin],
                     recorded = state.recordedFeeSwitches[alternative.candidate.isin],
                     onSuggestionExpanded = onSuggestionExpanded,
-                    onFollowFee = onFollowFee,
+                    onFollowFee = onFollowFee
                 )
             }
         }
@@ -313,9 +317,12 @@ private fun SwitchDecisionSection(
         // hunnit starta sägs ingenting — då är frågan obesvarad, inte besvarad med "nej".
         when {
             state.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
+
             state.switchPlan.isEmpty() && state.feeComparison == null -> Unit
+
             // Ett avstått byte (HEM-14) är inte "planen föreslår inget" — det sägs ut nedan.
             state.switchPlan.isEmpty() && state.dismissedPlanCount == 0 -> SwitchMessage(stringResource(R.string.switch_none_plan_body))
+
             else -> Unit
         }
         // Avstådda förslag döljs här som på Beslut; antalet och vägen till Ångra sägs ut, så ett
@@ -327,8 +334,7 @@ private fun SwitchDecisionSection(
 }
 
 /** Den *andra* fonden i ett byte sett från fonden [fundIsin] — den som ska jämföras mot. */
-private fun SwitchPlanResolver.Suggestion.counterpartIsin(fundIsin: String?): String =
-    if (sellIsin == fundIsin) buyIsin else sellIsin
+private fun SwitchPlanResolver.Suggestion.counterpartIsin(fundIsin: String?): String = if (sellIsin == fundIsin) buyIsin else sellIsin
 
 /** Liten grupprubrik inne i bytesavsnittet — skiljer bytesplanen (HEM-8) från avgiftsjämförelsen (ANA-9). */
 @Composable
@@ -336,7 +342,7 @@ private fun SwitchGroupLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
     )
 }
 
@@ -354,7 +360,7 @@ private fun SwitchWorkingMessage(text: String) {
         WorkingIndicator(
             working = true,
             contentDescription = text,
-            modifier = Modifier.padding(top = 8.dp, end = 8.dp),
+            modifier = Modifier.padding(top = 8.dp, end = 8.dp)
         )
         SwitchMessage(text)
     }
@@ -366,7 +372,7 @@ private fun SwitchMessage(text: String) {
         text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(top = 8.dp)
     )
 }
 
@@ -385,7 +391,7 @@ private fun SwitchPlanRow(
     onSuggestionExpanded: (String) -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     watched: Boolean,
-    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
+    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit
 ) {
     val sellingThisFund = suggestion.sellIsin == fundIsin
     val counterpartName = if (sellingThisFund) suggestion.buyFundName else suggestion.sellFundName
@@ -393,7 +399,7 @@ private fun SwitchPlanRow(
     val explanation = listOfNotNull(
         suggestion.switchValueKr?.let { stringResource(R.string.format_switch_plan_amount, MoneyFormat.kr(it)) },
         stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0)),
-        stringResource(R.string.switch_plan_disclaimer),
+        stringResource(R.string.switch_plan_disclaimer)
     ).joinToString("\n")
 
     Column {
@@ -404,18 +410,18 @@ private fun SwitchPlanRow(
                 ComparisonChart(
                     holdingPoints = chartPoints,
                     candidateName = counterpartName,
-                    comparison = comparison,
+                    comparison = comparison
                 )
-            },
+            }
         ) {
             Column {
                 Text(
                     stringResource(
                         if (sellingThisFund) R.string.format_switch_plan_to else R.string.format_switch_plan_from,
                         suggestion.planIndex + 1,
-                        counterpartName,
+                        counterpartName
                     ),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium
                 )
                 // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
                 // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
@@ -423,7 +429,7 @@ private fun SwitchPlanRow(
                 RiskBadge(
                     level = suggestion.fromLevel,
                     toLevel = suggestion.toLevel,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
@@ -437,7 +443,7 @@ private fun SwitchPlanRow(
                 text = stringResource(R.string.beslut_follow),
                 onClick = { onFollow(suggestion) },
                 variant = AppButtonVariant.Outlined,
-                contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName),
+                contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
         }
         // Bevaka alternativ (ANA-12) — för ett förslag kvitterat i Facit, av samma skäl som på
@@ -447,7 +453,7 @@ private fun SwitchPlanRow(
             AppButton(
                 text = stringResource(R.string.switch_watch_start),
                 onClick = { onStartSwitchWatch(suggestion) },
-                variant = AppButtonVariant.Text,
+                variant = AppButtonVariant.Text
             )
         }
     }
@@ -470,11 +476,11 @@ private fun FeeAlternativeRow(
     comparison: ComparisonUiState?,
     recorded: RecordedFeeSwitch?,
     onSuggestionExpanded: (String) -> Unit,
-    onFollowFee: (Long) -> Unit,
+    onFollowFee: (Long) -> Unit
 ) {
     val explanation = stringResource(
         R.string.format_fee_comparison_alternative_explain,
-        MoneyFormat.feePercent(alternative.candidateFeePercent),
+        MoneyFormat.feePercent(alternative.candidateFeePercent)
     )
     Column {
         ExpandableInfoRow(
@@ -484,15 +490,15 @@ private fun FeeAlternativeRow(
                 ComparisonChart(
                     holdingPoints = chartPoints,
                     candidateName = alternative.candidate.name,
-                    comparison = comparison,
+                    comparison = comparison
                 )
-            },
+            }
         ) {
             Column {
                 PeriodRow(
                     label = alternative.candidate.name,
                     amount = alternative.annualSavingsKr,
-                    fraction = null,
+                    fraction = null
                 )
                 RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = 4.dp))
             }
@@ -504,7 +510,7 @@ private fun FeeAlternativeRow(
                 text = stringResource(R.string.beslut_follow),
                 onClick = { onFollowFee(recorded.recordId) },
                 variant = AppButtonVariant.Outlined,
-                contentDescription = stringResource(R.string.format_fee_follow_a11y, alternative.candidate.name),
+                contentDescription = stringResource(R.string.format_fee_follow_a11y, alternative.candidate.name)
             )
         }
     }
@@ -520,22 +526,23 @@ private fun FeeAlternativeRow(
 private fun ComparisonChart(
     holdingPoints: List<Pair<Long, Double>>,
     candidateName: String,
-    comparison: ComparisonUiState?,
+    comparison: ComparisonUiState?
 ) {
     when (comparison) {
         null -> Unit
+
         ComparisonUiState.Loading -> SwitchWorkingMessage(stringResource(R.string.switch_comparison_loading))
 
         ComparisonUiState.Unavailable -> Text(
             stringResource(R.string.switch_comparison_unavailable),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         is ComparisonUiState.Ready -> FundLineChart(
             points = holdingPoints,
             comparisonSeries = listOf(ChartSeries(label = candidateName, points = comparison.points)),
-            modifier = Modifier.padding(bottom = 8.dp),
+            modifier = Modifier.padding(bottom = 8.dp)
         )
     }
 }
@@ -564,7 +571,7 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     PeriodRow(
                         label = periodLabel(periodReturn.period),
                         amount = periodReturn.amount,
-                        fraction = periodReturn.fraction,
+                        fraction = periodReturn.fraction
                     )
                 }
             }
@@ -580,17 +587,17 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                 PeriodRow(
                     label = stringResource(
                         R.string.format_analys_gav_label,
-                        MoneyFormat.kr(analysis.keyFigures.gavPerShare),
+                        MoneyFormat.kr(analysis.keyFigures.gavPerShare)
                     ),
                     amount = null,
-                    fraction = analysis.keyFigures.gavFraction,
+                    fraction = analysis.keyFigures.gavFraction
                 )
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_portfolio_share_explain)) {
                 PeriodRow(
                     label = stringResource(R.string.analys_portfolio_share_label),
                     amount = null,
-                    fraction = analysis.keyFigures.portfolioShareFraction,
+                    fraction = analysis.keyFigures.portfolioShareFraction
                 )
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_volatility_explain)) {
@@ -598,7 +605,7 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     label = stringResource(R.string.analys_volatility_label),
                     amount = null,
                     fraction = null,
-                    valueText = analysis.keyFigures.annualizedVolatility?.let { MoneyFormat.percent(it) },
+                    valueText = analysis.keyFigures.annualizedVolatility?.let { MoneyFormat.percent(it) }
                 )
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_sharpe_explain)) {
@@ -606,7 +613,7 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     label = stringResource(R.string.analys_sharpe_label),
                     amount = null,
                     fraction = null,
-                    valueText = analysis.keyFigures.sharpeRatio?.let { MoneyFormat.decimal(it) },
+                    valueText = analysis.keyFigures.sharpeRatio?.let { MoneyFormat.decimal(it) }
                 )
             }
         }
@@ -625,21 +632,21 @@ private fun SignalExplanations(analysis: FundAnalysisCalc.Analysis, modifier: Mo
             SignalRow(
                 level = signal.level,
                 label = stringResource(R.string.analys_signal_distance_label),
-                explanation = stringResource(R.string.analys_signal_distance_explain),
+                explanation = stringResource(R.string.analys_signal_distance_explain)
             )
         }
         analysis.trend?.let { signal ->
             SignalRow(
                 level = signal.level,
                 label = stringResource(R.string.analys_signal_trend_label),
-                explanation = stringResource(R.string.analys_signal_trend_explain),
+                explanation = stringResource(R.string.analys_signal_trend_explain)
             )
         }
         analysis.momentum?.let { signal ->
             SignalRow(
                 level = signal.level,
                 label = stringResource(R.string.analys_signal_momentum_label),
-                explanation = stringResource(R.string.analys_signal_momentum_explain),
+                explanation = stringResource(R.string.analys_signal_momentum_explain)
             )
         }
     }
@@ -671,7 +678,7 @@ private fun AnalysisGlossary(modifier: Modifier = Modifier) {
             R.string.analys_glossary_horisont_term to R.string.analys_glossary_horisont_def,
             R.string.analys_glossary_ranta_term to R.string.analys_glossary_ranta_def,
             R.string.analys_glossary_volatilitet_term to R.string.analys_glossary_volatilitet_def,
-            R.string.analys_glossary_sharpe_term to R.string.analys_glossary_sharpe_def,
+            R.string.analys_glossary_sharpe_term to R.string.analys_glossary_sharpe_def
         )
         terms.forEach { (termRes, defRes) ->
             ExpandableInfoRow(explanation = stringResource(defRes)) {
@@ -694,7 +701,7 @@ private fun periodLabel(period: FundAnalysisCalc.Period): String = when (period)
 private fun IsinInput(
     suggestedIsin: String?,
     onConfirm: (String) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     // rememberSaveable, inte remember: ISIN:et skrivs in för hand (NAV-2) och ska överleva en
     // rotation eller ett tema-/språkbyte. Med remember återställdes fältet till maskinens
@@ -708,22 +715,22 @@ private fun IsinInput(
     Column(modifier = modifier) {
         Text(
             text = stringResource(
-                if (suggestedIsin != null) R.string.fond_isin_suggested_body else R.string.fond_isin_missing_body,
+                if (suggestedIsin != null) R.string.fond_isin_suggested_body else R.string.fond_isin_missing_body
             ),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         AppTextField(
             value = text,
             onValueChange = { text = it },
             label = stringResource(R.string.fond_isin_label),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         AppButton(
             text = stringResource(R.string.save),
             onClick = { onConfirm(text) },
             enabled = text.isNotBlank(),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
     }
 }

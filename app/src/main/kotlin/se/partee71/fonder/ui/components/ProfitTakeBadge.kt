@@ -42,19 +42,19 @@ fun ProfitTakeBadge(gainFraction: Double, modifier: Modifier = Modifier) {
             .background(ReturnColors.gain.copy(alpha = 0.16f))
             .padding(horizontal = 10.dp, vertical = 4.dp)
             .semantics { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Filled.TrendingUp,
             contentDescription = null,
             tint = ReturnColors.gain,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(16.dp)
         )
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
             color = ReturnColors.gain,
-            modifier = Modifier.padding(start = 4.dp),
+            modifier = Modifier.padding(start = 4.dp)
         )
     }
 }

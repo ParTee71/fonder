@@ -1,11 +1,11 @@
 package se.partee71.fonder.domain.usecase
 
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.TransactionType
-import javax.inject.Inject
 
 /**
  * Ett alternativ i bytesväljaren så som formuläret (NAV-4) och PDF-importen (IMP-6) visar det
@@ -60,7 +60,7 @@ data class FollowedSuggestion(
     val toLevel: Int,
     val switchValueKr: Double?,
     val planIndex: Int?,
-    val inProgress: Boolean = false,
+    val inProgress: Boolean = false
 ) {
     val decision: SwitchDecision.ForSuggestion get() = SwitchDecision.ForSuggestion(recordId, toLevel)
 
@@ -74,7 +74,7 @@ data class FollowedSuggestion(
             toLevel = row.toLevel,
             switchValueKr = row.switchValueKr,
             planIndex = row.planIndex.takeIf { row.kind == SuggestionKind.RISK_PLAN },
-            inProgress = row.inProgress,
+            inProgress = row.inProgress
         )
     }
 }
@@ -88,7 +88,7 @@ data class FollowedSuggestion(
  */
 class FollowedSuggestionLookup @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val fundMetadataRepository: FundMetadataRepository,
+    private val fundMetadataRepository: FundMetadataRepository
 ) {
     suspend fun lookup(recordId: Long): FollowedSuggestion? {
         val record = suggestionRecordRepository.observeByIds(setOf(recordId)).first().firstOrNull() ?: return null
@@ -103,7 +103,7 @@ class FollowedSuggestionLookup @Inject constructor(
             buyFundName = buy.name,
             toLevel = toLevel,
             switchValueKr = record.switchValueKr,
-            planIndex = record.planIndex.takeIf { record.kind == SuggestionKind.RISK_PLAN },
+            planIndex = record.planIndex.takeIf { record.kind == SuggestionKind.RISK_PLAN }
         )
     }
 }
@@ -138,7 +138,7 @@ object SwitchQuestions {
         followed: FollowedSuggestion? = null,
         closesWatchId: Long? = null,
         /** Bevakningar en tidigare rad i samma import redan kopplar — erbjuds inte igen. */
-        linkedWatchIds: Set<Long> = emptySet(),
+        linkedWatchIds: Set<Long> = emptySet()
     ): SwitchQuestion {
         val choices = inputs.suggestFor(type, fundIsin, epochDay)
         val options = choices.options.mapTo(mutableListOf<SwitchOption>()) { SwitchOption.Decide(it) }
@@ -169,15 +169,19 @@ object SwitchQuestions {
     fun forImport(
         inputs: SwitchChoicesSource.Inputs,
         rows: List<SwitchImportRow>,
-        chosen: List<SwitchOption?>,
+        chosen: List<SwitchOption?>
     ): List<SwitchQuestion> {
         val questions = mutableListOf<SwitchQuestion>()
         rows.forEachIndexed { index, row ->
             questions += when (row.type) {
                 TransactionType.SALJ -> forTransaction(
-                    inputs, row.type, row.fundIsin, row.epochDay,
-                    linkedWatchIds = linkedByEarlierRows(questions, chosen),
+                    inputs,
+                    row.type,
+                    row.fundIsin,
+                    row.epochDay,
+                    linkedWatchIds = linkedByEarlierRows(questions, chosen)
                 )
+
                 TransactionType.KOP -> forImportPurchase(inputs, rows, questions, chosen, index)
             }
         }
@@ -185,17 +189,16 @@ object SwitchQuestions {
     }
 
     /** Bevakningarna raderna före den aktuella redan svarat ja på — en bevakning kopplas av högst en rad. */
-    private fun linkedByEarlierRows(earlier: List<SwitchQuestion>, chosen: List<SwitchOption?>): Set<Long> =
-        earlier.indices.mapNotNullTo(mutableSetOf()) { index ->
-            (earlier[index].resolve(chosen.getOrNull(index)) as? SwitchOption.LinkOtherDay)?.watchId
-        }
+    private fun linkedByEarlierRows(earlier: List<SwitchQuestion>, chosen: List<SwitchOption?>): Set<Long> = earlier.indices.mapNotNullTo(mutableSetOf()) { index ->
+        (earlier[index].resolve(chosen.getOrNull(index)) as? SwitchOption.LinkOtherDay)?.watchId
+    }
 
     private fun forImportPurchase(
         inputs: SwitchChoicesSource.Inputs,
         rows: List<SwitchImportRow>,
         earlier: List<SwitchQuestion>,
         chosen: List<SwitchOption?>,
-        index: Int,
+        index: Int
     ): SwitchQuestion {
         val row = rows[index]
         val base = forTransaction(inputs, row.type, row.fundIsin, row.epochDay)
@@ -219,6 +222,7 @@ object SwitchQuestions {
         val preselected = when {
             existing == 0 && started.size == 1 && started.single().second == row.fundIsin ->
                 SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(started.single().first))
+
             else -> null
         }
         return SwitchQuestion(options, preselected)
@@ -228,11 +232,9 @@ object SwitchQuestions {
      * Förslaget [recordId] som Följ pekar ut: ur Besluts källa när raden står där (då är dess
      * pågående-märkning känd, BYT-1), annars [lookedUp] ur [FollowedSuggestionLookup].
      */
-    fun followed(inputs: SwitchChoicesSource.Inputs, recordId: Long, lookedUp: FollowedSuggestion?): FollowedSuggestion? =
-        (inputs.plan + inputs.cheaperAlternatives).firstOrNull { it.recordId == recordId }?.let { FollowedSuggestion.of(it) }
-            ?: lookedUp?.takeIf { it.recordId == recordId }
+    fun followed(inputs: SwitchChoicesSource.Inputs, recordId: Long, lookedUp: FollowedSuggestion?): FollowedSuggestion? = (inputs.plan + inputs.cheaperAlternatives).firstOrNull { it.recordId == recordId }?.let { FollowedSuggestion.of(it) }
+        ?: lookedUp?.takeIf { it.recordId == recordId }
 
-    private fun buyIsinOf(inputs: SwitchChoicesSource.Inputs, recordId: Long): String? =
-        (inputs.plan + inputs.cheaperAlternatives).firstOrNull { it.recordId == recordId }?.buyIsin
-            ?: inputs.buyIsinByRecordId[recordId]
+    private fun buyIsinOf(inputs: SwitchChoicesSource.Inputs, recordId: Long): String? = (inputs.plan + inputs.cheaperAlternatives).firstOrNull { it.recordId == recordId }?.buyIsin
+        ?: inputs.buyIsinByRecordId[recordId]
 }

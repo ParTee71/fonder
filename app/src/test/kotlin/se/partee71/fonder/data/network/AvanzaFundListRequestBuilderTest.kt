@@ -34,7 +34,7 @@ class AvanzaFundListRequestBuilderTest {
             interestType = listOf("SEK"),
             misc = listOf("Övriga"),
             company = listOf("Länsförsäkringar"),
-            risk = listOf("4"),
+            risk = listOf("4")
         )
 
         val json = Json.parseToJsonElement(AvanzaFundListRequestBuilder.buildPayload(query)).jsonObject
@@ -57,7 +57,7 @@ class AvanzaFundListRequestBuilderTest {
             nameContains = "index",
             sortField = "totalFee",
             sortDirection = FundScreenSortDirection.ASCENDING,
-            startIndex = 20,
+            startIndex = 20
         )
 
         val json = Json.parseToJsonElement(AvanzaFundListRequestBuilder.buildPayload(query)).jsonObject

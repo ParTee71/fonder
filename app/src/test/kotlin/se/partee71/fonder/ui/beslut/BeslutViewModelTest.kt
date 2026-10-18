@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.beslut
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -18,25 +19,26 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
-import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
-import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.DismissedPlanSource
@@ -45,19 +47,17 @@ import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
+import se.partee71.fonder.domain.usecase.SwitchOrigin
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import se.partee71.fonder.domain.usecase.SwitchOrigin
-import se.partee71.fonder.domain.usecase.SwitchRowState
 import se.partee71.fonder.domain.usecase.SwitchRow
+import se.partee71.fonder.domain.usecase.SwitchRowState
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 /**
  * Fliken Beslut (NAV-9): bytesplanen (HEM-8) och de pågående bytena (ANA-12) ur den delade
@@ -83,18 +83,26 @@ class BeslutViewModelTest {
 
     private fun viewModel() = BeslutViewModel(
         PendingDecisionsSource(
-            preferencesRepository, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo,
+            preferencesRepository,
+            suggestionRepo,
+            switchWatchRepo,
+            priceRepo,
+            metadataRepo,
             DismissedPlanSource(suggestionRepo, dismissalRepo, preferencesRepository, metadataRepo),
-            InProgressSwitches(switchWatchRepo, suggestionRepo),
+            InProgressSwitches(switchWatchRepo, suggestionRepo)
         ),
         FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
         preferencesRepository,
         RecordTransaction(
-            transactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
-            testTargetLevelPreselection(transactionRepo, switchWatchRepo),
+            transactionRepo,
+            switchWatchRepo,
+            suggestionRepo,
+            metadataRepo,
+            scheduler,
+            testTargetLevelPreselection(transactionRepo, switchWatchRepo)
         ),
         dismissalRepo,
-        scheduler,
+        scheduler
     )
 
     @Before
@@ -108,7 +116,7 @@ class BeslutViewModelTest {
     private fun meta(isin: String, name: String, fee: Double, risk: Int) = FundMetadata(
         isin = isin, name = name, orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     private fun planRecord(
@@ -117,19 +125,19 @@ class BeslutViewModelTest {
         epochDay: Long = LocalDate.now().toEpochDay(),
         batch: Long = 0,
         valueKr: Double? = 2_500.0,
-        id: Long = 42,
+        id: Long = 42
     ) = SuggestionRecord(
         id = id, suggestedAtEpochDay = epochDay, planIndex = planIndex,
         sellIsin = "SE_HELD", buyIsin = buyIsin,
         sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
-        switchValueKr = valueKr, batchEpochMillis = batch,
+        switchValueKr = valueKr, batchEpochMillis = batch
     )
 
     /** Ett innehav på nivå 5 och en köpkandidat på nivå 3, båda i metadatacachen, och en inspelad plan med ett byte. */
     private fun setUpSwitchPlan() {
         metadataRepo.metadataByIsin = mapOf(
             "SE_HELD" to meta("SE_HELD", "Innehav", fee = 1.0, risk = 5),
-            "SE_CAND" to meta("SE_CAND", "Kandidat", fee = 0.3, risk = 3),
+            "SE_CAND" to meta("SE_CAND", "Kandidat", fee = 0.3, risk = 3)
         )
         suggestionRepo.records.value = listOf(planRecord())
     }
@@ -162,7 +170,7 @@ class BeslutViewModelTest {
     fun `rubrikraden speglar riskprofil och kontotyp`() = runTest(dispatcher) {
         val profile = RiskProfile(
             targetAllocation = mapOf(4 to 1.0),
-            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
+            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD)
         )
         preferencesRepository.setRiskProfile(profile)
         preferencesRepository.setAccountType(AccountType.ISK_KF)
@@ -266,7 +274,7 @@ class BeslutViewModelTest {
         metadataRepo.metadataByIsin = metadataRepo.metadataByIsin + ("SE_ANNAN" to meta("SE_ANNAN", "Annan kandidat", fee = 0.4, risk = 3))
         suggestionRepo.records.value = listOf(
             planRecord(buyIsin = "SE_ANNAN", batch = 1_000, valueKr = 1_000.0, id = 1),
-            planRecord(batch = 2_000, id = 2),
+            planRecord(batch = 2_000, id = 2)
         )
         preferencesRepository.setAccountType(AccountType.ISK_KF)
 
@@ -282,7 +290,7 @@ class BeslutViewModelTest {
         setUpSwitchPlan()
         suggestionRepo.records.value = listOf(
             planRecord(buyIsin = "SE_UTAN_METADATA", batch = 2_000, id = 1),
-            planRecord(planIndex = 1, batch = 2_000, id = 2),
+            planRecord(planIndex = 1, batch = 2_000, id = 2)
         )
         preferencesRepository.setAccountType(AccountType.ISK_KF)
 
@@ -377,7 +385,7 @@ class BeslutViewModelTest {
             assertNull(suggestionRepo.records.value.single().followed)
             assertEquals(
                 listOf(SuggestionDismissal("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now().toEpochDay())),
-                dismissalRepo.dismissals.value,
+                dismissalRepo.dismissals.value
             )
 
             vm.undoDismissal(suggestion)
@@ -400,7 +408,7 @@ class BeslutViewModelTest {
         dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now())
         suggestionRepo.records.value = listOf(
             planRecord(id = 1, batch = 1_000),
-            planRecord(id = 2, buyIsin = "SE_ANNAN", batch = 2_000),
+            planRecord(id = 2, buyIsin = "SE_ANNAN", batch = 2_000)
         )
         preferencesRepository.setAccountType(AccountType.ISK_KF)
 
@@ -480,10 +488,10 @@ class BeslutViewModelTest {
     private fun setUpCheaperAlternative(followed: Boolean? = null) {
         metadataRepo.metadataByIsin = mapOf(
             "SE_HELD" to meta("SE_HELD", "Sverige Småbolag", fee = 1.4, risk = 5).copy(shownAlternativeIsins = listOf("SE_IDX")),
-            "SE_IDX" to meta("SE_IDX", "Småbolag Index", fee = 0.4, risk = 5),
+            "SE_IDX" to meta("SE_IDX", "Småbolag Index", fee = 0.4, risk = 5)
         )
         suggestionRepo.records.value = listOf(
-            planRecord(id = 77, buyIsin = "SE_IDX", valueKr = 96_000.0).copy(kind = SuggestionKind.FEE, followed = followed),
+            planRecord(id = 77, buyIsin = "SE_IDX", valueKr = 96_000.0).copy(kind = SuggestionKind.FEE, followed = followed)
         )
     }
 
@@ -531,7 +539,7 @@ class BeslutViewModelTest {
             assertEquals(0, state.decisions.count)
             assertEquals(
                 listOf(SuggestionDismissal("SE_HELD", "SE_IDX", SuggestionKind.FEE, LocalDate.now().toEpochDay())),
-                dismissalRepo.dismissals.value,
+                dismissalRepo.dismissals.value
             )
 
             vm.undoDismissal(suggestion)
@@ -662,7 +670,7 @@ class BeslutViewModelTest {
         // fyller budgeterat — inte ur en hämtning Beslut gör själv.
         priceRepo.latestPrices.value = mapOf(
             "SE_A" to FundPrice("SE_A", LocalDate.now().toEpochDay(), 105.0),
-            "SE_B" to FundPrice("SE_B", LocalDate.now().toEpochDay(), 110.0),
+            "SE_B" to FundPrice("SE_B", LocalDate.now().toEpochDay(), 110.0)
         )
         switchWatchRepo.start(
             SwitchWatch(
@@ -672,9 +680,9 @@ class BeslutViewModelTest {
                 proceedsKr = 10_000.0,
                 candidates = listOf(
                     SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A", navAtStart = 100.0),
-                    SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B", navAtStart = 100.0),
-                ),
-            ),
+                    SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B", navAtStart = 100.0)
+                )
+            )
         )
 
         viewModel().uiState.test {
@@ -701,7 +709,7 @@ class BeslutViewModelTest {
         setUpSwitchPlan()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         switchWatchRepo.start(
-            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Innehav", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 9, sourceRecordId = 42),
+            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Innehav", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 9, sourceRecordId = 42)
         )
 
         viewModel().uiState.test {
@@ -743,8 +751,8 @@ class BeslutViewModelTest {
             SwitchWatch(
                 sellIsin = "SE_SALJ",
                 sellFundName = "Fond A",
-                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
-            ),
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+            )
         )
 
         viewModel().uiState.test {
@@ -774,7 +782,7 @@ class BeslutViewModelTest {
             toLevel = 4,
             feeDeltaPercent = -0.1,
             switchValueKr = 4_200.0,
-            followed = true,
+            followed = true
         )
 
         vm.startSwitchWatch(suggestion)
@@ -802,8 +810,8 @@ class BeslutViewModelTest {
             vm.startSwitchWatch(
                 SwitchPlanResolver.Suggestion(
                     recordId = 7, planIndex = 0, sellIsin = "SE_SALJ", buyIsin = "SE_KOP",
-                    sellFundName = "Fond A", buyFundName = "Fond B", fromLevel = 6, toLevel = 4, feeDeltaPercent = 0.0,
-                ),
+                    sellFundName = "Fond A", buyFundName = "Fond B", fromLevel = 6, toLevel = 4, feeDeltaPercent = 0.0
+                )
             )
             while (state.startedSwitchWatchId == null) state = awaitItem()
             assertEquals(switchWatchRepo.watches.value.single().id, state.startedSwitchWatchId)
@@ -823,7 +831,7 @@ class BeslutViewModelTest {
             planRecord(id = 1).copy(followed = true),
             planRecord(id = 2, epochDay = LocalDate.now().minusDays(30).toEpochDay()).copy(followed = true),
             planRecord(id = 3).copy(followed = false),
-            planRecord(id = 4),
+            planRecord(id = 4)
         )
 
         viewModel().uiState.test {
@@ -841,7 +849,7 @@ class BeslutViewModelTest {
         transactionRepo.funds.value = listOf(Fund(fundId = "SHB1", name = "Innehav", isin = "SE_HELD"))
         priceRepo.latestPrices.value = mapOf(
             "SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 126.0),
-            "SE_CAND" to FundPrice(fundId = "SE_CAND", epochDay = 20_100, nav = 56.0),
+            "SE_CAND" to FundPrice(fundId = "SE_CAND", epochDay = 20_100, nav = 56.0)
         )
         suggestionRepo.records.value = listOf(planRecord(id = 1).copy(followed = true), planRecord(id = 2))
 
@@ -891,7 +899,7 @@ class BeslutViewModelTest {
     fun `ett salt billigare alternativ blir en Salt-rad i stallet for avgiftsraden`() = runTest(dispatcher) {
         setUpCheaperAlternative()
         switchWatchRepo.start(
-            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 77),
+            SwitchWatch(sellIsin = "SE_HELD", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 77)
         )
 
         viewModel().uiState.test {

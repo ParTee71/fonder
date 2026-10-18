@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -23,7 +24,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.testing.testPreferencesRepository
-import java.time.LocalDate
 
 /**
  * Bytesväljarens förval (BYT-2, issue #144): få, deterministiska regler — allt annat är en fråga
@@ -34,11 +34,10 @@ class SwitchTransitionsTest {
     private val today: LocalDate = LocalDate.of(2026, 10, 12)
     private val day = today.toEpochDay()
 
-    private fun row(recordId: Long, planIndex: Int, sellIsin: String = "SE_SALJ", buyIsin: String = "SE_KOP", toLevel: Int = 3, inProgress: Boolean = false) =
-        SwitchPlanResolver.Suggestion(
-            recordId = recordId, planIndex = planIndex, sellIsin = sellIsin, buyIsin = buyIsin, sellFundName = sellIsin, buyFundName = buyIsin,
-            fromLevel = 5, toLevel = toLevel, feeDeltaPercent = 0.0, switchValueKr = 1_000.0, inProgress = inProgress,
-        )
+    private fun row(recordId: Long, planIndex: Int, sellIsin: String = "SE_SALJ", buyIsin: String = "SE_KOP", toLevel: Int = 3, inProgress: Boolean = false) = SwitchPlanResolver.Suggestion(
+        recordId = recordId, planIndex = planIndex, sellIsin = sellIsin, buyIsin = buyIsin, sellFundName = sellIsin, buyFundName = buyIsin,
+        fromLevel = 5, toLevel = toLevel, feeDeltaPercent = 0.0, switchValueKr = 1_000.0, inProgress = inProgress
+    )
 
     private fun watch(
         id: Long,
@@ -47,21 +46,20 @@ class SwitchTransitionsTest {
         sourceRecordId: Long? = null,
         sellTransactionId: Long? = 5,
         closed: Boolean = false,
-        sellIsin: String = "SE_SALJ",
+        sellIsin: String = "SE_SALJ"
     ) = SwitchWatch(
         id = id, sellIsin = sellIsin, sellFundName = sellIsin, soldAtEpochDay = soldAt, targetLevel = 3, sourceRecordId = sourceRecordId,
         sellTransactionId = sellTransactionId, candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
-        closedAtEpochDay = if (closed) day else null, closeReason = if (closed) SwitchWatchCloseReason.AVBRUTEN else null,
+        closedAtEpochDay = if (closed) day else null, closeReason = if (closed) SwitchWatchCloseReason.AVBRUTEN else null
     )
 
-    private fun sale(isin: String? = "SE_SALJ", plan: List<SwitchPlanResolver.Suggestion> = emptyList(), watches: List<SwitchWatch> = emptyList()) =
-        SwitchTransitions.suggestFor(TransactionType.SALJ, isin, day, plan, watches, today)
+    private fun sale(isin: String? = "SE_SALJ", plan: List<SwitchPlanResolver.Suggestion> = emptyList(), watches: List<SwitchWatch> = emptyList()) = SwitchTransitions.suggestFor(TransactionType.SALJ, isin, day, plan, watches, today)
 
     private fun purchase(
         isin: String? = "SE_KOP",
         epochDay: Long = day,
         watches: List<SwitchWatch> = emptyList(),
-        buyIsinByRecordId: Map<Long, String> = emptyMap(),
+        buyIsinByRecordId: Map<Long, String> = emptyMap()
     ) = SwitchTransitions.suggestFor(TransactionType.KOP, isin, epochDay, emptyList(), watches, today, buyIsinByRecordId)
 
     // --- Sälj ---
@@ -134,7 +132,7 @@ class SwitchTransitionsTest {
         val choices = purchase(
             isin = "SE_FORESLAGEN",
             watches = listOf(watch(1, candidates = listOf("SE_KOP"), sourceRecordId = 7)),
-            buyIsinByRecordId = mapOf(7L to "SE_FORESLAGEN"),
+            buyIsinByRecordId = mapOf(7L to "SE_FORESLAGEN")
         )
 
         assertEquals(SwitchDecision.ClosesWatch(1), choices.preselected)
@@ -195,7 +193,7 @@ class SwitchTransitionsTest {
             watch(4, soldAt = day - SwitchWatchCalc.WATCH_TTL_DAYS - 1, sellTransactionId = null), // utgången
             watch(5, soldAt = day - 1, sellTransactionId = null),
             watch(6, soldAt = day - 4, sellTransactionId = null),
-            watch(7, soldAt = day - 2, sellTransactionId = null, closed = true),
+            watch(7, soldAt = day - 2, sellTransactionId = null, closed = true)
         )
 
         assertEquals(6L, SwitchTransitions.linkableWatch("SE_SALJ", day, watches, today)?.id)
@@ -251,24 +249,30 @@ class SwitchTransitionsTest {
             metadataByIsin = listOf("SE_SALJ" to 5, "SE_KOP" to 3, "SE_SALJ2" to 5, "SE_KOP2" to 3).associate { (isin, risk) ->
                 isin to FundMetadata(
                     isin = isin, name = isin, orderbookId = isin, totalFee = 0.5, managementFee = 0.5, category = null, fundType = null,
-                    companyName = null, risk = risk, indexFund = false, startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+                    companyName = null, risk = risk, indexFund = false, startDateEpochDay = null, minimumBuy = null, tags = emptyList()
                 )
-            },
+            }
         )
         val preferences = testPreferencesRepository(dispatcher, tempFolder, "choices_${System.nanoTime()}")
         preferences.setAccountType(AccountType.ISK_KF)
         records.records.value = listOf(
             SuggestionRecord(id = 1, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0, sellIsin = "SE_SALJ", buyIsin = "SE_KOP", sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, batchEpochMillis = 1_000),
-            SuggestionRecord(id = 2, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 1, sellIsin = "SE_SALJ2", buyIsin = "SE_KOP2", sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, batchEpochMillis = 1_000),
+            SuggestionRecord(id = 2, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 1, sellIsin = "SE_SALJ2", buyIsin = "SE_KOP2", sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, batchEpochMillis = 1_000)
         )
         // Rad 2 är såld: bevakning ur den, utan kandidater — köpfonden kommer ur raden.
         val watchId = watches.start(SwitchWatch(sellIsin = "SE_SALJ2", sellFundName = "SE_SALJ2", soldAtEpochDay = LocalDate.now().toEpochDay(), sourceRecordId = 2, sellTransactionId = 9))
         val source = SwitchChoicesSource(
             PendingDecisionsSource(
-                preferences, records, watches, FakeCachedPriceRepository(), metadata,
-                DismissedPlanSource(records, FakeSuggestionDismissalRepository(), preferences, metadata), InProgressSwitches(watches, records),
+                preferences,
+                records,
+                watches,
+                FakeCachedPriceRepository(),
+                metadata,
+                DismissedPlanSource(records, FakeSuggestionDismissalRepository(), preferences, metadata),
+                InProgressSwitches(watches, records)
             ),
-            watches, records,
+            watches,
+            records
         )
 
         val inputs = source.observe { LocalDate.now() }.first { it.plan.size == 2 && it.openWatches.size == 1 }

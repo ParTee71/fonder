@@ -19,7 +19,7 @@ class AnalysisGuidanceTest {
         gavFraction = gavFraction,
         portfolioShareFraction = 0.25,
         annualizedVolatility = 0.18,
-        sharpeRatio = 0.8,
+        sharpeRatio = 0.8
     )
 
     private fun analysis(
@@ -28,20 +28,20 @@ class AnalysisGuidanceTest {
         trendLevel: SignalLevel? = null,
         momentumLevel: SignalLevel? = null,
         gavFraction: Double? = 0.2,
-        status: SignalLevel? = SignalLevel.GUL,
+        status: SignalLevel? = SignalLevel.GUL
     ) = FundAnalysisCalc.Analysis(
         keyFigures = keyFigures(gavFraction),
         distanceFromHigh = distanceLevel?.let { DistanceFromHighSignal(it, distanceFraction) },
         trend = trendLevel?.let { TrendSignal(it) },
         momentum = momentumLevel?.let { MomentumSignal(it, -6.0) },
         status = status,
-        profitTake = null,
+        profitTake = null
     )
 
     @Test
     fun `under toppen men plus mot GAV ger uppmuntrande kontext`() {
         val keys = AnalysisGuidance.guidanceFor(
-            analysis(distanceLevel = SignalLevel.GUL, gavFraction = 0.06, status = SignalLevel.GUL),
+            analysis(distanceLevel = SignalLevel.GUL, gavFraction = 0.06, status = SignalLevel.GUL)
         )
         assertTrue(keys.contains(GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV))
     }
@@ -49,7 +49,7 @@ class AnalysisGuidanceTest {
     @Test
     fun `under toppen men minus mot GAV ger inte plus-mot-GAV-kontext`() {
         val keys = AnalysisGuidance.guidanceFor(
-            analysis(distanceLevel = SignalLevel.ROD, gavFraction = -0.05, status = SignalLevel.ROD),
+            analysis(distanceLevel = SignalLevel.ROD, gavFraction = -0.05, status = SignalLevel.ROD)
         )
         assertTrue(!keys.contains(GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV))
     }
@@ -57,7 +57,7 @@ class AnalysisGuidanceTest {
     @Test
     fun `djup nedgang ger tidshorisont-kontext`() {
         val keys = AnalysisGuidance.guidanceFor(
-            analysis(distanceLevel = SignalLevel.ROD, distanceFraction = -0.25, gavFraction = -0.1, status = SignalLevel.ROD),
+            analysis(distanceLevel = SignalLevel.ROD, distanceFraction = -0.25, gavFraction = -0.1, status = SignalLevel.ROD)
         )
         assertEquals(listOf(GuidanceKey.DJUP_NEDGANG_TIDSHORISONT), keys)
     }
@@ -81,8 +81,8 @@ class AnalysisGuidanceTest {
                 distanceLevel = SignalLevel.GRON,
                 trendLevel = SignalLevel.GRON,
                 momentumLevel = SignalLevel.GRON,
-                status = SignalLevel.GRON,
-            ),
+                status = SignalLevel.GRON
+            )
         )
         assertEquals(listOf(GuidanceKey.LUGNT_LAGE), keys)
     }
@@ -103,17 +103,17 @@ class AnalysisGuidanceTest {
                 trendLevel = SignalLevel.GUL,
                 momentumLevel = SignalLevel.GUL,
                 gavFraction = 0.05,
-                status = SignalLevel.ROD,
-            ),
+                status = SignalLevel.ROD
+            )
         )
         assertEquals(
             listOf(
                 GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV,
                 GuidanceKey.DJUP_NEDGANG_TIDSHORISONT,
                 GuidanceKey.UNDER_TREND_INTE_SALJBUD,
-                GuidanceKey.SVAG_MOT_PORTFOLJ,
+                GuidanceKey.SVAG_MOT_PORTFOLJ
             ),
-            keys,
+            keys
         )
     }
 
@@ -128,8 +128,8 @@ class AnalysisGuidanceTest {
                 trendLevel = SignalLevel.GRON,
                 momentumLevel = SignalLevel.GRON,
                 gavFraction = -0.05,
-                status = SignalLevel.GUL,
-            ),
+                status = SignalLevel.GUL
+            )
         )
 
         assertEquals(listOf(GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV), keys)
@@ -140,7 +140,7 @@ class AnalysisGuidanceTest {
         // Den röda nyckeln säger redan samma sak starkare ("att sälja nu gör nedgången
         // verklig"); två överlappande stycken i samma kort vore sämre än ett träffsäkert.
         val keys = AnalysisGuidance.guidanceFor(
-            analysis(distanceLevel = SignalLevel.ROD, distanceFraction = -0.25, gavFraction = -0.1, status = SignalLevel.ROD),
+            analysis(distanceLevel = SignalLevel.ROD, distanceFraction = -0.25, gavFraction = -0.1, status = SignalLevel.ROD)
         )
 
         assertEquals(listOf(GuidanceKey.DJUP_NEDGANG_TIDSHORISONT), keys)

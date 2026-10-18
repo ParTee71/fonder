@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class FundTag(
     val title: String,
-    val category: String,
+    val category: String
 ) {
     companion object {
         /** Källans `fundTagCategory`-värden som [se.partee71.fonder.domain.usecase.FundScreenFilter] vet att matcha mot ett filter. */

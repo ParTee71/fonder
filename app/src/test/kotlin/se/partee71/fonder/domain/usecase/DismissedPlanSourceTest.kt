@@ -1,6 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -16,7 +17,6 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.testing.testPreferencesRepository
-import java.time.LocalDate
 
 /** De avstådda planbytena (HEM-14), resolvade — en källa för Beslut och Fonddetalj. */
 class DismissedPlanSourceTest {
@@ -32,9 +32,9 @@ class DismissedPlanSourceTest {
             isin to FundMetadata(
                 isin = isin, name = "Fond $isin", orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
                 category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
             )
-        },
+        }
     )
     private var today: LocalDate = LocalDate.of(2026, 10, 12)
 
@@ -45,8 +45,14 @@ class DismissedPlanSourceTest {
     }
 
     private fun record(id: Long, buyIsin: String = "SE_KOP", followed: Boolean? = null) = SuggestionRecord(
-        id = id, suggestedAtEpochDay = today.toEpochDay(), planIndex = 0, sellIsin = "SE_SALJ", buyIsin = buyIsin,
-        sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, followed = followed,
+        id = id,
+        suggestedAtEpochDay = today.toEpochDay(),
+        planIndex = 0,
+        sellIsin = "SE_SALJ",
+        buyIsin = buyIsin,
+        sellNavAtSuggestion = 100.0,
+        buyNavAtSuggestion = 50.0,
+        followed = followed
     )
 
     @Test

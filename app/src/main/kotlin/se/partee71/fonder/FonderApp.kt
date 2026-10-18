@@ -5,11 +5,13 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
-import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
+import se.partee71.fonder.worker.FundPriceRefreshScheduler
 
 @HiltAndroidApp
-class FonderApp : Application(), Configuration.Provider {
+class FonderApp :
+    Application(),
+    Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory

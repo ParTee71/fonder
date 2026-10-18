@@ -55,6 +55,9 @@ pdfboxAndroid           = "2.0.27.0"
 # - PMD (CPD i cpdCheck) är ren Java och körs via sin CLI i en egen konfiguration.
 robolectric             = "4.17"
 roborazzi               = "1.76.0"
+spotless                = "8.10.4"
+ktlint                  = "1.8.0"
+composeRules            = "0.6.8"
 konsist                 = "0.18.1"
 pmd                     = "7.28.0"
 
@@ -133,6 +136,7 @@ robolectric                          = { group = "org.robolectric",          nam
 roborazzi                            = { group = "io.github.takahirom.roborazzi", name = "roborazzi",                 version.ref = "roborazzi" }
 roborazzi-compose                    = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose",         version.ref = "roborazzi" }
 roborazzi-junit-rule                 = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule",      version.ref = "roborazzi" }
+compose-rules-ktlint                 = { group = "io.nlopez.compose.rules",     name = "ktlint",                    version.ref = "composeRules" }
 konsist                              = { group = "com.lemonappdev",          name = "konsist",                        version.ref = "konsist" }
 pmd-cli                              = { group = "net.sourceforge.pmd",      name = "pmd-cli",                        version.ref = "pmd" }
 pmd-kotlin                           = { group = "net.sourceforge.pmd",      name = "pmd-kotlin",                     version.ref = "pmd" }
@@ -148,3 +152,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 google-services      = { id = "com.google.gms.google-services",            version.ref = "googleServices" }
 # Skärmdumpar i JVM: recordRoborazziDebug / verifyRoborazziDebug (skill testing-strategy)
 roborazzi            = { id = "io.github.takahirom.roborazzi",             version.ref = "roborazzi" }
+spotless             = { id = "com.diffplug.spotless",                     version.ref = "spotless" }

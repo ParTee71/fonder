@@ -1,9 +1,9 @@
 package se.partee71.fonder.data.imports
 
+import kotlin.math.abs
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
-import kotlin.math.abs
 
 /**
  * Parsar Handelsbankens "Avräkningsnota" — en PDF-orderbekräftelse för en enskild
@@ -33,7 +33,7 @@ object AvrakningsnotaPdfParser {
     private val isinRegex = Regex("""ISIN:\s*([A-Z]{2}[A-Z0-9]{9}\d)""")
     private const val NUMBER = """-?[0-9][0-9\s ]*[.,]\d{2,4}"""
     private val transactionLineRegex = Regex(
-        """^(In|Ut|Avslut)\s+.+?\s+(\d{4}-\d{2}-\d{2})\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s*$""",
+        """^(In|Ut|Avslut)\s+.+?\s+(\d{4}-\d{2}-\d{2})\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s+($NUMBER)\s*$"""
     )
 
     /** Tomt om ingen ISIN hittas i texten alls — inget att importera från filen. */
@@ -56,7 +56,7 @@ object AvrakningsnotaPdfParser {
         isin: String,
         fundName: String,
         fundCompanyName: String,
-        sourceFileName: String,
+        sourceFileName: String
     ): ImportedOrderTransaction? {
         val match = transactionLineRegex.find(line) ?: return null
         val (typeToken, dateRaw, amountRaw, priceRaw, sharesRaw) = match.groupValues.drop(1)
@@ -83,7 +83,7 @@ object AvrakningsnotaPdfParser {
             shares = shares,
             pricePerShare = price,
             amount = amount,
-            sourceFileName = sourceFileName,
+            sourceFileName = sourceFileName
         )
     }
 }

@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -10,7 +11,6 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.SuggestionKind
-import javax.inject.Inject
 
 /**
  * En rad i facit — ett inspelat bytesförslag med fondnamnen uppslagna och utfallet räknat.
@@ -29,7 +29,7 @@ data class FacitRad(
     val buyFundName: String,
     val switchValueKr: Double?,
     val followed: Boolean,
-    val outcome: SwitchOutcomeCalc.Outcome,
+    val outcome: SwitchOutcomeCalc.Outcome
 )
 
 /**
@@ -50,7 +50,7 @@ data class FacitSnapshot(
     val feeAllSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
     val feeFollowedSummary: SwitchOutcomeCalc.Summary = SwitchOutcomeCalc.Summary(),
     /** Snitt per plats i planen (SET-5) — underlaget för om `MAX_SWITCHES_PER_PLAN` kan höjas. Bara bytesplanens rader. */
-    val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> = emptyList(),
+    val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> = emptyList()
 ) {
     /** Förslag användaren markerat som genomförda, över hela historiken och båda sorterna. */
     val followedCount: Int get() = rows.count { it.followed }
@@ -80,47 +80,46 @@ class FacitSummary @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
-    private val fundMetadataRepository: FundMetadataRepository,
+    private val fundMetadataRepository: FundMetadataRepository
 ) {
 
-    fun observe(): Flow<FacitSnapshot> =
-        combine(suggestionRecordRepository.observeHistory(), transactionRepository.observeFunds()) { history, funds ->
-            history to funds
-        }.flatMapLatest { (history, funds) ->
-            val isins = (history.map { it.sellIsin } + history.map { it.buyIsin }).distinct()
-            // Säljsidan är en bevakad fond, vars kurser ligger under fondens egen fundId.
-            // Köpsidan ägs inte av appen och cachas under ISIN:et självt — så gör
-            // `FundPriceRepository.findFundByIsin`, som är vägen workern hämtar den på.
-            val fundIdByIsin = funds.mapNotNull { fund -> fund.isin?.let { it to fund.fundId } }.toMap()
-            val priceKeys = (funds.map { it.fundId } + isins).distinct()
+    fun observe(): Flow<FacitSnapshot> = combine(suggestionRecordRepository.observeHistory(), transactionRepository.observeFunds()) { history, funds ->
+        history to funds
+    }.flatMapLatest { (history, funds) ->
+        val isins = (history.map { it.sellIsin } + history.map { it.buyIsin }).distinct()
+        // Säljsidan är en bevakad fond, vars kurser ligger under fondens egen fundId.
+        // Köpsidan ägs inte av appen och cachas under ISIN:et självt — så gör
+        // `FundPriceRepository.findFundByIsin`, som är vägen workern hämtar den på.
+        val fundIdByIsin = funds.mapNotNull { fund -> fund.isin?.let { it to fund.fundId } }.toMap()
+        val priceKeys = (funds.map { it.fundId } + isins).distinct()
 
-            fundPriceRepository.observeLatestPrices(priceKeys).map { prices ->
-                val metadataByIsin = fundMetadataRepository.cachedMetadataFor(isins)
-                val navByIsin = isins.mapNotNull { isin ->
-                    val nav = prices[fundIdByIsin[isin] ?: isin]?.nav ?: prices[isin]?.nav
-                    nav?.let { isin to it }
-                }.toMap()
+        fundPriceRepository.observeLatestPrices(priceKeys).map { prices ->
+            val metadataByIsin = fundMetadataRepository.cachedMetadataFor(isins)
+            val navByIsin = isins.mapNotNull { isin ->
+                val nav = prices[fundIdByIsin[isin] ?: isin]?.nav ?: prices[isin]?.nav
+                nav?.let { isin to it }
+            }.toMap()
 
-                val rows = history.map { record ->
-                    FacitRad(
-                        recordId = record.id,
-                        kind = record.kind,
-                        planIndex = record.planIndex,
-                        suggestedAtEpochDay = record.suggestedAtEpochDay,
-                        sellFundName = metadataByIsin[record.sellIsin]?.name ?: record.sellIsin,
-                        buyFundName = metadataByIsin[record.buyIsin]?.name ?: record.buyIsin,
-                        switchValueKr = record.switchValueKr,
-                        followed = record.followed == true,
-                        outcome = SwitchOutcomeCalc.evaluate(
-                            record = record,
-                            sellNavNow = navByIsin[record.sellIsin],
-                            buyNavNow = navByIsin[record.buyIsin],
-                        ),
+            val rows = history.map { record ->
+                FacitRad(
+                    recordId = record.id,
+                    kind = record.kind,
+                    planIndex = record.planIndex,
+                    suggestedAtEpochDay = record.suggestedAtEpochDay,
+                    sellFundName = metadataByIsin[record.sellIsin]?.name ?: record.sellIsin,
+                    buyFundName = metadataByIsin[record.buyIsin]?.name ?: record.buyIsin,
+                    switchValueKr = record.switchValueKr,
+                    followed = record.followed == true,
+                    outcome = SwitchOutcomeCalc.evaluate(
+                        record = record,
+                        sellNavNow = navByIsin[record.sellIsin],
+                        buyNavNow = navByIsin[record.buyIsin]
                     )
-                }
-                summarize(rows)
+                )
             }
+            summarize(rows)
         }
+    }
 
     companion object {
         /**
@@ -137,7 +136,7 @@ class FacitSummary @Inject constructor(
                 planFollowedSummary = SwitchOutcomeCalc.summarize(planRows.filter { it.followed }.map { it.outcome }),
                 feeAllSummary = SwitchOutcomeCalc.summarize(feeRows.map { it.outcome }),
                 feeFollowedSummary = SwitchOutcomeCalc.summarize(feeRows.filter { it.followed }.map { it.outcome }),
-                byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome }),
+                byPlanIndex = SwitchOutcomeCalc.byPlanIndex(planRows.map { it.outcome })
             )
         }
     }

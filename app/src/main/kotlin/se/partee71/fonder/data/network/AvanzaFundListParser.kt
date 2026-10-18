@@ -1,11 +1,11 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundTag
-import java.time.LocalDate
 
 /**
  * Parsar JSON-svar från `POST /_api/fund-guide/list` (avanza.se:s odokumenterade fond-API,
@@ -20,7 +20,7 @@ object AvanzaFundListParser {
     private data class FundListResponse(
         val fundListViews: List<FundListView> = emptyList(),
         val totalNoFunds: Int = 0,
-        val filterCounts: Map<String, List<FilterCountView>> = emptyMap(),
+        val filterCounts: Map<String, List<FilterCountView>> = emptyMap()
     )
 
     @Serializable
@@ -38,7 +38,7 @@ object AvanzaFundListParser {
         val startDate: String? = null,
         val minimumBuy: Double? = null,
         val developmentOneYear: Double? = null,
-        val tagList: List<TagView> = emptyList(),
+        val tagList: List<TagView> = emptyList()
     )
 
     @Serializable
@@ -51,7 +51,7 @@ object AvanzaFundListParser {
     data class ParsedFundListPage(
         val funds: List<FundMetadata>,
         val totalNoFunds: Int,
-        val vocabulary: FundFilterVocabulary,
+        val vocabulary: FundFilterVocabulary
     )
 
     /**
@@ -69,7 +69,7 @@ object AvanzaFundListParser {
         return ParsedFundListPage(
             funds = response.fundListViews.map { it.toDomain() },
             totalNoFunds = response.totalNoFunds,
-            vocabulary = buildVocabulary(response.filterCounts),
+            vocabulary = buildVocabulary(response.filterCounts)
         )
     }
 
@@ -77,13 +77,12 @@ object AvanzaFundListParser {
      * Vokabulären byggs enbart ur svarets `type`-fält (redan källans egna transportnycklar,
      * t.ex. `"fundType"`) — ingen hårdkodad dimensionslista, se [FundFilterVocabulary].
      */
-    private fun buildVocabulary(filterCounts: Map<String, List<FilterCountView>>): FundFilterVocabulary =
-        FundFilterVocabulary(
-            filters = filterCounts.values
-                .flatten()
-                .groupBy { it.type }
-                .mapValues { (_, entries) -> entries.map { it.title } },
-        )
+    private fun buildVocabulary(filterCounts: Map<String, List<FilterCountView>>): FundFilterVocabulary = FundFilterVocabulary(
+        filters = filterCounts.values
+            .flatten()
+            .groupBy { it.type }
+            .mapValues { (_, entries) -> entries.map { it.title } }
+    )
 
     private fun FundListView.toDomain() = FundMetadata(
         isin = isin,
@@ -99,6 +98,6 @@ object AvanzaFundListParser {
         startDateEpochDay = startDate?.let { runCatching { LocalDate.parse(it).toEpochDay() }.getOrNull() },
         minimumBuy = minimumBuy,
         tags = tagList.map { FundTag(title = it.title, category = it.fundTagCategory) },
-        developmentOneYear = developmentOneYear,
+        developmentOneYear = developmentOneYear
     )
 }

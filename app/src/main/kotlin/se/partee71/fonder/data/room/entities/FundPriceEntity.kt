@@ -8,7 +8,7 @@ data class FundPriceEntity(
     val fundId: String,
     val epochDay: Long,
     val nav: Double,
-    val currency: String,
+    val currency: String
 ) {
     fun toDomain() = FundPrice(fundId = fundId, epochDay = epochDay, nav = nav, currency = currency)
 
@@ -17,7 +17,7 @@ data class FundPriceEntity(
             fundId = price.fundId,
             epochDay = price.epochDay,
             nav = price.nav,
-            currency = price.currency,
+            currency = price.currency
         )
     }
 }

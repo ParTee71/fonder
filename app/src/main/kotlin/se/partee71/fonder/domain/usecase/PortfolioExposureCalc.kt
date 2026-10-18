@@ -65,7 +65,7 @@ object PortfolioExposureCalc {
         /** Summan av alla medräknade innehavs värde — nämnaren för varje [Bucket.fraction]/[Dimension.unknownFraction]. */
         val includedValueKr: Double,
         /** Innehav utan ISIN, metadataträff eller känd kurs — exkluderade helt, aldrig gissade in i en kategori (samma princip som [PortfolioFeeCalc.Result.unknownFeeCount]). */
-        val excludedCount: Int,
+        val excludedCount: Int
     )
 
     private data class EligibleHolding(val valueKr: Double, val metadata: FundMetadata)
@@ -93,7 +93,7 @@ object PortfolioExposureCalc {
             byRiskLevel = dimension(eligible, includedValueKr, sortAscendingByLabel = true) { h -> h.metadata.risk?.toString() },
             indexStatus = indexStatusSplit(eligible, includedValueKr),
             includedValueKr = includedValueKr,
-            excludedCount = excludedCount,
+            excludedCount = excludedCount
         )
     }
 
@@ -101,7 +101,7 @@ object PortfolioExposureCalc {
         eligible: List<EligibleHolding>,
         includedValueKr: Double,
         sortAscendingByLabel: Boolean = false,
-        labelOf: (EligibleHolding) -> String?,
+        labelOf: (EligibleHolding) -> String?
     ): Dimension {
         val grouped = eligible.groupBy(labelOf)
         val unknown = grouped[null].orEmpty()
@@ -122,7 +122,7 @@ object PortfolioExposureCalc {
             indexValueKr = indexValueKr,
             indexFraction = fractionOf(indexValueKr, includedValueKr),
             activeValueKr = activeValueKr,
-            activeFraction = fractionOf(activeValueKr, includedValueKr),
+            activeFraction = fractionOf(activeValueKr, includedValueKr)
         )
     }
 

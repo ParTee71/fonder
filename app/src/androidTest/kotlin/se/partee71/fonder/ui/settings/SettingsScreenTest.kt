@@ -147,7 +147,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(databaseCleared = true),
-                    onClearedMessageDismissed = { dismissed = true },
+                    onClearedMessageDismissed = { dismissed = true }
                 )
             }
         }
@@ -243,7 +243,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(backupMessage = BackupMessage.Restored(RestoreSummary(2, 5, 3, 1))),
-                    onBackupMessageDismissed = { dismissed = true },
+                    onBackupMessageDismissed = { dismissed = true }
                 )
             }
         }
@@ -251,7 +251,7 @@ class SettingsScreenTest {
         // Kvittensen räknar även bevakade byten sedan issue #114 — "klart" får aldrig kunna
         // betyda "tomt" för någon del av kontraktet.
         composeRule.onNodeWithText(
-            "Återställt: 2 fonder, 5 transaktioner, 3 inspelade förslag och 1 bevakade byten.",
+            "Återställt: 2 fonder, 5 transaktioner, 3 inspelade förslag och 1 bevakade byten."
         ).assertExists()
         composeRule.onNodeWithText("Stäng").performScrollTo().performClick()
 
@@ -264,8 +264,8 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(
-                        backupMessage = BackupMessage.RestoreFailed(BackupFormatException.Reason.UNSUPPORTED_VERSION),
-                    ),
+                        backupMessage = BackupMessage.RestoreFailed(BackupFormatException.Reason.UNSUPPORTED_VERSION)
+                    )
                 )
             }
         }
@@ -303,7 +303,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(chosenBenchmarkName = "Global Index"),
-                    onClearBenchmark = { cleared++ },
+                    onClearBenchmark = { cleared++ }
                 )
             }
         }
@@ -354,8 +354,8 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(
-                        googleUser = AuthUser("uid-1", "Test Testsson", "test@example.com"),
-                    ),
+                        googleUser = AuthUser("uid-1", "Test Testsson", "test@example.com")
+                    )
                 )
             }
         }
@@ -403,7 +403,7 @@ class SettingsScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SettingsContent(
-                    state = SettingsUiState(signInError = SignInException.Reason.NO_CREDENTIAL),
+                    state = SettingsUiState(signInError = SignInException.Reason.NO_CREDENTIAL)
                 )
             }
         }
@@ -428,8 +428,8 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(
-                        lastBackup = BackupRecord(1710504000000L, BackupTarget.DRIVE, fingerprint = "x", transactionCount = 1),
-                    ),
+                        lastBackup = BackupRecord(1710504000000L, BackupTarget.DRIVE, fingerprint = "x", transactionCount = 1)
+                    )
                 )
             }
         }

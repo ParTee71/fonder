@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,7 +9,6 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
-import java.time.LocalDate
 
 class PortfolioFeeCalcTest {
 
@@ -16,21 +16,20 @@ class PortfolioFeeCalcTest {
 
     private fun fund(fundId: String, isin: String? = "SE$fundId") = Fund(fundId = fundId, name = fundId, isin = isin)
 
-    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") =
-        Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
+    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") = Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
 
     private fun metadata(
         isin: String,
         totalFee: Double?,
         cheapestAlternativeFee: Double? = null,
-        comparisonResolvedAtEpochDay: Long? = null,
+        comparisonResolvedAtEpochDay: Long? = null
     ) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
         category = null, fundType = null, companyName = null, risk = null, indexFund = false,
         startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
         cheapestAlternativeIsin = if (cheapestAlternativeFee != null) "SE_ALT" else null,
         cheapestAlternativeFee = cheapestAlternativeFee,
-        comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay,
+        comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay
     )
 
     @Test
@@ -60,11 +59,11 @@ class PortfolioFeeCalcTest {
     fun `summerar over flera innehav`() {
         val holdings = listOf(
             holding("A", currentValue = 100_000.0),
-            holding("B", currentValue = 200_000.0),
+            holding("B", currentValue = 200_000.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.5),
-            "SEB" to metadata("SEB", totalFee = 1.0),
+            "SEB" to metadata("SEB", totalFee = 1.0)
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -122,11 +121,11 @@ class PortfolioFeeCalcTest {
     fun `nedbrytning sorterad pa storst avgift forst`() {
         val holdings = listOf(
             holding("Liten", currentValue = 10_000.0),
-            holding("Stor", currentValue = 500_000.0),
+            holding("Stor", currentValue = 500_000.0)
         )
         val metadataByIsin = mapOf(
             "SELiten" to metadata("SELiten", totalFee = 1.0),
-            "SEStor" to metadata("SEStor", totalFee = 1.0),
+            "SEStor" to metadata("SEStor", totalFee = 1.0)
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -140,7 +139,7 @@ class PortfolioFeeCalcTest {
     fun `farsk jamforelse med billigare alternativ ger besparing per rad och i aggregatet`() {
         val holdings = listOf(holding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
-            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay()),
+            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -156,7 +155,7 @@ class PortfolioFeeCalcTest {
     fun `farsk jamforelse utan billigare alternativ ger ingen besparing men rakas som genomsokt`() {
         val holdings = listOf(holding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
-            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = null, comparisonResolvedAtEpochDay = today.toEpochDay()),
+            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = null, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -186,7 +185,7 @@ class PortfolioFeeCalcTest {
         val staleDay = today.minusDays(FundMetadataFreshness.COMPARISON_TTL_DAYS + 1).toEpochDay()
         val holdings = listOf(holding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
-            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = staleDay),
+            "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = staleDay)
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -200,11 +199,11 @@ class PortfolioFeeCalcTest {
     fun `besparing summeras over flera farskt genomsokta innehav`() {
         val holdings = listOf(
             holding("A", currentValue = 300_000.0),
-            holding("B", currentValue = 100_000.0),
+            holding("B", currentValue = 100_000.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay()),
-            "SEB" to metadata("SEB", totalFee = 1.0, cheapestAlternativeFee = 0.5, comparisonResolvedAtEpochDay = today.toEpochDay()),
+            "SEB" to metadata("SEB", totalFee = 1.0, cheapestAlternativeFee = 0.5, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -226,8 +225,8 @@ class PortfolioFeeCalcTest {
                 "SEA",
                 totalFee = 0.15,
                 cheapestAlternativeFee = 0.21,
-                comparisonResolvedAtEpochDay = today.toEpochDay(),
-            ),
+                comparisonResolvedAtEpochDay = today.toEpochDay()
+            )
         )
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)

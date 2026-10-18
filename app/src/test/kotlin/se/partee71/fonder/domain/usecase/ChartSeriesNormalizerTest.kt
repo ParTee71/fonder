@@ -207,9 +207,8 @@ class ChartSeriesNormalizerTest {
             kedja += (130L + steg * 30L) to (index - 1.0)
         }
 
-        fun periodensAvkastning(period: ChartPeriodFilter.Period): Double =
-            ChartSeriesNormalizer.rebaseReturns(listOf(ChartPeriodFilter.apply(kedja, period)))
-                .series[0].last().second
+        fun periodensAvkastning(period: ChartPeriodFilter.Period): Double = ChartSeriesNormalizer.rebaseReturns(listOf(ChartPeriodFilter.apply(kedja, period)))
+            .series[0].last().second
 
         // Sista månaden = sista faktorn, sista kvartalet = de tre sista, Allt = hela kedjan.
         assertEquals(0.25, periodensAvkastning(ChartPeriodFilter.Period.EN_MANAD), 1e-9)

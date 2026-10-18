@@ -24,7 +24,7 @@ class FxRateDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dao = db.fxRateDao()
     }
@@ -38,8 +38,8 @@ class FxRateDaoTest {
             listOf(
                 FxRateEntity(currency = "USD", epochDay = 100, rate = 9.5),
                 FxRateEntity(currency = "USD", epochDay = 101, rate = 9.6),
-                FxRateEntity(currency = "EUR", epochDay = 100, rate = 11.0),
-            ),
+                FxRateEntity(currency = "EUR", epochDay = 100, rate = 11.0)
+            )
         )
 
         assertEquals(9.5, dao.getOldest("USD")?.rate ?: -1.0, 1e-9)

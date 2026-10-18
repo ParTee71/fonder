@@ -12,26 +12,26 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.time.LocalDate
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.CheaperAlternative
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
-import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -75,7 +75,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L),
+            backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L)
         )
 
         composeRule.setContent {
@@ -163,9 +163,9 @@ class HemScreenTest {
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
                 day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 50.0, fraction = 0.05, partial = false),
                 week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
             ),
-            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(), // POR-7, issue #27
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay() // POR-7, issue #27
         )
 
         composeRule.setContent {
@@ -191,8 +191,8 @@ class HemScreenTest {
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
                 day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
                 week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-            ),
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+            )
         )
 
         composeRule.setContent {
@@ -213,8 +213,8 @@ class HemScreenTest {
             performance = PortfolioPerformanceCalc.PortfolioPerformance(
                 day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 10.0, fraction = 0.01, partial = true),
                 week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-            ),
+                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+            )
         )
 
         composeRule.setContent {
@@ -245,9 +245,9 @@ class HemScreenTest {
                     state = HemUiState(
                         loading = false,
                         hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = persistentListOf(FlaggedHolding(fund, analysis))),
+                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = persistentListOf(FlaggedHolding(fund, analysis)))
                     ),
-                    onFundClick = { clickedFundId = it },
+                    onFundClick = { clickedFundId = it }
                 )
             }
         }
@@ -271,7 +271,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0),
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
         )
 
         composeRule.setContent {
@@ -288,7 +288,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 2),
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 2)
         )
 
         composeRule.setContent {
@@ -303,7 +303,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0),
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
         )
 
         composeRule.setContent {
@@ -327,10 +327,10 @@ class HemScreenTest {
                 // ska bara rendera i den ordningen, inte sortera om.
                 byHolding = listOf(
                     PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0),
-                    PortfolioFeeCalc.HoldingFee(billig, annualFeeKr = 200.0),
+                    PortfolioFeeCalc.HoldingFee(billig, annualFeeKr = 200.0)
                 ),
-                unknownFeeCount = 0,
-            ),
+                unknownFeeCount = 0
+            )
         )
 
         composeRule.setContent {
@@ -360,8 +360,8 @@ class HemScreenTest {
                 unknownFeeCount = 0,
                 totalAnnualSavingsKr = 300.0,
                 comparedCount = 2,
-                comparableCount = 3,
-            ),
+                comparableCount = 3
+            )
         )
 
         composeRule.setContent {
@@ -377,7 +377,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0),
+            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0)
         )
 
         composeRule.setContent {
@@ -399,8 +399,8 @@ class HemScreenTest {
                 unknownFeeCount = 0,
                 totalAnnualSavingsKr = 350.0,
                 comparedCount = 1,
-                comparableCount = 1,
-            ),
+                comparableCount = 1
+            )
         )
 
         composeRule.setContent {
@@ -420,8 +420,8 @@ class HemScreenTest {
                 totalAnnualFeeKr = 700.0,
                 // wasCompared=false (standard) — aldrig sökt, eller ett utgånget resultat.
                 byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null)),
-                unknownFeeCount = 0,
-            ),
+                unknownFeeCount = 0
+            )
         )
 
         composeRule.setContent {
@@ -445,8 +445,8 @@ class HemScreenTest {
                 byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null, wasCompared = true)),
                 unknownFeeCount = 0,
                 comparedCount = 1,
-                comparableCount = 1,
-            ),
+                comparableCount = 1
+            )
         )
 
         composeRule.setContent {
@@ -474,8 +474,8 @@ class HemScreenTest {
                     state = HemUiState(
                         loading = false,
                         hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged.toImmutableList()),
-                    ),
+                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged.toImmutableList())
+                    )
                 )
             }
         }
@@ -494,13 +494,13 @@ class HemScreenTest {
             gavFraction = 0.0,
             portfolioShareFraction = null,
             annualizedVolatility = null,
-            sharpeRatio = null,
+            sharpeRatio = null
         ),
         distanceFromHigh = null,
         trend = FundAnalysisCalc.TrendSignal(status),
         momentum = null,
         status = status,
-        profitTake = null,
+        profitTake = null
     )
 
     // --- Riskprofil (HEM-7, issue #68) ---
@@ -520,7 +520,7 @@ class HemScreenTest {
             loading = false,
             hasHoldings = true,
             riskProfile = RiskProfile(targetRiskLevel = 5),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0)
         )
 
         composeRule.setContent {
@@ -545,7 +545,7 @@ class HemScreenTest {
             hasHoldings = true,
             riskProfile = RiskProfile(targetAllocation = target),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
-            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList(),
+            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList()
         )
 
         composeRule.setContent {
@@ -575,7 +575,7 @@ class HemScreenTest {
             hasHoldings = true,
             riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0),
-            decisions = PendingDecisions(switchPlan = listOf(planSuggestion)).withSwitches(emptyList(), LocalDate.now()),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion)).withSwitches(emptyList(), LocalDate.now())
         )
 
         composeRule.setContent {
@@ -588,13 +588,14 @@ class HemScreenTest {
         composeRule.onNodeWithText("Bytesplan").assertDoesNotExist()
         composeRule.onNodeWithText("Sälj Dyr fond", substring = true).assertDoesNotExist()
     }
+
     @Test
     fun riskkortet_visar_otillrackligt_data_nar_ingen_faktisk_niva_kunde_beraknas() {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
             riskProfile = RiskProfile(targetRiskLevel = 4),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1),
+            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1)
         )
 
         composeRule.setContent {
@@ -614,7 +615,7 @@ class HemScreenTest {
     private fun returnState(
         points: List<Pair<Long, Double>> = listOf(20_000L to 0.0, 20_015L to 0.08, 20_030L to 0.20),
         partial: Boolean = false,
-        benchmark: BenchmarkSeries? = null,
+        benchmark: BenchmarkSeries? = null
     ) = HemUiState(
         loading = false,
         hasHoldings = true,
@@ -623,7 +624,7 @@ class HemScreenTest {
         totalGainLossFraction = 0.2,
         returnSeries = PortfolioReturnSeriesCalc.Result(points = points, partial = partial),
         benchmarkSeries = benchmark,
-        purchaseEpochDays = persistentListOf(20_000L),
+        purchaseEpochDays = persistentListOf(20_000L)
     )
 
     @Test
@@ -700,7 +701,7 @@ class HemScreenTest {
         // i teckenförklaringen och i texten under diagrammet.
         val benchmark = BenchmarkSeries(
             fundName = "Länsförsäkringar Global Index",
-            points = persistentListOf(20_000L to 0.0, 20_030L to 0.10),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.10)
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -717,7 +718,7 @@ class HemScreenTest {
         // vad man jämförs med och i vilka proportioner (UI-3).
         val benchmark = BenchmarkSeries(
             fundName = "70,0 % Global Index / 30,0 % Räntefond X",
-            points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.07)
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -735,7 +736,7 @@ class HemScreenTest {
         val benchmark = BenchmarkSeries(
             fundName = "Global Index",
             points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
-            unclassifiedFraction = 0.30,
+            unclassifiedFraction = 0.30
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -748,7 +749,7 @@ class HemScreenTest {
         val benchmark = BenchmarkSeries(
             fundName = "Global Index",
             points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
-            unclassifiedFraction = 0.02,
+            unclassifiedFraction = 0.02
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -786,11 +787,11 @@ class HemScreenTest {
                     CheaperAlternative(
                         suggestion = planSuggestion.copy(recordId = 3, kind = SuggestionKind.FEE),
                         sellFeePercent = 1.4,
-                        buyFeePercent = 0.4,
-                    ),
+                        buyFeePercent = 0.4
+                    )
                 ),
-                openWatches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3)),
-            ).withSwitches(emptyList(), LocalDate.now()),
+                openWatches = listOf(OpenSwitchWatch(watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3))
+            ).withSwitches(emptyList(), LocalDate.now())
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = state, onOpenBeslut = { opened++ }) } }
@@ -811,7 +812,7 @@ class HemScreenTest {
         val state = HemUiState(
             loading = false,
             hasHoldings = true,
-            decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))).withSwitches(emptyList(), LocalDate.now()),
+            decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))).withSwitches(emptyList(), LocalDate.now())
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = state) } }
@@ -823,7 +824,7 @@ class HemScreenTest {
     private val planSuggestion = SwitchPlanResolver.Suggestion(
         recordId = 1, planIndex = 0, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
         sellFundName = "Dyr fond", buyFundName = "Billig fond",
-        fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0,
+        fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = 250.0
     )
 }
 

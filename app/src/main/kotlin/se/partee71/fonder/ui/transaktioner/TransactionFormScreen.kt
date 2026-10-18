@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
@@ -34,14 +35,13 @@ import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.navigation.TransactionFormKey
-import java.time.LocalDate
 
 @Composable
 fun TransactionFormScreen(
     formKey: TransactionFormKey,
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: TransactionFormViewModel = hiltViewModel<TransactionFormViewModel, TransactionFormViewModel.Factory> { it.create(formKey) },
+    viewModel: TransactionFormViewModel = hiltViewModel<TransactionFormViewModel, TransactionFormViewModel.Factory> { it.create(formKey) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -62,7 +62,7 @@ fun TransactionFormScreen(
         onFeeTextChange = viewModel::onFeeTextChange,
         onSwitchSelected = viewModel::onSwitchSelected,
         onSave = viewModel::save,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -82,7 +82,7 @@ fun TransactionFormContent(
     onPriceTextChange: (String) -> Unit = {},
     onFeeTextChange: (String) -> Unit = {},
     onSwitchSelected: (SwitchOption) -> Unit = {},
-    onSave: () -> Unit = {},
+    onSave: () -> Unit = {}
 ) {
     if (state.funds.isEmpty() && (!state.prefilled || state.fundLookupFailed)) {
         // En fond ur nyckeln som inte gick att slå upp, och inga bevakade fonder att välja bland:
@@ -90,9 +90,9 @@ fun TransactionFormContent(
         EmptyState(
             title = stringResource(R.string.transaktionsform_no_funds_title),
             body = stringResource(
-                if (state.fundLookupFailed) R.string.transaktionsform_fund_not_found_no_funds else R.string.transaktionsform_no_funds_body,
+                if (state.fundLookupFailed) R.string.transaktionsform_fund_not_found_no_funds else R.string.transaktionsform_no_funds_body
             ),
-            modifier = modifier,
+            modifier = modifier
         )
         return
     }
@@ -101,7 +101,7 @@ fun TransactionFormContent(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
     ) {
         state.followIntro?.let { intro ->
             AppCard(variant = AppCardVariant.Filled, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
@@ -120,7 +120,7 @@ fun TransactionFormContent(
                 state.fundLoading -> stringResource(R.string.transaktionsform_fund_loading)
                 state.fundLookupFailed -> stringResource(R.string.transaktionsform_fund_not_found)
                 else -> null
-            },
+            }
         )
 
         ChoiceChipRow(
@@ -129,14 +129,14 @@ fun TransactionFormContent(
             optionLabel = { type -> stringResource(type.labelRes()) },
             onSelect = onTypeChange,
             enabled = !state.typeLocked,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
 
         DateField(
             label = stringResource(R.string.transaktionsform_date_label),
             date = state.date,
             onDateChange = onDateChange,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
@@ -145,14 +145,14 @@ fun TransactionFormContent(
                 onValueChange = onSharesTextChange,
                 label = stringResource(R.string.transaktionsform_shares_label),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             AppTextField(
                 value = state.priceText,
                 onValueChange = onPriceTextChange,
                 label = stringResource(R.string.transaktionsform_price_label),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
         }
         state.prefillAmountKr?.let { amount ->
@@ -160,7 +160,7 @@ fun TransactionFormContent(
                 stringResource(R.string.format_transaktionsform_prefill_note, MoneyFormat.kr(amount)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
 
@@ -169,7 +169,7 @@ fun TransactionFormContent(
             onValueChange = onFeeTextChange,
             label = stringResource(R.string.transaktionsform_fee_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
 
         state.switchField?.let { field ->
@@ -177,24 +177,24 @@ fun TransactionFormContent(
                 field = field,
                 fundName = state.selectedFund?.name,
                 onSelect = onSwitchSelected,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
 
         AppButton(
             text = stringResource(
-                if (state.prefilled && state.type == TransactionType.SALJ) R.string.transaktionsform_save_sale else R.string.save,
+                if (state.prefilled && state.type == TransactionType.SALJ) R.string.transaktionsform_save_sale else R.string.save
             ),
             onClick = onSave,
             enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
         )
         if (state.blockedBySwitch) {
             Text(
                 stringResource(R.string.transaktionsform_save_blocked),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (state.linkFailed) {
@@ -202,7 +202,7 @@ fun TransactionFormContent(
                 stringResource(R.string.transaktionsform_link_failed),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }

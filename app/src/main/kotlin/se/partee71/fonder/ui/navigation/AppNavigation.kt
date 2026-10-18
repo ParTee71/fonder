@@ -78,7 +78,7 @@ fun AppNavigation() {
         isWorkerRunning = isRunning,
         beslutBadgeCount = beslutBadgeCount,
         backStack = backStack,
-        entryProvider = entries,
+        entryProvider = entries
     )
 }
 
@@ -99,7 +99,7 @@ fun AppNavigationShell(
     isWorkerRunning: Boolean,
     beslutBadgeCount: Int = 0,
     backStack: AppBackStack = rememberAppBackStack(),
-    entryProvider: (AppKey) -> NavEntry<AppKey>,
+    entryProvider: (AppKey) -> NavEntry<AppKey>
 ) {
     val currentKey = backStack.current
     val currentTab = Screen.forKey(currentKey)
@@ -111,7 +111,7 @@ fun AppNavigationShell(
 
     val decorators = listOf(
         rememberSaveableStateHolderNavEntryDecorator<AppKey>(),
-        rememberViewModelStoreNavEntryDecorator<AppKey>(),
+        rememberViewModelStoreNavEntryDecorator<AppKey>()
     )
     val decoratedStacks = Screen.entries.associateWith { tab ->
         rememberDecoratedNavEntries(backStack.stack(tab), decorators, entryProvider)
@@ -146,25 +146,25 @@ fun AppNavigationShell(
                                 start = 8.dp,
                                 end = AppFabMenuDefaults.ReservedEndWidth,
                                 top = toolbarVertical,
-                                bottom = toolbarVertical,
+                                bottom = toolbarVertical
                             ),
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = Alignment.Center
                     ) {
                         val tabs = Screen.entries.map { tab ->
                             AppToolbarTab(
                                 label = stringResource(tab.labelRes),
                                 icon = tab.icon,
-                                badgeCount = beslutBadgeCount.takeIf { tab == Screen.Beslut },
+                                badgeCount = beslutBadgeCount.takeIf { tab == Screen.Beslut }
                             )
                         }
                         AppFloatingToolbar(
                             tabs = tabs,
                             selectedIndex = Screen.entries.indexOf(currentTab),
-                            onSelect = { index -> backStack.select(Screen.entries[index]) },
+                            onSelect = { index -> backStack.select(Screen.entries[index]) }
                         )
                     }
                 }
-            },
+            }
         ) { innerPadding ->
             NavDisplay(
                 entries = shownEntries,
@@ -177,7 +177,7 @@ fun AppNavigationShell(
                 transitionSpec = Transitions.forward,
                 popTransitionSpec = Transitions.back,
                 predictivePopTransitionSpec = Transitions.predictiveBack,
-                onBack = { backStack.pop() },
+                onBack = { backStack.pop() }
             )
             // Bakåt stänger en öppen plusmeny i stället för att lämna fliken – menyns enda bakåthanterare
             // (AppFabMenu får handleBack = false). Den senast registrerade hanteraren tas först, och
@@ -194,12 +194,12 @@ fun AppNavigationShell(
                     AppFabMenuItem(stringResource(R.string.transaktioner_add), { backStack.push(TransactionFormKey()) }),
                     AppFabMenuItem(stringResource(R.string.fab_import_orders), { backStack.push(ImportOrdersKey) }),
                     AppFabMenuItem(stringResource(R.string.fab_import_holdings), { backStack.push(ImportHoldingsKey) }),
-                    AppFabMenuItem(stringResource(R.string.fab_watch_fund), { backStack.push(FundSearchKey) }),
+                    AppFabMenuItem(stringResource(R.string.fab_watch_fund), { backStack.push(FundSearchKey) })
                 ),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding(),
-                handleBack = false,
+                handleBack = false
             )
         }
     }
@@ -222,8 +222,9 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, backStack: AppBack
                 icon = Icons.Outlined.Settings,
                 contentDescription = stringResource(R.string.nav_settings),
                 onClick = { backStack.push(SettingsKey) },
-                variant = AppIconButtonVariant.Tonal,
+                variant = AppIconButtonVariant.Tonal
             )
+
             Screen.Innehav, Screen.Beslut, Screen.Handelser -> Unit
         }
     }
@@ -237,7 +238,7 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, backStack: AppBack
  */
 fun fonderEntries(
     backStack: AppBackStack,
-    scrollSettingsToBackup: MutableState<Boolean>,
+    scrollSettingsToBackup: MutableState<Boolean>
 ): (AppKey) -> NavEntry<AppKey> = entryProvider {
     entry<OversiktKey> {
         HemScreen(
@@ -246,7 +247,7 @@ fun fonderEntries(
             onOpenBackup = {
                 scrollSettingsToBackup.value = true
                 backStack.push(SettingsKey)
-            },
+            }
         )
     }
     entry<InnehavKey> {
@@ -257,7 +258,7 @@ fun fonderEntries(
             onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
             onOpenRiskProfile = { backStack.push(RiskProfileKey) },
             onOpenFacit = { backStack.push(FacitKey) },
-            onFollow = { suggestion -> backStack.push(TransactionFormKey.follow(suggestion)) },
+            onFollow = { suggestion -> backStack.push(TransactionFormKey.follow(suggestion)) }
         )
     }
     // Facit (SET-5) — en skärm i stacken med bakåtpil, från Beslut och från Inställningar (NAV-9).
@@ -266,7 +267,7 @@ fun fonderEntries(
     }
     entry<HandelserKey> {
         TransaktionerScreen(
-            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
+            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) }
         )
     }
     entry<SettingsKey> {
@@ -277,14 +278,14 @@ fun fonderEntries(
             onOpenFacit = { backStack.push(FacitKey) },
             onOpenBenchmarkPicker = { backStack.push(BenchmarkPickerKey) },
             scrollToBackup = scrollSettingsToBackup.value,
-            onScrolledToBackup = { scrollSettingsToBackup.value = false },
+            onScrolledToBackup = { scrollSettingsToBackup.value = false }
         )
     }
     entry<FondDetaljKey> { key ->
         FondDetaljScreen(
             fundId = key.fundId,
             onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
-            onOpenTransactionForm = { formKey -> backStack.push(formKey) },
+            onOpenTransactionForm = { formKey -> backStack.push(formKey) }
         )
     }
     entry<FundSearchKey> {
@@ -311,7 +312,7 @@ fun fonderEntries(
             onPickFund = { fund ->
                 settingsViewModel.chooseBenchmark(fund)
                 backStack.popIfTop(key)
-            },
+            }
         )
     }
     entry<SwitchWatchKey> { key ->
@@ -319,7 +320,7 @@ fun fonderEntries(
             watchId = key.watchId,
             onAddCandidate = { backStack.push(SwitchWatchPickerKey(key.watchId)) },
             onBought = { isin -> backStack.push(TransactionFormKey.bought(key.watchId, isin)) },
-            onClosed = { backStack.popIfTop(key) },
+            onClosed = { backStack.popIfTop(key) }
         )
     }
     // Fondsök i valläge (ANA-13): samma skärm som HEM-10:s referensval, men träffen
@@ -333,7 +334,7 @@ fun fonderEntries(
             onPickFund = { fund ->
                 switchWatchViewModel.onAddCandidate(fund)
                 backStack.popIfTop(key)
-            },
+            }
         )
     }
 }

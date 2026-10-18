@@ -45,7 +45,7 @@ class FondDetaljScreenTest {
         cagr: Double? = 0.05,
         portfolioShareFraction: Double? = 0.25,
         annualizedVolatility: Double? = 0.18,
-        sharpeRatio: Double? = 0.8,
+        sharpeRatio: Double? = 0.8
     ) = FundAnalysisCalc.KeyFigures(
         periodReturns = FundAnalysisCalc.Period.entries.map { FundAnalysisCalc.PeriodReturn(it, amount = 10.0, fraction = 0.05) },
         cagr = cagr,
@@ -54,7 +54,7 @@ class FondDetaljScreenTest {
         gavFraction = 0.2,
         portfolioShareFraction = portfolioShareFraction,
         annualizedVolatility = annualizedVolatility,
-        sharpeRatio = sharpeRatio,
+        sharpeRatio = sharpeRatio
     )
 
     /** Analysens nyckeltal ligger hopfällda (ANA-10) — fäll ut sektionen innan raderna söks. */
@@ -82,7 +82,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -102,7 +102,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.ROD,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -123,7 +123,7 @@ class FondDetaljScreenTest {
             trend = null,
             momentum = null,
             status = null,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -143,7 +143,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -169,8 +169,8 @@ class FondDetaljScreenTest {
                         prices = prices.toImmutableList(),
                         firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
                         netInvested = 500.0,
-                        analysis = null,
-                    ),
+                        analysis = null
+                    )
                 )
             }
         }
@@ -190,8 +190,8 @@ class FondDetaljScreenTest {
                         fundName = "Fond A",
                         prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
                         movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
-                        analysis = null,
-                    ),
+                        analysis = null
+                    )
                 )
             }
         }
@@ -221,7 +221,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GUL,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -240,7 +240,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GUL,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -263,7 +263,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -289,7 +289,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
             momentum = FundAnalysisCalc.MomentumSignal(FundAnalysisCalc.SignalLevel.GUL, -7.0),
             status = FundAnalysisCalc.SignalLevel.ROD,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -311,7 +311,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -336,7 +336,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -358,7 +358,7 @@ class FondDetaljScreenTest {
             trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
             momentum = null,
             status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null,
+            profitTake = null
         )
         composeRule.setContent {
             FonderTheme {
@@ -379,11 +379,11 @@ class FondDetaljScreenTest {
             isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345",
             totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
             companyName = "Länsförsäkringar", risk = null, indexFund = true, startDateEpochDay = null,
-            minimumBuy = null, tags = emptyList(),
+            minimumBuy = null, tags = emptyList()
         ),
         candidateFeePercent = 0.21,
         // Under 1000 kr undviker tusentalsavgränsarens tvetydiga blanksteg (se MoneyFormatTest).
-        annualSavingsKr = 780.0,
+        annualSavingsKr = 780.0
     )
 
     @Test
@@ -402,7 +402,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Loading),
+                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Loading)
                 )
             }
         }
@@ -416,7 +416,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Unavailable),
+                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Unavailable)
                 )
             }
         }
@@ -430,9 +430,11 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false, fundName = "Fond A", prices = prices.toImmutableList(),
-                        feeComparison = FeeComparisonUiState.NoCheaperAlternative,
-                    ),
+                        loading = false,
+                        fundName = "Fond A",
+                        prices = prices.toImmutableList(),
+                        feeComparison = FeeComparisonUiState.NoCheaperAlternative
+                    )
                 )
             }
         }
@@ -446,9 +448,11 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false, fundName = "Fond A", prices = prices.toImmutableList(),
-                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
-                    ),
+                        loading = false,
+                        fundName = "Fond A",
+                        prices = prices.toImmutableList(),
+                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
+                    )
                 )
             }
         }
@@ -463,9 +467,11 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false, fundName = "Fond A", prices = prices.toImmutableList(),
-                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
-                    ),
+                        loading = false,
+                        fundName = "Fond A",
+                        prices = prices.toImmutableList(),
+                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
+                    )
                 )
             }
         }
@@ -488,7 +494,7 @@ class FondDetaljScreenTest {
         fromLevel = 5,
         toLevel = 4,
         feeDeltaPercent = -0.8,
-        switchValueKr = 400.0,
+        switchValueKr = 400.0
     )
 
     private fun holdingState(
@@ -497,7 +503,7 @@ class FondDetaljScreenTest {
         switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
         feeComparison: FeeComparisonUiState? = null,
         comparisons: Map<String, ComparisonUiState> = emptyMap(),
-        recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
+        recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap()
     ) = FondDetaljUiState(
         loading = false,
         fundName = "Fond A",
@@ -508,7 +514,7 @@ class FondDetaljScreenTest {
         switchPlan = switchPlan.toImmutableList(),
         feeComparison = feeComparison,
         comparisons = comparisons.toImmutableMap(),
-        recordedFeeSwitches = recordedFeeSwitches.toImmutableMap(),
+        recordedFeeSwitches = recordedFeeSwitches.toImmutableMap()
     )
 
     private fun greenAnalysis() = FundAnalysisCalc.Analysis(
@@ -517,7 +523,7 @@ class FondDetaljScreenTest {
         trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
         momentum = null,
         status = FundAnalysisCalc.SignalLevel.GRON,
-        profitTake = null,
+        profitTake = null
     )
 
     @Test
@@ -574,7 +580,7 @@ class FondDetaljScreenTest {
             sellFundName = "Fond B",
             buyFundName = "Fond A",
             fromLevel = 4,
-            toLevel = 5,
+            toLevel = 5
         )
         composeRule.setContent {
             FonderTheme {
@@ -607,7 +613,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
-                    onSuggestionExpanded = { expanded += it },
+                    onSuggestionExpanded = { expanded += it }
                 )
             }
         }
@@ -626,8 +632,8 @@ class FondDetaljScreenTest {
                     state = holdingState(
                         analysis = greenAnalysis(),
                         switchPlan = listOf(planSuggestion),
-                        comparisons = mapOf("SE0000581434" to comparison),
-                    ),
+                        comparisons = mapOf("SE0000581434" to comparison)
+                    )
                 )
             }
         }
@@ -645,8 +651,8 @@ class FondDetaljScreenTest {
                     state = holdingState(
                         analysis = greenAnalysis(),
                         switchPlan = listOf(planSuggestion),
-                        comparisons = mapOf("SE0000581434" to ComparisonUiState.Unavailable),
-                    ),
+                        comparisons = mapOf("SE0000581434" to ComparisonUiState.Unavailable)
+                    )
                 )
             }
         }
@@ -660,7 +666,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), feeComparison = FeeComparisonUiState.NoCheaperAlternative),
+                    state = holdingState(analysis = greenAnalysis(), feeComparison = FeeComparisonUiState.NoCheaperAlternative)
                 )
             }
         }
@@ -677,8 +683,8 @@ class FondDetaljScreenTest {
                 FondDetaljContent(
                     state = holdingState(
                         analysis = greenAnalysis(),
-                        feeComparison = FeeComparisonUiState.Found(persistentListOf()),
-                    ).copy(dismissedPlanCount = 1, dismissedFeeCount = 1),
+                        feeComparison = FeeComparisonUiState.Found(persistentListOf())
+                    ).copy(dismissedPlanCount = 1, dismissedFeeCount = 1)
                 )
             }
         }
@@ -715,7 +721,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
-                    onFollow = { followed = it.recordId },
+                    onFollow = { followed = it.recordId }
                 )
             }
         }
@@ -730,7 +736,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion.copy(followed = true))),
+                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion.copy(followed = true)))
                 )
             }
         }
@@ -751,8 +757,8 @@ class FondDetaljScreenTest {
                 FondDetaljContent(
                     state = holdingState(
                         analysis = greenAnalysis(),
-                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
-                    ),
+                        feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
+                    )
                 )
             }
         }
@@ -770,9 +776,9 @@ class FondDetaljScreenTest {
                     state = holdingState(
                         analysis = greenAnalysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
-                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = false)),
+                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = false))
                     ),
-                    onFollowFee = { followed = it },
+                    onFollowFee = { followed = it }
                 )
             }
         }
@@ -791,8 +797,8 @@ class FondDetaljScreenTest {
                     state = holdingState(
                         analysis = greenAnalysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
-                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = true)),
-                    ),
+                        recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = true))
+                    )
                 )
             }
         }

@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -45,8 +47,6 @@ import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import java.time.LocalDate
-import javax.inject.Inject
 
 /** Ett innehav flaggat gul eller röd i analysen (HEM-4), med det underliggande resultatet för visning av triggade signaler. */
 data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysis)
@@ -63,7 +63,7 @@ data class BenchmarkSeries(
     val fundName: String,
     val points: ImmutableList<Pair<Long, Double>>,
     /** Andel av portföljen som varken kunde klassificeras som aktier eller räntor (blandfonder, okänd typ) — vikterna vilar inte på den delen. */
-    val unclassifiedFraction: Double = 0.0,
+    val unclassifiedFraction: Double = 0.0
 )
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
@@ -73,7 +73,7 @@ data class AnalysisSummary(
     val gulCount: Int = 0,
     val rodCount: Int = 0,
     /** Bara gul/röd, sorterat mest allvarligt (röd) först — se [HemScreen]. */
-    val flagged: ImmutableList<FlaggedHolding> = persistentListOf(),
+    val flagged: ImmutableList<FlaggedHolding> = persistentListOf()
 )
 
 @Immutable
@@ -87,7 +87,7 @@ data class HemUiState(
     val performance: PortfolioPerformanceCalc.PortfolioPerformance = PortfolioPerformanceCalc.PortfolioPerformance(
         day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
         week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
     ),
     val analysisSummary: AnalysisSummary = AnalysisSummary(),
     /** Portföljens tidsviktade avkastning i procent per NAV-dag (HEM-9, issue #96/#116). Tom = historiken räcker inte till en enda punkt. */
@@ -118,7 +118,7 @@ data class HemUiState(
     /** Fondmetadatan slås upp just nu (nätverk per okänd ISIN) — avgifts- och riskkortet vilar på den. */
     val metadataWorking: Boolean = false,
     /** Påminnelsen om att säkerhetskopiera (HEM-12), null när innehållet redan finns i en kopia. */
-    val backupReminder: BackupReminder? = null,
+    val backupReminder: BackupReminder? = null
 ) {
     val isEmpty: Boolean get() = !loading && !hasHoldings
 
@@ -155,7 +155,7 @@ class HemViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
-    private val backupStatusRepository: BackupStatusRepository,
+    private val backupStatusRepository: BackupStatusRepository
 ) : ViewModel() {
 
     /**
@@ -167,7 +167,7 @@ class HemViewModel @Inject constructor(
     private data class PortfolioInput(
         val funds: List<Fund>,
         val holdings: List<Holding>,
-        val transactions: List<Transaction>,
+        val transactions: List<Transaction>
     )
 
     private val baseHoldings: Flow<PortfolioInput> =
@@ -190,7 +190,7 @@ class HemViewModel @Inject constructor(
                 // blandningen, inte en del av den: väljer man en fond är det den man vill mätas
                 // mot, inte den plus appens gissning om resten.
                 chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: derived
-            },
+            }
         ) { riskProfile, benchmark ->
             Settings(riskProfile, benchmark)
         }
@@ -250,7 +250,7 @@ class HemViewModel @Inject constructor(
             combine(
                 fundPriceRepository.observeLatestPrices(fundIds),
                 metadata,
-                settings,
+                settings
             ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
@@ -269,7 +269,7 @@ class HemViewModel @Inject constructor(
                     fund.fundId to fundPriceRepository.priceHistory(
                         fundId = fund.fundId,
                         fromEpochDay = since.toEpochDay(),
-                        toEpochDay = today.toEpochDay(),
+                        toEpochDay = today.toEpochDay()
                     )
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
@@ -290,7 +290,7 @@ class HemViewModel @Inject constructor(
                         refs = currentSettings.benchmark,
                         transactions = transactions,
                         unclassifiedFraction = IndexBenchmarkSelector.exposureSplit(exposure.byType).unclassifiedFraction,
-                        today = today,
+                        today = today
                     ),
                     purchaseEpochDays = transactions
                         .filter { it.type == TransactionType.KOP }
@@ -305,9 +305,9 @@ class HemViewModel @Inject constructor(
                     riskLevelDeviations = riskProfile?.let {
                         PortfolioRiskCalc.deviationByLevel(
                             targetAllocation = it.effectiveAllocation,
-                            actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel),
+                            actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel)
                         )
-                    }.orEmpty().toImmutableList(),
+                    }.orEmpty().toImmutableList()
                 )
             }
         }.combine(pendingDecisionsSource.observe()) { state, decisions ->
@@ -322,7 +322,7 @@ class HemViewModel @Inject constructor(
         }.combine(
             combine(fundPriceRefreshScheduler.observeRunningWork(), metadataLoading) { running, metadataPending ->
                 running to metadataPending
-            },
+            }
         ) { state, (running, metadataPending) ->
             // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
             // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
@@ -330,12 +330,12 @@ class HemViewModel @Inject constructor(
             state.copy(
                 pricesWorking = BackgroundWork.PRICE_REFRESH in running,
                 benchmarkWorking = BackgroundWork.BENCHMARK_SCAN in running,
-                metadataWorking = metadataPending,
+                metadataWorking = metadataPending
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = HemUiState(),
+            initialValue = HemUiState()
         )
 
     /**
@@ -350,7 +350,7 @@ class HemViewModel @Inject constructor(
         enriched: List<Holding>,
         firstPurchaseByFund: Map<String, LocalDate>,
         fullHistoryByFundId: Map<String, List<FundPrice>>,
-        today: LocalDate,
+        today: LocalDate
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
@@ -371,7 +371,7 @@ class HemViewModel @Inject constructor(
                 priceHistory = historyByFundId[holding.fund.fundId].orEmpty(),
                 firstPurchaseDate = firstPurchase,
                 portfolioTotalValue = portfolioTotalValue,
-                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories),
+                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
             ) ?: return@mapNotNull null
             FlaggedHolding(holding.fund, analysis)
         }
@@ -383,7 +383,7 @@ class HemViewModel @Inject constructor(
             flagged = analyses
                 .filter { it.analysis.status == FundAnalysisCalc.SignalLevel.GUL || it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
                 .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
-                .toImmutableList(),
+                .toImmutableList()
         )
     }
 
@@ -421,14 +421,14 @@ class HemViewModel @Inject constructor(
         refs: List<BenchmarkComponentRef>,
         transactions: List<Transaction>,
         unclassifiedFraction: Double,
-        today: LocalDate,
+        today: LocalDate
     ): BenchmarkSeries? {
         if (refs.isEmpty() || transactions.isEmpty()) return null
         val since = LocalDate.ofEpochDay(transactions.minOf { it.epochDay })
         val components = refs.map { ref ->
             PortfolioReturnSeriesCalc.BenchmarkComponent(
                 weight = ref.weight,
-                history = fundPriceRepository.priceHistory(ref.isin, since.toEpochDay(), today.toEpochDay()),
+                history = fundPriceRepository.priceHistory(ref.isin, since.toEpochDay(), today.toEpochDay())
             )
         }
         val series = PortfolioReturnSeriesCalc.benchmark(transactions, components) ?: return null
@@ -459,6 +459,6 @@ class HemViewModel @Inject constructor(
     private data class Settings(
         val riskProfile: RiskProfile?,
         /** Referensblandningen (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
-        val benchmark: List<BenchmarkComponentRef>,
+        val benchmark: List<BenchmarkComponentRef>
     )
 }

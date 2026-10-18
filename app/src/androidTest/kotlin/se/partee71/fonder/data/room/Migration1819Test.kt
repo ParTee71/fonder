@@ -44,7 +44,7 @@ class Migration1819Test {
                     "comparisonResolvedAtEpochDay, developmentOneYear) VALUES " +
                     "('LU0122376428', 'BGF World Energy A2', '111', 2.55, 1.75, 'Energi', 'EQUITY_FUND', 'BlackRock', 5, 0, 11000, 100.0, '[]', 0, 20740, 20740, 'SE1', 1.1, '[\"SE1\"]', 20739, 61.2), " +
                     "('SE0005932993', 'Handelsbanken Asien Småbolag (A1 SEK)', '222', 2.07, 1.6, 'Asien', 'EQUITY_FUND', 'Handelsbanken', 5, 0, 16000, 100.0, '[]', 1, 20741, 20741, NULL, NULL, '[]', NULL, 55.0), " +
-                    "('SE0000000001', 'Aldrig prövad', '333', 0.2, 0.2, NULL, 'EQUITY_FUND', NULL, 4, 1, NULL, NULL, '[]', NULL, NULL, 20742, NULL, NULL, '[]', NULL, NULL)",
+                    "('SE0000000001', 'Aldrig prövad', '333', 0.2, 0.2, NULL, 'EQUITY_FUND', NULL, 4, 1, NULL, NULL, '[]', NULL, NULL, 20742, NULL, NULL, '[]', NULL, NULL)"
             )
             old.version = 18
         }

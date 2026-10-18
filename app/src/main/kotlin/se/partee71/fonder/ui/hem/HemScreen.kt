@@ -52,7 +52,7 @@ fun HemScreen(
     onOpenBeslut: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenBackup: () -> Unit = {},
-    viewModel: HemViewModel = hiltViewModel(),
+    viewModel: HemViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -62,17 +62,10 @@ fun HemScreen(
         onFundClick = onFundClick,
         onOpenBeslut = onOpenBeslut,
         onOpenBackup = onOpenBackup,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
-/**
- * Tillståndsdriven, testbar del av [HemScreen] — inget ViewModel/Hilt-beroende (issue #14).
- * `LazyColumn` (samma mönster som [se.partee71.fonder.ui.fond.FondDetaljScreen], regel 4) —
- * en vanlig `Column(fillMaxSize())` klippte tyst innehåll som växte förbi skärmhöjden
- * (analys-summeringskortets flaggade fonder, HEM-4, plus avgiftskortets rader, HEM-5) i
- * stället för att göra det nåbart (UI-5, issue #63).
- */
 /**
  * Adresserar Hems lista för `performScrollToIndex` i tester (UI-5, issue #66) — samma skäl och
  * samma mönster som Portfölj, Facit och Pågående byte redan använder. Korten ligger som var sitt
@@ -82,6 +75,13 @@ fun HemScreen(
  */
 const val HEM_LIST_TEST_TAG = "hem_list"
 
+/**
+ * Tillståndsdriven, testbar del av [HemScreen] — inget ViewModel/Hilt-beroende (issue #14).
+ * `LazyColumn` (samma mönster som [se.partee71.fonder.ui.fond.FondDetaljScreen], regel 4) —
+ * en vanlig `Column(fillMaxSize())` klippte tyst innehåll som växte förbi skärmhöjden
+ * (analys-summeringskortets flaggade fonder, HEM-4, plus avgiftskortets rader, HEM-5) i
+ * stället för att göra det nåbart (UI-5, issue #63).
+ */
 @Composable
 fun HemContent(
     state: HemUiState,
@@ -89,7 +89,7 @@ fun HemContent(
     onFundClick: (String) -> Unit = {},
     onOpenBeslut: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     when {
         // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
@@ -98,7 +98,7 @@ fun HemContent(
             state.backupReminder?.let { BackupReminderRow(it, onOpenBackup, Modifier.padding(16.dp)) }
             EmptyState(
                 title = stringResource(R.string.hem_empty_title),
-                body = stringResource(R.string.hem_empty_body),
+                body = stringResource(R.string.hem_empty_body)
             )
         }
 
@@ -107,7 +107,7 @@ fun HemContent(
         else -> PullToRefreshContainer(
             refreshing = state.pricesWorking,
             onRefresh = onRefresh,
-            modifier = modifier,
+            modifier = modifier
         ) {
             // Ordningen enligt Översiktens mockup: värdet, det som väntar på beslut, jämförelsen
             // mot index och påminnelsen om säkerhetskopia; resten av Hems kort under dem.
@@ -125,14 +125,14 @@ fun HemContent(
                     AnalysisSummaryCard(
                         summary = state.analysisSummary,
                         working = state.analysisWorking,
-                        onFundClick = onFundClick,
+                        onFundClick = onFundClick
                     )
                 }
                 item(contentType = "fee") {
                     FeeCard(
                         summary = state.feeSummary,
                         working = state.feeWorking,
-                        onFundClick = onFundClick,
+                        onFundClick = onFundClick
                     )
                 }
                 state.riskProfile?.let { riskProfile ->
@@ -141,7 +141,7 @@ fun HemContent(
                             riskProfile = riskProfile,
                             portfolioRisk = state.portfolioRisk,
                             levelDeviations = state.riskLevelDeviations,
-                            working = state.riskWorking,
+                            working = state.riskWorking
                         )
                     }
                 }
@@ -155,7 +155,7 @@ private fun TotalCard(state: HemUiState) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(
             title = stringResource(R.string.portfolj_total_value),
-            working = state.totalWorking,
+            working = state.totalWorking
         )
         val fraction = state.totalGainLossFraction
         if (fraction != null) {
@@ -163,7 +163,7 @@ private fun TotalCard(state: HemUiState) {
             Text(
                 "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
                 style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = ReturnColors.forAmount(state.totalGainLoss),
+                color = ReturnColors.forAmount(state.totalGainLoss)
             )
             ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
         } else {
@@ -171,7 +171,7 @@ private fun TotalCard(state: HemUiState) {
             Text(
                 stringResource(R.string.portfolj_price_missing),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -186,13 +186,13 @@ private fun TotalCard(state: HemUiState) {
 @Composable
 private fun PerformanceCard(
     performance: PortfolioPerformanceCalc.PortfolioPerformance,
-    working: Boolean,
+    working: Boolean
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         CardTitleRow(
             title = stringResource(R.string.hem_performance_title),
             working = working,
-            modifier = Modifier.padding(bottom = 4.dp),
+            modifier = Modifier.padding(bottom = 4.dp)
         )
         val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
         PeriodRow(
@@ -200,7 +200,7 @@ private fun PerformanceCard(
             amount = dayAmount,
             fraction = dayFraction,
             partial = dayPartial,
-            modifier = Modifier.padding(vertical = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp)
         )
         val (weekAmount, weekFraction, weekPartial) = performance.week.toRowArgs()
         PeriodRow(
@@ -208,7 +208,7 @@ private fun PerformanceCard(
             amount = weekAmount,
             fraction = weekFraction,
             partial = weekPartial,
-            modifier = Modifier.padding(vertical = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp)
         )
         val (monthAmount, monthFraction, monthPartial) = performance.month.toRowArgs()
         PeriodRow(
@@ -216,7 +216,7 @@ private fun PerformanceCard(
             amount = monthAmount,
             fraction = monthFraction,
             partial = monthPartial,
-            modifier = Modifier.padding(vertical = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp)
         )
     }
 }
@@ -247,14 +247,14 @@ private fun ReturnChartCard(state: HemUiState) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(
             title = stringResource(R.string.hem_return_chart_title),
-            working = state.returnChartWorking,
+            working = state.returnChartWorking
         )
         if (state.returnSeries.isEmpty) {
             Text(
                 stringResource(R.string.hem_return_chart_insufficient),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
             return@AppCard
         }
@@ -265,13 +265,13 @@ private fun ReturnChartCard(state: HemUiState) {
             primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
             comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
             valueAxis = ChartValueAxis.PROCENT,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         Text(
             stringResource(R.string.hem_return_chart_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         Text(
             if (benchmark != null) {
@@ -281,7 +281,7 @@ private fun ReturnChartCard(state: HemUiState) {
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
         // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
         // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
@@ -290,11 +290,11 @@ private fun ReturnChartCard(state: HemUiState) {
             Text(
                 stringResource(
                     R.string.format_hem_return_chart_benchmark_unclassified,
-                    MoneyFormat.percent(benchmark.unclassifiedFraction),
+                    MoneyFormat.percent(benchmark.unclassifiedFraction)
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (state.returnSeries.partial) {
@@ -302,7 +302,7 @@ private fun ReturnChartCard(state: HemUiState) {
                 stringResource(R.string.hem_return_chart_partial),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }
@@ -314,6 +314,7 @@ private data class PeriodRowArgs(val amount: Double?, val fraction: Double?, val
 private fun PortfolioPerformanceCalc.PortfolioPeriodResult.toRowArgs(): PeriodRowArgs = when (this) {
     is PortfolioPerformanceCalc.PortfolioPeriodResult.Available ->
         PeriodRowArgs(amount, fraction, partial)
+
     PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory ->
         PeriodRowArgs(null, null, partial = false)
 }
@@ -328,7 +329,7 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFu
                 stringResource(R.string.hem_analysis_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
         } else {
             Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -361,20 +362,20 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundCl
             label = stringResource(R.string.hem_fee_total_label),
             amount = null,
             fraction = null,
-            valueText = MoneyFormat.kr(summary.totalAnnualFeeKr),
+            valueText = MoneyFormat.kr(summary.totalAnnualFeeKr)
         )
         Text(
             stringResource(R.string.hem_fee_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
         if (summary.unknownFeeCount > 0) {
             Text(
                 stringResource(R.string.format_hem_fee_unknown, summary.unknownFeeCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (summary.comparableCount > 0) {
@@ -383,11 +384,11 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundCl
                     R.string.format_hem_fee_savings,
                     MoneyFormat.kr(summary.totalAnnualSavingsKr),
                     summary.comparedCount,
-                    summary.comparableCount,
+                    summary.comparableCount
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (summary.byHolding.isNotEmpty()) {
@@ -406,13 +407,13 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
         onClick = onClick,
         variant = AppCardVariant.Filled,
         contentPadding = PaddingValues(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         PeriodRow(
             label = holdingFee.fund.name,
             amount = null,
             fraction = null,
-            valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+            valueText = MoneyFormat.kr(holdingFee.annualFeeKr)
         )
         // Aldrig jämfört (ingen text) och jämfört-utan-träff ("Redan bland de billigaste",
         // samma text som ANA-9:s eget kort i Fonddetalj — regel 4) är skilda tillstånd,
@@ -424,13 +425,14 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
                 stringResource(R.string.format_hem_fee_holding_savings, MoneyFormat.kr(savings)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp)
             )
+
             holdingFee.wasCompared -> Text(
                 stringResource(R.string.fee_comparison_none_cheaper),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }
@@ -442,11 +444,11 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
         onClick = onClick,
         variant = AppCardVariant.Filled,
         contentPadding = PaddingValues(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             StatusDot(level = flagged.analysis.status!!, modifier = Modifier.padding(end = 12.dp))
             Column {
@@ -454,7 +456,7 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
                 Text(
                     statusTriggerMessages(flagged.analysis).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -479,7 +481,7 @@ private fun RiskCard(
     riskProfile: RiskProfile,
     portfolioRisk: PortfolioRiskCalc.Result,
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
-    working: Boolean,
+    working: Boolean
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
@@ -488,46 +490,46 @@ private fun RiskCard(
             amount = null,
             fraction = null,
             valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         PeriodRow(
             label = stringResource(R.string.hem_risk_actual_label),
             amount = null,
             fraction = null,
             valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
         Text(
             stringResource(R.string.hem_risk_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
         if (portfolioRisk.excludedCount > 0) {
             Text(
                 stringResource(R.string.format_hem_risk_excluded, portfolioRisk.excludedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (levelDeviations.isNotEmpty()) {
             Text(
                 stringResource(R.string.hem_risk_distribution_title),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp)
             )
             levelDeviations.sortedBy { it.level }.forEach { deviation ->
                 Text(
                     stringResource(R.string.format_hem_risk_level, deviation.level),
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 8.dp)
                 )
                 ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
                 ExposureBar(
                     label = stringResource(R.string.hem_risk_actual_bar_label),
                     fraction = deviation.actualFraction,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    color = MaterialTheme.colorScheme.tertiary
                 )
             }
         }
@@ -540,18 +542,20 @@ private fun RiskCard(
  * Inställningars säkerhetskopiering; själva kopian tas där (SET-6, SET-7).
  */
 @Composable
-private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit, modifier: Modifier) {
+private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit, modifier: Modifier = Modifier) {
     val body = when {
         reminder.lastBackupEpochMillis == null -> stringResource(R.string.hem_backup_reminder_never)
+
         reminder.newTransactions > 0 -> pluralStringResource(
             R.plurals.format_hem_backup_reminder_new_transactions,
             reminder.newTransactions,
             reminder.newTransactions,
-            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis),
+            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis)
         )
+
         else -> stringResource(
             R.string.format_hem_backup_reminder_last,
-            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis),
+            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis)
         )
     }
     ReminderRow(
@@ -560,7 +564,7 @@ private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit
         actionLabel = stringResource(R.string.hem_backup_reminder_action),
         onAction = onOpenBackup,
         // Samma ytterkant som korten; marginalen väljs av platsen (överst i tomt läge, under diagrammet annars).
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -574,7 +578,7 @@ private fun DecisionsRow(decisions: PendingDecisions, onOpen: () -> Unit) {
     val body = listOf(
         R.plurals.format_hem_decisions_suggestions to decisions.switches.proposedCount,
         R.plurals.format_hem_decisions_sold to decisions.switches.soldCount,
-        R.plurals.format_hem_decisions_cheaper to decisions.switches.feeCount,
+        R.plurals.format_hem_decisions_cheaper to decisions.switches.feeCount
     )
         .filter { (_, count) -> count > 0 }
         .map { (plural, count) -> pluralStringResource(plural, count, count) }
@@ -587,6 +591,6 @@ private fun DecisionsRow(decisions: PendingDecisions, onOpen: () -> Unit) {
         count = decisions.count,
         tone = ReminderRowTone.Accent,
         chevron = true,
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = 16.dp)
     )
 }

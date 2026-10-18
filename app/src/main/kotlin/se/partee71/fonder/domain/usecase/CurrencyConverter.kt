@@ -32,12 +32,11 @@ object CurrencyConverter {
      * hellre en lucka i historiken än ett belopp räknat på en gissad kurs (samma princip som
      * POR-3, aldrig ett felaktigt värde).
      */
-    fun toValueCurrency(prices: List<FundPrice>, ratesByEpochDay: Map<Long, Double>): List<FundPrice> =
-        prices.mapNotNull { price ->
-            if (price.currency.equals(FundPrice.VALUE_CURRENCY, ignoreCase = true)) return@mapNotNull price
-            val rate = rateFor(price.epochDay, ratesByEpochDay) ?: return@mapNotNull null
-            price.copy(nav = price.nav * rate, currency = FundPrice.VALUE_CURRENCY)
-        }
+    fun toValueCurrency(prices: List<FundPrice>, ratesByEpochDay: Map<Long, Double>): List<FundPrice> = prices.mapNotNull { price ->
+        if (price.currency.equals(FundPrice.VALUE_CURRENCY, ignoreCase = true)) return@mapNotNull price
+        val rate = rateFor(price.epochDay, ratesByEpochDay) ?: return@mapNotNull null
+        price.copy(nav = price.nav * rate, currency = FundPrice.VALUE_CURRENCY)
+    }
 
     /** Kursen för [epochDay], eller närmast föregående inom [MAX_RATE_AGE_DAYS]. Null om ingen finns. */
     internal fun rateFor(epochDay: Long, ratesByEpochDay: Map<Long, Double>): Double? {

@@ -41,7 +41,7 @@ class UiConsistencyTest {
         val files = production.files.map { relativePath(it.path) }
         assertTrue(
             "Konsist hittade inte HemScreen.kt – fel modul eller arbetskatalog? ${files.take(5)}",
-            "app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt" in files,
+            "app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt" in files
         )
     }
 
@@ -56,7 +56,7 @@ class UiConsistencyTest {
         if (hits.isNotEmpty()) {
             fail(
                 "Regel 4: förbjudna mönster (skill shared-ui-components).\n" + hits.joinToString("\n") +
-                    "\nUndantag bara via ui-allowlist.txt med motivering och användarens ok.",
+                    "\nUndantag bara via ui-allowlist.txt med motivering och användarens ok."
             )
         }
     }

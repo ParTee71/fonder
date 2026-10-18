@@ -1,8 +1,8 @@
 package se.partee71.fonder.ui.riskprofil
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +71,7 @@ class RiskProfilViewModelTest {
         Dispatchers.setMain(dispatcher)
         dataStore = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("riskprofil_test.preferences_pb") },
+            produceFile = { tempFolder.newFile("riskprofil_test.preferences_pb") }
         )
         preferencesRepository = PreferencesRepository(dataStore)
     }
@@ -251,8 +251,8 @@ class RiskProfilViewModelTest {
         preferencesRepository.setRiskProfile(
             RiskProfile(
                 targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-                answers = RiskProfileAnswers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            ),
+                answers = RiskProfileAnswers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT)
+            )
         )
 
         val vm = viewModel()

@@ -83,7 +83,7 @@ object PortfolioReturnSeriesCalc {
     fun compute(
         funds: List<Fund>,
         transactions: List<Transaction>,
-        historyByFundId: Map<String, List<FundPrice>>,
+        historyByFundId: Map<String, List<FundPrice>>
     ): Result {
         if (transactions.isEmpty()) return Result.EMPTY
         val firstTransactionDay = transactions.minOf { it.epochDay }
@@ -228,7 +228,7 @@ object PortfolioReturnSeriesCalc {
                     fundId = fundId,
                     shares = amount / nav,
                     pricePerShare = nav,
-                    fee = 0.0,
+                    fee = 0.0
                 )
             }
         }
@@ -245,7 +245,7 @@ object PortfolioReturnSeriesCalc {
         fundId: String,
         day: Long,
         sortedHistory: Map<String, List<FundPrice>>,
-        cursor: MutableMap<String, Int>,
+        cursor: MutableMap<String, Int>
     ): Double? {
         val prices = sortedHistory[fundId] ?: return null
         var index = cursor[fundId] ?: -1

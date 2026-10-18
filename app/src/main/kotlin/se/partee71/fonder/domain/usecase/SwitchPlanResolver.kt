@@ -1,10 +1,10 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
 
 /**
  * Gör den senast inspelade bytesplanen ([SuggestionRecord], HEM-8, issue #70) visningsbar —
@@ -57,7 +57,7 @@ object SwitchPlanResolver {
          * i en tidigare inspelning — så bytet är **sålt**, inte bara föreslaget. Sätts av
          * [InProgressSwitches] (Beslut och Fonddetalj), inte här: resolvern ser bara inspelningen.
          */
-        val inProgress: Boolean = false,
+        val inProgress: Boolean = false
     )
 
     /**
@@ -86,7 +86,7 @@ object SwitchPlanResolver {
         latestBatch: List<SuggestionRecord>,
         metadataByIsin: Map<String, FundMetadata>,
         today: LocalDate,
-        emptiedAtEpochMillis: Long? = null,
+        emptiedAtEpochMillis: Long? = null
     ): List<Suggestion> {
         if (accountType != AccountType.ISK_KF) return emptyList()
 
@@ -133,7 +133,7 @@ object SwitchPlanResolver {
             feeDeltaPercent = buyFee - sellFee,
             switchValueKr = record.switchValueKr,
             followed = record.followed == true,
-            kind = record.kind,
+            kind = record.kind
         )
     }
 

@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.bytesfonster
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -36,13 +37,12 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 /**
  * Skärmen Pågående byte (ANA-12/ANA-13, issue #114) — automatiska förslag, ankring av
@@ -56,7 +56,7 @@ class SwitchWatchViewModelTest {
     private val soldAt = today.minusDays(3)
 
     private val funds = MutableStateFlow(
-        listOf(Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SALJ")),
+        listOf(Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SALJ"))
     )
 
     private val fakeTransactionRepo = object : TransactionRepository {
@@ -77,8 +77,7 @@ class SwitchWatchViewModelTest {
     private val fakePriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = null
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
-            historyByIsin[fundId].orEmpty().map { (day, nav) -> FundPrice(fundId, day, nav, "SEK") }
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = historyByIsin[fundId].orEmpty().map { (day, nav) -> FundPrice(fundId, day, nav, "SEK") }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?) = true
         override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
@@ -121,14 +120,14 @@ class SwitchWatchViewModelTest {
         indexFund = false,
         startDateEpochDay = null,
         minimumBuy = null,
-        tags = emptyList(),
+        tags = emptyList()
     )
 
     private suspend fun startWatch(
         targetLevel: Int? = 5,
         candidates: List<SwitchWatchCandidate> = emptyList(),
         sourceRecordId: Long? = null,
-        proceedsKr: Double? = 10_000.0,
+        proceedsKr: Double? = 10_000.0
     ): Long = switchWatchRepo.start(
         SwitchWatch(
             sellIsin = "SE_SALJ",
@@ -137,8 +136,8 @@ class SwitchWatchViewModelTest {
             proceedsKr = proceedsKr,
             targetLevel = targetLevel,
             sourceRecordId = sourceRecordId,
-            candidates = candidates,
-        ),
+            candidates = candidates
+        )
     )
 
     private fun viewModel(watchId: Long) = SwitchWatchViewModel(
@@ -148,7 +147,7 @@ class SwitchWatchViewModelTest {
         metadataRepo,
         fakeTransactionRepo,
         testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo, riskProfile, fakePriceRepo),
-        scheduler,
+        scheduler
     )
 
     @Test
@@ -329,13 +328,13 @@ class SwitchWatchViewModelTest {
             "SE_A" to listOf(
                 soldAt.minusDays(1).toEpochDay() to 90.0,
                 soldAt.toEpochDay() to 100.0,
-                today.toEpochDay() to 105.0,
-            ),
+                today.toEpochDay() to 105.0
+            )
         )
         metadataRepo.metadataByIsin = mapOf("SE_A" to metadata("SE_A", risk = 5, fee = 0.35))
         val watchId = startWatch(
             targetLevel = null,
-            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A", source = SwitchWatchCandidateSource.MANUELL)),
+            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A", source = SwitchWatchCandidateSource.MANUELL))
         )
 
         val vm = viewModel(watchId)
@@ -361,7 +360,7 @@ class SwitchWatchViewModelTest {
         historyByIsin = emptyMap()
         val watchId = startWatch(
             targetLevel = null,
-            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A")),
+            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A"))
         )
 
         val vm = viewModel(watchId)
@@ -389,7 +388,7 @@ class SwitchWatchViewModelTest {
         val watchId = startWatch(
             targetLevel = null,
             candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A")),
-            sourceRecordId = 7,
+            sourceRecordId = 7
         )
 
         val vm = viewModel(watchId)
@@ -401,7 +400,7 @@ class SwitchWatchViewModelTest {
 
         assertEquals(
             TransactionFormKey(fundIsin = "SE_A", type = TransactionType.KOP, watchId = watchId),
-            TransactionFormKey.bought(watchId, "SE_A"),
+            TransactionFormKey.bought(watchId, "SE_A")
         )
         assertTrue(switchWatchRepo.watches.value.single().isOpen)
     }
@@ -432,7 +431,7 @@ class SwitchWatchViewModelTest {
             targetLevel = null,
             candidates = (1..SwitchWatchCalc.MAX_CANDIDATES).map {
                 SwitchWatchCandidate(isin = "SE_$it", name = "Fond $it")
-            },
+            }
         )
 
         val vm = viewModel(watchId)
@@ -456,7 +455,7 @@ class SwitchWatchViewModelTest {
         historyByIsin = mapOf("SE_A" to listOf(soldAt.toEpochDay() to 100.0, today.toEpochDay() to 101.0))
         val watchId = startWatch(
             targetLevel = null,
-            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A")),
+            candidates = listOf(SwitchWatchCandidate(isin = "SE_A", name = "Fond A"))
         )
 
         val vm = viewModel(watchId)
@@ -489,11 +488,9 @@ class SwitchWatchViewModelTest {
 
     // --- Målnivå och indexfilter på skärmen (issue #150) ---
 
-    private fun auto(isin: String, position: Int) =
-        SwitchWatchCandidate(isin = isin, name = "Fond $isin", source = SwitchWatchCandidateSource.AUTO, position = position)
+    private fun auto(isin: String, position: Int) = SwitchWatchCandidate(isin = isin, name = "Fond $isin", source = SwitchWatchCandidateSource.AUTO, position = position)
 
-    private fun manual(isin: String, position: Int) =
-        SwitchWatchCandidate(isin = isin, name = "Egen $isin", source = SwitchWatchCandidateSource.MANUELL, position = position)
+    private fun manual(isin: String, position: Int) = SwitchWatchCandidate(isin = isin, name = "Egen $isin", source = SwitchWatchCandidateSource.MANUELL, position = position)
 
     @Test
     fun `utan malniva med riskprofil forvaljs nivan med storst gap och planen raknas om`() = runTest(dispatcher) {
@@ -572,7 +569,7 @@ class SwitchWatchViewModelTest {
         assertEquals(listOf("SE_EGEN", "SE_B", "SE_C", "SE_D"), stored.candidates.map { it.isin })
         assertEquals(
             listOf(SwitchWatchCandidateSource.MANUELL) + List(SwitchWatchCalc.AUTO_CANDIDATES) { SwitchWatchCandidateSource.AUTO },
-            stored.candidates.map { it.source },
+            stored.candidates.map { it.source }
         )
         assertEquals(listOf(3 to setOf("SE_SALJ", "SE_EGEN")), metadataRepo.switchCandidateCalls)
         assertEquals(1, scheduler.switchPlanScans)
@@ -721,9 +718,13 @@ class SwitchWatchViewModelTest {
     }
 
     private fun viewModelWithPreselectionTransactions(watchId: Long, transactions: TransactionRepository) = SwitchWatchViewModel(
-        watchId, switchWatchRepo, fakePriceRepo, metadataRepo, fakeTransactionRepo,
+        watchId,
+        switchWatchRepo,
+        fakePriceRepo,
+        metadataRepo,
+        fakeTransactionRepo,
         testTargetLevelPreselection(transactions, switchWatchRepo, riskProfile, fakePriceRepo),
-        scheduler,
+        scheduler
     )
 
     @Test
@@ -828,9 +829,13 @@ class SwitchWatchViewModelTest {
             }
         }
         val vm = SwitchWatchViewModel(
-            watchId, flaky, fakePriceRepo, metadataRepo, fakeTransactionRepo,
+            watchId,
+            flaky,
+            fakePriceRepo,
+            metadataRepo,
+            fakeTransactionRepo,
             testTargetLevelPreselection(fakeTransactionRepo, flaky, riskProfile, fakePriceRepo),
-            scheduler,
+            scheduler
         )
 
         vm.uiState.test {

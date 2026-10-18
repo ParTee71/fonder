@@ -29,7 +29,7 @@ fun WorkerStatusIcon(isRunning: Boolean, modifier: Modifier = Modifier) {
         working = isRunning,
         contentDescription = stringResource(R.string.worker_status_running),
         size = 24.dp,
-        modifier = modifier.padding(horizontal = 12.dp),
+        modifier = modifier.padding(horizontal = 12.dp)
     )
 }
 
@@ -57,7 +57,7 @@ fun WorkingIndicator(
     working: Boolean,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    size: Dp = CARD_INDICATOR_SIZE,
+    size: Dp = CARD_INDICATOR_SIZE
 ) {
     if (!working) return
     // Lokal kopia: inne i `semantics`-lambdan skuggar mottagarens (write-only)
@@ -67,6 +67,6 @@ fun WorkingIndicator(
         modifier = modifier
             .size(size)
             .semantics { this.contentDescription = description },
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.primary
     )
 }

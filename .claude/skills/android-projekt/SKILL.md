@@ -41,7 +41,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Tester: JUnit, MockK, Turbine, Robolectric + Roborazzi i JVM, Konsist (`UiConsistencyTest`);
   Room- och Compose-tester även i `androidTest/` (skill `testing-strategy`).
 - **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
-  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); ingen Spotless/ktlint (ingen `.editorconfig`); ingen Renovate eller Dependabot;
+  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); åtta compose-rules-regler som kräver API-ändringar i befintliga komponenter är avstängda i ktlint (`parameter-naming`, `lambda-param-event-trailing`, `lambda-param-in-effect`, `content-slot-reused`, `multiple-emitters-check`, `modifier-naming`, `modifier-missing-check`, `param-order-check`) och `vm-injection-check` för att dess autorättning bryter `AppNavigation` (två `hiltViewModel()`); ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
   pluginen (beta), men utan kommentar i katalogen om varför. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.
@@ -134,7 +134,7 @@ Versioner och SDK-nivåer: KRAVLISTA TP-1 (minSdk 30, targetSdk 36, compileSdk 3
 SDK-nivåer uppdaterar TP-1 i samma PR.
 
 - En modul (`:app`), ingen `build-logic` och inga convention plugins – rotens `build.gradle.kts`
-  har bara `apply false`-deklarationerna och `cpdCheck`.
+  har bara `apply false`-deklarationerna, Spotless och `cpdCheck`.
 - Plugins i `:app`: `android.application` (AGP 9, inbyggd Kotlin), `kotlin.compose`, `ksp`,
   `hilt`, `kotlin.serialization`, `google-services`, `roborazzi`.
 - Java 17 utan toolchain: `sourceCompatibility`/`targetCompatibility` 17 och `jvmTarget` 17 i
@@ -144,6 +144,7 @@ SDK-nivåer uppdaterar TP-1 i samma PR.
   migreringstesterna) och Hilt.
 - `cpdCheck` (PMD CPD via CLI som `JavaExec`, 80 tokens, baslinjen `config/cpd-baseline.txt`)
   över `app/src/main`, `app/src/test`, `app/src/androidTest`, kopplad till `check`.
+- Kodstil: ktlint 1.8 (stil `android_studio`) med compose-rules via Spotless, bara lokalt och inte i CI (regel 5). Kör `./gradlew spotlessApply` före push; `spotlessCheck` kontrollerar. Reglerna står i `ktlintRules` i rotens `build.gradle.kts`; nya CompositionLocals läggs i `compose_allowed_composition_locals`.
 - `gradle.properties`: `org.gradle.caching` och `org.gradle.parallel` påslagna;
   configuration cache är inte påslagen (skill `ci-budget`).
 - `app/google-services.json` är **incheckad** och `google-services` appliceras alltid; utan filen

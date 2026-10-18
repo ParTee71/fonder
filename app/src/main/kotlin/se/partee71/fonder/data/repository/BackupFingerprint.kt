@@ -1,10 +1,10 @@
 package se.partee71.fonder.data.repository
 
+import java.security.MessageDigest
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import java.security.MessageDigest
 
 /**
  * Fingeravtryck av backup-kontraktets innehåll (HEM-12) — samma innehåll ger samma sträng, en
@@ -42,7 +42,7 @@ object BackupFingerprint {
             transactions = payload.transactions.sortedBy { it.id },
             suggestionRecords = payload.suggestionRecords.filter { it.followed != null }.sortedBy { it.id },
             switchWatches = payload.switchWatches.map(::userPart).sortedBy { it.id },
-            suggestionDismissals = payload.suggestionDismissals.sortedWith(compareBy({ it.sellIsin }, { it.buyIsin }, { it.kind })),
+            suggestionDismissals = payload.suggestionDismissals.sortedWith(compareBy({ it.sellIsin }, { it.buyIsin }, { it.kind }))
         )
         val digest = MessageDigest.getInstance("SHA-256").digest(BackupSerializer.encode(normalized).toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
@@ -57,7 +57,7 @@ object BackupFingerprint {
             candidates = watch.candidates
                 .filter { it.source == SwitchWatchCandidateSource.MANUELL }
                 .map { SwitchWatchCandidate(isin = it.isin, name = it.name, source = it.source) }
-                .sortedBy { it.isin },
+                .sortedBy { it.isin }
         )
     }
 }

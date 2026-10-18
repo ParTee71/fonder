@@ -35,7 +35,7 @@ import se.partee71.fonder.ui.components.ChoiceChipRow
 fun RiskProfilScreen(
     onSaved: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: RiskProfilViewModel = hiltViewModel(),
+    viewModel: RiskProfilViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.saved) {
@@ -51,7 +51,7 @@ fun RiskProfilScreen(
         onGoalSelected = viewModel::onGoalSelected,
         onAllocationPercentChanged = viewModel::onAllocationPercentChanged,
         onSave = viewModel::save,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -74,20 +74,20 @@ fun RiskProfilContent(
     onGoalSelected: (PrimaryGoal) -> Unit = {},
     onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
     onSave: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(16.dp)
     ) {
         Text(stringResource(R.string.riskprofile_title), style = MaterialTheme.typography.titleLarge)
         Text(
             stringResource(R.string.riskprofile_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
         QuestionSection(stringResource(R.string.riskprofile_q_horizon)) {
@@ -95,7 +95,7 @@ fun RiskProfilContent(
                 options = TimeHorizon.entries,
                 selected = state.horizon,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onHorizonSelected,
+                onSelect = onHorizonSelected
             )
         }
         QuestionSection(stringResource(R.string.riskprofile_q_reaction)) {
@@ -103,7 +103,7 @@ fun RiskProfilContent(
                 options = DownturnReaction.entries,
                 selected = state.reaction,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onReactionSelected,
+                onSelect = onReactionSelected
             )
         }
         QuestionSection(stringResource(R.string.riskprofile_q_goal)) {
@@ -111,7 +111,7 @@ fun RiskProfilContent(
                 options = PrimaryGoal.entries,
                 selected = state.goal,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onGoalSelected,
+                onSelect = onGoalSelected
             )
         }
 
@@ -119,47 +119,47 @@ fun RiskProfilContent(
             Text(
                 stringResource(R.string.riskprofile_suggestion_hint),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp)
             )
         }
 
         Text(
             stringResource(R.string.riskprofile_allocation_title),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
         )
         Text(
             stringResource(R.string.riskprofile_allocation_disclaimer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
+            modifier = Modifier.padding(bottom = 8.dp)
         )
         if (state.availableLevels.isEmpty()) {
             Text(
                 stringResource(R.string.riskprofile_no_levels_yet),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             state.availableLevels.forEach { level ->
                 AllocationRow(
                     level = level,
                     percentText = state.allocationText[level].orEmpty(),
-                    onPercentChange = { onAllocationPercentChanged(level, it) },
+                    onPercentChange = { onAllocationPercentChanged(level, it) }
                 )
             }
             Text(
                 stringResource(R.string.format_riskprofile_allocation_sum, state.allocationSumPercent),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (state.canSave) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
             if (!state.canSave) {
                 Text(
                     stringResource(R.string.riskprofile_allocation_sum_error),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
@@ -168,7 +168,7 @@ fun RiskProfilContent(
             text = stringResource(R.string.riskprofile_save_button),
             onClick = onSave,
             enabled = state.canSave,
-            modifier = Modifier.padding(top = 24.dp),
+            modifier = Modifier.padding(top = 24.dp)
         )
     }
 }
@@ -183,19 +183,19 @@ private fun QuestionSection(title: String, content: @Composable () -> Unit) {
 private fun AllocationRow(level: Int, percentText: String, onPercentChange: (String) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Text(
             stringResource(R.string.format_riskprofile_level_label, level),
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f)
         )
         AppTextField(
             value = percentText,
             onValueChange = onPercentChange,
             suffix = "%",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.width(100.dp).testTag(allocationFieldTestTag(level)),
+            modifier = Modifier.width(100.dp).testTag(allocationFieldTestTag(level))
         )
     }
 }

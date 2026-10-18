@@ -1,10 +1,10 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Fixturen nedan är ett trimmat utdrag av ett verkligt svar från avanza.se:s odokumenterade
@@ -116,7 +116,7 @@ class AvanzaFundListParserTest {
     fun `parse okant nytt falt i svaret ignoreras utan att parsningen faller`() {
         val medOkantFalt = response.replace(
             "\"minimumBuy\": 100.0,",
-            "\"minimumBuy\": 100.0, \"esgScore\": 19.09, \"nagotHeltNytt\": {\"x\": 1},",
+            "\"minimumBuy\": 100.0, \"esgScore\": 19.09, \"nagotHeltNytt\": {\"x\": 1},"
         )
 
         val page = AvanzaFundListParser.parse(medOkantFalt)!!

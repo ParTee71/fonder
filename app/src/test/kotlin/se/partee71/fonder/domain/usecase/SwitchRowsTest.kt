@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -8,7 +9,6 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import java.time.LocalDate
 
 /**
  * Listan "Byten" på Beslut (BYT-4): ett byte per rad med sitt tillstånd, avslutade i 14 dagar, och
@@ -22,25 +22,34 @@ class SwitchRowsTest {
     private fun plan(recordId: Long, planIndex: Int, followed: Boolean = false, inProgress: Boolean = false) = SwitchPlanResolver.Suggestion(
         recordId = recordId, planIndex = planIndex, sellIsin = "S$recordId", buyIsin = "K$recordId",
         sellFundName = "Sälj $recordId", buyFundName = "Köp $recordId", fromLevel = 5, toLevel = 3,
-        feeDeltaPercent = -0.5, followed = followed, inProgress = inProgress,
+        feeDeltaPercent = -0.5, followed = followed, inProgress = inProgress
     )
 
     private fun fee(recordId: Long, followed: Boolean = false, inProgress: Boolean = false) = CheaperAlternative(
         suggestion = plan(recordId, 0, followed, inProgress).copy(kind = SuggestionKind.FEE),
         sellFeePercent = 1.4,
-        buyFeePercent = 0.4,
+        buyFeePercent = 0.4
     )
 
-    private fun open(id: Long, sourceRecordId: Long? = null, sourcePair: Pair<String, String>? = null, sourceKind: SuggestionKind? = null) =
-        OpenSwitchWatch(
-            watchId = id, sellFundName = "Fond $id", daysWaiting = 2, candidateCount = 3,
-            sourceRecordId = sourceRecordId, sourcePair = sourcePair, sourceKind = sourceKind,
-        )
+    private fun open(id: Long, sourceRecordId: Long? = null, sourcePair: Pair<String, String>? = null, sourceKind: SuggestionKind? = null) = OpenSwitchWatch(
+        watchId = id,
+        sellFundName = "Fond $id",
+        daysWaiting = 2,
+        candidateCount = 3,
+        sourceRecordId = sourceRecordId,
+        sourcePair = sourcePair,
+        sourceKind = sourceKind
+    )
 
     private fun closed(id: Long, reason: SwitchWatchCloseReason, closedDaysAgo: Long, boughtIsin: String? = null) = SwitchWatch(
-        id = id, sellIsin = "SW$id", sellFundName = "Sålt $id", soldAtEpochDay = todayDay - 20,
-        closedAtEpochDay = todayDay - closedDaysAgo, closeReason = reason, boughtIsin = boughtIsin,
-        candidates = listOf(SwitchWatchCandidate(isin = "KAND", name = "Kandidat A")),
+        id = id,
+        sellIsin = "SW$id",
+        sellFundName = "Sålt $id",
+        soldAtEpochDay = todayDay - 20,
+        closedAtEpochDay = todayDay - closedDaysAgo,
+        closeReason = reason,
+        boughtIsin = boughtIsin,
+        candidates = listOf(SwitchWatchCandidate(isin = "KAND", name = "Kandidat A"))
     )
 
     @Test
@@ -50,7 +59,7 @@ class SwitchRowsTest {
             cheaperAlternatives = listOf(fee(10)),
             dismissedSuggestions = listOf(plan(3, 2)),
             dismissedCheaperAlternatives = listOf(fee(11)),
-            openWatches = listOf(open(7, sourceRecordId = 2)),
+            openWatches = listOf(open(7, sourceRecordId = 2))
         )
         val expiredOpen = SwitchWatch(id = 9, sellIsin = "SX", sellFundName = "Gammal", soldAtEpochDay = todayDay - 20)
         val rows = SwitchRows.build(
@@ -59,9 +68,9 @@ class SwitchRowsTest {
                 expiredOpen,
                 closed(4, SwitchWatchCloseReason.KOPT, closedDaysAgo = 1, boughtIsin = "KAND"),
                 closed(5, SwitchWatchCloseReason.AVBRUTEN, closedDaysAgo = 2),
-                closed(6, SwitchWatchCloseReason.UTGANGEN, closedDaysAgo = 3),
+                closed(6, SwitchWatchCloseReason.UTGANGEN, closedDaysAgo = 3)
             ),
-            today = today,
+            today = today
         )
 
         assertEquals(listOf(SwitchRowState.SOLD, SwitchRowState.PROPOSED, SwitchRowState.FEE), rows.active.map { it.state })
@@ -72,9 +81,9 @@ class SwitchRowsTest {
                 SwitchRowState.CANCELLED,
                 SwitchRowState.EXPIRED,
                 SwitchRowState.DISMISSED,
-                SwitchRowState.DISMISSED,
+                SwitchRowState.DISMISSED
             ),
-            rows.closed.map { it.state },
+            rows.closed.map { it.state }
         )
         assertEquals("Kandidat A", (rows.closed[1] as SwitchRow.Closed).boughtFundName)
         assertNull((rows.closed[2] as SwitchRow.Closed).boughtFundName)
@@ -85,7 +94,7 @@ class SwitchRowsTest {
         // Samma byte i en nyare inspelning (nytt id, samma fondpar) ska inte heller bli en andra rad.
         val decisions = PendingDecisions(
             switchPlan = listOf(plan(1, 0), plan(2, 1)),
-            openWatches = listOf(open(7, sourceRecordId = 99, sourcePair = "S2" to "K2", sourceKind = SuggestionKind.RISK_PLAN)),
+            openWatches = listOf(open(7, sourceRecordId = 99, sourcePair = "S2" to "K2", sourceKind = SuggestionKind.RISK_PLAN))
         )
 
         val rows = SwitchRows.build(decisions, emptyList(), today)
@@ -101,7 +110,7 @@ class SwitchRowsTest {
     fun `billigare alternativ foljer samma livscykel - salt ersatter avgiftsraden`() {
         val decisions = PendingDecisions(
             cheaperAlternatives = listOf(fee(10, inProgress = true), fee(11)),
-            openWatches = listOf(open(7, sourceRecordId = 10, sourceKind = SuggestionKind.FEE)),
+            openWatches = listOf(open(7, sourceRecordId = 10, sourceKind = SuggestionKind.FEE))
         )
 
         val rows = SwitchRows.build(decisions, emptyList(), today)
@@ -115,7 +124,7 @@ class SwitchRowsTest {
     @Test
     fun `en fristaende bevakning ar salt utan forslag och ett kallforslag utanfor planen behaller sin sort`() {
         val decisions = PendingDecisions(
-            openWatches = listOf(open(7), open(8, sourceRecordId = 50, sourceKind = SuggestionKind.RISK_PLAN)),
+            openWatches = listOf(open(7), open(8, sourceRecordId = 50, sourceKind = SuggestionKind.RISK_PLAN))
         )
 
         val rows = SwitchRows.build(decisions, emptyList(), today)
@@ -137,7 +146,7 @@ class SwitchRowsTest {
     fun `en bevakning som just stangts syns bara som avslutad aven om det oppna flodet ligger efter`() {
         val decisions = PendingDecisions(
             switchPlan = listOf(plan(1, 0)),
-            openWatches = listOf(open(4, sourceRecordId = 1)),
+            openWatches = listOf(open(4, sourceRecordId = 1))
         )
         val bought = closed(4, SwitchWatchCloseReason.KOPT, closedDaysAgo = 0, boughtIsin = "KAND")
 
@@ -152,7 +161,7 @@ class SwitchRowsTest {
     fun `ett avstatt par som anda salts visas inte som avstatt`() {
         val decisions = PendingDecisions(
             dismissedSuggestions = listOf(plan(3, 0)),
-            openWatches = listOf(open(7, sourceRecordId = 3)),
+            openWatches = listOf(open(7, sourceRecordId = 3))
         )
 
         val rows = SwitchRows.build(decisions, emptyList(), today)
@@ -176,9 +185,9 @@ class SwitchRowsTest {
             PendingDecisions(),
             closedWatches = listOf(
                 closed(1, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.WATCH_TTL_DAYS),
-                closed(2, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.WATCH_TTL_DAYS + 1),
+                closed(2, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.WATCH_TTL_DAYS + 1)
             ),
-            today = today,
+            today = today
         )
 
         assertEquals(listOf("closed-1"), rows.closed.map { it.key })
@@ -190,7 +199,7 @@ class SwitchRowsTest {
         val decisions = PendingDecisions(
             switchPlan = listOf(plan(1, 0), plan(2, 1, followed = true)),
             cheaperAlternatives = listOf(fee(10), fee(11, followed = true)),
-            openWatches = listOf(open(7), open(8)),
+            openWatches = listOf(open(7), open(8))
         )
 
         val rows = SwitchRows.build(decisions, emptyList(), today)

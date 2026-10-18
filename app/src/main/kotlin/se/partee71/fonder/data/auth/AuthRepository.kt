@@ -26,7 +26,7 @@ class SignInException(val reason: Reason, cause: Throwable? = null) : Exception(
         NO_CREDENTIAL,
 
         /** Nätverk, Firebase-avslag eller okänt — det användaren kan göra är att försöka igen. */
-        FAILED,
+        FAILED
     }
 }
 

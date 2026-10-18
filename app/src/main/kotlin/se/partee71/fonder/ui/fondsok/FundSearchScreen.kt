@@ -36,7 +36,7 @@ import se.partee71.fonder.ui.components.SelectField
 fun FundSearchScreen(
     modifier: Modifier = Modifier,
     onPickFund: ((Fund) -> Unit)? = null,
-    viewModel: FundSearchViewModel = hiltViewModel(),
+    viewModel: FundSearchViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     FundSearchContent(
@@ -46,7 +46,7 @@ fun FundSearchScreen(
         onAddFund = viewModel::addFund,
         onRefresh = viewModel::refresh,
         onPickFund = onPickFund,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -69,7 +69,7 @@ fun FundSearchContent(
      */
     onPickFund: ((Fund) -> Unit)? = null,
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val allaFondbolag = stringResource(R.string.fondsok_company_all)
 
@@ -81,14 +81,14 @@ fun FundSearchContent(
             optionLabel = { it.name },
             onSelect = onCompanySelected,
             placeholder = allaFondbolag,
-            clearOptionLabel = allaFondbolag,
+            clearOptionLabel = allaFondbolag
         )
 
         AppTextField(
             value = state.query,
             onValueChange = onQueryChange,
             label = stringResource(R.string.fondsok_label),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
 
         // Dra ned hämtar om katalogen (UI-11). Gesten omsluter även fel- och tomlägena, och
@@ -97,7 +97,7 @@ fun FundSearchContent(
         // i — utan en skrollbar yta har svepet inget att koppla sig till.
         PullToRefreshContainer(
             refreshing = state.refreshing,
-            onRefresh = onRefresh,
+            onRefresh = onRefresh
         ) {
             when {
                 state.loading -> ProgressBar(modifier = Modifier.padding(top = 16.dp))
@@ -107,14 +107,14 @@ fun FundSearchContent(
                 state.loadFailed -> PullableMessage {
                     EmptyState(
                         title = stringResource(R.string.fondsok_load_failed_title),
-                        body = stringResource(R.string.fondsok_load_failed_body),
+                        body = stringResource(R.string.fondsok_load_failed_body)
                     )
                 }
 
                 state.results.isEmpty() -> PullableMessage {
                     EmptyState(
                         title = stringResource(R.string.fondsok_empty_title),
-                        body = stringResource(R.string.fondsok_empty_body),
+                        body = stringResource(R.string.fondsok_empty_body)
                     )
                 }
 
@@ -125,7 +125,7 @@ fun FundSearchContent(
                             added = onPickFund == null && fund.fundId in state.addedFundIds,
                             riskLevel = state.riskLevels[fund.fundId],
                             actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
-                            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) },
+                            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) }
                         )
                     }
                 }
@@ -145,7 +145,7 @@ private fun FundResultRow(
     added: Boolean,
     riskLevel: Int?,
     actionLabelRes: Int,
-    onAction: () -> Unit,
+    onAction: () -> Unit
 ) {
     ItemRow(
         headline = fund.name,
@@ -156,7 +156,7 @@ private fun FundResultRow(
             } else {
                 AppButton(text = stringResource(actionLabelRes), onClick = onAction, variant = AppButtonVariant.Text)
             }
-        },
+        }
     )
 }
 

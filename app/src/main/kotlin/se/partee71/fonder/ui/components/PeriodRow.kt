@@ -48,12 +48,12 @@ fun PeriodRow(
     modifier: Modifier = Modifier,
     partial: Boolean = false,
     stackValue: Boolean = false,
-    valueText: String? = null,
+    valueText: String? = null
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Vikt + ellips på etiketten: en Row mäter oviktade barn i tur och ordning och drar av
         // redan förbrukad bredd, så en etikett som fyller raden lämnade **noll** till värdet.
@@ -66,18 +66,18 @@ fun PeriodRow(
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
         )
         if (valueText != null) {
             Text(
                 valueText,
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium)
             )
         } else if (amount == null && fraction == null) {
             Text(
                 stringResource(R.string.period_insufficient_data),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             Column(horizontalAlignment = Alignment.End) {
@@ -95,20 +95,20 @@ fun PeriodRow(
                     // avkastning är de alltid överens, men GAV-raden i Fonddetalj skickade in
                     // ett *pris* som belopp — alltid positivt — och färgade därför ett innehav
                     // 30 % under GAV grönt (issue #78). Tecken och färg ska alltid följas åt.
-                    color = ReturnColors.forAmount(fraction ?: amount!!),
+                    color = ReturnColors.forAmount(fraction ?: amount!!)
                 )
                 if (stacked) {
                     Text(
                         MoneyFormat.kr(amount!!),
                         style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 if (partial) {
                     Text(
                         stringResource(R.string.period_partial_data),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

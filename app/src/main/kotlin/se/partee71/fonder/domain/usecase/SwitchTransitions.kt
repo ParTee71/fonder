@@ -1,5 +1,8 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
+import kotlin.math.abs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -8,9 +11,6 @@ import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
-import javax.inject.Inject
-import kotlin.math.abs
 
 /**
  * Vad en transaktion gör med bytet (BYT-2, issue #144) — svaret på bytesväljaren i formuläret
@@ -63,7 +63,7 @@ sealed interface SwitchDecision {
  */
 data class SwitchChoices(
     val options: List<SwitchDecision>,
-    val preselected: SwitchDecision?,
+    val preselected: SwitchDecision?
 ) {
     /** Sant när inget förval finns och användaren måste svara innan transaktionen sparas. */
     val required: Boolean get() = preselected == null
@@ -108,7 +108,7 @@ object SwitchTransitions {
         plan: List<SwitchPlanResolver.Suggestion>,
         openWatches: List<SwitchWatch>,
         today: LocalDate,
-        buyIsinByRecordId: Map<Long, String> = emptyMap(),
+        buyIsinByRecordId: Map<Long, String> = emptyMap()
     ): SwitchChoices = when (type) {
         TransactionType.SALJ -> forSale(fundIsin, plan)
         TransactionType.KOP -> forPurchase(fundIsin, epochDay, openWatches, today, buyIsinByRecordId)
@@ -134,7 +134,7 @@ object SwitchTransitions {
         epochDay: Long,
         openWatches: List<SwitchWatch>,
         today: LocalDate,
-        buyIsinByRecordId: Map<Long, String>,
+        buyIsinByRecordId: Map<Long, String>
     ): SwitchChoices {
         if (fundIsin == null) return SwitchChoices(listOf(SwitchDecision.None), SwitchDecision.None)
         val eligible = openWatches
@@ -150,8 +150,7 @@ object SwitchTransitions {
     }
 
     /** Sant när [isin] är en bevakad kandidat eller källförslagets köpfond i [watch]. */
-    private fun expects(watch: SwitchWatch, isin: String, buyIsinByRecordId: Map<Long, String>): Boolean =
-        watch.candidates.any { it.isin == isin } || watch.sourceRecordId?.let { buyIsinByRecordId[it] } == isin
+    private fun expects(watch: SwitchWatch, isin: String, buyIsinByRecordId: Map<Long, String>): Boolean = watch.candidates.any { it.isin == isin } || watch.sourceRecordId?.let { buyIsinByRecordId[it] } == isin
 
     /**
      * Den öppna bevakning **utan känd transaktion** av säljfonden inom ±[SwitchWatchCalc.WATCH_TTL_DAYS]
@@ -165,8 +164,7 @@ object SwitchTransitions {
      * kopplas utan svar; bara "Fristående"/"för planrad" kopplar samma dag utan fråga
      * ([RecordTransaction.startWatchForSale]).
      */
-    fun linkableWatch(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate): SwitchWatch? =
-        linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull()
+    fun linkableWatch(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate): SwitchWatch? = linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull()
 
     /**
      * Alla bevakningar [linkableWatch] kan peka ut, äldst först — importen behöver nästa när en
@@ -195,7 +193,7 @@ object SwitchTransitions {
 class SwitchChoicesSource @Inject constructor(
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val switchWatchRepository: SwitchWatchRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val suggestionRecordRepository: SuggestionRecordRepository
 ) {
 
     /**
@@ -211,27 +209,24 @@ class SwitchChoicesSource @Inject constructor(
         val openWatches: List<SwitchWatch>,
         val buyIsinByRecordId: Map<Long, String>,
         val today: LocalDate,
-        val cheaperAlternatives: List<SwitchPlanResolver.Suggestion> = emptyList(),
+        val cheaperAlternatives: List<SwitchPlanResolver.Suggestion> = emptyList()
     ) {
-        fun suggestFor(type: TransactionType, fundIsin: String?, epochDay: Long): SwitchChoices =
-            SwitchTransitions.suggestFor(type, fundIsin, epochDay, plan, openWatches, today, buyIsinByRecordId)
+        fun suggestFor(type: TransactionType, fundIsin: String?, epochDay: Long): SwitchChoices = SwitchTransitions.suggestFor(type, fundIsin, epochDay, plan, openWatches, today, buyIsinByRecordId)
 
         /** Som [SwitchTransitions.linkableWatch], utan bevakningar i [exclude] — de en tidigare rad i samma import redan kopplar. */
-        fun linkableWatch(fundIsin: String?, epochDay: Long, exclude: Set<Long> = emptySet()): SwitchWatch? =
-            SwitchTransitions.linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull { it.id !in exclude }
+        fun linkableWatch(fundIsin: String?, epochDay: Long, exclude: Set<Long> = emptySet()): SwitchWatch? = SwitchTransitions.linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull { it.id !in exclude }
     }
 
-    fun observe(today: () -> LocalDate = LocalDate::now): Flow<Inputs> =
-        switchWatchRepository.observeOpen().flatMapLatest { watches ->
-            val ids = watches.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }
-            combine(pendingDecisionsSource.observe(), suggestionRecordRepository.observeByIds(ids)) { pending, records ->
-                Inputs(
-                    plan = pending.switchPlan,
-                    openWatches = watches,
-                    buyIsinByRecordId = records.associate { it.id to it.buyIsin },
-                    today = today(),
-                    cheaperAlternatives = pending.cheaperAlternatives.map { it.suggestion },
-                )
-            }
+    fun observe(today: () -> LocalDate = LocalDate::now): Flow<Inputs> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
+        val ids = watches.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }
+        combine(pendingDecisionsSource.observe(), suggestionRecordRepository.observeByIds(ids)) { pending, records ->
+            Inputs(
+                plan = pending.switchPlan,
+                openWatches = watches,
+                buyIsinByRecordId = records.associate { it.id to it.buyIsin },
+                today = today(),
+                cheaperAlternatives = pending.cheaperAlternatives.map { it.suggestion }
+            )
         }
+    }
 }

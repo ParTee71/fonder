@@ -10,8 +10,8 @@ import androidx.compose.ui.unit.dp
  */
 val FonderShapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
-    small      = RoundedCornerShape(8.dp),
-    medium     = RoundedCornerShape(18.dp),
-    large      = RoundedCornerShape(26.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )

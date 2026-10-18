@@ -19,5 +19,5 @@ fun testTargetLevelPreselection(
     switchWatches: SwitchWatchRepository,
     riskProfile: RiskProfile? = null,
     prices: FundPriceRepository = FakeCachedPriceRepository(),
-    records: SuggestionRecordRepository = FakeSuggestionRecordRepository(),
+    records: SuggestionRecordRepository = FakeSuggestionRecordRepository()
 ): TargetLevelPreselection = TargetLevelPreselection({ riskProfile }, transactions, prices, switchWatches, records)

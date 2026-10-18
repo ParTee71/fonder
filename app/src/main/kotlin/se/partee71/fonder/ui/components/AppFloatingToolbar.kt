@@ -42,7 +42,7 @@ import se.partee71.fonder.R
 data class AppToolbarTab(
     val label: String,
     val icon: ImageVector,
-    val badgeCount: Int? = null,
+    val badgeCount: Int? = null
 )
 
 /** Testtagg för flikraden — gör "raden döljs på djupare skärmar" (NAV-7) adresserbart i tester. */
@@ -64,7 +64,7 @@ fun AppFloatingToolbar(
     tabs: List<AppToolbarTab>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     HorizontalFloatingToolbar(
         expanded = true,
@@ -73,15 +73,15 @@ fun AppFloatingToolbar(
             .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = CircleShape),
         colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
             toolbarContainerColor = MaterialTheme.colorScheme.surface,
-            toolbarContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            toolbarContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         shape = CircleShape,
-        expandedShadowElevation = TOOLBAR_ELEVATION,
+        expandedShadowElevation = TOOLBAR_ELEVATION
     ) {
         Row(
             modifier = Modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEachIndexed { index, tab ->
                 ToolbarTab(tab = tab, selected = index == selectedIndex, onClick = { onSelect(index) })
@@ -97,7 +97,7 @@ private val TAB_ICON_SIZE = 22.dp
 private fun ToolbarTab(tab: AppToolbarTab, selected: Boolean, onClick: () -> Unit) {
     val container by animateColorAsState(
         if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        label = "tabContainer",
+        label = "tabContainer"
     )
     val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val badge = tab.badgeCount?.takeIf { it > 0 && !selected }
@@ -116,7 +116,7 @@ private fun ToolbarTab(tab: AppToolbarTab, selected: Boolean, onClick: () -> Uni
             .semantics { contentDescription = description }
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(tab.icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(TAB_ICON_SIZE))
         AnimatedVisibility(visible = selected) {
@@ -125,7 +125,7 @@ private fun ToolbarTab(tab: AppToolbarTab, selected: Boolean, onClick: () -> Uni
                 style = MaterialTheme.typography.labelLarge,
                 color = contentColor,
                 maxLines = 1,
-                modifier = Modifier.clearAndSetSemantics {},
+                modifier = Modifier.clearAndSetSemantics {}
             )
         }
         if (badge != null) CountBadge(badge)

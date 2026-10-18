@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -7,7 +8,6 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
 
 /**
  * Uppslaget av den inspelade bytesplanen (HEM-8), utbrutet ur `HemViewModel` i issue #85 så
@@ -22,7 +22,7 @@ class SwitchPlanResolverTest {
     private fun metadata(isin: String, name: String, risk: Int?, fee: Double?) = FundMetadata(
         isin = isin, name = name, orderbookId = "ob-$isin", totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     private fun record(
@@ -30,7 +30,7 @@ class SwitchPlanResolverTest {
         sell: String,
         buy: String,
         epochDay: Long = today.toEpochDay(),
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SuggestionRecord(
         id = planIndex + 1L,
         suggestedAtEpochDay = epochDay,
@@ -40,13 +40,13 @@ class SwitchPlanResolverTest {
         sellNavAtSuggestion = 100.0,
         buyNavAtSuggestion = 90.0,
         switchValueKr = 4000.0,
-        kind = kind,
+        kind = kind
     )
 
     private val metadataByIsin = mapOf(
         "A" to metadata("A", "Fond A", risk = 6, fee = 1.4),
         "B" to metadata("B", "Fond B", risk = 3, fee = 0.4),
-        "C" to metadata("C", "Fond C", risk = 4, fee = 0.6),
+        "C" to metadata("C", "Fond C", risk = 4, fee = 0.6)
     )
 
     @Test
@@ -138,7 +138,7 @@ class SwitchPlanResolverTest {
             AccountType.ISK_KF,
             listOf(record(0, "A", "B"), record(1, "C", "A")),
             metadataByIsin,
-            today,
+            today
         )
 
         assertEquals(listOf(0, 1), SwitchPlanResolver.forFund(plan, "A").map { it.planIndex })

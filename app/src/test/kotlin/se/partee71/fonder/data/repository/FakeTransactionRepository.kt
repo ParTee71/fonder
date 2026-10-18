@@ -26,8 +26,7 @@ class FakeTransactionRepository : TransactionRepository {
 
     override fun observeTransactions(): Flow<List<Transaction>> = transactions
 
-    override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> =
-        transactions.map { all -> all.filter { it.fundId == fundId } }
+    override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactions.map { all -> all.filter { it.fundId == fundId } }
 
     override suspend fun upsertFund(fund: Fund) {
         funds.value = funds.value.filterNot { it.fundId == fund.fundId } + fund

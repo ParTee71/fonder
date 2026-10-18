@@ -13,13 +13,13 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 
 /**
  * Schemalägger [FundPriceUpdateWorker] från appens tre triggers (issue #27, TP-17), koalescerade
@@ -150,12 +150,12 @@ enum class BackgroundWork {
     SWITCH_PLAN_SCAN,
 
     /** Val och hämtning av Hems referensfond (HEM-10). */
-    BENCHMARK_SCAN,
+    BENCHMARK_SCAN
 }
 
 @Singleton
 class WorkManagerFundPriceRefreshScheduler @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext context: Context
 ) : FundPriceRefreshScheduler {
 
     private val workManager = WorkManager.getInstance(context)
@@ -181,8 +181,8 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
                 workDataOf(
                     FundPriceUpdateWorker.KEY_SCAN_COMPARISONS to true,
                     FundPriceUpdateWorker.KEY_SCAN_SWITCH_PLAN to true,
-                    FundPriceUpdateWorker.KEY_SCAN_BENCHMARK to true,
-                ),
+                    FundPriceUpdateWorker.KEY_SCAN_BENCHMARK to true
+                )
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints)
@@ -234,23 +234,21 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
     }
 
     /** Begäran som köas av [triggerSwitchPlanScan] och [enqueueSwitchPlanFollowUp] — `internal` så instrumenttestet kan läsa dess indata. */
-    internal fun switchPlanScanRequest(force: Boolean): OneTimeWorkRequest {
-        return OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
-            // Utan force hämtar `refreshAll` bara inaktuella kurser och rapporterar en färsk cache
-            // som lyckad — vilket är rätt: skanningen räknar då på kurser som redan är dagens.
-            // "Räkna om" (#88) forcerar, så facit mäter mot kursen *vid* förslagstillfället även
-            // när användaren uttryckligen vill ha en ny plan.
-            .setInputData(
-                workDataOf(
-                    FundPriceUpdateWorker.KEY_FORCE to force,
-                    FundPriceUpdateWorker.KEY_SCAN_SWITCH_PLAN to true,
-                    FundPriceUpdateWorker.KEY_RESCAN_ON_REQUEST to true,
-                ),
+    internal fun switchPlanScanRequest(force: Boolean): OneTimeWorkRequest = OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
+        // Utan force hämtar `refreshAll` bara inaktuella kurser och rapporterar en färsk cache
+        // som lyckad — vilket är rätt: skanningen räknar då på kurser som redan är dagens.
+        // "Räkna om" (#88) forcerar, så facit mäter mot kursen *vid* förslagstillfället även
+        // när användaren uttryckligen vill ha en ny plan.
+        .setInputData(
+            workDataOf(
+                FundPriceUpdateWorker.KEY_FORCE to force,
+                FundPriceUpdateWorker.KEY_SCAN_SWITCH_PLAN to true,
+                FundPriceUpdateWorker.KEY_RESCAN_ON_REQUEST to true
             )
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
-            .setConstraints(networkConstraints)
-            .build()
-    }
+        )
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+        .setConstraints(networkConstraints)
+        .build()
 
     override fun triggerBenchmarkScan() {
         val request = OneTimeWorkRequestBuilder<FundPriceUpdateWorker>()
@@ -260,8 +258,8 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
             .setInputData(
                 workDataOf(
                     FundPriceUpdateWorker.KEY_FORCE to true,
-                    FundPriceUpdateWorker.KEY_SCAN_BENCHMARK to true,
-                ),
+                    FundPriceUpdateWorker.KEY_SCAN_BENCHMARK to true
+                )
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints)
@@ -273,33 +271,32 @@ class WorkManagerFundPriceRefreshScheduler @Inject constructor(
         RETIRED_WORK_NAMES.forEach(workManager::cancelUniqueWork)
     }
 
-    override fun observeRunningWork(): Flow<Set<BackgroundWork>> =
-        combine(
-            workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
-            workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
-            workManager.getWorkInfosForUniqueWorkFlow(SWITCH_PLAN_WORK_NAME),
-            workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME),
-        ) { oneTime, periodic, switchPlan, benchmark ->
-            buildSet {
-                if (oneTime.isRunning()) add(BackgroundWork.PRICE_REFRESH)
-                // Backstopen bär alla tre skanningarna, se observeRunningWork i gränssnittet.
-                if (periodic.isRunning()) {
-                    add(BackgroundWork.PRICE_REFRESH)
-                    add(BackgroundWork.SWITCH_PLAN_SCAN)
-                    add(BackgroundWork.BENCHMARK_SCAN)
-                }
-                // Skanningarna kör kursuppdateringens worker med KEY_FORCE, alltså uppdateras
-                // kurserna på riktigt även här — kurskorten ska snurra med.
-                if (switchPlan.isRunning()) {
-                    add(BackgroundWork.SWITCH_PLAN_SCAN)
-                    add(BackgroundWork.PRICE_REFRESH)
-                }
-                if (benchmark.isRunning()) {
-                    add(BackgroundWork.BENCHMARK_SCAN)
-                    add(BackgroundWork.PRICE_REFRESH)
-                }
+    override fun observeRunningWork(): Flow<Set<BackgroundWork>> = combine(
+        workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
+        workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
+        workManager.getWorkInfosForUniqueWorkFlow(SWITCH_PLAN_WORK_NAME),
+        workManager.getWorkInfosForUniqueWorkFlow(BENCHMARK_WORK_NAME)
+    ) { oneTime, periodic, switchPlan, benchmark ->
+        buildSet {
+            if (oneTime.isRunning()) add(BackgroundWork.PRICE_REFRESH)
+            // Backstopen bär alla tre skanningarna, se observeRunningWork i gränssnittet.
+            if (periodic.isRunning()) {
+                add(BackgroundWork.PRICE_REFRESH)
+                add(BackgroundWork.SWITCH_PLAN_SCAN)
+                add(BackgroundWork.BENCHMARK_SCAN)
+            }
+            // Skanningarna kör kursuppdateringens worker med KEY_FORCE, alltså uppdateras
+            // kurserna på riktigt även här — kurskorten ska snurra med.
+            if (switchPlan.isRunning()) {
+                add(BackgroundWork.SWITCH_PLAN_SCAN)
+                add(BackgroundWork.PRICE_REFRESH)
+            }
+            if (benchmark.isRunning()) {
+                add(BackgroundWork.BENCHMARK_SCAN)
+                add(BackgroundWork.PRICE_REFRESH)
             }
         }
+    }
 
     private fun List<WorkInfo>.isRunning(): Boolean = any { it.state == WorkInfo.State.RUNNING }
 

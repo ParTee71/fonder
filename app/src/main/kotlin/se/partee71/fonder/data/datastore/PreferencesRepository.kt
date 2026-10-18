@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import java.io.IOException
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -19,9 +22,6 @@ import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.RiskProfile
-import java.io.IOException
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 enum class ThemeMode { LIGHT, DARK, AUTO }
@@ -32,7 +32,7 @@ enum class ThemeMode { LIGHT, DARK, AUTO }
  */
 @Singleton
 class PreferencesRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>,
+    private val dataStore: DataStore<Preferences>
 ) {
     /**
      * Alla läsningar går via det här flödet i stället för `dataStore.data` direkt: en oläsbar
@@ -52,10 +52,12 @@ class PreferencesRepository @Inject constructor(
     private val switchPlanEmptiedAtKey = longPreferencesKey("switch_plan_emptied_at_epoch_millis")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
+
     /** Issue #96:s ensamma ISIN — läses fortfarande, skrivs aldrig mer. Se [benchmark]. */
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
     private val benchmarkKey = stringPreferencesKey("benchmark_components")
     private val chosenBenchmarkKey = stringPreferencesKey("chosen_benchmark_isin")
+
     /** Före HEM-12: bara tidsstämpeln för den dygnsvisa molnbackupen. Läses som reserv, skrivs aldrig mer. Se [lastBackup]. */
     private val legacyLastDriveBackupKey = longPreferencesKey("last_drive_backup_epoch_millis")
     private val lastBackupEpochKey = longPreferencesKey("last_backup_epoch_millis")
@@ -102,7 +104,7 @@ class PreferencesRepository @Inject constructor(
                 epochMillis = epoch,
                 target = prefs[lastBackupTargetKey]?.let { runCatching { BackupTarget.valueOf(it) }.getOrNull() },
                 fingerprint = prefs[lastBackupFingerprintKey],
-                transactionCount = prefs[lastBackupTransactionCountKey],
+                transactionCount = prefs[lastBackupTransactionCountKey]
             )
         } ?: prefs[legacyLastDriveBackupKey]?.let { epoch ->
             BackupRecord(epochMillis = epoch, target = BackupTarget.DRIVE, fingerprint = null, transactionCount = null)

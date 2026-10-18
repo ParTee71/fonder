@@ -29,6 +29,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.FacitRad
@@ -40,8 +42,6 @@ import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -55,14 +55,14 @@ const val FACIT_LIST_TEST_TAG = "facit_list"
 @Composable
 fun FacitScreen(
     modifier: Modifier = Modifier,
-    viewModel: FacitViewModel = hiltViewModel(),
+    viewModel: FacitViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     FacitContent(
         state = state,
         onFollowedChange = viewModel::setFollowed,
         onRefresh = viewModel::refresh,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -72,13 +72,13 @@ fun FacitContent(
     state: FacitUiState,
     onFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     if (state.isEmpty) {
         EmptyState(
             title = stringResource(R.string.facit_empty_title),
             body = stringResource(R.string.facit_empty_body),
-            modifier = modifier,
+            modifier = modifier
         )
     } else {
         // Summeringskortet ligger som `item {}` i samma lista som raderna, inte i en fast
@@ -90,7 +90,7 @@ fun FacitContent(
         PullToRefreshContainer(
             refreshing = state.switchPlanWorking,
             onRefresh = onRefresh,
-            modifier = modifier,
+            modifier = modifier
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(FACIT_LIST_TEST_TAG)) {
                 item(contentType = "summary") { SummaryCard(state = state) }
@@ -102,7 +102,7 @@ fun FacitContent(
                         stringResource(R.string.facit_disclaimer),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
                     )
                 }
             }
@@ -125,7 +125,7 @@ private fun SummaryCard(state: FacitUiState) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(
             title = stringResource(R.string.facit_summary_title),
-            working = state.summaryWorking,
+            working = state.summaryWorking
         )
 
         // Varje sektion visas bara när dess sort faktiskt har inspelade rader — en rubrik
@@ -135,27 +135,27 @@ private fun SummaryCard(state: FacitUiState) {
             Text(
                 stringResource(R.string.facit_summary_plan_title),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
             SummaryRow(
                 label = stringResource(R.string.facit_summary_all_label),
                 summary = state.planAllSummary,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
             SummaryRow(
                 label = stringResource(R.string.facit_summary_followed_label),
                 summary = state.planFollowedSummary,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
             Text(
                 stringResource(
                     R.string.format_facit_evaluated_count,
                     state.planAllSummary.evaluatedCount,
-                    state.planAllSummary.totalCount,
+                    state.planAllSummary.totalCount
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
 
@@ -163,23 +163,23 @@ private fun SummaryCard(state: FacitUiState) {
             Text(
                 stringResource(R.string.facit_summary_fee_title),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp)
             )
             SummaryRow(
                 label = stringResource(R.string.facit_summary_all_label),
                 summary = state.feeAllSummary,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
             SummaryRow(
                 label = stringResource(R.string.facit_summary_followed_label),
                 summary = state.feeFollowedSummary,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
             Text(
                 stringResource(R.string.facit_summary_fee_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
 
@@ -187,20 +187,20 @@ private fun SummaryCard(state: FacitUiState) {
             Text(
                 stringResource(R.string.facit_by_plan_index_title),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp)
             )
             state.byPlanIndex.forEach { entry ->
                 SummaryRow(
                     label = stringResource(R.string.format_facit_plan_index_label, entry.planIndex + 1),
                     summary = entry.summary,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             Text(
                 stringResource(R.string.facit_by_plan_index_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }
@@ -218,7 +218,7 @@ private fun SummaryRow(label: String, summary: SwitchOutcomeCalc.Summary, modifi
         amount = summary.totalExcessKr,
         fraction = summary.averageExcessReturn,
         stackValue = true,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -239,14 +239,14 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
     AppCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         // Hela kortet fäller ut: klickytan går ända ut i kanten och marginalen ligger innanför den.
-        contentPadding = PaddingValues(0.dp),
+        contentPadding = PaddingValues(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .clickable { expanded = !expanded }
-                .padding(16.dp),
+                .padding(16.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -254,28 +254,28 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                         stringResource(
                             R.string.format_facit_row_funds,
                             row.sellFundName,
-                            row.buyFundName,
+                            row.buyFundName
                         ),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall
                     )
                     Text(
                         stringResource(
                             R.string.format_facit_row_kind_and_date,
                             stringResource(
-                                if (row.kind == SuggestionKind.FEE) R.string.facit_kind_fee else R.string.facit_kind_plan,
+                                if (row.kind == SuggestionKind.FEE) R.string.facit_kind_fee else R.string.facit_kind_plan
                             ),
-                            LocalDate.ofEpochDay(row.suggestedAtEpochDay).format(dateFormatter),
+                            LocalDate.ofEpochDay(row.suggestedAtEpochDay).format(dateFormatter)
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = stringResource(
-                        if (expanded) R.string.facit_collapse else R.string.facit_expand,
+                        if (expanded) R.string.facit_collapse else R.string.facit_expand
                     ),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -287,7 +287,7 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                 amount = row.outcome.excessKr,
                 fraction = row.outcome.excessReturn,
                 stackValue = true,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
 
             AnimatedVisibility(visible = expanded) {
@@ -299,14 +299,14 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                         Text(
                             stringResource(R.string.format_facit_plan_index_detail, row.planIndex + 1),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     row.switchValueKr?.let { valueKr ->
                         Text(
                             stringResource(R.string.format_facit_amount, MoneyFormat.kr(valueKr)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     if (row.outcome.isEvaluated) {
@@ -314,22 +314,22 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                             stringResource(
                                 R.string.format_facit_legs,
                                 MoneyFormat.percentSigned(row.outcome.sellReturn!!),
-                                MoneyFormat.percentSigned(row.outcome.buyReturn!!),
+                                MoneyFormat.percentSigned(row.outcome.buyReturn!!)
                             ),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
                             stringResource(R.string.facit_not_evaluated_explain),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     FollowedToggleRow(
                         followed = row.followed,
                         onFollowedChange = { checked -> onFollowedChange(row.recordId, checked) },
-                        modifier = Modifier.padding(top = 4.dp),
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }

@@ -1,6 +1,9 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
+import java.time.LocalDate
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.datastore.PreferencesRepository
@@ -20,9 +23,6 @@ import se.partee71.fonder.domain.usecase.FundNameKey
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.FundScreenFilter
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import java.time.LocalDate
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Kontrakt för fondmetadata (avgift, kategori, fondtyp, risk, se KRAVLISTA TP-21) — sökbart
@@ -136,11 +136,10 @@ interface FundMetadataRepository {
      * filtrera i, utan sållar [findSwitchCandidates] svar i efterhand, och den kan inte se uppslagen
      * och svarar därför aldrig "misslyckades".
      */
-    suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>, indexOnly: Boolean = false): SwitchPlanCalc.CandidateSearch =
-        SwitchPlanCalc.CandidateSearch(
-            findSwitchCandidates(level, excludeIsins).filter { !indexOnly || it.metadata.indexFund },
-            lookupFailed = false,
-        )
+    suspend fun searchSwitchCandidates(level: Int, excludeIsins: Set<String>, indexOnly: Boolean = false): SwitchPlanCalc.CandidateSearch = SwitchPlanCalc.CandidateSearch(
+        findSwitchCandidates(level, excludeIsins).filter { !indexOnly || it.metadata.indexFund },
+        lookupFailed = false
+    )
 }
 
 @Singleton
@@ -148,7 +147,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
     private val source: AvanzaSource,
     private val dao: FundMetadataDao,
     private val preferencesRepository: PreferencesRepository,
-    private val fundPriceRepository: FundPriceRepository,
+    private val fundPriceRepository: FundPriceRepository
 ) : FundMetadataRepository {
 
     /**
@@ -201,16 +200,14 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return Page(live.funds, live = true)
     }
 
-    private suspend fun fetchLive(query: FundScreenQuery): AvanzaFundListParser.ParsedFundListPage? =
-        runCatching {
-            val payload = AvanzaFundListRequestBuilder.buildPayload(query)
-            AvanzaFundListParser.parse(source.fetchFundList(payload))
-        }.onFailure { e ->
-            Log.w(TAG, "Kunde inte hämta fondmetadata, faller tillbaka på cachen", e)
-        }.getOrNull()
+    private suspend fun fetchLive(query: FundScreenQuery): AvanzaFundListParser.ParsedFundListPage? = runCatching {
+        val payload = AvanzaFundListRequestBuilder.buildPayload(query)
+        AvanzaFundListParser.parse(source.fetchFundList(payload))
+    }.onFailure { e ->
+        Log.w(TAG, "Kunde inte hämta fondmetadata, faller tillbaka på cachen", e)
+    }.getOrNull()
 
-    private suspend fun offlineQuery(query: FundScreenQuery): List<FundMetadata> =
-        FundScreenFilter.apply(dao.getAll().map { it.toDomain() }, query)
+    private suspend fun offlineQuery(query: FundScreenQuery): List<FundMetadata> = FundScreenFilter.apply(dao.getAll().map { it.toDomain() }, query)
 
     /**
      * En färsk [FundMetadata] från källan bär aldrig köpbarhet eller jämförelseresultat (de
@@ -228,7 +225,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
             cheapestAlternativeIsin = existing?.cheapestAlternativeIsin,
             cheapestAlternativeFee = existing?.cheapestAlternativeFee,
             shownAlternativeIsinsJson = existing?.shownAlternativeIsinsJson ?: "[]",
-            comparisonResolvedAtEpochDay = existing?.comparisonResolvedAtEpochDay,
+            comparisonResolvedAtEpochDay = existing?.comparisonResolvedAtEpochDay
         )
     }
 
@@ -249,8 +246,8 @@ class AvanzaFundMetadataRepository @Inject constructor(
         dao.upsert(
             cached.copy(
                 availableAtHandelsbanken = available,
-                availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay(),
-            ),
+                availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay()
+            )
         )
         return available
     }
@@ -327,8 +324,8 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 cheapestAlternativeIsin = best?.candidate?.isin,
                 cheapestAlternativeFee = best?.candidateFeePercent,
                 shownAlternativeIsinsJson = FundAlternativeIsinsCodec.encode(shown.map { it.candidate.isin }),
-                comparisonResolvedAtEpochDay = LocalDate.now().toEpochDay(),
-            ),
+                comparisonResolvedAtEpochDay = LocalDate.now().toEpochDay()
+            )
         )
     }
 
@@ -380,8 +377,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return dao.getByIsins(distinct).associate { it.isin to it.toDomain() }
     }
 
-    override suspend fun cachedRiskByFundName(): Map<String, Int> =
-        // Sista raden vinner vid namnkollision (andelsklasser med identiskt normaliserat namn).
+    override suspend fun cachedRiskByFundName(): Map<String, Int> = // Sista raden vinner vid namnkollision (andelsklasser med identiskt normaliserat namn).
         // Ett godtyckligt men konsekvent val: alternativet vore att utelämna kollisioner helt,
         // men två andelsklasser av samma fond har i praktiken samma risknivå — det är den
         // siffran som visas, oavsett vilken rad den lästes ur.
@@ -395,8 +391,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
         return (fromVocabulary + fromCache).distinct().sorted()
     }
 
-    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> =
-        searchSwitchCandidates(level, excludeIsins).candidates
+    override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = searchSwitchCandidates(level, excludeIsins).candidates
 
     /**
      * Med [indexOnly] (issue #150) sållas fonder som inte är indexfonder bort **före** rangordning
@@ -425,7 +420,7 @@ class AvanzaFundMetadataRepository @Inject constructor(
                 risk = listOf(level.toString()),
                 sortField = SORT_FIELD_DEVELOPMENT_ONE_YEAR,
                 sortDirection = FundScreenSortDirection.DESCENDING,
-                startIndex = page * FundScreenFilter.PAGE_SIZE,
+                startIndex = page * FundScreenFilter.PAGE_SIZE
             )
             val fetched = queryPage(pageQuery, storeVocabulary = page == 0)
             if (page > 0 && !fetched.live) {
@@ -461,9 +456,11 @@ class AvanzaFundMetadataRepository @Inject constructor(
             if (verified.size >= MAX_SWITCH_CANDIDATES) break
             when (resolveHandelsbankenAvailability(metadata.isin)) {
                 true -> verified += SwitchPlanCalc.Candidate(metadata, metadata.developmentOneYear!!)
+
                 // Null = okänt, inte "nej" (se resolveHandelsbankenAvailability) — räknas
                 // fortfarande bort, men utfallet säger att det inte gick att kontrollera.
                 null -> lookupFailed = true
+
                 false -> Unit
             }
         }

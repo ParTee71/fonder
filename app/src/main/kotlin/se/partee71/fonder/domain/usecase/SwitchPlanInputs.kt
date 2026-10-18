@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -10,7 +11,6 @@ import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.Transaction
-import java.time.LocalDate
 
 /**
  * Portföljläget bytesplanens nivåer räknas på — innehaven med värde ur kurscachen, deras
@@ -29,7 +29,7 @@ class SwitchPlanInputs(
     val holdings: List<Holding>,
     val prices: Map<String, FundPrice>,
     val metadataByIsin: Map<String, FundMetadata>,
-    val pendingProceedsByLevel: Map<Int, Double>,
+    val pendingProceedsByLevel: Map<Int, Double>
 ) {
     val heldIsins: Set<String> get() = holdings.mapNotNullTo(mutableSetOf()) { it.fund.isin }
 
@@ -45,7 +45,7 @@ class SwitchPlanInputs(
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate,
             metadataFor: suspend (List<String>) -> Map<String, FundMetadata>,
-            excludeWatchId: Long? = null,
+            excludeWatchId: Long? = null
         ): SwitchPlanInputs {
             val funds = transactionRepository.observeFunds().first()
             if (funds.isEmpty()) return SwitchPlanInputs(funds, emptyList(), emptyList(), emptyMap(), emptyMap(), emptyMap())

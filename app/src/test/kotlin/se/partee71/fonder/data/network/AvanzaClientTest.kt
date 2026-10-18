@@ -1,8 +1,8 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Enhetstest för den rena URL-byggaren i [AvanzaClient] (nätverksdelen kräver riktig HTTP och
@@ -19,12 +19,12 @@ class AvanzaClientTest {
             orderbookId = "236069",
             from = LocalDate.of(2025, 6, 10),
             to = LocalDate.of(2026, 7, 20),
-            today = LocalDate.of(2026, 7, 20),
+            today = LocalDate.of(2026, 7, 20)
         )
 
         assertEquals(
             "https://www.avanza.se/_api/fund-guide/chart/236069/2025-06-10/2026-07-20?raw=true&resolution=DAY",
-            url,
+            url
         )
     }
 
@@ -34,12 +34,12 @@ class AvanzaClientTest {
             orderbookId = "236069",
             from = LocalDate.of(2026, 7, 1),
             to = LocalDate.of(2026, 7, 31),
-            today = LocalDate.of(2026, 7, 20),
+            today = LocalDate.of(2026, 7, 20)
         )
 
         assertEquals(
             "https://www.avanza.se/_api/fund-guide/chart/236069/2026-07-01/2026-07-20?raw=true&resolution=DAY",
-            url,
+            url
         )
     }
 
@@ -49,12 +49,12 @@ class AvanzaClientTest {
             orderbookId = "1",
             from = LocalDate.of(2020, 1, 1),
             to = LocalDate.of(2020, 6, 1),
-            today = LocalDate.of(2026, 7, 20),
+            today = LocalDate.of(2026, 7, 20)
         )
 
         assertEquals(
             "https://www.avanza.se/_api/fund-guide/chart/1/2020-01-01/2020-06-01?raw=true&resolution=DAY",
-            url,
+            url
         )
     }
 }

@@ -1,10 +1,10 @@
 package se.partee71.fonder.domain.usecase
 
-import se.partee71.fonder.domain.model.FundPrice
-import se.partee71.fonder.domain.model.Holding
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.pow
+import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.Holding
 
 /**
  * Nyckeltal och säljsignaler per innehav (issue #16) — hjälper användaren följa en fond över
@@ -34,6 +34,7 @@ object FundAnalysisCalc {
     /** Riskmått (ANA-7, issue #24) — fasta konstanter, ej konfigurerbara i v1. */
     private const val TRADING_DAYS_PER_YEAR = 252.0
     private const val RISK_FREE_RATE = 0.0
+
     /** Minsta antal dagsavkastningar för att volatilitet/Sharpe ska beräknas (~3 mån handel). */
     private const val MIN_RETURN_SAMPLES = 60
 
@@ -77,7 +78,7 @@ object FundAnalysisCalc {
         /** Annualiserad standardavvikelse på dagsavkastningar (ANA-7). Null = för kort historik (ANA-4). */
         val annualizedVolatility: Double?,
         /** Riskjusterad avkastning, [annualizedVolatility] i nämnaren (ANA-7). Null = för kort historik eller nollvolatilitet. */
-        val sharpeRatio: Double?,
+        val sharpeRatio: Double?
     )
 
     /**
@@ -91,7 +92,7 @@ object FundAnalysisCalc {
         val momentum: MomentumSignal?,
         val status: SignalLevel?,
         /** Null = otillräcklig data (samma [KeyFigures.gavFraction]-gate, ANA-4). Deltar inte i [status] (ANA-8). */
-        val profitTake: ProfitTakeSignal?,
+        val profitTake: ProfitTakeSignal?
     )
 
     /**
@@ -112,7 +113,7 @@ object FundAnalysisCalc {
         priceHistory: List<FundPrice>,
         firstPurchaseDate: LocalDate,
         portfolioTotalValue: Double,
-        otherHoldingsAverageThreeMonthReturn: Double?,
+        otherHoldingsAverageThreeMonthReturn: Double?
     ): Analysis? {
         if (holding.netShares <= 0.0) return null
         val currentNav = priceHistory.maxByOrNull { it.epochDay }?.nav ?: return null
@@ -122,7 +123,7 @@ object FundAnalysisCalc {
             Period.TRE_MANADER to today.minusMonths(3),
             Period.ETT_AR to today.minusYears(1),
             Period.TRE_AR to today.minusYears(3),
-            Period.SEDAN_KOP to firstPurchaseDate,
+            Period.SEDAN_KOP to firstPurchaseDate
         ).map { (period, start) -> periodReturn(period, start, priceHistory, currentNav, holding.netShares) }
 
         val sincePurchaseFraction = periodReturns.first { it.period == Period.SEDAN_KOP }.fraction
@@ -155,14 +156,14 @@ object FundAnalysisCalc {
                 gavFraction = gavFraction,
                 portfolioShareFraction = portfolioShareFraction,
                 annualizedVolatility = annualizedVolatility,
-                sharpeRatio = sharpeRatio,
+                sharpeRatio = sharpeRatio
             ),
             distanceFromHigh = distanceFromHigh,
             trend = trend,
             momentum = momentum,
             // Deltar medvetet inte i combineStatus nedan (ANA-8) — se ProfitTakeSignal-docen.
             status = combineStatus(listOfNotNull(distanceFromHigh?.level, trend?.level, momentum?.level)),
-            profitTake = profitTakeSignal(gavFraction),
+            profitTake = profitTakeSignal(gavFraction)
         )
     }
 
@@ -193,7 +194,7 @@ object FundAnalysisCalc {
         periodStart: LocalDate,
         priceHistory: List<FundPrice>,
         currentNav: Double,
-        shares: Double,
+        shares: Double
     ): PeriodReturn {
         val historicalNav = priceHistory
             .filter { it.epochDay <= periodStart.toEpochDay() }
@@ -274,7 +275,7 @@ object FundAnalysisCalc {
         val sma = MovingAverageCalc.averageAt(
             points = priceHistory.map { it.epochDay to it.nav },
             epochDay = today.toEpochDay(),
-            windowDays = SMA_WINDOW_DAYS,
+            windowDays = SMA_WINDOW_DAYS
         ) ?: return null
         val level = if (currentNav < sma) SignalLevel.GUL else SignalLevel.GRON
         return TrendSignal(level)

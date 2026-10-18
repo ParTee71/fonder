@@ -1,11 +1,11 @@
 package se.partee71.fonder.data.repository
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
 
 /**
  * In-memory-fake av [SuggestionRecordRepository] för läsarna av bytesplanen (HEM-8) — Översikten,

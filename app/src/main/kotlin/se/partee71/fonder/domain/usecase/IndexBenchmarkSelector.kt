@@ -56,7 +56,7 @@ object IndexBenchmarkSelector {
         fundType = listOf(TAG_TYPE_EQUITY),
         region = listOf(TAG_REGION_GLOBAL),
         sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
-        sortDirection = FundScreenSortDirection.ASCENDING,
+        sortDirection = FundScreenSortDirection.ASCENDING
     )
 
     /**
@@ -72,7 +72,7 @@ object IndexBenchmarkSelector {
     val BOND_QUERY = FundScreenQuery(
         fundType = listOf(TAG_TYPE_BOND),
         sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
-        sortDirection = FundScreenSortDirection.ASCENDING,
+        sortDirection = FundScreenSortDirection.ASCENDING
     )
 
     /** En del av referensen: en fond och dess vikt (andel av varje insättning). */
@@ -114,7 +114,7 @@ object IndexBenchmarkSelector {
         val unclassified = if (total <= 0.0) 1.0 else ((total - classified) / total).coerceIn(0.0, 1.0)
         return ExposureSplit(
             equityShare = if (classified <= 0.0) 1.0 else equity / classified,
-            unclassifiedFraction = unclassified,
+            unclassifiedFraction = unclassified
         )
     }
 
@@ -132,7 +132,7 @@ object IndexBenchmarkSelector {
     fun select(
         equityCandidates: List<FundMetadata>,
         bondCandidates: List<FundMetadata>,
-        equityShare: Double,
+        equityShare: Double
     ): Benchmark? {
         val share = equityShare.coerceIn(0.0, 1.0)
         val equity = bestOf(equityCandidates) { isGlobalEquity(it) }
@@ -153,26 +153,23 @@ object IndexBenchmarkSelector {
         val sum = chosen.sumOf { it.second }
         return Benchmark(
             components = chosen.map { (metadata, weight) -> Component(metadata, weight / sum) },
-            missingBondComponent = missingBond,
+            missingBondComponent = missingBond
         )
     }
 
-    private fun bestOf(candidates: List<FundMetadata>, matchesType: (FundMetadata) -> Boolean): FundMetadata? =
-        candidates
-            .filter { it.indexFund && it.totalFee != null && matchesType(it) }
-            .minWithOrNull(
-                compareBy<FundMetadata> { it.totalFee }
-                    // Längre historik = jämförelsen når längre bak innan den måste ge upp
-                    // (se PortfolioReturnSeriesCalc.benchmark). Okänt startdatum sorteras sist
-                    // genom att behandlas som "startade idag", aldrig som "startade år noll".
-                    .thenBy { it.startDateEpochDay ?: Long.MAX_VALUE }
-                    .thenBy { it.isin },
-            )
+    private fun bestOf(candidates: List<FundMetadata>, matchesType: (FundMetadata) -> Boolean): FundMetadata? = candidates
+        .filter { it.indexFund && it.totalFee != null && matchesType(it) }
+        .minWithOrNull(
+            compareBy<FundMetadata> { it.totalFee }
+                // Längre historik = jämförelsen når längre bak innan den måste ge upp
+                // (se PortfolioReturnSeriesCalc.benchmark). Okänt startdatum sorteras sist
+                // genom att behandlas som "startade idag", aldrig som "startade år noll".
+                .thenBy { it.startDateEpochDay ?: Long.MAX_VALUE }
+                .thenBy { it.isin }
+        )
 
-    private fun isGlobalEquity(metadata: FundMetadata): Boolean =
-        hasType(metadata, TAG_TYPE_EQUITY) &&
-            metadata.tags.any { it.category == FundTag.CATEGORY_COMMON_REGION && it.title == TAG_REGION_GLOBAL }
+    private fun isGlobalEquity(metadata: FundMetadata): Boolean = hasType(metadata, TAG_TYPE_EQUITY) &&
+        metadata.tags.any { it.category == FundTag.CATEGORY_COMMON_REGION && it.title == TAG_REGION_GLOBAL }
 
-    private fun hasType(metadata: FundMetadata, title: String): Boolean =
-        metadata.tags.any { it.category == FundTag.CATEGORY_TYPE && it.title == title }
+    private fun hasType(metadata: FundMetadata, title: String): Boolean = metadata.tags.any { it.category == FundTag.CATEGORY_TYPE && it.title == title }
 }

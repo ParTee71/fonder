@@ -63,18 +63,30 @@ class BackupRoundTripTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dataStore = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
-            produceFile = { tempFolder.newFile("backup_roundtrip.preferences_pb") },
+            produceFile = { tempFolder.newFile("backup_roundtrip.preferences_pb") }
         )
         preferences = PreferencesRepository(dataStore)
         backup = LocalBackupRepository(
-            db, db.fundDao(), db.transactionDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(), preferences,
+            db,
+            db.fundDao(),
+            db.transactionDao(),
+            db.suggestionRecordDao(),
+            db.switchWatchDao(),
+            db.suggestionDismissalDao(),
+            preferences
         )
         transactions = RoomTransactionRepository(
-            db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(),
+            db,
+            db.fundDao(),
+            db.transactionDao(),
+            db.fundPriceDao(),
+            db.suggestionRecordDao(),
+            db.switchWatchDao(),
+            db.suggestionDismissalDao()
         )
     }
 
@@ -85,10 +97,10 @@ class BackupRoundTripTest {
         db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033", fondlistaFundId = "SHB0000442"))
         db.fundDao().upsert(FundEntity(fundId = "LU0055631609", name = "Fond B", currency = "USD", isin = null, fondlistaFundId = null))
         db.transactionDao().insert(
-            TransactionEntity(id = 11, fundId = "SHB0000442", type = "KOP", epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0),
+            TransactionEntity(id = 11, fundId = "SHB0000442", type = "KOP", epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0)
         )
         db.transactionDao().insert(
-            TransactionEntity(id = 12, fundId = "SHB0000442", type = "SALJ", epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0),
+            TransactionEntity(id = 12, fundId = "SHB0000442", type = "SALJ", epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0)
         )
         // followed i alla tre lägen — kolumnen är ett *val*, inte en mätning, och kan inte
         // härledas i efterhand: tappas den kan facit (SET-5) aldrig skilja ett följt råd från
@@ -97,15 +109,15 @@ class BackupRoundTripTest {
             SuggestionRecordEntity(
                 id = 1, suggestedAtEpochDay = 19_800, planIndex = 0, sellIsin = "SE0000582033", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 95.25, switchValueKr = 4_200.0, followed = true,
-                batchEpochMillis = 1_754_200_000_000,
-            ),
+                batchEpochMillis = 1_754_200_000_000
+            )
         )
         db.suggestionRecordDao().insert(
             SuggestionRecordEntity(
                 id = 2, suggestedAtEpochDay = 19_800, planIndex = 1, sellIsin = "SE0000582033", buyIsin = "SE0004617590",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 55.0, switchValueKr = null, followed = false,
-                batchEpochMillis = 1_754_200_000_000,
-            ),
+                batchEpochMillis = 1_754_200_000_000
+            )
         )
         db.suggestionRecordDao().insert(
             SuggestionRecordEntity(
@@ -114,8 +126,8 @@ class BackupRoundTripTest {
                 batchEpochMillis = 0,
                 // Ett avgiftsbyte (issue #91): sorten avgör vilken summering raden räknas i och
                 // om Hem visar den — tappas den i rundturen byter rådet betydelse.
-                kind = SuggestionKind.FEE.name,
-            ),
+                kind = SuggestionKind.FEE.name
+            )
         )
         // Ett öppet och ett avslutat byte (ANA-12, issue #114). Nollpunkten (navAtStart) kan
         // inte återskapas i efterhand — kandidaten ligger inte i kurscachen (ANA-11) — och det
@@ -126,22 +138,30 @@ class BackupRoundTripTest {
                 id = 1, sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 19_900,
                 proceedsKr = 12_500.0, targetLevel = 4, sourceRecordId = 1,
                 closedAtEpochDay = null, boughtIsin = null, closeReason = null,
-                sellTransactionId = 12, buyTransactionId = null,
-            ),
+                sellTransactionId = 12, buyTransactionId = null
+            )
         )
         db.switchWatchDao().insertCandidates(
             listOf(
                 SwitchWatchCandidateEntity(
-                    watchId = watchId, isin = "SE0001466368", name = "Kandidat A",
-                    navAtStart = 95.25, navAtStartEpochDay = 19_900,
-                    source = SwitchWatchCandidateSource.AUTO.name, position = 0,
+                    watchId = watchId,
+                    isin = "SE0001466368",
+                    name = "Kandidat A",
+                    navAtStart = 95.25,
+                    navAtStartEpochDay = 19_900,
+                    source = SwitchWatchCandidateSource.AUTO.name,
+                    position = 0
                 ),
                 SwitchWatchCandidateEntity(
-                    watchId = watchId, isin = "SE0004617590", name = "Kandidat B",
-                    navAtStart = null, navAtStartEpochDay = null,
-                    source = SwitchWatchCandidateSource.MANUELL.name, position = 1,
-                ),
-            ),
+                    watchId = watchId,
+                    isin = "SE0004617590",
+                    name = "Kandidat B",
+                    navAtStart = null,
+                    navAtStartEpochDay = null,
+                    source = SwitchWatchCandidateSource.MANUELL.name,
+                    position = 1
+                )
+            )
         )
         // Användarens val på skärmen (ANA-13, issue #150): en annan nivå än förslagets och bara
         // indexfonder — båda val, inte härledda, och därför en del av kontraktet.
@@ -153,23 +173,23 @@ class BackupRoundTripTest {
                 proceedsKr = null, targetLevel = null, sourceRecordId = null,
                 closedAtEpochDay = 19_505, boughtIsin = "SE0001466368",
                 closeReason = SwitchWatchCloseReason.KOPT.name,
-                sellTransactionId = null, buyTransactionId = 11,
-            ),
+                sellTransactionId = null, buyTransactionId = 11
+            )
         )
         // Avstådda förslag (HEM-14) — ett val per fondpar och sort som inte går att räkna fram;
         // tappas det dyker varje avstått förslag upp igen efter återställningen.
         db.suggestionDismissalDao().upsert(
-            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0004617590", kind = SuggestionKind.RISK_PLAN.name, dismissedAtEpochDay = 19_801),
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0004617590", kind = SuggestionKind.RISK_PLAN.name, dismissedAtEpochDay = 19_801)
         )
         db.suggestionDismissalDao().upsert(
-            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE.name, dismissedAtEpochDay = 19_401),
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE.name, dismissedAtEpochDay = 19_401)
         )
         preferences.setRiskProfile(
             RiskProfile(
                 targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
                 answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-                targetRiskLevel = 4,
-            ),
+                targetRiskLevel = 4
+            )
         )
         preferences.setAccountType(AccountType.ISK_KF)
         preferences.setThemeMode(ThemeMode.DARK)
@@ -195,7 +215,7 @@ class BackupRoundTripTest {
 
         assertEquals(
             RestoreSummary(funds = 2, transactions = 2, suggestionRecords = 3, switchWatches = 2),
-            summary,
+            summary
         )
 
         val funds = db.fundDao().getAll().sortedBy { it.fundId }
@@ -218,7 +238,7 @@ class BackupRoundTripTest {
         assertEquals(listOf(1_754_200_000_000L, 1_754_200_000_000L, 0L), records.map { it.batchEpochMillis })
         assertEquals(
             listOf(SuggestionKind.RISK_PLAN, SuggestionKind.RISK_PLAN, SuggestionKind.FEE),
-            records.map { it.toDomain().kind },
+            records.map { it.toDomain().kind }
         )
         assertEquals(listOf(0, 1, 0), records.map { it.planIndex })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
@@ -248,7 +268,7 @@ class BackupRoundTripTest {
         assertEquals(listOf(19_900L, null), open.candidates.map { it.navAtStartEpochDay })
         assertEquals(
             listOf(SwitchWatchCandidateSource.AUTO, SwitchWatchCandidateSource.MANUELL),
-            open.candidates.map { it.source },
+            open.candidates.map { it.source }
         )
 
         val closed = watches.last()
@@ -344,7 +364,7 @@ class BackupRoundTripTest {
         assertNull(status.reminder.first())
 
         db.transactionDao().insert(
-            TransactionEntity(id = 99, fundId = "SHB0000442", type = "KOP", epochDay = 19_600, shares = 1.0, pricePerShare = 190.0, fee = 0.0),
+            TransactionEntity(id = 99, fundId = "SHB0000442", type = "KOP", epochDay = 19_600, shares = 1.0, pricePerShare = 190.0, fee = 0.0)
         )
 
         assertEquals(1, status.reminder.first()?.newTransactions)
@@ -395,7 +415,7 @@ class BackupRoundTripTest {
     fun cachade_kurser_ingar_inte_i_filen_och_roras_inte_av_en_aterstallning() = runTest {
         seed()
         db.fundPriceDao().upsertAll(
-            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 19_500, nav = 201.5, currency = "SEK")),
+            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 19_500, nav = 201.5, currency = "SEK"))
         )
         val json = backup.export().getOrThrow()
 

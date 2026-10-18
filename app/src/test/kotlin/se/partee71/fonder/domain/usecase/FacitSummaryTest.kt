@@ -31,12 +31,12 @@ class FacitSummaryTest {
         id: Long,
         followed: Boolean? = true,
         switchValueKr: Double? = 10_000.0,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SuggestionRecord(
         id = id, suggestedAtEpochDay = 20_000, planIndex = 0,
         sellIsin = "SE_SELL", buyIsin = "SE_BUY",
         sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 200.0,
-        switchValueKr = switchValueKr, followed = followed, kind = kind,
+        switchValueKr = switchValueKr, followed = followed, kind = kind
     )
 
     /** Säljfonden är bevakad (kurs under fondens fundId), köpfonden inte (kurs under ISIN:et). */
@@ -106,7 +106,7 @@ class FacitSummaryTest {
         prices(sellNavNow = 105.0, buyNavNow = 224.0)
         suggestionRepo.records.value = listOf(
             record(id = 1),
-            record(id = 2, switchValueKr = 20_000.0, kind = SuggestionKind.FEE),
+            record(id = 2, switchValueKr = 20_000.0, kind = SuggestionKind.FEE)
         )
 
         val snapshot = summary.observe().first()

@@ -33,7 +33,7 @@ enum class StateChipTone {
     Tertiary,
 
     /** Ytvarianten — Avstått, Avbrutet, Utgånget och risknivån ([RiskBadge]). */
-    Neutral,
+    Neutral
 }
 
 /**
@@ -49,7 +49,7 @@ fun StateChip(
     text: String,
     tone: StateChipTone,
     modifier: Modifier = Modifier,
-    contentDescription: String? = null,
+    contentDescription: String? = null
 ) {
     val (container, content) = tone.colors()
     Row(
@@ -58,7 +58,7 @@ fun StateChip(
             .background(container)
             .padding(horizontal = 10.dp, vertical = 4.dp)
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text, style = MaterialTheme.typography.labelMedium, color = content)
     }

@@ -5,17 +5,18 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.text.AnnotatedString
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -27,11 +28,11 @@ import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
-import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
+import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
@@ -39,7 +40,6 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Fliken Beslut (NAV-9) i JVM med Robolectric: rubrikraden mot riskprofilen, listan Byten (BYT-4)
@@ -54,7 +54,7 @@ class BeslutScreenTest {
 
     private val balanced = RiskProfile(
         targetAllocation = mapOf(4 to 1.0),
-        answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
+        answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD)
     )
 
     /** Det billigare alternativet ur mockupen (ANA-9): 1,40 % → 0,40 % på 96 000 kr sparar 960 kr per år. */
@@ -62,10 +62,10 @@ class BeslutScreenTest {
         suggestion = SwitchPlanResolver.Suggestion(
             recordId = 21, planIndex = 0, sellIsin = "SE_SB", buyIsin = "SE_SBI",
             sellFundName = "Sverige Småbolag", buyFundName = "Småbolag Index",
-            fromLevel = 5, toLevel = 5, feeDeltaPercent = -1.0, switchValueKr = 96_000.0, kind = SuggestionKind.FEE,
+            fromLevel = 5, toLevel = 5, feeDeltaPercent = -1.0, switchValueKr = 96_000.0, kind = SuggestionKind.FEE
         ),
         sellFeePercent = 1.40,
-        buyFeePercent = 0.40,
+        buyFeePercent = 0.40
     )
 
     private val today = LocalDate.of(2026, 10, 13)
@@ -73,30 +73,39 @@ class BeslutScreenTest {
     private val planRow1 = SwitchPlanResolver.Suggestion(
         recordId = 11, planIndex = 0, sellIsin = "SE_TM", buyIsin = "SE_GI",
         sellFundName = "Tillväxtmarknad Bred", buyFundName = "Global Indexfond A",
-        fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.9, switchValueKr = 300.0, inProgress = true,
+        fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.9, switchValueKr = 300.0, inProgress = true
     )
     private val planRow2 = SwitchPlanResolver.Suggestion(
         recordId = 12, planIndex = 1, sellIsin = "SE_SB", buyIsin = "SE_RF",
         sellFundName = "Sverige Småbolag", buyFundName = "Räntefond Kort",
-        fromLevel = 5, toLevel = 2, feeDeltaPercent = -1.05, switchValueKr = 12_500.0,
+        fromLevel = 5, toLevel = 2, feeDeltaPercent = -1.05, switchValueKr = 12_500.0
     )
     private val planRow3 = SwitchPlanResolver.Suggestion(
         recordId = 13, planIndex = 2, sellIsin = "SE_EN", buyIsin = "SE_RB",
         sellFundName = "Energi Norden", buyFundName = "Räntefond Bred",
-        fromLevel = 6, toLevel = 3, feeDeltaPercent = -0.4, switchValueKr = 4_000.0, followed = true,
+        fromLevel = 6, toLevel = 3, feeDeltaPercent = -0.4, switchValueKr = 4_000.0, followed = true
     )
 
     /** Ett köpt och ett utgånget byte, stängda inom 14 dagar (BYT-4). */
     private val closedWatches = listOf(
         SwitchWatch(
-            id = 5, sellIsin = "SE_AMF", sellFundName = "Aktiefond Global", soldAtEpochDay = today.toEpochDay() - 9,
-            closedAtEpochDay = LocalDate.of(2026, 10, 7).toEpochDay(), closeReason = SwitchWatchCloseReason.KOPT, boughtIsin = "SE_GIX",
-            candidates = listOf(SwitchWatchCandidate(isin = "SE_GIX", name = "Global Indexnära")),
+            id = 5,
+            sellIsin = "SE_AMF",
+            sellFundName = "Aktiefond Global",
+            soldAtEpochDay = today.toEpochDay() - 9,
+            closedAtEpochDay = LocalDate.of(2026, 10, 7).toEpochDay(),
+            closeReason = SwitchWatchCloseReason.KOPT,
+            boughtIsin = "SE_GIX",
+            candidates = listOf(SwitchWatchCandidate(isin = "SE_GIX", name = "Global Indexnära"))
         ),
         SwitchWatch(
-            id = 6, sellIsin = "SE_NGS", sellFundName = "Global Stars", soldAtEpochDay = today.toEpochDay() - 20,
-            closedAtEpochDay = today.toEpochDay() - 5, closeReason = SwitchWatchCloseReason.UTGANGEN,
-        ),
+            id = 6,
+            sellIsin = "SE_NGS",
+            sellFundName = "Global Stars",
+            soldAtEpochDay = today.toEpochDay() - 20,
+            closedAtEpochDay = today.toEpochDay() - 5,
+            closeReason = SwitchWatchCloseReason.UTGANGEN
+        )
     )
 
     /**
@@ -115,21 +124,21 @@ class BeslutScreenTest {
                 OpenSwitchWatch(
                     watchId = 3, sellFundName = "Tillväxtmarknad Bred", daysWaiting = 2, candidateCount = 3,
                     leaderName = "Global Indexfond A", leaderChangeFraction = 0.018, proceedsKr = 18_400.0,
-                    sourceRecordId = 11, sourceKind = SuggestionKind.RISK_PLAN,
-                ),
+                    sourceRecordId = 11, sourceKind = SuggestionKind.RISK_PLAN
+                )
             ),
             switchPlan = listOf(planRow1, planRow2, planRow3),
             cheaperAlternatives = listOf(cheaper),
-            dismissedSuggestions = listOf(planRow2.copy(recordId = 14, sellFundName = "Aktiefond Investmentbolag", buyFundName = "Zero")),
-        ).withSwitches(closedWatches, today),
+            dismissedSuggestions = listOf(planRow2.copy(recordId = 14, sellFundName = "Aktiefond Investmentbolag", buyFundName = "Zero"))
+        ).withSwitches(closedWatches, today)
     )
 
     /** Allt avstått (HEM-14), ett byte i planen och ett billigare alternativ: inget att besluta, men raden för att ångra finns kvar. */
     private val withDismissed = full.copy(
         decisions = PendingDecisions(
             dismissedSuggestions = listOf(planRow2),
-            dismissedCheaperAlternatives = listOf(cheaper),
-        ).withSwitches(emptyList(), today),
+            dismissedCheaperAlternatives = listOf(cheaper)
+        ).withSwitches(emptyList(), today)
     )
 
     @Test
@@ -208,7 +217,7 @@ class BeslutScreenTest {
             "Sälj Sverige Småbolag → Köp Småbolag Index",
             "Sparar ca ${MoneyFormat.kr(960.0)}/år · avgift 1,40 % → 0,40 %",
             "Avslutade och avstådda (3)",
-            "Hur gick det?",
+            "Hur gick det?"
         ).forEach { text ->
             list.performScrollToNode(hasText(text))
             composeRule.onAllNodesWithText(text).assertCountEquals(1)
@@ -242,7 +251,7 @@ class BeslutScreenTest {
                 BeslutContent(
                     state = full,
                     onFollow = { followed = it },
-                    onDismissSuggestion = { dismissed = it },
+                    onDismissSuggestion = { dismissed = it }
                 )
             }
         }

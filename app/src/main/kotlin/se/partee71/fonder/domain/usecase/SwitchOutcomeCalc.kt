@@ -31,7 +31,7 @@ object SwitchOutcomeCalc {
         val sellReturn: Double? = null,
         val buyReturn: Double? = null,
         val excessReturn: Double? = null,
-        val excessKr: Double? = null,
+        val excessKr: Double? = null
     ) {
         val isEvaluated: Boolean get() = excessReturn != null
     }
@@ -48,7 +48,7 @@ object SwitchOutcomeCalc {
         val averageExcessReturn: Double? = null,
         val totalExcessKr: Double? = null,
         val evaluatedCount: Int = 0,
-        val totalCount: Int = 0,
+        val totalCount: Int = 0
     )
 
     /** Snittutfallet för en given plats i planen — se [byPlanIndex]. */
@@ -73,7 +73,7 @@ object SwitchOutcomeCalc {
             sellReturn = sellReturn,
             buyReturn = buyReturn,
             excessReturn = excess,
-            excessKr = record.switchValueKr?.let { it * excess },
+            excessKr = record.switchValueKr?.let { it * excess }
         )
     }
 
@@ -94,7 +94,7 @@ object SwitchOutcomeCalc {
             averageExcessReturn = if (evaluated.isEmpty()) null else evaluated.mapNotNull { it.excessReturn }.average(),
             totalExcessKr = if (withKr.isEmpty()) null else withKr.sum(),
             evaluatedCount = evaluated.size,
-            totalCount = outcomes.size,
+            totalCount = outcomes.size
         )
     }
 
@@ -104,8 +104,7 @@ object SwitchOutcomeCalc {
      * frågan avgör om `SwitchPlanCalc.MAX_SWITCHES_PER_PLAN` (3) kan höjas, och den går inte
      * att svara på förrän utfallen redovisas per plats.
      */
-    fun byPlanIndex(outcomes: List<Outcome>): List<PlanIndexSummary> =
-        outcomes.groupBy { it.record.planIndex }
-            .toSortedMap()
-            .map { (index, group) -> PlanIndexSummary(planIndex = index, summary = summarize(group)) }
+    fun byPlanIndex(outcomes: List<Outcome>): List<PlanIndexSummary> = outcomes.groupBy { it.record.planIndex }
+        .toSortedMap()
+        .map { (index, group) -> PlanIndexSummary(planIndex = index, summary = summarize(group)) }
 }

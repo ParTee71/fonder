@@ -1,8 +1,8 @@
 package se.partee71.fonder.ui.beslut
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,12 +33,13 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.MoneyFormat
-import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
+import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchOrigin
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRow
@@ -57,7 +58,6 @@ import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
-import java.time.LocalDate
 
 /** Gör Besluts lista adresserbar för `performScrollToIndex` i tester (UI-5, samma mönster som Hem och Facit). */
 const val BESLUT_LIST_TEST_TAG = "beslut_list"
@@ -69,7 +69,7 @@ fun BeslutScreen(
     onOpenFacit: () -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: BeslutViewModel = hiltViewModel(),
+    viewModel: BeslutViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -92,7 +92,7 @@ fun BeslutScreen(
         onUndoDismissal = viewModel::undoDismissal,
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
         onOpenFacit = onOpenFacit,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -115,7 +115,7 @@ fun BeslutContent(
     onDismissSuggestion: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onUndoDismissal: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onRecomputeSwitchPlan: () -> Unit = {},
-    onOpenFacit: () -> Unit = {},
+    onOpenFacit: () -> Unit = {}
 ) {
     val switches = state.switches
     LazyColumn(modifier = modifier.fillMaxSize().testTag(BESLUT_LIST_TEST_TAG)) {
@@ -126,7 +126,7 @@ fun BeslutContent(
                 EmptyState(
                     title = stringResource(R.string.beslut_empty_title),
                     body = stringResource(R.string.beslut_empty_body),
-                    icon = Icons.Outlined.TaskAlt,
+                    icon = Icons.Outlined.TaskAlt
                 )
             }
         } else {
@@ -137,7 +137,7 @@ fun BeslutContent(
                     onOpenSwitchWatch = onOpenSwitchWatch,
                     onFollow = onFollow,
                     onStartSwitchWatch = onStartSwitchWatch,
-                    onDismiss = onDismissSuggestion,
+                    onDismiss = onDismissSuggestion
                 )
             }
         }
@@ -157,16 +157,16 @@ fun BeslutContent(
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppButton(
                         text = stringResource(
-                            if (state.backgroundWorkRunning) R.string.switch_plan_recompute_running else R.string.switch_plan_recompute,
+                            if (state.backgroundWorkRunning) R.string.switch_plan_recompute_running else R.string.switch_plan_recompute
                         ),
                         onClick = onRecomputeSwitchPlan,
                         enabled = !state.backgroundWorkRunning,
-                        variant = AppButtonVariant.Text,
+                        variant = AppButtonVariant.Text
                     )
                     Text(
                         stringResource(R.string.switch_plan_recompute_explain),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -196,25 +196,25 @@ private fun ProfileHeader(riskProfile: RiskProfile?, accountType: AccountType?, 
                 stringResource(R.string.format_beslut_risk_profile, MoneyFormat.decimal(level))
             } else {
                 stringResource(R.string.beslut_no_risk_profile)
-            },
+            }
         )
         riskProfile?.answers?.goal?.let { add(stringResource(it.labelRes())) }
         accountType?.let { add(stringResource(it.labelRes())) }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             parts.joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f)
         )
         AppButton(
             text = stringResource(R.string.beslut_change_risk_profile),
             onClick = onChange,
-            variant = AppButtonVariant.Text,
+            variant = AppButtonVariant.Text
         )
     }
 }
@@ -228,7 +228,7 @@ private fun SectionHeading(title: String, working: Boolean = false) {
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
-            .semantics { heading() },
+            .semantics { heading() }
     )
 }
 
@@ -238,7 +238,7 @@ private fun CaptionText(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     )
 }
 
@@ -247,19 +247,19 @@ private fun CaptionText(text: String) {
 private fun SwitchesHeading(waiting: Int, working: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         CardTitleRow(
             title = stringResource(R.string.beslut_switches_title),
             working = working,
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f).semantics { heading() },
+            modifier = Modifier.weight(1f).semantics { heading() }
         )
         if (waiting > 0) {
             Text(
                 stringResource(R.string.format_beslut_switches_waiting, waiting),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -270,17 +270,23 @@ private fun SwitchesHeading(waiting: Int, working: Boolean) {
 private fun SwitchRowChip(row: SwitchRow) {
     val text = when (row.state) {
         SwitchRowState.PROPOSED -> stringResource(R.string.switch_state_proposed)
+
         SwitchRowState.FEE -> stringResource(R.string.switch_state_fee)
+
         SwitchRowState.SOLD -> stringResource(
             R.string.format_switch_state_sold,
             (row as SwitchRow.Sold).watch.daysWaiting,
-            SwitchWatchCalc.WATCH_TTL_DAYS,
+            SwitchWatchCalc.WATCH_TTL_DAYS
         )
+
         SwitchRowState.BOUGHT -> (row as? SwitchRow.Closed)?.closedAtEpochDay
             ?.let { stringResource(R.string.format_switch_state_bought, shortDate(LocalDate.ofEpochDay(it))) }
             ?: stringResource(R.string.switch_state_bought)
+
         SwitchRowState.CANCELLED -> stringResource(R.string.switch_state_cancelled)
+
         SwitchRowState.EXPIRED -> stringResource(R.string.switch_state_expired)
+
         SwitchRowState.DISMISSED -> stringResource(R.string.switch_state_dismissed)
     }
     val tone = when (row.state) {
@@ -295,8 +301,7 @@ private fun SwitchRowChip(row: SwitchRow) {
 
 /** "7 okt" — dag och kort månad på svenska, utan punkt. */
 @Composable
-private fun shortDate(date: LocalDate): String =
-    "${date.dayOfMonth} ${stringArrayResource(R.array.month_short)[date.monthValue - 1]}"
+private fun shortDate(date: LocalDate): String = "${date.dayOfMonth} ${stringArrayResource(R.array.month_short)[date.monthValue - 1]}"
 
 /**
  * En rad i listan "Byten" (BYT-4): chip och ursprung, rubrik, underlag och radens beslut.
@@ -315,15 +320,17 @@ private fun SwitchRowCard(
     onOpenSwitchWatch: (Long) -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
-    onDismiss: (SwitchPlanResolver.Suggestion) -> Unit,
+    onDismiss: (SwitchPlanResolver.Suggestion) -> Unit
 ) {
     AppCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        contentPadding = PaddingValues(bottom = 8.dp),
+        contentPadding = PaddingValues(bottom = 8.dp)
     ) {
         when (row) {
             is SwitchRow.Suggested -> SuggestedRow(row, onFollow, onStartSwitchWatch, onDismiss)
+
             is SwitchRow.Sold -> SoldRow(row, onOpenSwitchWatch)
+
             // Avslutade och avstådda står i den hopfällda sektionen, aldrig bland de väntande.
             is SwitchRow.Closed, is SwitchRow.Dismissed -> Unit
         }
@@ -348,12 +355,12 @@ private fun SwitchRowText(row: SwitchRow, origin: String, title: String, details
                     Text(
                         details.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 lead?.invoke()
             }
-        },
+        }
     )
 }
 
@@ -363,7 +370,7 @@ private fun SwitchRowActions(content: @Composable () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) { content() }
 }
 
@@ -372,7 +379,7 @@ private fun SuggestedRow(
     row: SwitchRow.Suggested,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
-    onDismiss: (SwitchPlanResolver.Suggestion) -> Unit,
+    onDismiss: (SwitchPlanResolver.Suggestion) -> Unit
 ) {
     val suggestion = row.suggestion
     val cheaper = row.cheaper
@@ -386,12 +393,12 @@ private fun SuggestedRow(
                 suggestion.sellFundName,
                 suggestion.fromLevel,
                 suggestion.buyFundName,
-                suggestion.toLevel,
+                suggestion.toLevel
             ),
             details = listOfNotNull(
                 suggestion.switchValueKr?.let { stringResource(R.string.format_switch_plan_amount, MoneyFormat.kr(it)) },
-                stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0)),
-            ),
+                stringResource(R.string.format_switch_plan_fee_delta, MoneyFormat.percentSigned(suggestion.feeDeltaPercent / 100.0))
+            )
         )
     } else {
         SwitchRowText(
@@ -400,8 +407,8 @@ private fun SuggestedRow(
             title = stringResource(R.string.format_beslut_switch_pair, suggestion.sellFundName, suggestion.buyFundName),
             details = listOfNotNull(
                 cheaper.annualSavingsKr?.let { stringResource(R.string.format_beslut_cheaper_savings, MoneyFormat.kr(it)) },
-                stringResource(R.string.format_beslut_cheaper_fees, MoneyFormat.feePercent(cheaper.sellFeePercent), MoneyFormat.feePercent(cheaper.buyFeePercent)),
-            ),
+                stringResource(R.string.format_beslut_cheaper_fees, MoneyFormat.feePercent(cheaper.sellFeePercent), MoneyFormat.feePercent(cheaper.buyFeePercent))
+            )
         )
     }
     SwitchRowActions {
@@ -412,7 +419,7 @@ private fun SuggestedRow(
                 AppButton(
                     text = stringResource(R.string.switch_watch_start),
                     onClick = { onStartSwitchWatch(suggestion) },
-                    variant = AppButtonVariant.Text,
+                    variant = AppButtonVariant.Text
                 )
             }
         } else {
@@ -420,13 +427,13 @@ private fun SuggestedRow(
                 text = stringResource(R.string.beslut_dismiss),
                 onClick = { onDismiss(suggestion) },
                 variant = AppButtonVariant.Text,
-                contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, suggestion.sellFundName, suggestion.buyFundName),
+                contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
             AppButton(
                 text = stringResource(R.string.beslut_register_sale),
                 onClick = { onFollow(suggestion) },
                 variant = AppButtonVariant.Outlined,
-                contentDescription = stringResource(R.string.format_beslut_register_sale_a11y, suggestion.sellFundName, suggestion.buyFundName),
+                contentDescription = stringResource(R.string.format_beslut_register_sale_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
         }
     }
@@ -440,22 +447,24 @@ private fun SoldRow(row: SwitchRow.Sold, onOpen: (Long) -> Unit) {
         origin = when (row.origin) {
             SwitchOrigin.PLAN -> row.planIndex?.let { stringResource(R.string.format_switch_origin_plan_step, it + 1) }
                 ?: stringResource(R.string.switch_origin_plan)
+
             SwitchOrigin.FEE -> stringResource(R.string.fee_comparison_title)
+
             SwitchOrigin.STANDALONE -> stringResource(R.string.switch_origin_standalone)
         },
         title = stringResource(R.string.format_beslut_sold_title, watch.sellFundName),
         details = listOfNotNull(
             watch.proceedsKr?.let { stringResource(R.string.format_beslut_sold_proceeds, MoneyFormat.kr(it)) },
-            pluralStringResource(R.plurals.format_beslut_sold_candidates, watch.candidateCount, watch.candidateCount),
+            pluralStringResource(R.plurals.format_beslut_sold_candidates, watch.candidateCount, watch.candidateCount)
         ),
-        lead = { SoldLeader(watch) },
+        lead = { SoldLeader(watch) }
     )
     SwitchRowActions {
         AppButton(
             text = stringResource(R.string.beslut_open_watch),
             onClick = { onOpen(watch.watchId) },
             variant = AppButtonVariant.Outlined,
-            contentDescription = stringResource(R.string.format_beslut_open_watch_a11y, watch.sellFundName),
+            contentDescription = stringResource(R.string.format_beslut_open_watch_a11y, watch.sellFundName)
         )
     }
 }
@@ -472,7 +481,7 @@ private fun SoldLeader(watch: OpenSwitchWatch) {
         Text(
             stringResource(R.string.beslut_switch_watch_no_leader),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         return
     }
@@ -488,7 +497,7 @@ private fun SoldLeader(watch: OpenSwitchWatch) {
                 withStyle(MonoAmountStyle.toSpanStyle()) { append(MoneyFormat.percentSigned(change)) }
             }
         },
-        style = MaterialTheme.typography.bodySmall,
+        style = MaterialTheme.typography.bodySmall
     )
 }
 
@@ -501,13 +510,13 @@ private fun SoldLeader(watch: OpenSwitchWatch) {
 private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
     ExpandableSection(
         title = stringResource(R.string.format_beslut_closed_title, rows.size),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
     ) {
         Column {
             Text(
                 stringResource(R.string.format_beslut_closed_explain, SwitchWatchCalc.WATCH_TTL_DAYS, SuggestionDismissals.TTL_DAYS),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             rows.forEach { row ->
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 8.dp))
@@ -525,7 +534,9 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
             row.boughtFundName != null -> stringResource(R.string.format_beslut_switch_watch_title, row.sellFundName, row.boughtFundName)
             else -> stringResource(R.string.format_beslut_closed_bought_unknown, row.sellFundName)
         }
+
         is SwitchRow.Dismissed -> stringResource(R.string.format_beslut_switch_pair, row.suggestion.sellFundName, row.suggestion.buyFundName)
+
         is SwitchRow.Suggested, is SwitchRow.Sold -> return
     }
     ItemRow(
@@ -541,13 +552,13 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
                     contentDescription = stringResource(
                         R.string.format_beslut_undo_dismissal_a11y,
                         row.suggestion.sellFundName,
-                        row.suggestion.buyFundName,
-                    ),
+                        row.suggestion.buyFundName
+                    )
                 )
             }
         } else {
             null
-        },
+        }
     )
 }
 
@@ -561,26 +572,26 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
 private fun FacitRow(followedCount: Int, followedExcessKr: Double?, onOpen: () -> Unit) {
     AppCard(
         onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 pluralStringResource(R.plurals.format_beslut_facit_row, followedCount, followedCount),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             if (followedCount > 0 && followedExcessKr != null) {
                 Text(
                     MoneyFormat.krSigned(followedExcessKr),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
                     color = ReturnColors.forAmount(followedExcessKr),
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

@@ -38,21 +38,21 @@ class Migration910Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "CREATE TABLE `fx_rates` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))"
             )
             db.execSQL(
                 """
@@ -67,15 +67,15 @@ class Migration910Test {
                     `comparisonResolvedAtEpochDay` INTEGER,
                     PRIMARY KEY(`isin`)
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)",
+                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)"
             )
             db.execSQL(
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)",
+                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)"
             )
             db.execSQL("INSERT INTO fund_prices VALUES ('SHB0000442', 20658, 164.35, 'SEK')")
             db.execSQL("INSERT INTO fx_rates VALUES ('USD', 20658, 9.73973)")
@@ -87,7 +87,7 @@ class Migration910Test {
                     "cheapestAlternativeIsin, cheapestAlternativeFee, comparisonResolvedAtEpochDay) " +
                     "VALUES ('SE0000581434', 'Länsförsäkringar Sverige Index', '12345', 0.21, 0.2, " +
                     "'Sverige', 'EQUITY_FUND', 'Länsförsäkringar', 4, 1, NULL, 100.0, " +
-                    "'[]', 1, 20600, 20658, 'SE0001466368', 0.73, 20658)",
+                    "'[]', 1, 20600, 20658, 'SE0001466368', 0.73, 20658)"
             )
             db.version = 9
         }
@@ -110,10 +110,15 @@ class Migration910Test {
         // suggestion_records finns och är skrivbar (HEM-8, genuin användardata — NFR-1).
         db.suggestionRecordDao().insert(
             SuggestionRecordEntity(
-                suggestedAtEpochDay = 20658, planIndex = 0,
-                sellIsin = "SE0000581434", buyIsin = "SE0001466368",
-                sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0, followed = null,
-            ),
+                suggestedAtEpochDay = 20658,
+                planIndex = 0,
+                sellIsin = "SE0000581434",
+                buyIsin = "SE0001466368",
+                sellNavAtSuggestion = 100.0,
+                buyNavAtSuggestion = 50.0,
+                switchValueKr = 1_000.0,
+                followed = null
+            )
         )
         val records = db.suggestionRecordDao().getAll()
         assertEquals(1, records.size)
@@ -124,7 +129,7 @@ class Migration910Test {
         assertEquals(1, db.transactionDao().observeForFund("SHB0000442").first().size)
         assertTrue(
             db.fundPriceDao().getRange("SHB0000442", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-                .isNotEmpty(),
+                .isNotEmpty()
         )
         assertEquals(9.73973, db.fxRateDao().getLatest("USD")?.rate ?: -1.0, 1e-9)
 

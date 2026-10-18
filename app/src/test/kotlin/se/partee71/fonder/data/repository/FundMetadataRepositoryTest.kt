@@ -2,11 +2,13 @@ package se.partee71.fonder.data.repository
 
 import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -32,8 +34,6 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundScreenQuery
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.FundNameKey
-import java.io.IOException
-import java.time.LocalDate
 
 private class FakeAvanzaSource(var response: String = """{"fundListViews":[],"totalNoFunds":0,"filterCounts":{}}""") : AvanzaSource {
     var lastRequestBody: String? = null
@@ -67,11 +67,16 @@ private class FakeFundMetadataDao : FundMetadataDao {
     override suspend fun getAll(): List<FundMetadataEntity> = stored.values.toList()
     override suspend fun getByIsin(isin: String): FundMetadataEntity? = stored[isin]
     override suspend fun getByIsins(isins: List<String>): List<FundMetadataEntity> = isins.mapNotNull { stored[it] }
-    override suspend fun getKnownRisks(): List<FundNameRisk> =
-        stored.values.mapNotNull { row -> row.risk?.let { FundNameRisk(row.name, it) } }
-    override suspend fun upsert(row: FundMetadataEntity) { stored[row.isin] = row }
-    override suspend fun upsertAll(rows: List<FundMetadataEntity>) { rows.forEach { stored[it.isin] = it } }
-    override suspend fun deleteAll() { stored.clear() }
+    override suspend fun getKnownRisks(): List<FundNameRisk> = stored.values.mapNotNull { row -> row.risk?.let { FundNameRisk(row.name, it) } }
+    override suspend fun upsert(row: FundMetadataEntity) {
+        stored[row.isin] = row
+    }
+    override suspend fun upsertAll(rows: List<FundMetadataEntity>) {
+        rows.forEach { stored[it.isin] = it }
+    }
+    override suspend fun deleteAll() {
+        stored.clear()
+    }
 }
 
 /**
@@ -80,13 +85,13 @@ private class FakeFundMetadataDao : FundMetadataDao {
  */
 private val UNRELATED_CATALOG = FundCatalog(
     companies = emptyList(),
-    funds = listOf(Fund(fundId = "XZ", name = "Orelaterad Räntefond Kort", currency = "SEK")),
+    funds = listOf(Fund(fundId = "XZ", name = "Orelaterad Räntefond Kort", currency = "SEK"))
 )
 
 private class FakeFundPriceRepository(
     /** Null = katalogen kunde inte hämtas (nätverksfel), skilt från en tom katalog. */
     var catalog: FundCatalog? = UNRELATED_CATALOG,
-    private val isinByFundId: Map<String, String> = emptyMap(),
+    private val isinByFundId: Map<String, String> = emptyMap()
 ) : FundPriceRepository {
     var fetchFundCatalogCallCount = 0
     var lookupIsinCallCount = 0
@@ -135,8 +140,7 @@ class FundMetadataRepositoryTest {
     @After
     fun tearDown() = unmockkStatic(Log::class)
 
-    private fun repo(source: AvanzaSource, fundPriceRepository: FundPriceRepository = FakeFundPriceRepository()) =
-        AvanzaFundMetadataRepository(source, dao, preferencesRepository, fundPriceRepository)
+    private fun repo(source: AvanzaSource, fundPriceRepository: FundPriceRepository = FakeFundPriceRepository()) = AvanzaFundMetadataRepository(source, dao, preferencesRepository, fundPriceRepository)
 
     private fun fundListJson(totalNoFunds: Int, funds: List<Triple<String, String, String>>): String {
         val views = funds.joinToString(",") { (isin, name, region) ->
@@ -157,7 +161,7 @@ class FundMetadataRepositoryTest {
         indexFund: Boolean,
         tags: List<Pair<String, String>>,
         risk: Int? = null,
-        developmentOneYear: Double? = null,
+        developmentOneYear: Double? = null
     ): String {
         val feeField = if (totalFee != null) "\"totalFee\":$totalFee," else ""
         val riskField = if (risk != null) "\"risk\":$risk," else ""
@@ -167,17 +171,15 @@ class FundMetadataRepositoryTest {
     }
 
     /** En redan cachad metadatarad — för cache-bara läsvägar (SET-5, issue #80). */
-    private fun cachedEntity(isin: String, name: String, fetchedAtEpochDay: Long = LocalDate.now().toEpochDay()) =
-        FundMetadataEntity(
-            isin = isin, name = name, orderbookId = isin, totalFee = 0.2, managementFee = 0.2,
-            category = null, fundType = null, companyName = null, risk = 4, indexFund = false,
-            startDateEpochDay = null, minimumBuy = null, tagsJson = "[]",
-            availableAtHandelsbanken = null, availabilityResolvedAtEpochDay = null,
-            fetchedAtEpochDay = fetchedAtEpochDay,
-        )
+    private fun cachedEntity(isin: String, name: String, fetchedAtEpochDay: Long = LocalDate.now().toEpochDay()) = FundMetadataEntity(
+        isin = isin, name = name, orderbookId = isin, totalFee = 0.2, managementFee = 0.2,
+        category = null, fundType = null, companyName = null, risk = 4, indexFund = false,
+        startDateEpochDay = null, minimumBuy = null, tagsJson = "[]",
+        availableAtHandelsbanken = null, availabilityResolvedAtEpochDay = null,
+        fetchedAtEpochDay = fetchedAtEpochDay
+    )
 
-    private fun fullListJson(totalNoFunds: Int, views: List<String>): String =
-        """{"fundListViews":[${views.joinToString(",")}],"totalNoFunds":$totalNoFunds,"filterCounts":{}}"""
+    private fun fullListJson(totalNoFunds: Int, views: List<String>): String = """{"fundListViews":[${views.joinToString(",")}],"totalNoFunds":$totalNoFunds,"filterCounts":{}}"""
 
     // --- cachedMetadataFor: cache-bara uppslag för facit (SET-5, issue #80) ---
 
@@ -292,7 +294,7 @@ class FundMetadataRepositoryTest {
             category = null, fundType = null, companyName = null, risk = null, indexFund = false,
             startDateEpochDay = null, minimumBuy = null,
             tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""",
-            availableAtHandelsbanken = null, availabilityResolvedAtEpochDay = null, fetchedAtEpochDay = 0,
+            availableAtHandelsbanken = null, availabilityResolvedAtEpochDay = null, fetchedAtEpochDay = 0
         )
         val repository = repo(FailingAvanzaSource())
 
@@ -304,9 +306,10 @@ class FundMetadataRepositoryTest {
     @Test
     fun `query bevarar tidigare uppslagen kopbarhet nar samma fond dyker upp i ett nytt livesvar`() = runTest {
         dao.stored["SE1"] = fundMetadataEntity(
-            isin = "SE1", name = "Fond Ett",
+            isin = "SE1",
+            name = "Fond Ett",
             availableAtHandelsbanken = true,
-            availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay(),
+            availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay()
         )
         val source = FakeAvanzaSource(fundListJson(1499, listOf(Triple("SE1", "Fond Ett", "Sverige"))))
         val repository = repo(source)
@@ -331,9 +334,9 @@ class FundMetadataRepositoryTest {
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(
                 companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
             ),
-            isinByFundId = mapOf("X1" to "SE1"),
+            isinByFundId = mapOf("X1" to "SE1")
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
 
@@ -354,10 +357,10 @@ class FundMetadataRepositoryTest {
                 companies = emptyList(),
                 funds = listOf(
                     Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"),
-                    Fund(fundId = "X2", name = "Helt Annan Fond", currency = "SEK"),
-                ),
+                    Fund(fundId = "X2", name = "Helt Annan Fond", currency = "SEK")
+                )
             ),
-            isinByFundId = mapOf("X1" to "SE_SYSKON", "X2" to "SE2"),
+            isinByFundId = mapOf("X1" to "SE_SYSKON", "X2" to "SE2")
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
 
@@ -387,9 +390,9 @@ class FundMetadataRepositoryTest {
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(
                 companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
             ),
-            isinByFundId = emptyMap(),
+            isinByFundId = emptyMap()
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
 
@@ -413,7 +416,7 @@ class FundMetadataRepositoryTest {
         // Ingen cachad miss står i vägen när katalogen är tillgänglig igen.
         fundPriceRepo.catalog = FundCatalog(
             companies = emptyList(),
-            funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+            funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
         )
 
         assertEquals(true, repository.resolveHandelsbankenAvailability("SE1"))
@@ -423,9 +426,10 @@ class FundMetadataRepositoryTest {
     @Test
     fun `resolveHandelsbankenAvailability redan farsk cache anvands utan ny uppslagning`() = runTest {
         dao.stored["SE1"] = fundMetadataEntity(
-            isin = "SE1", name = "Fond",
+            isin = "SE1",
+            name = "Fond",
             availableAtHandelsbanken = true,
-            availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay(),
+            availabilityResolvedAtEpochDay = LocalDate.now().toEpochDay()
         )
         val fundPriceRepo = FakeFundPriceRepository()
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
@@ -439,16 +443,17 @@ class FundMetadataRepositoryTest {
     @Test
     fun `resolveHandelsbankenAvailability inaktuell cache loser upp pa nytt`() = runTest {
         dao.stored["SE1"] = fundMetadataEntity(
-            isin = "SE1", name = "Länsförsäkringar Sverige Index",
+            isin = "SE1",
+            name = "Länsförsäkringar Sverige Index",
             availableAtHandelsbanken = false,
-            availabilityResolvedAtEpochDay = LocalDate.now().minusDays(40).toEpochDay(),
+            availabilityResolvedAtEpochDay = LocalDate.now().minusDays(40).toEpochDay()
         )
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(
                 companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
             ),
-            isinByFundId = mapOf("X1" to "SE1"),
+            isinByFundId = mapOf("X1" to "SE1")
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
 
@@ -468,9 +473,9 @@ class FundMetadataRepositoryTest {
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(
                 companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")),
+                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
             ),
-            isinByFundId = mapOf("X1" to "SE_CAND"),
+            isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -556,7 +561,7 @@ class FundMetadataRepositoryTest {
         val isinByFundId = candidateFees.indices.associate { i -> "F$i" to "SE_C$i" }
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
-            isinByFundId = isinByFundId,
+            isinByFundId = isinByFundId
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -669,7 +674,7 @@ class FundMetadataRepositoryTest {
             cheapestAlternativeIsin = "SE2",
             cheapestAlternativeFee = 0.21,
             shownAlternativeIsinsJson = """["SE2","SE3"]""",
-            comparisonResolvedAtEpochDay = today.minusDays(3).toEpochDay(),
+            comparisonResolvedAtEpochDay = today.minusDays(3).toEpochDay()
         )
         val source = FakeAvanzaSource(fullListJson(1, listOf(fundView("SE1", "Fond Ett", totalFee = 0.5, indexFund = false, tags = emptyList()))))
         val repository = repo(source)
@@ -775,7 +780,7 @@ class FundMetadataRepositoryTest {
         val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Kandidatfond", currency = "SEK"))),
-            isinByFundId = mapOf("X1" to "SE_CAND"),
+            isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -793,7 +798,7 @@ class FundMetadataRepositoryTest {
         val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Utan avkastning", currency = "SEK"))),
-            isinByFundId = mapOf("X1" to "SE_CAND"),
+            isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -831,7 +836,7 @@ class FundMetadataRepositoryTest {
         val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
         val repository = repo(
             FakeAvanzaSource(fullListJson(1, listOf(candidateView))),
-            FakeFundPriceRepository(catalog = UNRELATED_CATALOG),
+            FakeFundPriceRepository(catalog = UNRELATED_CATALOG)
         )
 
         val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet())
@@ -845,7 +850,7 @@ class FundMetadataRepositoryTest {
         val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
         val repository = repo(
             FakeAvanzaSource(fullListJson(1, listOf(candidateView))),
-            FakeFundPriceRepository(catalog = null),
+            FakeFundPriceRepository(catalog = null)
         )
 
         val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet())
@@ -867,10 +872,10 @@ class FundMetadataRepositoryTest {
             FakeFundPriceRepository(
                 catalog = FundCatalog(
                     companies = emptyList(),
-                    funds = listOf(Fund(fundId = "X1", name = "Aktiv fond", currency = "SEK"), Fund(fundId = "X2", name = "Indexfond", currency = "SEK")),
+                    funds = listOf(Fund(fundId = "X1", name = "Aktiv fond", currency = "SEK"), Fund(fundId = "X2", name = "Indexfond", currency = "SEK"))
                 ),
-                isinByFundId = mapOf("X1" to "SE_AKTIV", "X2" to "SE_INDEX"),
-            ),
+                isinByFundId = mapOf("X1" to "SE_AKTIV", "X2" to "SE_INDEX")
+            )
         )
 
         val onlyIndex = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
@@ -898,8 +903,8 @@ class FundMetadataRepositoryTest {
             source,
             FakeFundPriceRepository(
                 catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Indexfond", currency = "SEK"))),
-                isinByFundId = mapOf("X1" to "SE_INDEX"),
-            ),
+                isinByFundId = mapOf("X1" to "SE_INDEX")
+            )
         )
 
         val result = repository.searchSwitchCandidates(level = 3, excludeIsins = emptySet(), indexOnly = true)
@@ -963,7 +968,7 @@ class FundMetadataRepositoryTest {
         val catalogFunds = (1..8).map { i -> Fund(fundId = "X$i", name = "Kandidat $i", currency = "SEK") }
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
-            isinByFundId = (1..8).associate { i -> "X$i" to "SE_C$i" },
+            isinByFundId = (1..8).associate { i -> "X$i" to "SE_C$i" }
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -996,17 +1001,17 @@ class FundMetadataRepositoryTest {
         val views = listOf(
             fundView("SE_LAG", "Låg avkastning", totalFee = 0.1, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.02),
             fundView("SE_MELLAN", "Mellan", totalFee = 0.2, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.10),
-            fundView("SE_HOG", "Hög avkastning", totalFee = 0.9, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.30),
+            fundView("SE_HOG", "Hög avkastning", totalFee = 0.9, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.30)
         )
         val source = FakeAvanzaSource(fullListJson(3, views))
         val catalogFunds = listOf(
             Fund(fundId = "X1", name = "Låg avkastning", currency = "SEK"),
             Fund(fundId = "X2", name = "Mellan", currency = "SEK"),
-            Fund(fundId = "X3", name = "Hög avkastning", currency = "SEK"),
+            Fund(fundId = "X3", name = "Hög avkastning", currency = "SEK")
         )
         val fundPriceRepo = FakeFundPriceRepository(
             catalog = FundCatalog(companies = emptyList(), funds = catalogFunds),
-            isinByFundId = mapOf("X1" to "SE_LAG", "X2" to "SE_MELLAN", "X3" to "SE_HOG"),
+            isinByFundId = mapOf("X1" to "SE_LAG", "X2" to "SE_MELLAN", "X3" to "SE_HOG")
         )
         val repository = repo(source, fundPriceRepo)
 
@@ -1019,13 +1024,13 @@ class FundMetadataRepositoryTest {
         isin: String,
         name: String,
         availableAtHandelsbanken: Boolean? = null,
-        availabilityResolvedAtEpochDay: Long? = null,
+        availabilityResolvedAtEpochDay: Long? = null
     ) = FundMetadataEntity(
         isin = isin, name = name, orderbookId = isin, totalFee = 0.2, managementFee = 0.2,
         category = null, fundType = null, companyName = null, risk = null, indexFund = false,
         startDateEpochDay = null, minimumBuy = null, tagsJson = "[]",
         availableAtHandelsbanken = availableAtHandelsbanken,
         availabilityResolvedAtEpochDay = availabilityResolvedAtEpochDay,
-        fetchedAtEpochDay = 0,
+        fetchedAtEpochDay = 0
     )
 }

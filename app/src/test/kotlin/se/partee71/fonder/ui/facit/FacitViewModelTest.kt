@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.facit
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +37,6 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 /** Facit-vyn (SET-5, issue #80) — se [FacitViewModel]. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,7 +57,7 @@ class FacitViewModelTest {
             all.sortedWith(
                 compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
                     .thenByDescending { it.batchEpochMillis }
-                    .thenBy { it.planIndex },
+                    .thenBy { it.planIndex }
             )
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
@@ -105,8 +105,7 @@ class FacitViewModelTest {
             return metadataByIsin.filterKeys { it in isins }
         }
         override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> =
-            metadataByIsin.filterKeys { it in isins }
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
         override suspend fun knownRiskLevels(): List<Int> = emptyList()
         override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
@@ -117,16 +116,17 @@ class FacitViewModelTest {
     private fun viewModel() = FacitViewModel(
         FacitSummary(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo),
         fakeSuggestionRepo,
-        fakeScheduler,
+        fakeScheduler
     )
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun metadata(isin: String, name: String) = FundMetadata(
         isin = isin, name = name, orderbookId = isin, totalFee = 0.2, managementFee = 0.2,
         category = null, fundType = null, companyName = null, risk = 4, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     private fun record(
@@ -137,7 +137,7 @@ class FacitViewModelTest {
         switchValueKr: Double? = 10_000.0,
         followed: Boolean? = null,
         suggestedAtEpochDay: Long = 20_000,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SuggestionRecord(
         id = id,
         suggestedAtEpochDay = suggestedAtEpochDay,
@@ -148,7 +148,7 @@ class FacitViewModelTest {
         buyNavAtSuggestion = buyNav,
         switchValueKr = switchValueKr,
         followed = followed,
-        kind = kind,
+        kind = kind
     )
 
     /** Säljfonden är bevakad (kurs under fondens egen fundId), köpfonden inte (kurs under ISIN:et). */
@@ -156,7 +156,7 @@ class FacitViewModelTest {
         funds.value = listOf(Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SELL"))
         metadataByIsin = mapOf(
             "SE_SELL" to metadata("SE_SELL", "Såld fond"),
-            "SE_BUY" to metadata("SE_BUY", "Köpt fond"),
+            "SE_BUY" to metadata("SE_BUY", "Köpt fond")
         )
         prices.value = buildMap {
             sellNavNow?.let { put("SHB1", FundPrice(fundId = "SHB1", epochDay = 20_100, nav = it)) }
@@ -238,7 +238,7 @@ class FacitViewModelTest {
         setUpPrices()
         records.value = listOf(
             record(id = 1, followed = true), // +7 pp, +700 kr
-            record(id = 2, sellNav = 100.0, buyNav = 200.0, followed = null),
+            record(id = 2, sellNav = 100.0, buyNav = 200.0, followed = null)
         )
         // Rad 2 har samma NAV-utgångsläge och samma kurser, alltså samma utfall — skillnaden
         // mellan måtten ska komma ur *urvalet*, inte ur att raderna råkar ha olika utfall.
@@ -290,7 +290,7 @@ class FacitViewModelTest {
         setUpPrices()
         records.value = listOf(
             record(id = 1, followed = true),
-            record(id = 2, kind = SuggestionKind.FEE, followed = null),
+            record(id = 2, kind = SuggestionKind.FEE, followed = null)
         )
 
         viewModel().uiState.test {
@@ -317,7 +317,7 @@ class FacitViewModelTest {
         setUpPrices()
         records.value = listOf(
             record(id = 1, planIndex = 0),
-            record(id = 2, planIndex = 0, kind = SuggestionKind.FEE),
+            record(id = 2, planIndex = 0, kind = SuggestionKind.FEE)
         )
 
         viewModel().uiState.test {

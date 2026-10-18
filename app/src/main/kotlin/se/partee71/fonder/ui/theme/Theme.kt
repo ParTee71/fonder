@@ -24,7 +24,7 @@ private val LocalDarkTheme = staticCompositionLocalOf { false }
 @Composable
 fun FonderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     // Fast palett (ingen dynamisk färg) — identiteten nordisk blå och koppar ska vara konsekvent.
     val colorScheme = if (darkTheme) FonderDarkColorScheme else FonderLightColorScheme
@@ -33,11 +33,11 @@ fun FonderTheme(
         // M3 Expressive (UI-12): uttrycksfulla rörelser (fjädrande formmorf, knappgrupper,
         // formskiftande laddningsindikator) ovanpå samma fasta färger, former och typografi.
         MaterialExpressiveTheme(
-            colorScheme  = colorScheme,
+            colorScheme = colorScheme,
             motionScheme = MotionScheme.expressive(),
-            typography   = FonderTypography,
-            shapes       = FonderShapes,
-            content      = content,
+            typography = FonderTypography,
+            shapes = FonderShapes,
+            content = content
         )
     }
 }

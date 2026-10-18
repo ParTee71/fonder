@@ -11,8 +11,7 @@ object MoneyFormat {
     private val locale = Locale("sv", "SE")
 
     /** Formaterar ett kronbelopp, t.ex. 1234.5 → "1 234,50 kr". */
-    fun kr(amount: Double): String =
-        String.format(locale, "%,.2f kr", amount)
+    fun kr(amount: Double): String = String.format(locale, "%,.2f kr", amount)
 
     /**
      * Formaterar ett kronbelopp med tecken, t.ex. 2140.0 → "+2 140,00 kr", -50.0 → "−50,00 kr"
@@ -31,8 +30,7 @@ object MoneyFormat {
     }
 
     /** Formaterar en osignerad procentandel, t.ex. 0.182 → "18,2 %" — för mått som aldrig är negativa (volatilitet). */
-    fun percent(fraction: Double): String =
-        String.format(locale, "%.1f %%", fraction * 100.0)
+    fun percent(fraction: Double): String = String.format(locale, "%.1f %%", fraction * 100.0)
 
     /** Formaterar ett rent decimaltal med två decimaler och äkta minustecken, t.ex. 0.83 → "0,83", -0.4 → "−0,40" (Sharpe-kvot). */
     fun decimal(value: Double): String {
@@ -48,6 +46,5 @@ object MoneyFormat {
      * eftersom avgiftsskillnader ofta ligger under en tiondels procentenhet (0,73 % mot
      * 0,21 % — en decimal hade avrundat bort just den skillnaden).
      */
-    fun feePercent(totalFeePercent: Double): String =
-        String.format(locale, "%.2f %%", totalFeePercent)
+    fun feePercent(totalFeePercent: Double): String = String.format(locale, "%.2f %%", totalFeePercent)
 }

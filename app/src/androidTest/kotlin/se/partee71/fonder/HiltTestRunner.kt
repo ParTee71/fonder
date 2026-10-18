@@ -12,6 +12,5 @@ import dagger.hilt.android.testing.HiltTestApplication
  * själva. Ingen appstart schemalägger kursuppdateringar; WorkManager initieras av testet som behöver det.
  */
 class HiltTestRunner : AndroidJUnitRunner() {
-    override fun newApplication(cl: ClassLoader?, className: String?, context: Context?): Application =
-        super.newApplication(cl, HiltTestApplication::class.java.name, context)
+    override fun newApplication(cl: ClassLoader?, className: String?, context: Context?): Application = super.newApplication(cl, HiltTestApplication::class.java.name, context)
 }

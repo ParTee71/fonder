@@ -51,35 +51,35 @@ class Migration1617Test {
             exportedSchemaStatements(16).forEach(db::execSQL)
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) VALUES " +
-                    "('SHB0000627', 'Fond B', 'USD', 'SE0000582033', NULL)",
+                    "('SHB0000627', 'Fond B', 'USD', 'SE0000582033', NULL)"
             )
             db.execSQL(
                 "INSERT INTO transactions (id, fundId, type, epochDay, shares, pricePerShare, fee) VALUES " +
-                    "(11, 'SHB0000627', 'SALJ', 19900, 7.5, 180.0, 9.0)",
+                    "(11, 'SHB0000627', 'SALJ', 19900, 7.5, 180.0, 9.0)"
             )
             db.execSQL(
                 "INSERT INTO suggestion_records (id, suggestedAtEpochDay, planIndex, sellIsin, buyIsin, sellNavAtSuggestion, " +
                     "buyNavAtSuggestion, switchValueKr, followed, batchEpochMillis, kind) VALUES " +
-                    "(3, 19800, 1, 'SE0000582033', 'SE0001466368', 180.0, 95.25, 4200.0, 1, 1754200000000, 'FEE')",
+                    "(3, 19800, 1, 'SE0000582033', 'SE0001466368', 180.0, 95.25, 4200.0, 1, 1754200000000, 'FEE')"
             )
             db.execSQL(
                 "INSERT INTO suggestion_dismissals (sellIsin, buyIsin, kind, dismissedAtEpochDay) " +
-                    "VALUES ('SE0000582033', 'SE0004617590', 'RISK_PLAN', 19910)",
+                    "VALUES ('SE0000582033', 'SE0004617590', 'RISK_PLAN', 19910)"
             )
             // En stängd bevakning med värde i varje kolumn, och en öppen — båda ska läsas som okopplade.
             db.execSQL(
                 "INSERT INTO switch_watches (id, sellIsin, sellFundName, soldAtEpochDay, proceedsKr, targetLevel, " +
                     "sourceRecordId, closedAtEpochDay, boughtIsin, closeReason) " +
-                    "VALUES (5, 'SE0000582033', 'Fond A', 19900, 12500.0, 4, 3, 19905, 'SE0001466368', 'KOPT')",
+                    "VALUES (5, 'SE0000582033', 'Fond A', 19900, 12500.0, 4, 3, 19905, 'SE0001466368', 'KOPT')"
             )
             db.execSQL(
                 "INSERT INTO switch_watches (id, sellIsin, sellFundName, soldAtEpochDay, proceedsKr, targetLevel, " +
                     "sourceRecordId, closedAtEpochDay, boughtIsin, closeReason) " +
-                    "VALUES (6, 'SE0005991445', 'Fond C', 19910, NULL, NULL, NULL, NULL, NULL, NULL)",
+                    "VALUES (6, 'SE0005991445', 'Fond C', 19910, NULL, NULL, NULL, NULL, NULL, NULL)"
             )
             db.execSQL(
                 "INSERT INTO switch_watch_candidates (id, watchId, isin, name, navAtStart, navAtStartEpochDay, source, position) " +
-                    "VALUES (8, 5, 'SE0001466368', 'Kandidat A', 95.25, 19900, 'MANUELL', 2)",
+                    "VALUES (8, 5, 'SE0001466368', 'Kandidat A', 95.25, 19900, 'MANUELL', 2)"
             )
             db.version = 16
         }
@@ -138,7 +138,7 @@ class Migration1617Test {
         // Indexet finns med samma namn och kolumner som entiteten deklarerar — annars hade Rooms
         // schemavalidering redan fällt öppningen ovan, men påståendet ska stå här, inte implicit.
         db.openHelper.readableDatabase.query(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'suggestion_records'",
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'suggestion_records'"
         ).use { cursor ->
             val names = generateSequence { if (cursor.moveToNext()) cursor.getString(0) else null }.toList()
             assertTrue(names.toString(), "index_suggestion_records_kind_sellIsin_buyIsin" in names)

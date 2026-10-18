@@ -34,7 +34,7 @@ class AppDialogTest {
                 confirmLabel = "Ta bort",
                 onConfirm = { events += "bekräfta" },
                 onDismiss = { events += "avbryt" },
-                destructive = true,
+                destructive = true
             )
         }
     }
@@ -69,21 +69,19 @@ class AppDialogTest {
     }
 
     @Test
-    fun `skärmdump av destruktiv bekräftelse`() =
-        composeRule.captureLightAndDark("ConfirmDialog_destructive", screen = true) {
-            ConfirmDialog(
-                title = "Ta bort transaktionen?",
-                body = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
-                confirmLabel = "Ta bort",
-                onConfirm = {},
-                onDismiss = {},
-                destructive = true,
-            )
-        }
+    fun `skärmdump av destruktiv bekräftelse`() = composeRule.captureLightAndDark("ConfirmDialog_destructive", screen = true) {
+        ConfirmDialog(
+            title = "Ta bort transaktionen?",
+            body = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
+            confirmLabel = "Ta bort",
+            onConfirm = {},
+            onDismiss = {},
+            destructive = true
+        )
+    }
 
     @Test
-    fun `skärmdump av väntedialogen`() =
-        composeRule.captureLightAndDark("LoadingDialog_import", screen = true, animated = true) {
-            LoadingDialog(title = "Importerar", body = "Matchar fonder och hämtar kurser …")
-        }
+    fun `skärmdump av väntedialogen`() = composeRule.captureLightAndDark("LoadingDialog_import", screen = true, animated = true) {
+        LoadingDialog(title = "Importerar", body = "Matchar fonder och hämtar kurser …")
+    }
 }

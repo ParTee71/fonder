@@ -7,6 +7,42 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.google.services) apply false
     alias(libs.plugins.roborazzi) apply false
+    alias(libs.plugins.spotless)
+}
+
+// Kodstil (ktlint + compose-rules) bara lokalt, inte i CI (regel 5): ./gradlew spotlessApply
+// före push rättar, spotlessCheck kontrollerar. Reglerna står här och inte i .editorconfig,
+// eftersom Spotless inte läser en .editorconfig-sektion per filändelse pålitligt.
+val ktlintRules = mapOf(
+    "ktlint_code_style" to "android_studio",
+    "max_line_length" to "off",
+    "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
+    "compose_allowed_composition_locals" to
+        "LocalDarkTheme",
+    // Befintliga avvikelser som kräver API-ändringar i komponenter – rättas i egna PR:er
+    // (skill android-projekt → Nuvarande läge). Ta bort raden när regeln är rättad.
+    "ktlint_compose_parameter-naming" to "disabled",
+    "ktlint_compose_lambda-param-event-trailing" to "disabled",
+    "ktlint_compose_lambda-param-in-effect" to "disabled",
+    "ktlint_compose_content-slot-reused" to "disabled",
+    "ktlint_compose_multiple-emitters-check" to "disabled",
+    "ktlint_compose_modifier-naming" to "disabled",
+    "ktlint_compose_modifier-missing-check" to "disabled",
+    "ktlint_compose_param-order-check" to "disabled",
+    // Autorättningen flyttar bara den sista av två hiltViewModel() till en parameter och bryter koden.
+    "ktlint_compose_vm-injection-check" to "disabled"
+)
+spotless {
+    kotlin {
+        target("app/src/**/*.kt")
+        ktlint(libs.versions.ktlint.get())
+            .editorConfigOverride(ktlintRules)
+            .customRuleSets(listOf(libs.compose.rules.ktlint.get().toString()))
+    }
+    kotlinGradle {
+        target("*.gradle.kts", "app/*.gradle.kts")
+        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintRules)
+    }
 }
 
 // Copy-paste-detektor (regel 4, skill shared-ui-components): PMD CPD för Kotlin via PMD:s CLI, som
@@ -56,13 +92,15 @@ val cpdCheck = tasks.register<JavaExec>("cpdCheck") {
     outputs.cacheIf { !writeBaseline }
     outputs.upToDateWhen { !writeBaseline }
     isIgnoreExitValue = true
-    argumentProviders.add(CommandLineArgumentProvider {
-        listOf(
-            "cpd", "--language", "kotlin", "--minimum-tokens", "$tokens",
-            "--file-list", fileList.get().asFile.path,
-            "--format", "csv", "--report-file", report.get().asFile.path,
-        )
-    })
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(
+                "cpd", "--language", "kotlin", "--minimum-tokens", "$tokens",
+                "--file-list", fileList.get().asFile.path,
+                "--format", "csv", "--report-file", report.get().asFile.path
+            )
+        }
+    )
     doFirst {
         fileList.get().asFile.apply {
             parentFile.mkdirs()
@@ -95,7 +133,7 @@ val cpdCheck = tasks.register<JavaExec>("cpdCheck") {
         if (stale.isNotEmpty()) {
             logger.warn(
                 "cpdCheck: ${stale.size} rader i config/cpd-baseline.txt gäller kopior som inte finns längre – " +
-                    "krymp baslinjen med ./gradlew cpdCheck -PcpdWriteBaseline.",
+                    "krymp baslinjen med ./gradlew cpdCheck -PcpdWriteBaseline."
             )
         }
         val fresh = copies.filter { it.first !in known }
@@ -103,7 +141,7 @@ val cpdCheck = tasks.register<JavaExec>("cpdCheck") {
             throw GradleException(
                 "cpdCheck: ny kopierad kod (regel 4, skill shared-ui-components). Bryt ut till en delad " +
                     "byggsten i stället för att höja tröskeln eller utöka baslinjen.\n" +
-                    fresh.joinToString("\n") { "  ${it.second}" },
+                    fresh.joinToString("\n") { "  ${it.second}" }
             )
         }
     }

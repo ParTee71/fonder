@@ -37,21 +37,21 @@ class Migration1112Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "CREATE TABLE `fx_rates` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))"
             )
             db.execSQL(
                 """
@@ -66,7 +66,7 @@ class Migration1112Test {
                     `comparisonResolvedAtEpochDay` INTEGER, `developmentOneYear` REAL,
                     PRIMARY KEY(`isin`)
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             // Version 11:s suggestion_records — med switchValueKr, utan batchEpochMillis.
             db.execSQL(
@@ -82,20 +82,20 @@ class Migration1112Test {
                     `followed` INTEGER,
                     `switchValueKr` REAL
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)",
+                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)"
             )
             db.execSQL(
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)",
+                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)"
             )
             db.execSQL(
                 "INSERT INTO suggestion_records (suggestedAtEpochDay, planIndex, sellIsin, buyIsin, " +
                     "sellNavAtSuggestion, buyNavAtSuggestion, followed, switchValueKr) " +
-                    "VALUES (20658, 0, 'SE0000581434', 'SE0001466368', 100.0, 50.0, NULL, 42000.0)",
+                    "VALUES (20658, 0, 'SE0000581434', 'SE0001466368', 100.0, 50.0, NULL, 42000.0)"
             )
             db.version = 11
         }
@@ -118,8 +118,8 @@ class Migration1112Test {
                 suggestedAtEpochDay = 20658, planIndex = 0,
                 sellIsin = "SE0000581434", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 101.0, buyNavAtSuggestion = 51.0,
-                switchValueKr = 1_000.0, followed = null, batchEpochMillis = 1_785_000_000_000,
-            ),
+                switchValueKr = 1_000.0, followed = null, batchEpochMillis = 1_785_000_000_000
+            )
         )
         val nyast = db.suggestionRecordDao().getAll().maxBy { it.id }
         assertEquals(1_785_000_000_000L, nyast.batchEpochMillis)

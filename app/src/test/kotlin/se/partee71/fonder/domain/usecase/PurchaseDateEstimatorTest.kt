@@ -1,16 +1,15 @@
 package se.partee71.fonder.domain.usecase
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
 import org.junit.Test
 import se.partee71.fonder.domain.model.FundPrice
 
 class PurchaseDateEstimatorTest {
 
-    private fun price(epochDay: Long, nav: Double) =
-        FundPrice(fundId = "SHB0000442", epochDay = epochDay, nav = nav, currency = "SEK")
+    private fun price(epochDay: Long, nav: Double) = FundPrice(fundId = "SHB0000442", epochDay = epochDay, nav = nav, currency = "SEK")
 
     @Test
     fun `hittar dagen med narmast matchande kurs`() {

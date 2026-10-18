@@ -1,9 +1,9 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Fixturerna nedan är trimmade utdrag av verkliga JSON-svar från avanza.se:s odokumenterade
@@ -78,7 +78,7 @@ class AvanzaJsonParserTest {
         // hela serien en dag fel. 2020-01-06 är trettondedag jul, därav hoppet till 01-07.
         assertEquals(
             listOf(LocalDate.of(2020, 1, 2), LocalDate.of(2020, 1, 3), LocalDate.of(2020, 1, 7)),
-            prices.map { LocalDate.ofEpochDay(it.epochDay) },
+            prices.map { LocalDate.ofEpochDay(it.epochDay) }
         )
     }
 
@@ -126,7 +126,7 @@ class AvanzaJsonParserTest {
         assertEquals(listOf(100.0, 103.0), prices.map { it.nav })
         assertEquals(
             listOf(java.time.LocalDate.of(2026, 7, 23), java.time.LocalDate.of(2026, 7, 27)),
-            prices.map { java.time.LocalDate.ofEpochDay(it.epochDay) },
+            prices.map { java.time.LocalDate.ofEpochDay(it.epochDay) }
         )
     }
 

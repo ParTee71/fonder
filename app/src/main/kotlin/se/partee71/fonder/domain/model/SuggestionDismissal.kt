@@ -22,5 +22,5 @@ data class SuggestionDismissal(
     val sellIsin: String,
     val buyIsin: String,
     val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
-    val dismissedAtEpochDay: Long,
+    val dismissedAtEpochDay: Long
 )

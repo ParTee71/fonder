@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,23 +12,20 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
 
 class SwitchPlanCalcTest {
 
     private fun fund(fundId: String, isin: String? = "SE$fundId") = Fund(fundId = fundId, name = fundId, isin = isin)
 
-    private fun holding(fundId: String, value: Double?, isin: String? = "SE$fundId") =
-        Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = value)
+    private fun holding(fundId: String, value: Double?, isin: String? = "SE$fundId") = Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = value)
 
     private fun metadata(isin: String, risk: Int?, fee: Double?) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
-    private fun candidate(isin: String, risk: Int, fee: Double, twelveMonthReturn: Double) =
-        SwitchPlanCalc.Candidate(metadata(isin, risk, fee), twelveMonthReturn)
+    private fun candidate(isin: String, risk: Int, fee: Double, twelveMonthReturn: Double) = SwitchPlanCalc.Candidate(metadata(isin, risk, fee), twelveMonthReturn)
 
     /** Som [SwitchPlanCalc.plan], utan avstådda par om inget anges — de flesta fallen rör inte dem. */
     private fun plan(
@@ -35,13 +33,13 @@ class SwitchPlanCalcTest {
         metadataByIsin: Map<String, FundMetadata>,
         candidates: List<SwitchPlanCalc.Candidate>,
         targetAllocation: Map<Int, Double>,
-        excludedPairs: Set<Pair<String, String>> = emptySet(),
+        excludedPairs: Set<Pair<String, String>> = emptySet()
     ) = SwitchPlanCalc.plan(holdings, metadataByIsin, candidates, targetAllocation, excludedPairs)
 
     private fun underweightedLevels(
         holdings: List<Holding>,
         metadataByIsin: Map<String, FundMetadata>,
-        targetAllocation: Map<Int, Double>,
+        targetAllocation: Map<Int, Double>
     ) = SwitchPlanCalc.underweightedLevels(holdings, metadataByIsin, targetAllocation)
 
     @Test
@@ -87,11 +85,11 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 5_000.0), holding("B", 5_000.0))
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", risk = 5, fee = 2.0),
-            "SEB" to metadata("SEB", risk = 5, fee = 1.0),
+            "SEB" to metadata("SEB", risk = 5, fee = 1.0)
         )
         val candidates = listOf(
             candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.15),
-            candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05),
+            candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05)
         )
 
         val plan = plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.3, 3 to 0.7))
@@ -114,7 +112,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("Lag", 4_000.0, isin = "SELAG"), holding("Hog", 6_000.0, isin = "SEHOG"))
         val metadataByIsin = mapOf(
             "SELAG" to metadata("SELAG", risk = 3, fee = 0.5),
-            "SEHOG" to metadata("SEHOG", risk = 5, fee = 1.0),
+            "SEHOG" to metadata("SEHOG", risk = 5, fee = 1.0)
         )
         val candidates = listOf(candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
@@ -135,7 +133,7 @@ class SwitchPlanCalcTest {
         val metadataByIsin = mapOf("SEENDA" to metadata("SEENDA", risk = 5, fee = 1.0))
         val candidates = listOf(
             candidate("SEC3", risk = 3, fee = 0.2, twelveMonthReturn = 0.15),
-            candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05),
+            candidate("SEC2", risk = 2, fee = 0.15, twelveMonthReturn = 0.05)
         )
 
         val plan = plan(holdings, metadataByIsin, candidates, mapOf(2 to 0.2, 3 to 0.3, 5 to 0.5))
@@ -164,7 +162,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("Billig", 1_000.0, isin = "SEBILLIG"), holding("Dyr", 1_000.0, isin = "SEDYR"))
         val metadataByIsin = mapOf(
             "SEBILLIG" to metadata("SEBILLIG", risk = 5, fee = 0.5),
-            "SEDYR" to metadata("SEDYR", risk = 5, fee = 2.0),
+            "SEDYR" to metadata("SEDYR", risk = 5, fee = 2.0)
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
@@ -187,7 +185,7 @@ class SwitchPlanCalcTest {
             candidate("C5", risk = 3, fee = 0.5, twelveMonthReturn = 0.10),
             candidate("C6", risk = 3, fee = 0.5, twelveMonthReturn = 0.05),
             candidate("C7", risk = 3, fee = 0.5, twelveMonthReturn = 0.02),
-            candidate("C8", risk = 3, fee = 0.5, twelveMonthReturn = 0.01),
+            candidate("C8", risk = 3, fee = 0.5, twelveMonthReturn = 0.01)
         )
 
         val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0))
@@ -200,7 +198,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("OkandRisk", 5_000.0, isin = "SEOKAND"), holding("KandRisk", 5_000.0, isin = "SEKAND"))
         val metadataByIsin = mapOf(
             "SEOKAND" to metadata("SEOKAND", risk = null, fee = 1.0),
-            "SEKAND" to metadata("SEKAND", risk = 5, fee = 1.0),
+            "SEKAND" to metadata("SEKAND", risk = 5, fee = 1.0)
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
@@ -221,7 +219,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("UtanAvgift", 5_000.0, isin = "SEU"), holding("MedAvgift", 5_000.0, isin = "SEM"))
         val metadataByIsin = mapOf(
             "SEU" to metadata("SEU", risk = 3, fee = null),
-            "SEM" to metadata("SEM", risk = 5, fee = 1.0),
+            "SEM" to metadata("SEM", risk = 5, fee = 1.0)
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
 
@@ -257,7 +255,7 @@ class SwitchPlanCalcTest {
     fun `innehav utan aktuellt varde eller isin exkluderas`() {
         val holdings = listOf(
             holding("UtanVarde", value = null, isin = "SEA"),
-            holding("UtanIsin", value = 1_000.0, isin = null),
+            holding("UtanIsin", value = 1_000.0, isin = null)
         )
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
 
@@ -272,7 +270,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("A", 9_510.0, isin = "SEA"), holding("B", 490.0, isin = "SEB"))
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", risk = 4, fee = 0.5),
-            "SEB" to metadata("SEB", risk = 3, fee = 0.5),
+            "SEB" to metadata("SEB", risk = 3, fee = 0.5)
         )
 
         val plan = plan(holdings, metadataByIsin, listOf(candidate("SEC", 3, 0.2, 0.1)), mapOf(4 to 1.0))
@@ -292,7 +290,7 @@ class SwitchPlanCalcTest {
             metadataByIsin,
             // Nivå 3 saknar 60 pp, nivå 4 saknar 39 pp, nivå 2 saknar 1 pp (under gränsen),
             // nivå 5 är kraftigt överviktad.
-            mapOf(2 to 0.01, 3 to 0.60, 4 to 0.39),
+            mapOf(2 to 0.01, 3 to 0.60, 4 to 0.39)
         )
 
         assertEquals(listOf(3, 4), levels)
@@ -314,12 +312,12 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("Dyr", 6_000.0, isin = "SED"), holding("Billig", 4_000.0, isin = "SEB"))
         val metadataByIsin = mapOf(
             "SED" to metadata("SED", risk = 5, fee = 1.5),
-            "SEB" to metadata("SEB", risk = 5, fee = 0.4),
+            "SEB" to metadata("SEB", risk = 5, fee = 0.4)
         )
         val target = mapOf(2 to 0.4, 3 to 0.4, 5 to 0.2)
         val candidates = listOf(
             candidate("C2", risk = 2, fee = 0.2, twelveMonthReturn = 0.10),
-            candidate("C3", risk = 3, fee = 0.2, twelveMonthReturn = 0.10),
+            candidate("C3", risk = 3, fee = 0.2, twelveMonthReturn = 0.10)
         )
 
         val levels = underweightedLevels(holdings, metadataByIsin, target)
@@ -328,7 +326,7 @@ class SwitchPlanCalcTest {
         assertTrue(plan.isNotEmpty())
         assertTrue(
             "plan köpte på en nivå underweightedLevels inte pekade ut",
-            plan.map { it.toLevel }.all { it in levels },
+            plan.map { it.toLevel }.all { it in levels }
         )
     }
 
@@ -340,7 +338,7 @@ class SwitchPlanCalcTest {
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
         val candidates = listOf(
             candidate("SEBAST", risk = 3, fee = 0.1, twelveMonthReturn = 0.3),
-            candidate("SENAST", risk = 3, fee = 0.2, twelveMonthReturn = 0.3),
+            candidate("SENAST", risk = 3, fee = 0.2, twelveMonthReturn = 0.3)
         )
 
         val plan = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), excludedPairs = setOf("SEA" to "SEBAST"))
@@ -355,7 +353,7 @@ class SwitchPlanCalcTest {
         val holdings = listOf(holding("Dyr", 5_000.0, isin = "SEDYR"), holding("Billig", 5_000.0, isin = "SEBILLIG"))
         val metadataByIsin = mapOf(
             "SEDYR" to metadata("SEDYR", risk = 5, fee = 2.0),
-            "SEBILLIG" to metadata("SEBILLIG", risk = 5, fee = 0.5),
+            "SEBILLIG" to metadata("SEBILLIG", risk = 5, fee = 0.5)
         )
         val candidates = listOf(candidate("SEC", risk = 3, fee = 0.2, twelveMonthReturn = 0.1))
         return plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), excludedPairs = excludedPairs)
@@ -382,11 +380,9 @@ class SwitchPlanCalcTest {
     private val today: LocalDate = LocalDate.of(2026, 10, 12)
     private val soldAt = today.minusDays(2).toEpochDay()
 
-    private fun sell(id: Long, fundId: String, kr: Double, day: Long = soldAt) =
-        Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = 1.0, pricePerShare = kr)
+    private fun sell(id: Long, fundId: String, kr: Double, day: Long = soldAt) = Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = 1.0, pricePerShare = kr)
 
-    private fun buy(id: Long, fundId: String, kr: Double, day: Long = soldAt + 1, fee: Double = 0.0) =
-        Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = 1.0, pricePerShare = kr, fee = fee)
+    private fun buy(id: Long, fundId: String, kr: Double, day: Long = soldAt + 1, fee: Double = 0.0) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = 1.0, pricePerShare = kr, fee = fee)
 
     private fun watch(
         id: Long,
@@ -396,12 +392,12 @@ class SwitchPlanCalcTest {
         soldAtEpochDay: Long = soldAt,
         candidates: List<String> = listOf("SEKAND"),
         sourceRecordId: Long? = null,
-        closed: Boolean = false,
+        closed: Boolean = false
     ) = SwitchWatch(
         id = id, sellIsin = "SEA", sellFundName = "A", soldAtEpochDay = soldAtEpochDay, proceedsKr = proceedsKr, targetLevel = targetLevel,
         sellTransactionId = sellTransactionId, sourceRecordId = sourceRecordId,
         candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
-        closedAtEpochDay = if (closed) today.toEpochDay() else null, closeReason = if (closed) SwitchWatchCloseReason.KOPT else null,
+        closedAtEpochDay = if (closed) today.toEpochDay() else null, closeReason = if (closed) SwitchWatchCloseReason.KOPT else null
     )
 
     private val funds = listOf(fund("A"), fund("KAND"), fund("FORESLAGEN"), fund("NIVA3"), fund("NIVA5"), fund("UTAN", isin = null))
@@ -410,7 +406,7 @@ class SwitchPlanCalcTest {
     private fun pending(
         watches: List<SwitchWatch>,
         transactions: List<Transaction>,
-        buyIsinByRecordId: Map<Long, String> = emptyMap(),
+        buyIsinByRecordId: Map<Long, String> = emptyMap()
     ) = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, levelMetadata, today)
 
     @Test
@@ -429,7 +425,7 @@ class SwitchPlanCalcTest {
             watch(3, proceedsKr = null),
             watch(4, targetLevel = null),
             watch(5, closed = true),
-            watch(6, soldAtEpochDay = expiredDay),
+            watch(6, soldAtEpochDay = expiredDay)
         )
 
         assertTrue(pending(watches, listOf(sell(1, "A", 4_000.0))).isEmpty())
@@ -445,7 +441,7 @@ class SwitchPlanCalcTest {
             buy(4, "NIVA3", 3_000.0),
             buy(5, "NIVA5", 500.0), // annan nivå — inte bytets pengar
             buy(6, "UTAN", 500.0), // utan ISIN kan inte matchas
-            buy(7, "KAND", 500.0, day = soldAt - 1), // före säljdagen — pengarna fanns inte
+            buy(7, "KAND", 500.0, day = soldAt - 1) // före säljdagen — pengarna fanns inte
         )
 
         val pending = pending(watches, transactions, buyIsinByRecordId = mapOf(7L to "SEFORESLAGEN"))
@@ -482,7 +478,10 @@ class SwitchPlanCalcTest {
         // Byte 1 (nivå 3) stängdes av köp 3 som buyTransactionId; byte 2 på samma nivå väntar
         // fortfarande. Räknades köpet igen mot byte 2 blev likviden 0 och planen sålde en gång till.
         val closedByBuy = watch(1, proceedsKr = 2_000.0).copy(
-            closedAtEpochDay = soldAt + 2, closeReason = SwitchWatchCloseReason.KOPT, boughtIsin = "SEKAND", buyTransactionId = 3,
+            closedAtEpochDay = soldAt + 2,
+            closeReason = SwitchWatchCloseReason.KOPT,
+            boughtIsin = "SEKAND",
+            buyTransactionId = 3
         )
         val open = watch(2, proceedsKr = 2_000.0, sellTransactionId = 2, soldAtEpochDay = soldAt + 1)
         val transactions = listOf(sell(1, "A", 2_000.0), sell(2, "A", 2_000.0, day = soldAt + 1), buy(3, "KAND", 2_000.0, day = soldAt + 2))
@@ -521,12 +520,11 @@ class SwitchPlanCalcTest {
     // --- preselectTargetLevel: förvald målnivå för en fristående bevakning (issue #150) ---
 
     /** Innehaven **efter** säljet: nivå 2, 3 och 5 (säljfondens nivå) med givna värden. */
-    private fun afterSale(level2: Double, level3: Double, level5: Double): Pair<List<Holding>, Map<String, FundMetadata>> =
-        listOf(holding("Två", level2, isin = "SE2"), holding("Tre", level3, isin = "SE3"), holding("Fem", level5, isin = "SE5")) to mapOf(
-            "SE2" to metadata("SE2", risk = 2, fee = 0.3),
-            "SE3" to metadata("SE3", risk = 3, fee = 0.3),
-            "SE5" to metadata("SE5", risk = 5, fee = 0.3),
-        )
+    private fun afterSale(level2: Double, level3: Double, level5: Double): Pair<List<Holding>, Map<String, FundMetadata>> = listOf(holding("Två", level2, isin = "SE2"), holding("Tre", level3, isin = "SE3"), holding("Fem", level5, isin = "SE5")) to mapOf(
+        "SE2" to metadata("SE2", risk = 2, fee = 0.3),
+        "SE3" to metadata("SE3", risk = 3, fee = 0.3),
+        "SE5" to metadata("SE5", risk = 5, fee = 0.3)
+    )
 
     /**
      * Förvalet för ett fristående sälj som produktionen räknar det (`TargetLevelPreselection.preselect`):
@@ -538,11 +536,11 @@ class SwitchPlanCalcTest {
         target: Map<Int, Double>,
         sellLevel: Int?,
         proceedsKr: Double?,
-        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap()
     ): Int? = SwitchPlanCalc.preselectTargetLevel(
         planToLevel = null,
         profileSuggestion = SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, target, proceedsKr, pendingProceedsByLevel),
-        sellLevel = sellLevel,
+        sellLevel = sellLevel
     )
 
     @Test
@@ -582,7 +580,7 @@ class SwitchPlanCalcTest {
         assertEquals(5, preselect(holdings, metadataByIsin, target, sellLevel = null, proceedsKr = 5_000.0))
         assertEquals(
             3,
-            preselect(holdings, metadataByIsin, target, sellLevel = null, proceedsKr = null, pendingProceedsByLevel = mapOf(5 to 5_000.0)),
+            preselect(holdings, metadataByIsin, target, sellLevel = null, proceedsKr = null, pendingProceedsByLevel = mapOf(5 to 5_000.0))
         )
     }
 
@@ -595,7 +593,7 @@ class SwitchPlanCalcTest {
         assertEquals(3, preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 2_000.0))
         assertEquals(
             2,
-            preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 2_000.0, pendingProceedsByLevel = mapOf(3 to 2_000.0)),
+            preselect(holdings, metadataByIsin, target, sellLevel = 5, proceedsKr = 2_000.0, pendingProceedsByLevel = mapOf(3 to 2_000.0))
         )
     }
 
@@ -626,8 +624,8 @@ class SwitchPlanCalcTest {
             SwitchPlanCalc.preselectTargetLevel(
                 planToLevel = 2,
                 profileSuggestion = SwitchPlanCalc.profileSuggestion(holdings, metadataByIsin, target, proceedsKr = 7_000.0),
-                sellLevel = 5,
-            ),
+                sellLevel = 5
+            )
         )
     }
 

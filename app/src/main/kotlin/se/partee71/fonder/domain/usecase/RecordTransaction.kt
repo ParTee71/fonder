@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -12,8 +14,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * Den **enda skrivvägen** för transaktioner (BYT-2, issue #143/#144): formuläret (TRX-1),
@@ -45,7 +45,7 @@ class RecordTransaction @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val scheduler: FundPriceRefreshScheduler,
-    private val targetLevelPreselection: TargetLevelPreselection,
+    private val targetLevelPreselection: TargetLevelPreselection
 ) {
 
     /** En transaktion att skriva, med användarens svar på bytesväljaren ("Inget byte" om väljaren inte visats). */
@@ -156,8 +156,11 @@ class RecordTransaction @Inject constructor(
             if (SwitchWatchCalc.isExpired(existing, today)) return null
             val adopt = record?.takeIf { existing.sourceRecordId == null }
             val linked = switchWatchRepository.linkSellTransaction(
-                existing.id, sale.id, sale.amount - sale.fee,
-                sourceRecordId = adopt?.id, targetLevel = adopt?.let { suggestion?.toLevel },
+                existing.id,
+                sale.id,
+                sale.amount - sale.fee,
+                sourceRecordId = adopt?.id,
+                targetLevel = adopt?.let { suggestion?.toLevel }
             )
             return if (linked) existing.id else null
         }
@@ -170,7 +173,7 @@ class RecordTransaction @Inject constructor(
             sellLevel = if (planToLevel == null) fundMetadataRepository.cachedMetadataFor(listOf(isin))[isin]?.risk else null,
             proceedsKr = proceedsKr,
             today = today,
-            metadataFor = fundMetadataRepository::cachedMetadataFor,
+            metadataFor = fundMetadataRepository::cachedMetadataFor
         )
         return switchWatchRepository.start(
             SwitchWatch(
@@ -180,8 +183,8 @@ class RecordTransaction @Inject constructor(
                 proceedsKr = proceedsKr,
                 targetLevel = targetLevel,
                 sourceRecordId = record?.id,
-                sellTransactionId = sale.id,
-            ),
+                sellTransactionId = sale.id
+            )
         )
     }
 
@@ -240,8 +243,8 @@ class RecordTransaction @Inject constructor(
                 soldAtEpochDay = today.toEpochDay(),
                 proceedsKr = suggestion.switchValueKr,
                 targetLevel = suggestion.toLevel,
-                sourceRecordId = suggestion.recordId,
-            ),
+                sourceRecordId = suggestion.recordId
+            )
         )
     }
 
@@ -279,6 +282,5 @@ class RecordTransaction @Inject constructor(
     }
 
     /** Riktad uppslagning — aldrig hela historiken för en rad. */
-    private suspend fun recordById(recordId: Long): SuggestionRecord? =
-        suggestionRecordRepository.observeByIds(setOf(recordId)).first().firstOrNull()
+    private suspend fun recordById(recordId: Long): SuggestionRecord? = suggestionRecordRepository.observeByIds(setOf(recordId)).first().firstOrNull()
 }

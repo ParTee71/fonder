@@ -38,7 +38,7 @@ object PortfolioCalc {
                     // som sålts av helt och köpts igen ska räknas från det nya köpet, annars
                     // beskriver datumet och netInvested två olika positioner (och ANA-1:s
                     // "sedan köp" annualiserar över år positionen inte funnits).
-                    firstPurchaseEpochDay = position.firstPurchaseEpochDay,
+                    firstPurchaseEpochDay = position.firstPurchaseEpochDay
                 )
             }
             .sortedBy { it.fund.name.lowercase() }
@@ -50,34 +50,29 @@ object PortfolioCalc {
      * i UI:t, aldrig en krasch eller ett felaktigt värde. [Holding.navEpochDay] sätts till
      * samma kurs NAV-datum, för "per <datum>"-visning (POR-7, issue #27).
      */
-    fun withCurrentValue(holdings: List<Holding>, prices: Map<String, FundPrice>): List<Holding> =
-        holdings.map { holding ->
-            val price = prices[holding.fund.fundId] ?: return@map holding
-            holding.copy(currentValue = holding.netShares * price.nav, navEpochDay = price.epochDay)
-        }
+    fun withCurrentValue(holdings: List<Holding>, prices: Map<String, FundPrice>): List<Holding> = holdings.map { holding ->
+        val price = prices[holding.fund.fundId] ?: return@map holding
+        holding.copy(currentValue = holding.netShares * price.nav, navEpochDay = price.epochDay)
+    }
 
     /**
      * Det äldsta NAV-datumet bland innehav med känt värde — totalens värde är aldrig färskare
      * än sin svagaste länk, samma "svagaste länk"-princip som "delvis osäker" (HEM-2). Null om
      * inget innehav har ett känt värde. Visas som "per <datum>" bredvid totalvärdet (POR-7).
      */
-    fun oldestKnownNavEpochDay(holdings: List<Holding>): Long? =
-        holdings.mapNotNull { if (it.currentValue != null) it.navEpochDay else null }.minOrNull()
+    fun oldestKnownNavEpochDay(holdings: List<Holding>): Long? = holdings.mapNotNull { if (it.currentValue != null) it.navEpochDay else null }.minOrNull()
 
     /** Summa nettoinvesterat över alla innehav. */
-    fun totalInvested(holdings: List<Holding>): Double =
-        holdings.sumOf { it.netInvested }
+    fun totalInvested(holdings: List<Holding>): Double = holdings.sumOf { it.netInvested }
 
     /** Summa nuvarande värde över innehav med känd kurs (innehav utan kurs uteblir ur summan). */
-    fun totalValue(holdings: List<Holding>): Double =
-        holdings.sumOf { it.currentValue ?: 0.0 }
+    fun totalValue(holdings: List<Holding>): Double = holdings.sumOf { it.currentValue ?: 0.0 }
 
     /**
      * Total vinst/förlust i kr, endast baserat på innehav med känd kurs (så ett innehav
      * utan kurs inte tycks vara en förlust på hela dess nettoinvestering).
      */
-    fun totalGainLoss(holdings: List<Holding>): Double =
-        holdings.sumOf { it.gainLoss ?: 0.0 }
+    fun totalGainLoss(holdings: List<Holding>): Double = holdings.sumOf { it.gainLoss ?: 0.0 }
 
     /** Total avkastning i andel, baserat på nettoinvesterat för innehav med känd kurs. */
     fun totalGainLossFraction(holdings: List<Holding>): Double? {

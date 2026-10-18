@@ -26,20 +26,20 @@ interface FundPriceDao {
         "SELECT fp.* FROM fund_prices fp " +
             "INNER JOIN (SELECT fundId, MAX(epochDay) AS maxEpochDay FROM fund_prices " +
             "WHERE fundId IN (:fundIds) GROUP BY fundId) latest " +
-            "ON fp.fundId = latest.fundId AND fp.epochDay = latest.maxEpochDay",
+            "ON fp.fundId = latest.fundId AND fp.epochDay = latest.maxEpochDay"
     )
     fun observeLatest(fundIds: List<String>): Flow<List<FundPriceEntity>>
 
     @Query(
         "SELECT * FROM fund_prices WHERE fundId = :fundId " +
-            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC",
+            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC"
     )
     suspend fun getRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPriceEntity>
 
     /** Som [getRange], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
     @Query(
         "SELECT * FROM fund_prices WHERE fundId = :fundId " +
-            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC",
+            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC"
     )
     fun observeRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPriceEntity>>
 

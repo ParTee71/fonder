@@ -1,16 +1,16 @@
 package se.partee71.fonder.data.network
 
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import se.partee71.fonder.di.IoDispatcher
 import java.io.IOException
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import se.partee71.fonder.di.IoDispatcher
 
 /**
  * Tunn HTTP-klient mot handelsbanken.fondlista.se (se issue #2/#3, utökad i #37). Publik
@@ -21,22 +21,21 @@ import javax.inject.Singleton
 class HandelsbankenFondlistaClient @Inject constructor(
     private val httpClient: OkHttpClient,
     private val wafToken: FondlistaWafTokenSource,
-    @param:IoDispatcher private val io: CoroutineDispatcher,
-) : FondlistaHtmlSource, FondlistaFundPageSource {
+    @param:IoDispatcher private val io: CoroutineDispatcher
+) : FondlistaHtmlSource,
+    FondlistaFundPageSource {
 
     /**
      * Hämtar historik-sidan. [fundId] = null ger fortfarande fondkatalogen (dropdownen),
      * [company] = null ger **hela** plattformens katalog i stället för ett enskilt bolags
      * (se KRAVLISTA TP-18).
      */
-    override suspend fun fetchHistoryPage(fundId: String?, company: String?, from: LocalDate, to: LocalDate): String =
-        get(buildHistoryUrl(fundId, company, from, to))
+    override suspend fun fetchHistoryPage(fundId: String?, company: String?, from: LocalDate, to: LocalDate): String = get(buildHistoryUrl(fundId, company, from, to))
 
     /** Hämtar en enskild fonds sida, som bär fondens ISIN (KRAVLISTA TP-18). */
     override suspend fun fetchFundPage(fundId: String): String = get(fundUrl(fundId))
 
-    private suspend fun get(url: String): String =
-        fetchWithWafToken(url, wafToken::token) { token -> fetchOnce(url, token) }
+    private suspend fun get(url: String): String = fetchWithWafToken(url, wafToken::token) { token -> fetchOnce(url, token) }
 
     private suspend fun fetchOnce(url: String, token: String?): Response = withContext(io) {
         val request = Request.Builder().url(url).apply {
@@ -85,7 +84,7 @@ class HandelsbankenFondlistaClient @Inject constructor(
         suspend fun fetchWithWafToken(
             url: String,
             token: suspend (rejected: String?) -> String?,
-            fetch: suspend (token: String?) -> Response,
+            fetch: suspend (token: String?) -> Response
         ): String {
             var current = token(null)
             var response = fetch(current)

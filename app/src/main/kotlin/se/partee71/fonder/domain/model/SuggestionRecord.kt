@@ -46,7 +46,7 @@ data class SuggestionRecord(
     val switchValueKr: Double? = null,
     val followed: Boolean? = null,
     val batchEpochMillis: Long = 0,
-    val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+    val kind: SuggestionKind = SuggestionKind.RISK_PLAN
 )
 
 /**
@@ -63,5 +63,5 @@ data class SuggestionRecord(
 @Serializable
 enum class SuggestionKind {
     RISK_PLAN,
-    FEE,
+    FEE
 }

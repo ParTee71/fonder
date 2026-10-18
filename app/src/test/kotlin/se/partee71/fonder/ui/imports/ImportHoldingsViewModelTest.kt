@@ -3,6 +3,9 @@ package se.partee71.fonder.ui.imports
 import android.net.Uri
 import app.cash.turbine.test
 import io.mockk.mockk
+import java.time.LocalDate
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -36,9 +39,6 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ImportHoldingsViewModelTest {
@@ -72,8 +72,7 @@ class ImportHoldingsViewModelTest {
     private val fakePriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = null
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
-            listOf(FundPrice(fundId = fundId, epochDay = fromEpochDay, nav = 950.0, currency = "SEK"))
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = listOf(FundPrice(fundId = fundId, epochDay = fromEpochDay, nav = 950.0, currency = "SEK"))
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundId = fundId
@@ -94,17 +93,22 @@ class ImportHoldingsViewModelTest {
     private val scheduler = FakeFundPriceRefreshScheduler()
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private fun recordTransaction(transactionRepo: TransactionRepository = fakeTransactionRepo) = RecordTransaction(
-        transactionRepo, switchWatchRepo, FakeSuggestionRecordRepository(), FakeFundMetadataRepository(), scheduler,
-        testTargetLevelPreselection(transactionRepo, switchWatchRepo),
+        transactionRepo,
+        switchWatchRepo,
+        FakeSuggestionRecordRepository(),
+        FakeFundMetadataRepository(),
+        scheduler,
+        testTargetLevelPreselection(transactionRepo, switchWatchRepo)
     )
 
     private fun viewModel(
         priceRepo: FundPriceRepository = fakePriceRepo,
         transactionRepo: TransactionRepository = fakeTransactionRepo,
-        fileReader: ImportFileReader = FakeImportFileReader(),
+        fileReader: ImportFileReader = FakeImportFileReader()
     ) = ImportHoldingsViewModel(transactionRepo, priceRepo, recordTransaction(transactionRepo), fileReader)
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun xlsxBytes(sheetXml: String): ByteArray {
@@ -236,8 +240,7 @@ class ImportHoldingsViewModelTest {
         // cachad kurs ska inte trigga en ny, långsam nätverksuppdatering av hela historiken
         // vid import — annars blir import onödigt långsamt för redan bevakade fonder.
         val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
-            override suspend fun latestPrice(fundId: String): FundPrice =
-                FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
+            override suspend fun latestPrice(fundId: String): FundPrice = FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 950.0, currency = "SEK")
         }
         val vm = viewModel(priceRepoMedFarskKurs)
         vm.uiState.test {
@@ -273,8 +276,7 @@ class ImportHoldingsViewModelTest {
         // 10 dagar gammal är otvetydigt inaktuellt oavsett veckodag/klockslag (till skillnad
         // från "igår", se NavCalendar, issue #27) — deterministiskt oavsett när CI kör testet.
         val priceRepoMedInaktuellKurs = object : FundPriceRepository by fakePriceRepo {
-            override suspend fun latestPrice(fundId: String): FundPrice =
-                FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 950.0, currency = "SEK")
+            override suspend fun latestPrice(fundId: String): FundPrice = FundPrice(fundId = fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 950.0, currency = "SEK")
         }
         val vm = viewModel(priceRepoMedInaktuellKurs)
         vm.uiState.test {
@@ -363,9 +365,9 @@ class ImportHoldingsViewModelTest {
         val ambiguousCatalog = FundCatalog(
             companies = listOf(
                 FundCompany(id = "2", name = "Aktiebolag Ett AB"),
-                FundCompany(id = "3", name = "Aktiebolag Tva AB"),
+                FundCompany(id = "3", name = "Aktiebolag Tva AB")
             ),
-            funds = listOf(fundA, fundB),
+            funds = listOf(fundA, fundB)
         )
         val ambiguousSheetXml = """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

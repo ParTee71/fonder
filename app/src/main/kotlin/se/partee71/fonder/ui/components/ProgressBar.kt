@@ -25,7 +25,7 @@ fun ProgressBar(modifier: Modifier = Modifier, progress: (() -> Float)? = null) 
             progress = progress,
             modifier = modifier.fillMaxWidth(),
             color = color,
-            trackColor = track,
+            trackColor = track
         )
     }
 }

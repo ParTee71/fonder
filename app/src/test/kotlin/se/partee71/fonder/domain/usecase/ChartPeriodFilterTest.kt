@@ -17,7 +17,7 @@ class ChartPeriodFilterTest {
             point(latest - 31),
             point(latest - 30),
             point(latest - 1),
-            point(latest),
+            point(latest)
         )
 
         val result = ChartPeriodFilter.apply(points, Period.EN_MANAD)
@@ -40,7 +40,6 @@ class ChartPeriodFilterTest {
         val points = listOf(point(0), point(10_000), point(20_000))
 
         val result = ChartPeriodFilter.apply(points, Period.ALLT)
-
 
         assertEquals(points, result)
     }
@@ -78,18 +77,18 @@ class ChartPeriodFilterTest {
         val latest = 20_000L
         val points = listOf(
             point(latest),
-            point(latest - 900),   // inom 3 år
+            point(latest - 900), // inom 3 år
             point(latest - 1_500), // inom 5 år, utanför 3
-            point(latest - 2_500), // utanför båda
+            point(latest - 2_500) // utanför båda
         )
 
         assertEquals(
             setOf(latest, latest - 900),
-            ChartPeriodFilter.apply(points, Period.TRE_AR).map { it.first }.toSet(),
+            ChartPeriodFilter.apply(points, Period.TRE_AR).map { it.first }.toSet()
         )
         assertEquals(
             setOf(latest, latest - 900, latest - 1_500),
-            ChartPeriodFilter.apply(points, Period.FEM_AR).map { it.first }.toSet(),
+            ChartPeriodFilter.apply(points, Period.FEM_AR).map { it.first }.toSet()
         )
     }
 

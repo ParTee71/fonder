@@ -47,25 +47,25 @@ class Migration1516Test {
             exportedSchemaStatements(15).forEach(db::execSQL)
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')",
+                    "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')"
             )
             db.execSQL(
                 "INSERT INTO transactions (id, fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES (11, 'SHB0000442', 'SALJ', 19900, 4.0, 201.5, 12.0)",
+                    "VALUES (11, 'SHB0000442', 'SALJ', 19900, 4.0, 201.5, 12.0)"
             )
             db.execSQL(
                 "INSERT INTO suggestion_records (id, suggestedAtEpochDay, planIndex, sellIsin, buyIsin, " +
                     "sellNavAtSuggestion, buyNavAtSuggestion, switchValueKr, followed, batchEpochMillis, kind) " +
-                    "VALUES (3, 19800, 1, 'SE0000582033', 'SE0001466368', 201.5, 95.25, 4200.0, 0, 1754200000000, 'FEE')",
+                    "VALUES (3, 19800, 1, 'SE0000582033', 'SE0001466368', 201.5, 95.25, 4200.0, 0, 1754200000000, 'FEE')"
             )
             db.execSQL(
                 "INSERT INTO switch_watches (id, sellIsin, sellFundName, soldAtEpochDay, proceedsKr, targetLevel, " +
                     "sourceRecordId, closedAtEpochDay, boughtIsin, closeReason) " +
-                    "VALUES (5, 'SE0000582033', 'Fond A', 19900, 12500.0, 4, 3, 19905, 'SE0001466368', 'KOPT')",
+                    "VALUES (5, 'SE0000582033', 'Fond A', 19900, 12500.0, 4, 3, 19905, 'SE0001466368', 'KOPT')"
             )
             db.execSQL(
                 "INSERT INTO switch_watch_candidates (id, watchId, isin, name, navAtStart, navAtStartEpochDay, source, position) " +
-                    "VALUES (8, 5, 'SE0001466368', 'Kandidat A', 95.25, 19900, 'MANUELL', 2)",
+                    "VALUES (8, 5, 'SE0001466368', 'Kandidat A', 95.25, 19900, 'MANUELL', 2)"
             )
             db.version = 15
         }

@@ -18,7 +18,7 @@ class FeeComparisonCalcTest {
     private val sverigeIndexTags = listOf(
         FundTag("Aktiefond", "TYPE"),
         FundTag("Sverige", "COMMON_REGION"),
-        FundTag("Index", "INDEX"),
+        FundTag("Index", "INDEX")
     )
 
     private fun fund(
@@ -26,7 +26,7 @@ class FeeComparisonCalcTest {
         name: String = isin,
         totalFee: Double?,
         indexFund: Boolean = true,
-        tags: List<FundTag> = sverigeIndexTags,
+        tags: List<FundTag> = sverigeIndexTags
     ) = FundMetadata(
         isin = isin,
         name = name,
@@ -40,7 +40,7 @@ class FeeComparisonCalcTest {
         indexFund = indexFund,
         startDateEpochDay = null,
         minimumBuy = null,
-        tags = tags,
+        tags = tags
     )
 
     private val held = fund(isin = "SE0001466368", name = "Handelsbanken Sverige Index Criteria", totalFee = 0.73)
@@ -79,7 +79,7 @@ class FeeComparisonCalcTest {
             isin = "SE_AKTIV",
             totalFee = 0.17,
             indexFund = false,
-            tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Sverige", "COMMON_REGION")),
+            tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Sverige", "COMMON_REGION"))
         )
 
         val result = FeeComparisonCalc.rank(held, listOf(aktivtForvaltad), holdingValue = 300_000.0)
@@ -93,7 +93,7 @@ class FeeComparisonCalcTest {
         val smabolag = fund(
             isin = "SE_SMA",
             totalFee = 0.20,
-            tags = sverigeIndexTags + FundTag("Småbolag", "ALIGNMENT"),
+            tags = sverigeIndexTags + FundTag("Småbolag", "ALIGNMENT")
         )
 
         assertTrue(FeeComparisonCalc.rank(held, listOf(smabolag), holdingValue = 300_000.0).isEmpty())
@@ -104,7 +104,7 @@ class FeeComparisonCalcTest {
         val global = fund(
             isin = "SE_GLOBAL",
             totalFee = 0.10,
-            tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Global", "COMMON_REGION"), FundTag("Index", "INDEX")),
+            tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Global", "COMMON_REGION"), FundTag("Index", "INDEX"))
         )
 
         assertTrue(FeeComparisonCalc.rank(held, listOf(global), holdingValue = 300_000.0).isEmpty())

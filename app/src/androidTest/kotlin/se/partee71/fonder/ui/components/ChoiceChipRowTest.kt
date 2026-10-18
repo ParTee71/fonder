@@ -1,7 +1,7 @@
 package se.partee71.fonder.ui.components
 
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -30,7 +30,7 @@ class ChoiceChipRowTest {
                     options = listOf("A", "B", "C"),
                     selected = "B",
                     optionLabel = { it },
-                    onSelect = {},
+                    onSelect = {}
                 )
             }
         }
@@ -49,7 +49,7 @@ class ChoiceChipRowTest {
                     options = listOf("A", "B", "C"),
                     selected = null,
                     optionLabel = { it },
-                    onSelect = { selected = it },
+                    onSelect = { selected = it }
                 )
             }
         }
@@ -67,7 +67,7 @@ class ChoiceChipRowTest {
                     options = listOf(1, 2, 3),
                     selected = null,
                     optionLabel = { it.toString() },
-                    onSelect = {},
+                    onSelect = {}
                 )
             }
         }

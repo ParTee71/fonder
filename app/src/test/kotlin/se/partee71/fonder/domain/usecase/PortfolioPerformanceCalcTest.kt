@@ -1,14 +1,14 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
-import java.time.LocalDate
 
 class PortfolioPerformanceCalcTest {
 
@@ -16,11 +16,9 @@ class PortfolioPerformanceCalcTest {
     private val fondB = Fund(fundId = "SHB0000627", name = "Fond B")
     private val today = LocalDate.of(2026, 7, 31)
 
-    private fun price(daysAgo: Long, nav: Double, fundId: String = "SHB0000442") =
-        FundPrice(fundId = fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = nav)
+    private fun price(daysAgo: Long, nav: Double, fundId: String = "SHB0000442") = FundPrice(fundId = fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = nav)
 
-    private fun available(result: PortfolioPerformanceCalc.PeriodResult?) =
-        result as PortfolioPerformanceCalc.PeriodResult.Available
+    private fun available(result: PortfolioPerformanceCalc.PeriodResult?) = result as PortfolioPerformanceCalc.PeriodResult.Available
 
     @Test
     fun `holdingChange berknar dag vecka och manad nar full historik finns`() {
@@ -31,7 +29,7 @@ class PortfolioPerformanceCalcTest {
             price(daysAgo = 0, nav = 120.0),
             price(daysAgo = 1, nav = 110.0),
             price(daysAgo = 7, nav = 100.0),
-            price(daysAgo = 30, nav = 80.0),
+            price(daysAgo = 30, nav = 80.0)
         )
 
         val day = available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history))
@@ -67,7 +65,7 @@ class PortfolioPerformanceCalcTest {
 
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history)
         )
         // Veckan hittar samma rad, men gapet (2 dagar) är inom toleransen — fortsatt beräkningsbar.
         val week = available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.VECKA, today, history))
@@ -86,15 +84,15 @@ class PortfolioPerformanceCalcTest {
         assertEquals(
             20.0,
             available(PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history)).amount,
-            1e-9,
+            1e-9
         )
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.VECKA, today, history),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.VECKA, today, history)
         )
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.MANAD, today, history),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.MANAD, today, history)
         )
     }
 
@@ -125,11 +123,11 @@ class PortfolioPerformanceCalcTest {
 
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, history)
         )
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.MANAD, today, history),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.MANAD, today, history)
         )
     }
 
@@ -138,7 +136,7 @@ class PortfolioPerformanceCalcTest {
         val holding = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
         assertEquals(
             PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, emptyList()),
+            PortfolioPerformanceCalc.holdingChange(holding, PortfolioPerformanceCalc.Period.DAG, today, emptyList())
         )
     }
 
@@ -149,7 +147,7 @@ class PortfolioPerformanceCalcTest {
             price(daysAgo = 0, nav = 120.0),
             price(daysAgo = 1, nav = 110.0),
             price(daysAgo = 7, nav = 100.0),
-            price(daysAgo = 30, nav = 80.0),
+            price(daysAgo = 30, nav = 80.0)
         )
 
         val performance = PortfolioPerformanceCalc.holdingPerformance(holding, today, history)
@@ -165,7 +163,7 @@ class PortfolioPerformanceCalcTest {
         val b = Holding(fund = fondB, netShares = 5.0, netInvested = 500.0, currentValue = 600.0)
         val historyByFundId = mapOf(
             fondA.fundId to listOf(price(daysAgo = 0, nav = 120.0, fundId = fondA.fundId), price(daysAgo = 1, nav = 110.0, fundId = fondA.fundId)),
-            fondB.fundId to listOf(price(daysAgo = 0, nav = 120.0, fundId = fondB.fundId), price(daysAgo = 1, nav = 110.0, fundId = fondB.fundId)),
+            fondB.fundId to listOf(price(daysAgo = 0, nav = 120.0, fundId = fondB.fundId), price(daysAgo = 1, nav = 110.0, fundId = fondB.fundId))
         )
 
         val total = PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
@@ -183,7 +181,7 @@ class PortfolioPerformanceCalcTest {
         val nyligenTillagd = Holding(fund = fondB, netShares = 5.0, netInvested = 500.0, currentValue = 520.0)
         val historyByFundId = mapOf(
             fondA.fundId to listOf(price(daysAgo = 0, nav = 120.0, fundId = fondA.fundId), price(daysAgo = 30, nav = 80.0, fundId = fondA.fundId)),
-            fondB.fundId to listOf(price(daysAgo = 1, nav = 104.0, fundId = fondB.fundId)), // ingen kurs 30 dagar bak
+            fondB.fundId to listOf(price(daysAgo = 1, nav = 104.0, fundId = fondB.fundId)) // ingen kurs 30 dagar bak
         )
 
         val total = PortfolioPerformanceCalc.totalChange(listOf(medHistorik, nyligenTillagd), PortfolioPerformanceCalc.Period.MANAD, today, historyByFundId)
@@ -200,7 +198,7 @@ class PortfolioPerformanceCalcTest {
 
         assertEquals(
             PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.totalChange(listOf(holding), PortfolioPerformanceCalc.Period.MANAD, today, historyByFundId),
+            PortfolioPerformanceCalc.totalChange(listOf(holding), PortfolioPerformanceCalc.Period.MANAD, today, historyByFundId)
         )
     }
 
@@ -209,10 +207,10 @@ class PortfolioPerformanceCalcTest {
         // Re-ankring på portföljnivå: alla fonders NAV är några dagar gamla men har minst två
         // punkter -> den senaste dagsrörelsen summeras, i stället för en tom total.
         val a = Holding(fund = fondA, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0) // nav 100, 5 dagar gammal
-        val b = Holding(fund = fondB, netShares = 5.0, netInvested = 450.0, currentValue = 500.0)   // nav 100, 5 dagar gammal
+        val b = Holding(fund = fondB, netShares = 5.0, netInvested = 450.0, currentValue = 500.0) // nav 100, 5 dagar gammal
         val historyByFundId = mapOf(
             fondA.fundId to listOf(price(daysAgo = 5, nav = 100.0, fundId = fondA.fundId), price(daysAgo = 6, nav = 95.0, fundId = fondA.fundId)),
-            fondB.fundId to listOf(price(daysAgo = 5, nav = 100.0, fundId = fondB.fundId), price(daysAgo = 6, nav = 96.0, fundId = fondB.fundId)),
+            fondB.fundId to listOf(price(daysAgo = 5, nav = 100.0, fundId = fondB.fundId), price(daysAgo = 6, nav = 96.0, fundId = fondB.fundId))
         )
 
         val day = PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
@@ -229,12 +227,12 @@ class PortfolioPerformanceCalcTest {
         val b = Holding(fund = fondB, netShares = 5.0, netInvested = 450.0, currentValue = 500.0)
         val historyByFundId = mapOf(
             fondA.fundId to listOf(price(daysAgo = 10, nav = 100.0, fundId = fondA.fundId)),
-            fondB.fundId to listOf(price(daysAgo = 15, nav = 100.0, fundId = fondB.fundId)),
+            fondB.fundId to listOf(price(daysAgo = 15, nav = 100.0, fundId = fondB.fundId))
         )
 
         assertEquals(
             PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId),
+            PortfolioPerformanceCalc.totalChange(listOf(a, b), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
         )
     }
 
@@ -243,7 +241,7 @@ class PortfolioPerformanceCalcTest {
         val medKurs = Holding(fund = fondA, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
         val utanKurs = Holding(fund = fondB, netShares = 5.0, netInvested = 500.0, currentValue = null)
         val historyByFundId = mapOf(
-            fondA.fundId to listOf(price(daysAgo = 0, nav = 110.0, fundId = fondA.fundId), price(daysAgo = 1, nav = 105.0, fundId = fondA.fundId)),
+            fondA.fundId to listOf(price(daysAgo = 0, nav = 110.0, fundId = fondA.fundId), price(daysAgo = 1, nav = 105.0, fundId = fondA.fundId))
         )
 
         val total = PortfolioPerformanceCalc.totalChange(listOf(medKurs, utanKurs), PortfolioPerformanceCalc.Period.DAG, today, historyByFundId)
@@ -257,7 +255,7 @@ class PortfolioPerformanceCalcTest {
     fun `totalChange InsufficientHistory for tom portfolj`() {
         assertEquals(
             PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-            PortfolioPerformanceCalc.totalChange(emptyList(), PortfolioPerformanceCalc.Period.DAG, today, emptyMap()),
+            PortfolioPerformanceCalc.totalChange(emptyList(), PortfolioPerformanceCalc.Period.DAG, today, emptyMap())
         )
     }
 
@@ -269,8 +267,8 @@ class PortfolioPerformanceCalcTest {
                 price(daysAgo = 0, nav = 120.0),
                 price(daysAgo = 1, nav = 110.0),
                 price(daysAgo = 7, nav = 100.0),
-                price(daysAgo = 30, nav = 80.0),
-            ),
+                price(daysAgo = 30, nav = 80.0)
+            )
         )
 
         val performance = PortfolioPerformanceCalc.totalPerformance(listOf(holding), today, historyByFundId)

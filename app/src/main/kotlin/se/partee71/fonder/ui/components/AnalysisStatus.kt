@@ -52,17 +52,16 @@ fun statusTitle(level: FundAnalysisCalc.SignalLevel) = when (level) {
  * (samma princip som [statusTriggerMessages]). Alltid förklarande, aldrig ett köp-/säljråd (ANA-3).
  */
 @Composable
-fun guidanceMessages(analysis: FundAnalysisCalc.Analysis): List<String> =
-    AnalysisGuidance.guidanceFor(analysis).map { key ->
-        when (key) {
-            AnalysisGuidance.GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV -> stringResource(R.string.analys_guidance_plus_mot_gav)
-            AnalysisGuidance.GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV -> stringResource(R.string.analys_guidance_minus_mot_gav)
-            AnalysisGuidance.GuidanceKey.DJUP_NEDGANG_TIDSHORISONT -> stringResource(R.string.analys_guidance_djup_nedgang)
-            AnalysisGuidance.GuidanceKey.UNDER_TREND_INTE_SALJBUD -> stringResource(R.string.analys_guidance_under_trend)
-            AnalysisGuidance.GuidanceKey.SVAG_MOT_PORTFOLJ -> stringResource(R.string.analys_guidance_svag_portfolj)
-            AnalysisGuidance.GuidanceKey.LUGNT_LAGE -> stringResource(R.string.analys_guidance_lugnt)
-        }
+fun guidanceMessages(analysis: FundAnalysisCalc.Analysis): List<String> = AnalysisGuidance.guidanceFor(analysis).map { key ->
+    when (key) {
+        AnalysisGuidance.GuidanceKey.NEDGANG_MEN_PLUS_MOT_GAV -> stringResource(R.string.analys_guidance_plus_mot_gav)
+        AnalysisGuidance.GuidanceKey.NEDGANG_OCH_MINUS_MOT_GAV -> stringResource(R.string.analys_guidance_minus_mot_gav)
+        AnalysisGuidance.GuidanceKey.DJUP_NEDGANG_TIDSHORISONT -> stringResource(R.string.analys_guidance_djup_nedgang)
+        AnalysisGuidance.GuidanceKey.UNDER_TREND_INTE_SALJBUD -> stringResource(R.string.analys_guidance_under_trend)
+        AnalysisGuidance.GuidanceKey.SVAG_MOT_PORTFOLJ -> stringResource(R.string.analys_guidance_svag_portfolj)
+        AnalysisGuidance.GuidanceKey.LUGNT_LAGE -> stringResource(R.string.analys_guidance_lugnt)
     }
+}
 
 /** Svensk text för varje triggad (icke-grön) signal i [analysis], i fast ordning (avstånd, trend, momentum). */
 @Composable
@@ -96,14 +95,14 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
             Text(
                 stringResource(R.string.analys_status_insufficient),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         return
     }
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = statusColor(level).copy(alpha = 0.14f)),
+        colors = CardDefaults.cardColors(containerColor = statusColor(level).copy(alpha = 0.14f))
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             StatusDot(level, modifier = Modifier.padding(top = 6.dp, end = 12.dp))
@@ -114,7 +113,7 @@ fun AnalysisStatusBanner(analysis: FundAnalysisCalc.Analysis?, modifier: Modifie
                     Text(
                         messages.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -138,7 +137,7 @@ fun AnalysisGuidanceCard(analysis: FundAnalysisCalc.Analysis, modifier: Modifier
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = if (index == 0) Modifier else Modifier.padding(top = 8.dp),
+                modifier = if (index == 0) Modifier else Modifier.padding(top = 8.dp)
             )
         }
     }

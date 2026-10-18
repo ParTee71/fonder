@@ -22,11 +22,15 @@ fun testPendingDecisionsSource(
     switchWatchRepo: FakeSwitchWatchRepository = FakeSwitchWatchRepository(),
     priceRepo: FundPriceRepository = FakeCachedPriceRepository(),
     metadataRepo: FakeFundMetadataRepository = FakeFundMetadataRepository(),
-    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository(),
+    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository()
 ): PendingDecisionsSource = PendingDecisionsSource(
-    preferences, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo,
+    preferences,
+    suggestionRepo,
+    switchWatchRepo,
+    priceRepo,
+    metadataRepo,
     DismissedPlanSource(suggestionRepo, dismissalRepo, preferences, metadataRepo),
-    InProgressSwitches(switchWatchRepo, suggestionRepo),
+    InProgressSwitches(switchWatchRepo, suggestionRepo)
 )
 
 /** Bytesväljarens indata (BYT-2) ur samma fakes — formulärets och PDF-importens tester. */
@@ -36,9 +40,9 @@ fun testSwitchChoicesSource(
     switchWatchRepo: FakeSwitchWatchRepository = FakeSwitchWatchRepository(),
     priceRepo: FundPriceRepository = FakeCachedPriceRepository(),
     metadataRepo: FakeFundMetadataRepository = FakeFundMetadataRepository(),
-    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository(),
+    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository()
 ): SwitchChoicesSource = SwitchChoicesSource(
     testPendingDecisionsSource(preferences, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo, dismissalRepo),
     switchWatchRepo,
-    suggestionRepo,
+    suggestionRepo
 )

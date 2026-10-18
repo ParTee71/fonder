@@ -4,19 +4,20 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -26,11 +27,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
-import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
-import se.partee71.fonder.domain.usecase.DismissedPlanSource
-import se.partee71.fonder.domain.usecase.InProgressSwitches
-import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
+import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -48,14 +46,16 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.InProgressSwitches
+import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.testing.testTargetLevelPreselection
-import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 import se.partee71.fonder.ui.navigation.TransactionFormKey
-import java.time.LocalDate
+import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FondDetaljViewModelTest {
@@ -70,6 +70,7 @@ class FondDetaljViewModelTest {
     private val fund = Fund(fundId = "SHB0000442", name = "Fond A")
     private val funds = MutableStateFlow(listOf(fund))
     private val transactionsForFund = MutableStateFlow<List<Transaction>>(emptyList())
+
     /** Alla transaktioner (alla fonder) — [FundAnalysisCalc] behöver portföljvida holdings, issue #16. */
     private val allTransactions = MutableStateFlow<List<Transaction>>(emptyList())
     private val history = MutableStateFlow<List<FundPrice>>(emptyList())
@@ -82,8 +83,7 @@ class FondDetaljViewModelTest {
     private var upsertedFund: Fund? = null
     private var capturedFromEpochDay: Long? = null
 
-    private fun transaction(epochDay: Long) =
-        Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = epochDay, shares = 1.0, pricePerShare = 100.0)
+    private fun transaction(epochDay: Long) = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = epochDay, shares = 1.0, pricePerShare = 100.0)
 
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
@@ -150,24 +150,27 @@ class FondDetaljViewModelTest {
         }
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
         override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
+
         /** Samma karta som `metadataFor` — testets metadata *är* cachen (de avstådda raderna slås upp här). */
         override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
 
     private val fakeSuggestionRecordRepo = object : SuggestionRecordRepository {
         val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
-        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> =
-            records.map { list -> list.filter { it.kind == SuggestionKind.RISK_PLAN } }
+        override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records.map { list -> list.filter { it.kind == SuggestionKind.RISK_PLAN } }
+
         /** Nyast först, precis som DAO:ns `observeHistory` — ordningen är en del av kontraktet (issue #91). */
         override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { list ->
             list.sortedWith(
                 compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
                     .thenByDescending { it.batchEpochMillis }
-                    .thenBy { it.planIndex },
+                    .thenBy { it.planIndex }
             )
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
-        override suspend fun record(record: SuggestionRecord) { records.value = records.value + record }
+        override suspend fun record(record: SuggestionRecord) {
+            records.value = records.value + record
+        }
         override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {}
         override suspend fun setFollowed(id: Long, followed: Boolean) {
             records.value = records.value.map { if (it.id == id) it.copy(followed = followed) else it }
@@ -188,11 +191,15 @@ class FondDetaljViewModelTest {
         fakeSuggestionRecordRepo,
         fakeSwitchWatchRepo,
         RecordTransaction(
-            fakeTransactionRepo, fakeSwitchWatchRepo, fakeSuggestionRecordRepo, fakeFundMetadataRepo, scheduler,
-            testTargetLevelPreselection(fakeTransactionRepo, fakeSwitchWatchRepo),
+            fakeTransactionRepo,
+            fakeSwitchWatchRepo,
+            fakeSuggestionRecordRepo,
+            fakeFundMetadataRepo,
+            scheduler,
+            testTargetLevelPreselection(fakeTransactionRepo, fakeSwitchWatchRepo)
         ),
         DismissedPlanSource(fakeSuggestionRecordRepo, fakeDismissalRepo, preferencesRepository, fakeFundMetadataRepo),
-        InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
+        InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo)
     )
 
     @Before
@@ -202,7 +209,7 @@ class FondDetaljViewModelTest {
         // om DataStores egen skrivning annars kör på en frikopplad klocka.
         dataStore = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("fond_test.preferences_pb") },
+            produceFile = { tempFolder.newFile("fond_test.preferences_pb") }
         )
         preferencesRepository = PreferencesRepository(dataStore)
     }
@@ -226,7 +233,7 @@ class FondDetaljViewModelTest {
         latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = 200, nav = 145.0, currency = "SEK")
         history.value = listOf(
             FundPrice(fundId = fund.fundId, epochDay = 100, nav = 140.0, currency = "SEK"),
-            FundPrice(fundId = fund.fundId, epochDay = 200, nav = 145.0, currency = "SEK"),
+            FundPrice(fundId = fund.fundId, epochDay = 200, nav = 145.0, currency = "SEK")
         )
 
         val vm = viewModel()
@@ -266,7 +273,7 @@ class FondDetaljViewModelTest {
             transaction(epochDay = 100),
             transaction(epochDay = 100),
             transaction(epochDay = 200),
-            sell,
+            sell
         )
 
         val vm = viewModel()
@@ -533,10 +540,10 @@ class FondDetaljViewModelTest {
                 isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345",
                 totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
                 companyName = "Länsförsäkringar", risk = null, indexFund = true, startDateEpochDay = null,
-                minimumBuy = null, tags = emptyList(),
+                minimumBuy = null, tags = emptyList()
             ),
             candidateFeePercent = 0.21,
-            annualSavingsKr = 1560.0,
+            annualSavingsKr = 1560.0
         )
         suggestCheaperAlternativesReturn = listOf(alternative)
 
@@ -586,19 +593,19 @@ class FondDetaljViewModelTest {
     private fun metadata(isin: String, name: String, risk: Int?, fee: Double?) = FundMetadata(
         isin = isin, name = name, orderbookId = "ob-$isin", totalFee = fee, managementFee = fee,
         category = "Sverige", fundType = "EQUITY_FUND", companyName = "Bolaget", risk = risk,
-        indexFund = true, startDateEpochDay = null, minimumBuy = null, tags = emptyList<FundTag>(),
+        indexFund = true, startDateEpochDay = null, minimumBuy = null, tags = emptyList<FundTag>()
     )
 
     /** Seedar ett innehav med ISIN, en ISK/KF-kontotyp och en färsk inspelad bytesplan. */
     private suspend fun setUpSwitchPlan(
         followed: Boolean? = null,
         suggestedAtEpochDay: Long = LocalDate.now().toEpochDay(),
-        accountType: AccountType = AccountType.ISK_KF,
+        accountType: AccountType = AccountType.ISK_KF
     ) {
         setUpHolding(isin = "SE0004297927")
         metadataByIsin = mapOf(
             "SE0004297927" to metadata("SE0004297927", "Fond A", risk = 5, fee = 1.2),
-            "SE0000581434" to metadata("SE0000581434", "Fond B", risk = 4, fee = 0.4),
+            "SE0000581434" to metadata("SE0000581434", "Fond B", risk = 4, fee = 0.4)
         )
         preferencesRepository.setAccountType(accountType)
         fakeSuggestionRecordRepo.records.value = listOf(
@@ -606,8 +613,8 @@ class FondDetaljViewModelTest {
                 id = 7, suggestedAtEpochDay = suggestedAtEpochDay, planIndex = 0,
                 sellIsin = "SE0004297927", buyIsin = "SE0000581434",
                 sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 90.0,
-                switchValueKr = 4000.0, followed = followed,
-            ),
+                switchValueKr = 4000.0, followed = followed
+            )
         )
     }
 
@@ -697,15 +704,20 @@ class FondDetaljViewModelTest {
         metadataByIsin = mapOf(
             "SE0004297927" to metadata("SE0004297927", "Fond A", risk = 5, fee = 1.2),
             "SE0000581434" to metadata("SE0000581434", "Fond B", risk = 4, fee = 0.4),
-            "SE0009778954" to metadata("SE0009778954", "Fond C", risk = 3, fee = 0.3),
+            "SE0009778954" to metadata("SE0009778954", "Fond C", risk = 3, fee = 0.3)
         )
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         fakeSuggestionRecordRepo.records.value = listOf(
             SuggestionRecord(
-                id = 9, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0,
-                sellIsin = "SE0000581434", buyIsin = "SE0009778954",
-                sellNavAtSuggestion = 90.0, buyNavAtSuggestion = 80.0, switchValueKr = 1000.0,
-            ),
+                id = 9,
+                suggestedAtEpochDay = LocalDate.now().toEpochDay(),
+                planIndex = 0,
+                sellIsin = "SE0000581434",
+                buyIsin = "SE0009778954",
+                sellNavAtSuggestion = 90.0,
+                buyNavAtSuggestion = 80.0,
+                switchValueKr = 1000.0
+            )
         )
 
         val vm = viewModel()
@@ -725,8 +737,8 @@ class FondDetaljViewModelTest {
         historyByIsin = mapOf(
             "SE0000581434" to listOf(
                 FundPrice(fundId = "SE0000581434", epochDay = 200, nav = 110.0),
-                FundPrice(fundId = "SE0000581434", epochDay = 100, nav = 100.0),
-            ),
+                FundPrice(fundId = "SE0000581434", epochDay = 100, nav = 100.0)
+            )
         )
 
         val vm = viewModel()
@@ -777,14 +789,14 @@ class FondDetaljViewModelTest {
         buyIsin: String = "SE0000581434",
         followed: Boolean? = null,
         suggestedAtEpochDay: Long = LocalDate.now().toEpochDay(),
-        id: Long = 21,
+        id: Long = 21
     ) {
         setUpHolding(isin = "SE0004297927")
         fakeSuggestionRecordRepo.records.value = fakeSuggestionRecordRepo.records.value + SuggestionRecord(
             id = id, suggestedAtEpochDay = suggestedAtEpochDay, planIndex = 0,
             sellIsin = "SE0004297927", buyIsin = buyIsin,
             sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 90.0,
-            switchValueKr = 10_000.0, followed = followed, kind = SuggestionKind.FEE,
+            switchValueKr = 10_000.0, followed = followed, kind = SuggestionKind.FEE
         )
     }
 
@@ -806,22 +818,21 @@ class FondDetaljViewModelTest {
     }
 
     @Test
-    fun `alternativ utan inspelad rad saknas i kartan — ingen kryssruta som inte skriver nagonstans`() =
-        runTest(dispatcher) {
-            // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen.
-            // Ett alternativ som just dykt upp har alltså inget att kvittera mot ännu.
-            setUpRecordedFeeSwitch(buyIsin = "SE0009778954")
+    fun `alternativ utan inspelad rad saknas i kartan — ingen kryssruta som inte skriver nagonstans`() = runTest(dispatcher) {
+        // Listan räknas om live vid varje skärmöppning, raden skrivs av bakgrundsskanningen.
+        // Ett alternativ som just dykt upp har alltså inget att kvittera mot ännu.
+        setUpRecordedFeeSwitch(buyIsin = "SE0009778954")
 
-            val vm = viewModel()
-            vm.uiState.test {
-                var state = awaitItem()
-                while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
 
-                assertNull(state.recordedFeeSwitches["SE0000581434"])
-                cancelAndIgnoreRemainingEvents()
-            }
-            advanceUntilIdle()
+            assertNull(state.recordedFeeSwitches["SE0000581434"])
+            cancelAndIgnoreRemainingEvents()
         }
+        advanceUntilIdle()
+    }
 
     @Test
     fun `planens rader hamnar aldrig bland avgiftsbytena`() = runTest(dispatcher) {
@@ -872,7 +883,7 @@ class FondDetaljViewModelTest {
             val key = TransactionFormKey.follow(state.switchPlan.single())
             assertEquals(
                 TransactionFormKey(fundIsin = "SE0004297927", type = TransactionType.SALJ, suggestionRecordId = 7, prefillAmountKr = 4000.0),
-                key,
+                key
             )
             cancelAndIgnoreRemainingEvents()
         }
@@ -881,7 +892,7 @@ class FondDetaljViewModelTest {
         assertNull(fakeSuggestionRecordRepo.records.value.single().followed)
         assertEquals(
             TransactionFormKey(fundId = "SHB1", type = TransactionType.SALJ, suggestionRecordId = 6),
-            TransactionFormKey.follow(fundId = "SHB1", recordId = 6),
+            TransactionFormKey.follow(fundId = "SHB1", recordId = 6)
         )
     }
 
@@ -908,7 +919,7 @@ class FondDetaljViewModelTest {
         // Samma regel som Beslut (InProgressSwitches, BYT-1): bevakningen är startad ur rad 7.
         setUpSwitchPlan()
         fakeSwitchWatchRepo.start(
-            SwitchWatch(sellIsin = "SE0004297927", sellFundName = "Fond A", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 3, sourceRecordId = 7),
+            SwitchWatch(sellIsin = "SE0004297927", sellFundName = "Fond A", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 3, sourceRecordId = 7)
         )
 
         val vm = viewModel()
@@ -933,9 +944,9 @@ class FondDetaljViewModelTest {
             SuggestionRecord(
                 id = 8, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0,
                 sellIsin = "SE0004297927", buyIsin = "SE_ANNAN",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0, switchValueKr = 4000.0, batchEpochMillis = 2_000,
+                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0, switchValueKr = 4000.0, batchEpochMillis = 2_000
             ),
-            fakeSuggestionRecordRepo.records.value.single().copy(planIndex = 1, batchEpochMillis = 2_000),
+            fakeSuggestionRecordRepo.records.value.single().copy(planIndex = 1, batchEpochMillis = 2_000)
         )
         fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.RISK_PLAN, LocalDate.now())
 
@@ -968,7 +979,7 @@ class FondDetaljViewModelTest {
     private fun cheaperAlternative(isin: String, name: String) = FeeComparisonCalc.Alternative(
         candidate = metadata(isin, name, risk = 4, fee = 0.2),
         candidateFeePercent = 0.2,
-        annualSavingsKr = 100.0,
+        annualSavingsKr = 100.0
     )
 
     @Test
@@ -976,7 +987,7 @@ class FondDetaljViewModelTest {
         setUpHolding()
         suggestCheaperAlternativesReturn = listOf(
             cheaperAlternative("SE0000581434", "Fond B"),
-            cheaperAlternative("SE0009778954", "Fond C"),
+            cheaperAlternative("SE0009778954", "Fond C")
         )
         fakeDismissalRepo.dismiss("SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now())
 
@@ -1012,7 +1023,10 @@ class FondDetaljViewModelTest {
         setUpHolding()
         suggestCheaperAlternativesReturn = listOf(cheaperAlternative("SE0000581434", "Fond B"))
         fakeDismissalRepo.dismiss(
-            "SE0004297927", "SE0000581434", SuggestionKind.FEE, LocalDate.now().minusDays(SuggestionDismissals.TTL_DAYS + 1),
+            "SE0004297927",
+            "SE0000581434",
+            SuggestionKind.FEE,
+            LocalDate.now().minusDays(SuggestionDismissals.TTL_DAYS + 1)
         )
 
         val vm = viewModel()

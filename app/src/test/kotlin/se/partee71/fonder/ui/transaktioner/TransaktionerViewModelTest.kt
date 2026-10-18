@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.transaktioner
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,7 +31,6 @@ import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 /**
  * Händelser (TRX, SLD): listan, filtret, årets realiserade resultat och säljens resultat och
@@ -70,16 +70,18 @@ class TransaktionerViewModelTest {
         fakeRepo,
         fakeSwitchWatchRepo,
         RecordTransaction(
-            fakeRepo, fakeSwitchWatchRepo, FakeSuggestionRecordRepository(), fakeMetadataRepo, scheduler,
-            testTargetLevelPreselection(fakeRepo, fakeSwitchWatchRepo),
-        ),
+            fakeRepo,
+            fakeSwitchWatchRepo,
+            FakeSuggestionRecordRepository(),
+            fakeMetadataRepo,
+            scheduler,
+            testTargetLevelPreselection(fakeRepo, fakeSwitchWatchRepo)
+        )
     ) { today }
 
-    private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) =
-        Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
+    private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
 
-    private fun salj(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId, fee: Double = 0.0) =
-        Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
+    private fun salj(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId, fee: Double = 0.0) = Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
 
     /** Väntar ut laddningen inom ett Turbine-block. */
     private suspend fun app.cash.turbine.ReceiveTurbine<TransaktionerUiState>.awaitLoaded(): TransaktionerUiState {
@@ -89,6 +91,7 @@ class TransaktionerViewModelTest {
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     // --- Listan (TRX-1, TRX-2) ---
@@ -110,7 +113,7 @@ class TransaktionerViewModelTest {
         funds.value = emptyList()
         transactions.value = listOf(
             kop(id = 1, day = 100, shares = 5.0, price = 200.0, fundId = "SE0003653302"),
-            salj(id = 2, day = 200, shares = 5.0, price = 210.0, fundId = "SE0003653302"),
+            salj(id = 2, day = 200, shares = 5.0, price = 210.0, fundId = "SE0003653302")
         )
         viewModel().uiState.test {
             val state = awaitLoaded()
@@ -152,7 +155,7 @@ class TransaktionerViewModelTest {
         transactions.value = listOf(
             salj(id = 3, day = 300, shares = 5.0, price = 120.0),
             kop(id = 2, day = 200, shares = 5.0, price = 110.0),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+            kop(id = 1, day = 100, shares = 10.0, price = 100.0)
         )
         val vm = viewModel()
         vm.uiState.test {
@@ -183,7 +186,7 @@ class TransaktionerViewModelTest {
         transactions.value = listOf(
             salj(id = 3, day = thisYear, shares = 10.0, price = 130.0),
             salj(id = 2, day = lastYear, shares = 10.0, price = 110.0),
-            kop(id = 1, day = lastYear - 100, shares = 20.0, price = 100.0),
+            kop(id = 1, day = lastYear - 100, shares = 20.0, price = 100.0)
         )
         viewModel().uiState.test {
             val state = awaitLoaded()
@@ -203,7 +206,7 @@ class TransaktionerViewModelTest {
             kop(id = 1, day = 100, shares = 10.0, price = 100.0),
             salj(id = 2, day = 200, shares = 10.0, price = 150.0),
             kop(id = 3, day = 100, shares = 5.0, price = 200.0, fundId = fondB.fundId),
-            salj(id = 4, day = 200, shares = 5.0, price = 190.0, fundId = fondB.fundId),
+            salj(id = 4, day = 200, shares = 5.0, price = 190.0, fundId = fondB.fundId)
         )
         viewModel().uiState.test {
             val state = awaitLoaded()
@@ -232,7 +235,7 @@ class TransaktionerViewModelTest {
     fun `saljrad bar realiserad vinst ur RealizedGainCalculator`() = runTest(dispatcher) {
         transactions.value = listOf(
             salj(id = 2, day = 200, shares = 10.0, price = 150.0),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+            kop(id = 1, day = 100, shares = 10.0, price = 100.0)
         )
         viewModel().uiState.test {
             val sale = awaitLoaded().rows.first { it.transaction.id == 2L }.sale!!
@@ -246,7 +249,7 @@ class TransaktionerViewModelTest {
     fun `saljrad med forlust far negativt resultat och avgiften avdragen`() = runTest(dispatcher) {
         transactions.value = listOf(
             salj(id = 2, day = 200, shares = 10.0, price = 90.0, fee = 25.0),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+            kop(id = 1, day = 100, shares = 10.0, price = 100.0)
         )
         viewModel().uiState.test {
             val sale = awaitLoaded().rows.first { it.transaction.id == 2L }.sale!!
@@ -261,7 +264,7 @@ class TransaktionerViewModelTest {
     fun `saljrad utan tackande kop markeras osaker (SLD-2)`() = runTest(dispatcher) {
         transactions.value = listOf(
             salj(id = 2, day = 200, shares = 10.0, price = 150.0),
-            kop(id = 1, day = 100, shares = 4.0, price = 100.0),
+            kop(id = 1, day = 100, shares = 4.0, price = 100.0)
         )
         viewModel().uiState.test {
             val sale = awaitLoaded().rows.first { it.transaction.id == 2L }.sale!!
@@ -277,7 +280,7 @@ class TransaktionerViewModelTest {
         funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
             salj(id = 2, day = 200, shares = 10.0, price = 150.0, fee = fee),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0),
+            kop(id = 1, day = 100, shares = 10.0, price = 100.0)
         )
     }
 
@@ -290,7 +293,7 @@ class TransaktionerViewModelTest {
             kop(id = 1, day = 100, shares = 10.0, price = 100.0, fundId = medIsin.fundId),
             salj(id = 2, day = 200, shares = 10.0, price = 150.0, fundId = medIsin.fundId),
             kop(id = 3, day = 100, shares = 5.0, price = 100.0, fundId = utanIsin.fundId),
-            salj(id = 4, day = 200, shares = 5.0, price = 120.0, fundId = utanIsin.fundId),
+            salj(id = 4, day = 200, shares = 5.0, price = 120.0, fundId = utanIsin.fundId)
         )
         viewModel().uiState.test {
             val rows = awaitLoaded().rows
@@ -371,7 +374,7 @@ class TransaktionerViewModelTest {
         funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
             salj(id = 2, day = soldAt, shares = 10.0, price = 150.0),
-            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0),
+            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0)
         )
         fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = soldAt))
 
@@ -390,7 +393,7 @@ class TransaktionerViewModelTest {
         funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
             salj(id = 2, day = soldAt, shares = 10.0, price = 150.0, fee = 25.0),
-            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0),
+            kop(id = 1, day = today.minusDays(100).toEpochDay(), shares = 10.0, price = 100.0)
         )
         val existing = fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = soldAt, proceedsKr = 4_200.0))
         val vm = viewModel()
@@ -425,6 +428,6 @@ class TransaktionerViewModelTest {
         indexFund = false,
         startDateEpochDay = null,
         minimumBuy = null,
-        tags = emptyList(),
+        tags = emptyList()
     )
 }

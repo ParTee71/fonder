@@ -23,23 +23,22 @@ import se.partee71.fonder.domain.model.FundScreenSortDirection
  */
 object AvanzaFundListRequestBuilder {
 
-    fun buildPayload(query: FundScreenQuery): String =
-        buildJsonObject {
-            putFilter("fundTypeFilter", query.fundType)
-            putFilter("commonRegionFilter", query.region)
-            putFilter("otherRegionFilter", query.otherRegion)
-            putFilter("industryFilter", query.industry)
-            putFilter("alignmentFilter", query.alignment)
-            putFilter("interestTypeFilter", query.interestType)
-            putFilter("miscFilter", query.misc)
-            putFilter("companyFilter", query.company)
-            putFilter("riskFilter", query.risk)
-            query.maxTotalFee?.let { put("maxTotalFee", it) }
-            query.nameContains?.let { put("name", it) }
-            query.sortField?.let { put("sortField", it) }
-            query.sortDirection?.let { put("sortDirection", it.wireValue()) }
-            put("startIndex", query.startIndex)
-        }.toString()
+    fun buildPayload(query: FundScreenQuery): String = buildJsonObject {
+        putFilter("fundTypeFilter", query.fundType)
+        putFilter("commonRegionFilter", query.region)
+        putFilter("otherRegionFilter", query.otherRegion)
+        putFilter("industryFilter", query.industry)
+        putFilter("alignmentFilter", query.alignment)
+        putFilter("interestTypeFilter", query.interestType)
+        putFilter("miscFilter", query.misc)
+        putFilter("companyFilter", query.company)
+        putFilter("riskFilter", query.risk)
+        query.maxTotalFee?.let { put("maxTotalFee", it) }
+        query.nameContains?.let { put("name", it) }
+        query.sortField?.let { put("sortField", it) }
+        query.sortDirection?.let { put("sortDirection", it.wireValue()) }
+        put("startIndex", query.startIndex)
+    }.toString()
 
     private fun JsonObjectBuilder.putFilter(name: String, values: List<String>) {
         if (values.isNotEmpty()) put(name, JsonArray(values.map { JsonPrimitive(it) }))

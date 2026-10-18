@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -24,8 +26,6 @@ import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.domain.usecase.RealizedTotal
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
-import javax.inject.Inject
 
 /** Händelsers filter (TRX-3): alla transaktioner, bara köp eller bara sälj. */
 enum class HandelseFilter { ALLA, KOP, SALJ }
@@ -46,7 +46,7 @@ data class TransaktionRad(
      * öppen bevakning redan kopplad till just den här säljtransaktionen (BYT-1). En öppen bevakning
      * utan känd transaktion för samma fond och dag kopplas i stället när knappen trycks.
      */
-    val canStartSwitchWatch: Boolean = false,
+    val canStartSwitchWatch: Boolean = false
 )
 
 @Immutable
@@ -60,7 +60,7 @@ data class TransaktionerUiState(
     /** Realiserat resultat över alla sälj (SLD-3), visat i säljfiltret. */
     val totalRealized: RealizedTotal = EMPTY_TOTAL,
     /** Sätts när en bevakning just startats (SLD-5), så skärmen kan navigera dit. Kvitteras med [TransaktionerViewModel.onSwitchWatchOpened]. */
-    val startedSwitchWatchId: Long? = null,
+    val startedSwitchWatchId: Long? = null
 ) {
     /** Raderna i det valda filtret (TRX-3). */
     val rows: List<TransaktionRad>
@@ -91,14 +91,14 @@ class TransaktionerViewModel internal constructor(
     private val repository: TransactionRepository,
     switchWatchRepository: SwitchWatchRepository,
     private val recordTransaction: RecordTransaction,
-    private val today: () -> LocalDate,
+    private val today: () -> LocalDate
 ) : ViewModel() {
 
     @Inject
     constructor(
         repository: TransactionRepository,
         switchWatchRepository: SwitchWatchRepository,
-        recordTransaction: RecordTransaction,
+        recordTransaction: RecordTransaction
     ) : this(repository, switchWatchRepository, recordTransaction, LocalDate::now)
 
     private val filter = MutableStateFlow(HandelseFilter.ALLA)
@@ -112,7 +112,7 @@ class TransaktionerViewModel internal constructor(
             repository.observeFunds(),
             switchWatchRepository.observeOpen(),
             filter,
-            startedSwitchWatchId,
+            startedSwitchWatchId
         ) { transactions, funds, openWatches, selectedFilter, startedId ->
             val fundsById = funds.associateBy { it.fundId }
             val sales = RealizedGainCalculator.compute(transactions)
@@ -126,7 +126,7 @@ class TransaktionerViewModel internal constructor(
                     fundName = fund?.name ?: tx.fundId,
                     sale = sale,
                     fundIsin = isin,
-                    canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) },
+                    canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) }
                 )
             }
             TransaktionerUiState(
@@ -135,12 +135,12 @@ class TransaktionerViewModel internal constructor(
                 filter = selectedFilter,
                 yearRealized = RealizedGainCalculator.totalForYear(sales, today().year),
                 totalRealized = RealizedGainCalculator.total(sales),
-                startedSwitchWatchId = startedId,
+                startedSwitchWatchId = startedId
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = TransaktionerUiState(),
+            initialValue = TransaktionerUiState()
         )
 
     fun onFilterSelected(selected: HandelseFilter) {
@@ -173,9 +173,8 @@ class TransaktionerViewModel internal constructor(
      * samma dag blockerar **inte** — knappen kopplar den till säljet i stället för att starta en
      * ny ([RecordTransaction.startWatchForSale]).
      */
-    private fun SwitchWatch.covers(tx: Transaction, isin: String?): Boolean =
-        sellTransactionId == tx.id ||
-            (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today()))
+    private fun SwitchWatch.covers(tx: Transaction, isin: String?): Boolean = sellTransactionId == tx.id ||
+        (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today()))
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
     fun onSwitchWatchOpened() {

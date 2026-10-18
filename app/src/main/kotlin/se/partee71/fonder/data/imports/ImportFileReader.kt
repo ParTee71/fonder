@@ -4,10 +4,10 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import se.partee71.fonder.di.IoDispatcher
-import javax.inject.Inject
 
 /**
  * Läser en fil som användaren valt i filväljaren (Storage Access Framework). Abstraherat bort från
@@ -25,7 +25,7 @@ interface ImportFileReader {
 /** Läser via appens [android.content.ContentResolver], på I/O-dispatchern. */
 class ContentResolverImportFileReader @Inject constructor(
     @ApplicationContext private val context: Context,
-    @param:IoDispatcher private val io: CoroutineDispatcher,
+    @param:IoDispatcher private val io: CoroutineDispatcher
 ) : ImportFileReader {
 
     override suspend fun readBytes(uri: Uri): ByteArray? = withContext(io) {

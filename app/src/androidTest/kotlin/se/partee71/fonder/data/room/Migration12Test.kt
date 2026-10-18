@@ -41,19 +41,19 @@ class Migration12Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`isin` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, PRIMARY KEY(`isin`))",
+                    "`currency` TEXT NOT NULL, PRIMARY KEY(`isin`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundIsin` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundIsin` ON `transactions` (`fundIsin`)")
 
             db.execSQL("INSERT INTO funds (isin, name, currency) VALUES ('SHB0000442', 'Fond A', 'SEK')")
             db.execSQL(
                 "INSERT INTO transactions (fundIsin, type, epochDay, shares, pricePerShare) " +
-                    "VALUES ('SHB0000442', 'KOP', 100, 2.0, 150.0)",
+                    "VALUES ('SHB0000442', 'KOP', 100, 2.0, 150.0)"
             )
             db.version = 1
         }
@@ -80,7 +80,7 @@ class Migration12Test {
 
         // fund_prices är ny i v2 — ska gå att skriva och läsa direkt efter migreringen.
         db.fundPriceDao().upsertAll(
-            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 150.0, currency = "SEK")),
+            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 150.0, currency = "SEK"))
         )
         assertEquals(150.0, db.fundPriceDao().getLatest("SHB0000442")?.nav ?: -1.0, 1e-9)
 

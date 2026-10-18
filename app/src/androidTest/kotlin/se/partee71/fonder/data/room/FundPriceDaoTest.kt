@@ -24,7 +24,7 @@ class FundPriceDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dao = db.fundPriceDao()
     }
@@ -38,8 +38,8 @@ class FundPriceDaoTest {
             listOf(
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 140.0, currency = "SEK"),
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 101, nav = 145.0, currency = "SEK"),
-                FundPriceEntity(fundId = "SHB0000627", epochDay = 100, nav = 200.0, currency = "NOK"),
-            ),
+                FundPriceEntity(fundId = "SHB0000627", epochDay = 100, nav = 200.0, currency = "NOK")
+            )
         )
 
         val latest = dao.getLatest("SHB0000442")
@@ -61,8 +61,8 @@ class FundPriceDaoTest {
             listOf(
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 101, nav = 145.0, currency = "SEK"),
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 140.0, currency = "SEK"),
-                FundPriceEntity(fundId = "SHB0000627", epochDay = 50, nav = 200.0, currency = "NOK"),
-            ),
+                FundPriceEntity(fundId = "SHB0000627", epochDay = 50, nav = 200.0, currency = "NOK")
+            )
         )
 
         assertEquals(100L, dao.getOldest("SHB0000442")?.epochDay)
@@ -87,8 +87,8 @@ class FundPriceDaoTest {
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 140.0, currency = "SEK"),
                 FundPriceEntity(fundId = "SHB0000442", epochDay = 101, nav = 145.0, currency = "SEK"),
                 FundPriceEntity(fundId = "SHB0000627", epochDay = 100, nav = 200.0, currency = "SEK"),
-                FundPriceEntity(fundId = "OKAND", epochDay = 100, nav = 999.0, currency = "SEK"),
-            ),
+                FundPriceEntity(fundId = "OKAND", epochDay = 100, nav = 999.0, currency = "SEK")
+            )
         )
 
         val latest = dao.observeLatest(listOf("SHB0000442", "SHB0000627")).first()

@@ -26,7 +26,7 @@ object ChartPeriodFilter {
         ETT_AR(365L),
         TRE_AR(1_095L),
         FEM_AR(1_825L),
-        ALLT(null),
+        ALLT(null)
     }
 
     /**

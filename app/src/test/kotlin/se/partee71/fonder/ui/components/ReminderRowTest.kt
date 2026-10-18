@@ -3,8 +3,8 @@ package se.partee71.fonder.ui.components
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -36,7 +36,7 @@ class ReminderRowTest {
                 title = "Ändringar sedan senaste säkerhetskopian",
                 body = "3 nya transaktioner · senast 2026-10-03",
                 actionLabel = "Säkerhetskopiera",
-                onAction = { clicks++ },
+                onAction = { clicks++ }
             )
         }
     }
@@ -51,7 +51,7 @@ class ReminderRowTest {
         val texts = node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
         assertEquals(
             listOf("Ändringar sedan senaste säkerhetskopian", "3 nya transaktioner · senast 2026-10-03", "Säkerhetskopiera"),
-            texts,
+            texts
         )
         assertEquals("Säkerhetskopiera", node.fetchSemanticsNode().config[SemanticsActions.OnClick].label)
     }
@@ -72,7 +72,7 @@ class ReminderRowTest {
                 title = "Ändringar sedan senaste säkerhetskopian",
                 body = "3 nya transaktioner · senast 2026-10-03",
                 actionLabel = "Säkerhetskopiera",
-                onAction = {},
+                onAction = {}
             )
         }
     }
@@ -90,7 +90,7 @@ class ReminderRowTest {
                     onAction = { clicks++ },
                     count = 3,
                     tone = ReminderRowTone.Accent,
-                    chevron = true,
+                    chevron = true
                 )
             }
         }
@@ -117,7 +117,7 @@ class ReminderRowTest {
                 onAction = {},
                 count = 3,
                 tone = ReminderRowTone.Accent,
-                chevron = true,
+                chevron = true
             )
         }
     }

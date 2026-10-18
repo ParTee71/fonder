@@ -44,32 +44,32 @@ class BackupSerializerTest {
         chosenBenchmarkIsin = "SE0011527613",
         funds = listOf(
             Fund(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033", fondlistaFundId = "SHB0000442"),
-            Fund(fundId = "LU0055631609", name = "Fond utan koder", currency = "USD", isin = null, fondlistaFundId = null),
+            Fund(fundId = "LU0055631609", name = "Fond utan koder", currency = "USD", isin = null, fondlistaFundId = null)
         ),
         transactions = listOf(
             Transaction(id = 7, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0),
-            Transaction(id = 8, fundId = "SHB0000442", type = TransactionType.SALJ, epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0),
+            Transaction(id = 8, fundId = "SHB0000442", type = TransactionType.SALJ, epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0)
         ),
         suggestionRecords = listOf(
             SuggestionRecord(
                 id = 3, suggestedAtEpochDay = 19_800, planIndex = 0,
                 sellIsin = "SE0000582033", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 95.25,
-                switchValueKr = 4_200.0, followed = true, batchEpochMillis = 1_754_200_000_000,
+                switchValueKr = 4_200.0, followed = true, batchEpochMillis = 1_754_200_000_000
             ),
             SuggestionRecord(
                 id = 4, suggestedAtEpochDay = 19_800, planIndex = 1,
                 sellIsin = "SE0000582033", buyIsin = "SE0004617590",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 55.0,
-                switchValueKr = null, followed = false, batchEpochMillis = 1_754_200_000_000,
+                switchValueKr = null, followed = false, batchEpochMillis = 1_754_200_000_000
             ),
             SuggestionRecord(
                 id = 5, suggestedAtEpochDay = 19_400, planIndex = 0,
                 sellIsin = "SE0000582033", buyIsin = "SE0005991445",
                 sellNavAtSuggestion = 190.0, buyNavAtSuggestion = 70.0,
                 switchValueKr = 1_000.0, followed = null, batchEpochMillis = 0,
-                kind = SuggestionKind.FEE,
-            ),
+                kind = SuggestionKind.FEE
+            )
         ),
         switchWatches = listOf(
             SwitchWatch(
@@ -87,16 +87,26 @@ class BackupSerializerTest {
                 indexOnly = true,
                 candidates = listOf(
                     SwitchWatchCandidate(
-                        id = 5, watchId = 2, isin = "SE0001466368", name = "Kandidat A",
-                        navAtStart = 95.25, navAtStartEpochDay = 19_900,
-                        source = SwitchWatchCandidateSource.AUTO, position = 0,
+                        id = 5,
+                        watchId = 2,
+                        isin = "SE0001466368",
+                        name = "Kandidat A",
+                        navAtStart = 95.25,
+                        navAtStartEpochDay = 19_900,
+                        source = SwitchWatchCandidateSource.AUTO,
+                        position = 0
                     ),
                     SwitchWatchCandidate(
-                        id = 6, watchId = 2, isin = "SE0004617590", name = "Kandidat B",
-                        navAtStart = null, navAtStartEpochDay = null,
-                        source = SwitchWatchCandidateSource.MANUELL, position = 1,
-                    ),
-                ),
+                        id = 6,
+                        watchId = 2,
+                        isin = "SE0004617590",
+                        name = "Kandidat B",
+                        navAtStart = null,
+                        navAtStartEpochDay = null,
+                        source = SwitchWatchCandidateSource.MANUELL,
+                        position = 1
+                    )
+                )
             ),
             SwitchWatch(
                 id = 3,
@@ -111,24 +121,24 @@ class BackupSerializerTest {
                 closeReason = SwitchWatchCloseReason.KOPT,
                 // Från före 0.67.0: säljet okänt, köpet kvitterat med transaktion 7.
                 sellTransactionId = null,
-                buyTransactionId = 7,
-            ),
+                buyTransactionId = 7
+            )
         ),
         suggestionDismissals = listOf(
             SuggestionDismissal(sellIsin = "SE0000582033", buyIsin = "SE0001466368", dismissedAtEpochDay = 19_810),
-            SuggestionDismissal(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE, dismissedAtEpochDay = 19_420),
+            SuggestionDismissal(sellIsin = "SE0000582033", buyIsin = "SE0005991445", kind = SuggestionKind.FEE, dismissedAtEpochDay = 19_420)
         ),
         riskProfile = RiskProfile(
             targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
             answers = RiskProfileAnswers(
                 horizon = TimeHorizon.SJU_TILL_15_AR,
                 reaction = DownturnReaction.KOPER_MER,
-                goal = PrimaryGoal.MAXIMAL_TILLVAXT,
+                goal = PrimaryGoal.MAXIMAL_TILLVAXT
             ),
-            targetRiskLevel = 4,
+            targetRiskLevel = 4
         ),
         accountType = AccountType.ISK_KF,
-        themeMode = ThemeMode.DARK,
+        themeMode = ThemeMode.DARK
     )
 
     @Test
@@ -153,7 +163,7 @@ class BackupSerializerTest {
         // tolka, eftersom de två sorterna mäts var för sig i facit.
         assertEquals(
             listOf(SuggestionKind.RISK_PLAN, SuggestionKind.RISK_PLAN, SuggestionKind.FEE),
-            restored.suggestionRecords.map { it.kind },
+            restored.suggestionRecords.map { it.kind }
         )
     }
 
@@ -207,46 +217,46 @@ class BackupSerializerTest {
             setOf(
                 "formatVersion", "exportedAtEpochMillis", "funds", "transactions",
                 "suggestionRecords", "switchWatches", "suggestionDismissals", "riskProfile", "accountType",
-                "themeMode", "chosenBenchmarkIsin",
+                "themeMode", "chosenBenchmarkIsin"
             ),
-            root.keys,
+            root.keys
         )
         assertEquals(
             setOf("sellIsin", "buyIsin", "kind", "dismissedAtEpochDay"),
-            root.getValue("suggestionDismissals").jsonArray.first().jsonObject.keys,
+            root.getValue("suggestionDismissals").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf("fundId", "name", "currency", "isin", "fondlistaFundId"),
-            root.getValue("funds").jsonArray.first().jsonObject.keys,
+            root.getValue("funds").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf("id", "fundId", "type", "epochDay", "shares", "pricePerShare", "fee"),
-            root.getValue("transactions").jsonArray.first().jsonObject.keys,
+            root.getValue("transactions").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf(
                 "id", "suggestedAtEpochDay", "planIndex", "sellIsin", "buyIsin",
                 "sellNavAtSuggestion", "buyNavAtSuggestion", "switchValueKr", "followed",
-                "batchEpochMillis", "kind",
+                "batchEpochMillis", "kind"
             ),
-            root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys,
+            root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf(
                 "id", "sellIsin", "sellFundName", "soldAtEpochDay", "proceedsKr", "targetLevel",
                 "sourceRecordId", "closedAtEpochDay", "boughtIsin", "closeReason", "candidates",
-                "sellTransactionId", "buyTransactionId", "indexOnly",
+                "sellTransactionId", "buyTransactionId", "indexOnly"
             ),
-            root.getValue("switchWatches").jsonArray.first().jsonObject.keys,
+            root.getValue("switchWatches").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf("id", "watchId", "isin", "name", "navAtStart", "navAtStartEpochDay", "source", "position"),
             root.getValue("switchWatches").jsonArray.first().jsonObject
-                .getValue("candidates").jsonArray.first().jsonObject.keys,
+                .getValue("candidates").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf("targetAllocation", "answers", "targetRiskLevel"),
-            root.getValue("riskProfile").jsonObject.keys,
+            root.getValue("riskProfile").jsonObject.keys
         )
     }
 
@@ -307,7 +317,7 @@ class BackupSerializerTest {
         assertEquals(listOf(19_900L, null), open.candidates.map { it.navAtStartEpochDay })
         assertEquals(
             listOf(SwitchWatchCandidateSource.AUTO, SwitchWatchCandidateSource.MANUELL),
-            open.candidates.map { it.source },
+            open.candidates.map { it.source }
         )
         assertEquals(listOf(0, 1), open.candidates.map { it.position })
         assertEquals(3L, open.sourceRecordId)
@@ -339,9 +349,9 @@ class BackupSerializerTest {
         assertEquals(
             listOf(
                 SuggestionDismissal("SE0000582033", "SE0001466368", SuggestionKind.RISK_PLAN, 19_810),
-                SuggestionDismissal("SE0000582033", "SE0005991445", SuggestionKind.FEE, 19_420),
+                SuggestionDismissal("SE0000582033", "SE0005991445", SuggestionKind.FEE, 19_420)
             ),
-            restored.suggestionDismissals,
+            restored.suggestionDismissals
         )
     }
 

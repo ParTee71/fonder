@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -31,7 +32,6 @@ import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanInputs
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
 
 /**
  * Uppdaterar kurser för alla fonder användaren bevakar (se issue #3), handelsdagsmedvetet sedan
@@ -58,7 +58,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val switchWatchRepository: SwitchWatchRepository,
     private val suggestionDismissalRepository: SuggestionDismissalRepository,
-    private val scheduler: FundPriceRefreshScheduler,
+    private val scheduler: FundPriceRefreshScheduler
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -92,7 +92,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRecordRepository,
             switchWatchRepository = switchWatchRepository,
-            suggestionDismissalRepository = suggestionDismissalRepository,
+            suggestionDismissalRepository = suggestionDismissalRepository
         )
 
         return if (success) Result.success() else Result.retry()
@@ -251,13 +251,18 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             /** När jobbet började — tas i `doWork` **före** kursuppdateringen, så att begäranden under den också fångas. */
             startedAt: Long = now(),
             switchPlanScanRequestedSince: (epochMillis: Long) -> SwitchPlanScanRequest? = { null },
-            enqueueSwitchPlanFollowUp: (force: Boolean) -> Unit = {},
+            enqueueSwitchPlanFollowUp: (force: Boolean) -> Unit = {}
         ) {
             if (!refreshSucceeded) {
                 if (scanSwitchPlan && !refreshForced) {
                     scanSwitchPlan(
-                        transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                        suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
+                        transactionRepository,
+                        fundPriceRepository,
+                        fundMetadataRepository,
+                        preferencesRepository,
+                        suggestionRecordRepository,
+                        suggestionDismissalRepository,
+                        switchWatchRepository
                     )
                 }
                 return
@@ -267,8 +272,13 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             }
             if (scanSwitchPlan) {
                 scanSwitchPlan(
-                    transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                    suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
+                    transactionRepository,
+                    fundPriceRepository,
+                    fundMetadataRepository,
+                    preferencesRepository,
+                    suggestionRecordRepository,
+                    suggestionDismissalRepository,
+                    switchWatchRepository
                 )
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
                 scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository)
@@ -287,8 +297,13 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     return
                 }
                 scanSwitchPlan(
-                    transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository,
-                    suggestionRecordRepository, suggestionDismissalRepository, switchWatchRepository,
+                    transactionRepository,
+                    fundPriceRepository,
+                    fundMetadataRepository,
+                    preferencesRepository,
+                    suggestionRecordRepository,
+                    suggestionDismissalRepository,
+                    switchWatchRepository
                 )
             }
             switchPlanScanRequestedSince(checkedAt)?.let { request -> enqueueSwitchPlanFollowUp(request.force) }
@@ -314,7 +329,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             fundMetadataRepository: FundMetadataRepository,
-            preferencesRepository: PreferencesRepository,
+            preferencesRepository: PreferencesRepository
         ) {
             val transactions = transactionRepository.observeTransactions().first()
             if (transactions.isEmpty()) return
@@ -349,7 +364,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private suspend fun resolveBenchmark(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
-            fundMetadataRepository: FundMetadataRepository,
+            fundMetadataRepository: FundMetadataRepository
         ): List<BenchmarkComponentRef>? {
             val funds = transactionRepository.observeFunds().first()
             val holdings = PortfolioCalc.computeHoldings(funds, transactionRepository.observeTransactions().first())
@@ -395,7 +410,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
-            today: LocalDate = LocalDate.now(),
+            today: LocalDate = LocalDate.now()
         ) {
             val history = suggestionRecordRepository.observeHistory().first()
             if (history.isEmpty()) return
@@ -429,7 +444,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             switchWatchRepository: SwitchWatchRepository,
-            today: LocalDate = LocalDate.now(),
+            today: LocalDate = LocalDate.now()
         ) {
             switchWatchRepository.expireStale(today)
 
@@ -468,7 +483,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         internal suspend fun refreshAll(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
-            force: Boolean = false,
+            force: Boolean = false
         ): Boolean {
             val funds = transactionRepository.observeFunds().first()
             if (funds.isEmpty()) return true
@@ -534,7 +549,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate = LocalDate.now(),
             /** Körnings-id som grupperar den här skanningens rader — se [SuggestionRecord.batchEpochMillis]. */
-            batchEpochMillis: Long = System.currentTimeMillis(),
+            batchEpochMillis: Long = System.currentTimeMillis()
         ) {
             val funds = transactionRepository.observeFunds().first().filter { it.isin != null }
             if (funds.isEmpty()) return
@@ -572,14 +587,17 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     // känd avgift eller källan svarade inte). Då spelas inget in för den — men
                     // den sparade listan får inte heller läsas, för den hör till ett resultat
                     // körningen just försökte ersätta.
-                    if (sellIsin in rescanned) rescanned[sellIsin].orEmpty()
-                    else metadataByIsin[sellIsin]?.shownAlternativeIsins.orEmpty()
+                    if (sellIsin in rescanned) {
+                        rescanned[sellIsin].orEmpty()
+                    } else {
+                        metadataByIsin[sellIsin]?.shownAlternativeIsins.orEmpty()
+                    }
                 },
                 prices = prices,
                 fundPriceRepository = fundPriceRepository,
                 suggestionRecordRepository = suggestionRecordRepository,
                 today = today,
-                batchEpochMillis = batchEpochMillis,
+                batchEpochMillis = batchEpochMillis
             )
         }
 
@@ -608,7 +626,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             fundPriceRepository: FundPriceRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate,
-            batchEpochMillis: Long,
+            batchEpochMillis: Long
         ) {
             var budget = MAX_FEE_RECORDINGS_PER_RUN
             for (holding in comparable) {
@@ -637,8 +655,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                             buyNavAtSuggestion = buyNav,
                             switchValueKr = holding.currentValue,
                             batchEpochMillis = batchEpochMillis,
-                            kind = SuggestionKind.FEE,
-                        ),
+                            kind = SuggestionKind.FEE
+                        )
                     )
                     budget--
                 }
@@ -695,7 +713,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
              * datum från före midnatt hade dedupat mot fel dag.
              */
             calendar: () -> LocalDate = LocalDate::now,
-            clock: () -> Long = System::currentTimeMillis,
+            clock: () -> Long = System::currentTimeMillis
         ) = switchPlanScanMutex.withLock {
             val today = calendar()
             val batchEpochMillis = clock()
@@ -705,8 +723,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             if (targetAllocation.isEmpty()) return@withLock
 
             val plan = computeSwitchPlan(
-                transactionRepository, fundPriceRepository, fundMetadataRepository,
-                suggestionDismissalRepository, suggestionRecordRepository, switchWatchRepository, targetAllocation, today,
+                transactionRepository,
+                fundPriceRepository,
+                fundMetadataRepository,
+                suggestionDismissalRepository,
+                suggestionRecordRepository,
+                switchWatchRepository,
+                targetAllocation,
+                today
             )
             if (plan.switches.isEmpty()) {
                 // Tom plan: bytet är gjort eller behovet borta. Går inte att spela in som rader —
@@ -747,7 +771,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     sellNavAtSuggestion = sellNav,
                     buyNavAtSuggestion = buyNav,
                     switchValueKr = switch.sellValueKr,
-                    batchEpochMillis = batchEpochMillis,
+                    batchEpochMillis = batchEpochMillis
                 )
             }
             if (moves.isNotEmpty() || inserts.isNotEmpty()) {
@@ -778,14 +802,18 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             suggestionRecordRepository: SuggestionRecordRepository,
             switchWatchRepository: SwitchWatchRepository,
             targetAllocation: Map<Int, Double>,
-            today: LocalDate,
+            today: LocalDate
         ): ComputedPlan {
             val none = ComputedPlan(emptyList(), emptyMap(), conclusive = true)
             // Innehav, kurser, metadata och likviden som väntar på köp (BYT-3) — samma läsväg som
             // målnivåns förval (SwitchPlanInputs), så de två aldrig mäter gapen olika.
             val inputs = SwitchPlanInputs.load(
-                transactionRepository, fundPriceRepository, switchWatchRepository, suggestionRecordRepository, today,
-                metadataFor = fundMetadataRepository::metadataFor,
+                transactionRepository,
+                fundPriceRepository,
+                switchWatchRepository,
+                suggestionRecordRepository,
+                today,
+                metadataFor = fundMetadataRepository::metadataFor
             )
             if (inputs.holdings.isEmpty()) return none
             val withValue = inputs.holdings
@@ -822,7 +850,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 SwitchPlanCalc.plan(withValue, metadataByIsin, candidatesByLevel.values.flatten(), targetAllocation, excludedPairs, pendingProceeds),
                 prices,
                 // En nivå utan en enda kandidat kan lika gärna vara en källa som inte svarade.
-                conclusive = metadataComplete && candidatesByLevel.values.none { it.isEmpty() },
+                conclusive = metadataComplete && candidatesByLevel.values.none { it.isEmpty() }
             )
         }
 

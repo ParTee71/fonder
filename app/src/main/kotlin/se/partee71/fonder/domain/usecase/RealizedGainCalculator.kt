@@ -1,8 +1,8 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
 
 /**
  * Realiserat resultat för en enskild säljtransaktion (issue #10).
@@ -24,7 +24,7 @@ data class RealizedSale(
     val proceeds: Double,
     val fee: Double,
     val costBasis: Double,
-    val uncoveredShares: Double,
+    val uncoveredShares: Double
 ) {
     /** Realiserat resultat i kr = försäljningsbelopp − avgift − FIFO-anskaffningsvärde. */
     val realizedGain: Double get() = proceeds - fee - costBasis
@@ -44,7 +44,7 @@ data class RealizedTotal(
     val realizedGain: Double,
     val costBasis: Double,
     val saleCount: Int,
-    val uncertain: Boolean,
+    val uncertain: Boolean
 ) {
     /** [realizedGain] som andel av summerat anskaffningsvärde, eller null om den summan är 0. */
     val realizedGainFraction: Double? get() = if (costBasis == 0.0) null else realizedGain / costBasis
@@ -66,7 +66,7 @@ data class RemainingPosition(
      * Null bara om positionen saknar köp-lott helt (osannolikt, men [shares] kan täckas av
      * `uncoveredShares`-fallet).
      */
-    val firstPurchaseEpochDay: Long?,
+    val firstPurchaseEpochDay: Long?
 )
 
 /**
@@ -94,6 +94,7 @@ object RealizedGainCalculator {
         for (tx in sorted) {
             when (tx.type) {
                 TransactionType.KOP -> lots.addLast(Lot(tx.shares, tx.pricePerShare, tx.epochDay))
+
                 TransactionType.SALJ -> {
                     var remaining = tx.shares
                     var costBasis = 0.0
@@ -114,8 +115,8 @@ object RealizedGainCalculator {
                             proceeds = tx.amount,
                             fee = tx.fee,
                             costBasis = costBasis,
-                            uncoveredShares = remaining.coerceAtLeast(0.0),
-                        ),
+                            uncoveredShares = remaining.coerceAtLeast(0.0)
+                        )
                     )
                 }
             }
@@ -125,39 +126,36 @@ object RealizedGainCalculator {
     }
 
     /** Realiserade sälj, en post per säljtransaktion, sorterat senaste först. */
-    fun compute(transactions: List<Transaction>): List<RealizedSale> =
-        transactions
-            .groupBy { it.fundId }
-            .flatMap { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).sales }
-            .sortedWith(compareByDescending<RealizedSale> { it.epochDay }.thenByDescending { it.transactionId })
+    fun compute(transactions: List<Transaction>): List<RealizedSale> = transactions
+        .groupBy { it.fundId }
+        .flatMap { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).sales }
+        .sortedWith(compareByDescending<RealizedSale> { it.epochDay }.thenByDescending { it.transactionId })
 
     /** Summerat realiserat resultat över [sales] (SLD-3). */
     fun total(sales: List<RealizedSale>): RealizedTotal = RealizedTotal(
         realizedGain = sales.sumOf { it.realizedGain },
         costBasis = sales.sumOf { it.costBasis },
         saleCount = sales.size,
-        uncertain = sales.any { it.uncoveredShares > 0.0 },
+        uncertain = sales.any { it.uncoveredShares > 0.0 }
     )
 
     /** Summerat realiserat resultat för sälj gjorda under kalenderåret [year] (TRX-4). */
-    fun totalForYear(sales: List<RealizedSale>, year: Int): RealizedTotal =
-        total(sales.filter { LocalDate.ofEpochDay(it.epochDay).year == year })
+    fun totalForYear(sales: List<RealizedSale>, year: Int): RealizedTotal = total(sales.filter { LocalDate.ofEpochDay(it.epochDay).year == year })
 
     /**
      * Kvarvarande andelar och FIFO-anskaffningsvärde per fond, efter att alla kända sälj
      * konsumerat äldsta köpen först. Fonder utan kvarvarande andelar (helt avsålda) finns
      * inte med i resultatet — se [PortfolioCalc.computeHoldings] (POR-1).
      */
-    fun remainingPositions(transactions: List<Transaction>): Map<String, RemainingPosition> =
-        transactions
-            .groupBy { it.fundId }
-            .mapValues { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).remainingLots }
-            .mapValues { (_, lots) ->
-                RemainingPosition(
-                    shares = lots.sumOf { it.shares },
-                    costBasis = lots.sumOf { it.shares * it.pricePerShare },
-                    firstPurchaseEpochDay = lots.minOfOrNull { it.epochDay },
-                )
-            }
-            .filterValues { it.shares > SHARE_EPSILON }
+    fun remainingPositions(transactions: List<Transaction>): Map<String, RemainingPosition> = transactions
+        .groupBy { it.fundId }
+        .mapValues { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).remainingLots }
+        .mapValues { (_, lots) ->
+            RemainingPosition(
+                shares = lots.sumOf { it.shares },
+                costBasis = lots.sumOf { it.shares * it.pricePerShare },
+                firstPurchaseEpochDay = lots.minOfOrNull { it.epochDay }
+            )
+        }
+        .filterValues { it.shares > SHARE_EPSILON }
 }

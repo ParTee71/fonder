@@ -35,7 +35,7 @@ object ImportFundMatcher {
         catalogFunds: List<Fund>,
         trackedFunds: List<Fund>,
         findFundByIsin: suspend (String) -> Fund?,
-        lookupIsin: suspend (String) -> String? = { null },
+        lookupIsin: suspend (String) -> String? = { null }
     ): FundNameMatcher.Match? {
         trackedFunds.firstOrNull { it.isin == isin }?.let { return FundNameMatcher.Match(it, 1.0) }
 

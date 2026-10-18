@@ -150,7 +150,7 @@ class AppBackStackTest {
             """{"current":"Oversikt","stacks":[["se.partee71.fonder.ui.navigation.OversiktKey"]]}""",
             // Översikt utan rot, och en vald flik med tom stack.
             """{"current":"Oversikt","stacks":[[],[],[],[]]}""",
-            """{"current":"Beslut","stacks":[[{"type":"se.partee71.fonder.ui.navigation.OversiktKey"}],[],[],[]]}""",
+            """{"current":"Beslut","stacks":[[{"type":"se.partee71.fonder.ui.navigation.OversiktKey"}],[],[],[]]}"""
         ).forEach { saved ->
             val restored = AppBackStack.restore(saved)
             assertEquals("återställt från: $saved", fresh, restored.entries)

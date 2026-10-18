@@ -3,12 +3,13 @@ package se.partee71.fonder.ui.settings
 import android.app.PendingIntent
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import app.cash.turbine.test
 import io.mockk.mockk
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,14 +36,14 @@ import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.AuthUser
 import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.PreferencesRepository
-import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupFingerprint
+import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.data.repository.BackupPayload
 import se.partee71.fonder.data.repository.BackupSerializer
 import se.partee71.fonder.data.repository.BackupStatusRepository
-import se.partee71.fonder.data.repository.FakeBackupRepository
 import se.partee71.fonder.data.repository.DriveBackupRepository
 import se.partee71.fonder.data.repository.DriveResult
+import se.partee71.fonder.data.repository.FakeBackupRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.RestoreSummary
@@ -62,7 +63,6 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -101,13 +101,12 @@ class SettingsViewModelTest {
         // samma dispatcher som testet så skrivningen blir en del av samma virtuella tid.
         dataStore = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("settings_test.preferences_pb") },
+            produceFile = { tempFolder.newFile("settings_test.preferences_pb") }
         )
     }
 
     @After
     fun tearDown() = Dispatchers.resetMain()
-
 
     /** Slår upp ISIN för en katalogfond utan ett — null = fonden går inte att jämföra mot (issue #102). */
     private var isinByFundId: Map<String, String> = emptyMap()
@@ -153,8 +152,7 @@ class SettingsViewModelTest {
 
     private val fakeAuthRepo = object : AuthRepository {
         override val currentUser: Flow<AuthUser?> = authUser
-        override suspend fun signInWithGoogle(activityContext: Context): Result<AuthUser> =
-            signInResult.onSuccess { authUser.value = it }
+        override suspend fun signInWithGoogle(activityContext: Context): Result<AuthUser> = signInResult.onSuccess { authUser.value = it }
         override suspend fun signOut() {
             signOutCalled = true
             authUser.value = null
@@ -178,8 +176,7 @@ class SettingsViewModelTest {
     /** Uppsamlade auktoriseringsintent — UI:t startar dem, testet räknar dem. */
     private val authorizationRequests = mutableListOf<PendingIntent>()
 
-    private fun viewModel(preferences: PreferencesRepository = PreferencesRepository(dataStore)) =
-        SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo, BackupStatusRepository(fakeBackupRepo, preferences))
+    private fun viewModel(preferences: PreferencesRepository = PreferencesRepository(dataStore)) = SettingsViewModel(preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, fakeDriveRepo, BackupStatusRepository(fakeBackupRepo, preferences))
 
     @Test
     fun `clearDatabase anropar repository och satter databaseCleared i uiState`() = runTest(dispatcher) {
@@ -402,8 +399,14 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { reads++; """{"formatVersion":1}""" }
-            vm.restore { reads++; """{"formatVersion":1}""" }
+            vm.restore {
+                reads++
+                """{"formatVersion":1}"""
+            }
+            vm.restore {
+                reads++
+                """{"formatVersion":1}"""
+            }
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -682,7 +685,7 @@ class SettingsViewModelTest {
         val vm = SettingsViewModel(
             PreferencesRepository(dataStore), fakeTransactionRepo, fakeScheduler,
             fakeBackupRepo, fakeFundPriceRepo, fakeFundMetadataRepo, countingAuthRepo, fakeDriveRepo,
-            BackupStatusRepository(fakeBackupRepo, PreferencesRepository(dataStore)),
+            BackupStatusRepository(fakeBackupRepo, PreferencesRepository(dataStore))
         )
 
         vm.uiState.test {
@@ -838,7 +841,7 @@ class SettingsViewModelTest {
 
             assertEquals(
                 BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE),
-                state.backupMessage,
+                state.backupMessage
             )
             cancelAndIgnoreRemainingEvents()
         }
@@ -861,7 +864,7 @@ class SettingsViewModelTest {
         val vm = SettingsViewModel(
             preferences, fakeTransactionRepo, fakeScheduler, fakeBackupRepo,
             fakeFundPriceRepo, fakeFundMetadataRepo, fakeAuthRepo, countingDrive,
-            BackupStatusRepository(fakeBackupRepo, preferences),
+            BackupStatusRepository(fakeBackupRepo, preferences)
         )
 
         vm.uiState.test {
@@ -1023,12 +1026,12 @@ class SettingsViewModelTest {
         funds = listOf(Fund(fundId = "SHB1", name = "Fond A")),
         transactions = (1..count).map { i ->
             Transaction(id = i.toLong(), fundId = "SHB1", type = TransactionType.KOP, epochDay = 19_000L + i, shares = 1.0, pricePerShare = 100.0)
-        },
+        }
     )
 
     private fun benchmarkMetadata() = FundMetadata(
         isin = "SE0011527613", name = "Global Index", orderbookId = "1", totalFee = 0.2, managementFee = 0.2,
         category = null, fundType = "Aktiefond", companyName = null, risk = 5, indexFund = true,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 }

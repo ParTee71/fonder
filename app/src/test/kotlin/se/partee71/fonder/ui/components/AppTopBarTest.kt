@@ -54,7 +54,7 @@ class AppTopBarTest {
                         icon = Icons.Outlined.Settings,
                         contentDescription = "Inställningar",
                         onClick = { clicks++ },
-                        variant = AppIconButtonVariant.Tonal,
+                        variant = AppIconButtonVariant.Tonal
                     )
                 }
             }
@@ -75,7 +75,7 @@ class AppTopBarTest {
                     icon = Icons.Outlined.Settings,
                     contentDescription = "Inställningar",
                     onClick = {},
-                    variant = AppIconButtonVariant.Tonal,
+                    variant = AppIconButtonVariant.Tonal
                 )
             }
         }

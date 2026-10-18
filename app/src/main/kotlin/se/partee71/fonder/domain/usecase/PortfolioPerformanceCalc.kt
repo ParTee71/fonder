@@ -1,8 +1,8 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
-import java.time.LocalDate
 
 /**
  * Beräknar hur portföljens värde förändrats över korta perioder (dag/vecka/månad), utöver
@@ -90,12 +90,11 @@ object PortfolioPerformanceCalc {
     }
 
     /** [holdingChange] för dag/vecka/månad i ett svep. */
-    fun holdingPerformance(holding: Holding, today: LocalDate, history: List<FundPrice>): HoldingPerformance =
-        HoldingPerformance(
-            day = holdingChange(holding, Period.DAG, today, history),
-            week = holdingChange(holding, Period.VECKA, today, history),
-            month = holdingChange(holding, Period.MANAD, today, history),
-        )
+    fun holdingPerformance(holding: Holding, today: LocalDate, history: List<FundPrice>): HoldingPerformance = HoldingPerformance(
+        day = holdingChange(holding, Period.DAG, today, history),
+        week = holdingChange(holding, Period.VECKA, today, history),
+        month = holdingChange(holding, Period.MANAD, today, history)
+    )
 
     /**
      * Summerar [holdingChange] över hela portföljen. Innehav som saknar tillräcklig historik
@@ -110,7 +109,7 @@ object PortfolioPerformanceCalc {
         holdings: List<Holding>,
         period: Period,
         today: LocalDate,
-        historyByFundId: Map<String, List<FundPrice>>,
+        historyByFundId: Map<String, List<FundPrice>>
     ): PortfolioPeriodResult {
         var sumAmount = 0.0
         var sumHistoricalValue = 0.0
@@ -126,7 +125,9 @@ object PortfolioPerformanceCalc {
                     sumAmount += change.amount
                     sumHistoricalValue += currentValue - change.amount
                 }
+
                 PeriodResult.InsufficientHistory -> partial = true
+
                 null -> Unit // ovnåbart — currentValue != null redan säkerställt ovan.
             }
         }
@@ -140,11 +141,10 @@ object PortfolioPerformanceCalc {
     fun totalPerformance(
         holdings: List<Holding>,
         today: LocalDate,
-        historyByFundId: Map<String, List<FundPrice>>,
-    ): PortfolioPerformance =
-        PortfolioPerformance(
-            day = totalChange(holdings, Period.DAG, today, historyByFundId),
-            week = totalChange(holdings, Period.VECKA, today, historyByFundId),
-            month = totalChange(holdings, Period.MANAD, today, historyByFundId),
-        )
+        historyByFundId: Map<String, List<FundPrice>>
+    ): PortfolioPerformance = PortfolioPerformance(
+        day = totalChange(holdings, Period.DAG, today, historyByFundId),
+        week = totalChange(holdings, Period.VECKA, today, historyByFundId),
+        month = totalChange(holdings, Period.MANAD, today, historyByFundId)
+    )
 }

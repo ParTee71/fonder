@@ -31,7 +31,7 @@ fun CheckRow(
     label: String,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
-    labelStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    labelStyle: TextStyle = MaterialTheme.typography.bodyMedium
 ) {
     Row(
         modifier = modifier
@@ -40,9 +40,9 @@ fun CheckRow(
             .toggleable(
                 value = checked,
                 role = Role.Checkbox,
-                onValueChange = onCheckedChange,
+                onValueChange = onCheckedChange
             ),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(checked = checked, onCheckedChange = null)
         Column {
@@ -51,7 +51,7 @@ fun CheckRow(
                 Text(
                     supportingText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -31,7 +31,7 @@ class SuggestionRecordDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dao = db.suggestionRecordDao()
     }
@@ -46,7 +46,7 @@ class SuggestionRecordDaoTest {
         buyIsin: String = "SE_BUY",
         followed: Boolean? = null,
         batchEpochMillis: Long = 0,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SuggestionRecordEntity(
         suggestedAtEpochDay = suggestedAtEpochDay,
         planIndex = planIndex,
@@ -57,7 +57,7 @@ class SuggestionRecordDaoTest {
         switchValueKr = 10_000.0,
         followed = followed,
         batchEpochMillis = batchEpochMillis,
-        kind = kind.name,
+        kind = kind.name
     )
 
     @Test
@@ -86,9 +86,9 @@ class SuggestionRecordDaoTest {
         assertNull(rows[1].followed)
     }
 
-    @Test
     // Inget kommatecken i namnet: ett instrumenterat testnamn blir ett dex-metodnamn, och D8
     // vägrar representera "," (mellanslag och bindestreck går bra, se övriga testnamn här).
+    @Test
     fun `observeHistory ger alla batchar - nyast forst`() = runTest {
         // observeLatestBatch ger med flit bara den senaste körningen — facit ska se hela
         // historiken, annars kan utfallet aldrig utvärderas över tid (SET-5).
@@ -150,8 +150,8 @@ class SuggestionRecordDaoTest {
         assertEquals(listOf("SE_BUY"), senaste.map { it.buyIsin })
     }
 
-    @Test
     // Regression för issue #91: MAX()-underfrågorna måste filtrera på kind de också.
+    @Test
     fun `observeLatestBatch ger planens senaste batch aven nar ett senare dygn bara har avgiftsbyten`() = runTest {
         dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, planIndex = 0))
         // Dygnet efter gav planen ingenting — bara avgiftsskanningen spelade in något. Väljs
@@ -175,8 +175,8 @@ class SuggestionRecordDaoTest {
         assertFalse(dao.existsForDay("SE_SELL", "SE_BUY", 20_001, SuggestionKind.RISK_PLAN.name))
     }
 
-    @Test
     // ANA-9 på Beslut (NAV-9): bara sorten och fönstret, nyast först.
+    @Test
     fun `observeRecent ger sortens rader fran och med dagen nyast forst`() = runTest {
         dao.insert(entity(suggestedAtEpochDay = 19_990, buyIsin = "SE_GAMMAL", kind = SuggestionKind.FEE))
         dao.insert(entity(suggestedAtEpochDay = 20_000, batchEpochMillis = 1_000, buyIsin = "SE_A", kind = SuggestionKind.FEE))

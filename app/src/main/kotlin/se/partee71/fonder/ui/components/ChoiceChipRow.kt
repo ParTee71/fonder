@@ -39,11 +39,11 @@ fun <T> ChoiceChipRow(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()).selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(ConnectedChoiceSpacing),
+        horizontalArrangement = Arrangement.spacedBy(ConnectedChoiceSpacing)
     ) {
         options.forEachIndexed { index, option ->
             ConnectedChoiceButton(
@@ -52,7 +52,7 @@ fun <T> ChoiceChipRow(
                 index = index,
                 count = options.size,
                 onClick = { onSelect(option) },
-                enabled = enabled,
+                enabled = enabled
             )
         }
     }
@@ -79,16 +79,19 @@ fun ConnectedChoiceButton(
     count: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     val shapes = when {
         count == 1 -> ToggleButtonShapes(
             shape = ToggleButtonDefaults.shape,
             pressedShape = ToggleButtonDefaults.pressedShape,
-            checkedShape = ToggleButtonDefaults.checkedShape,
+            checkedShape = ToggleButtonDefaults.checkedShape
         )
+
         index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+
         index == count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+
         else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
     }
     ToggleButton(
@@ -100,7 +103,7 @@ fun ConnectedChoiceButton(
             this.selected = selected
         },
         shapes = shapes,
-        colors = choiceButtonColors(),
+        colors = choiceButtonColors()
     ) {
         Text(label, maxLines = 1)
     }
@@ -114,5 +117,5 @@ fun ConnectedChoiceButton(
 @Composable
 internal fun choiceButtonColors(): ToggleButtonColors = ToggleButtonDefaults.colors(
     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor = MaterialTheme.colorScheme.onSurface,
+    contentColor = MaterialTheme.colorScheme.onSurface
 )

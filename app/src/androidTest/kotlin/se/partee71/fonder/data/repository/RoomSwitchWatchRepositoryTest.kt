@@ -3,6 +3,7 @@ package se.partee71.fonder.data.repository
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -17,7 +18,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
 
 /**
  * Kopplingen mellan en bevakning utan känd transaktion och säljtransaktionen mot riktig Room
@@ -44,13 +44,17 @@ class RoomSwitchWatchRepositoryTest {
     fun tearDown() = db.close()
 
     private fun watch(soldAtEpochDay: Long = soldAt, sellTransactionId: Long? = null) = SwitchWatch(
-        sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = soldAtEpochDay, proceedsKr = 4_200.0, targetLevel = 3,
+        sellIsin = "SE_SALJ",
+        sellFundName = "Såld fond",
+        soldAtEpochDay = soldAtEpochDay,
+        proceedsKr = 4_200.0,
+        targetLevel = 3,
         sellTransactionId = sellTransactionId,
         candidates = listOf(
             SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A", navAtStart = 101.5, navAtStartEpochDay = soldAtEpochDay),
             SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B"),
-            SwitchWatchCandidate(isin = "SE_EGEN", name = "Egen", navAtStart = 33.0, navAtStartEpochDay = soldAtEpochDay, source = SwitchWatchCandidateSource.MANUELL),
-        ),
+            SwitchWatchCandidate(isin = "SE_EGEN", name = "Egen", navAtStart = 33.0, navAtStartEpochDay = soldAtEpochDay, source = SwitchWatchCandidateSource.MANUELL)
+        )
     )
 
     @Test

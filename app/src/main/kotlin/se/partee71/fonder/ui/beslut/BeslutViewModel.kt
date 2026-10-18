@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,6 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRows
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import javax.inject.Inject
 
 @Immutable
 data class BeslutUiState(
@@ -48,7 +48,7 @@ data class BeslutUiState(
     /** Bytesplanen skannas — förslagens väntesnurra (NAV-6). */
     val switchPlanWorking: Boolean = false,
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [BeslutViewModel.onSwitchWatchOpened]. */
-    val startedSwitchWatchId: Long? = null,
+    val startedSwitchWatchId: Long? = null
 ) {
     /** Listan "Byten" (BYT-4) — samma [SwitchRows] som "Att besluta" (HEM-13) och flikmärket räknar på. */
     val switches: SwitchRows get() = decisions.switches
@@ -89,7 +89,7 @@ class BeslutViewModel @Inject constructor(
     preferencesRepository: PreferencesRepository,
     private val recordTransaction: RecordTransaction,
     private val suggestionDismissalRepository: SuggestionDismissalRepository,
-    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
     /** Se [BeslutUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
@@ -100,7 +100,7 @@ class BeslutViewModel @Inject constructor(
         preferencesRepository.riskProfile,
         preferencesRepository.accountType,
         facitSummary.observe(),
-        startedSwitchWatchId,
+        startedSwitchWatchId
     ) { decisions, riskProfile, accountType, facit, startedId ->
         BeslutUiState(
             loading = false,
@@ -109,19 +109,19 @@ class BeslutViewModel @Inject constructor(
             decisions = decisions,
             followedCount = facit.followedCount,
             followedExcessKr = facit.followedExcessKr,
-            startedSwitchWatchId = startedId,
+            startedSwitchWatchId = startedId
         )
     }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
         // Eget led: körstatusen kommer från WorkManager och ska inte kunna räkna om besluten.
         state.copy(
             backgroundWorkRunning = running.isNotEmpty(),
             pricesWorking = BackgroundWork.PRICE_REFRESH in running,
-            switchPlanWorking = BackgroundWork.SWITCH_PLAN_SCAN in running,
+            switchPlanWorking = BackgroundWork.SWITCH_PLAN_SCAN in running
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = BeslutUiState(),
+        initialValue = BeslutUiState()
     )
 
     /**

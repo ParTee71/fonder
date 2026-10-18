@@ -1,6 +1,9 @@
 package se.partee71.fonder.data.repository
 
 import androidx.room.withTransaction
+import java.time.LocalDate
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -9,9 +12,6 @@ import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Kontrakt för bytesplanens facit-inspelning (HEM-8, issue #70) — se [SuggestionRecord]. */
 interface SuggestionRecordRepository {
@@ -30,8 +30,7 @@ interface SuggestionRecordRepository {
      * för avgiftsbytena (ANA-9, NAV-9). Room filtrerar i SQL, så flikmärket inte materialiserar hela
      * historiken vid varje ändring; defaulten här är samma urval ur [observeHistory], för fakes.
      */
-    fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> =
-        observeHistory().map { all -> all.filter { it.kind == kind && it.suggestedAtEpochDay >= sinceEpochDay } }
+    fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> = observeHistory().map { all -> all.filter { it.kind == kind && it.suggestedAtEpochDay >= sinceEpochDay } }
 
     /**
      * Sant om det här bytet av den här sorten redan spelats in [epochDay] — dedupspärr mot
@@ -55,20 +54,18 @@ interface SuggestionRecordRepository {
     suspend fun commitBatch(moves: List<BatchMove>, records: List<SuggestionRecord>)
 
     /** Raderna med [ids] — de öppna bevakningarnas källförslag (BYT-1). Defaulten här är urvalet ur [observeHistory], för fakes. */
-    fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> =
-        if (ids.isEmpty()) flowOf(emptyList()) else observeHistory().map { all -> all.filter { it.id in ids } }
+    fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> = if (ids.isEmpty()) flowOf(emptyList()) else observeHistory().map { all -> all.filter { it.id in ids } }
 
     /**
      * Den senaste planraden ([SuggestionKind.RISK_PLAN]) per fondpar i [pairs] (sälj-ISIN, köp-ISIN)
      * — de avstådda förslagens rader (HEM-14). Room frågar riktat i SQL så märkesflödet (NAV-9)
      * aldrig materialiserar historiken; defaulten här är samma urval ur [observeHistory], för fakes.
      */
-    fun observeLatestPlanRecordsFor(pairs: Set<Pair<String, String>>): Flow<List<SuggestionRecord>> =
-        if (pairs.isEmpty()) {
-            flowOf(emptyList())
-        } else {
-            observeHistory().map { all -> latestPlanRecordPerPair(all).filter { (it.sellIsin to it.buyIsin) in pairs } }
-        }
+    fun observeLatestPlanRecordsFor(pairs: Set<Pair<String, String>>): Flow<List<SuggestionRecord>> = if (pairs.isEmpty()) {
+        flowOf(emptyList())
+    } else {
+        observeHistory().map { all -> latestPlanRecordPerPair(all).filter { (it.sellIsin to it.buyIsin) in pairs } }
+    }
 
     /**
      * Markerar ett förslag som genomfört eller ej (HEM-8/SET-5, issue #80) — det som gör att
@@ -91,36 +88,31 @@ interface SuggestionRecordRepository {
         const val RETENTION_DAYS = 730L
 
         /** Den senaste planraden per fondpar, i planordning — samma urval som DAO:ns `observeLatestPlanRecordsFor`. */
-        fun latestPlanRecordPerPair(records: List<SuggestionRecord>): List<SuggestionRecord> =
-            records
-                .filter { it.kind == SuggestionKind.RISK_PLAN }
-                .sortedWith(
-                    compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
-                        .thenByDescending { it.batchEpochMillis }
-                        .thenByDescending { it.id },
-                )
-                .distinctBy { it.sellIsin to it.buyIsin }
-                .sortedWith(compareBy({ it.planIndex }, { it.id }))
+        fun latestPlanRecordPerPair(records: List<SuggestionRecord>): List<SuggestionRecord> = records
+            .filter { it.kind == SuggestionKind.RISK_PLAN }
+            .sortedWith(
+                compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                    .thenByDescending { it.batchEpochMillis }
+                    .thenByDescending { it.id }
+            )
+            .distinctBy { it.sellIsin to it.buyIsin }
+            .sortedWith(compareBy({ it.planIndex }, { it.id }))
     }
 }
 
 @Singleton
 class RoomSuggestionRecordRepository @Inject constructor(
     private val database: AppDatabase,
-    private val dao: SuggestionRecordDao,
+    private val dao: SuggestionRecordDao
 ) : SuggestionRecordRepository {
 
-    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> =
-        dao.observeLatestBatch().map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = dao.observeLatestBatch().map { list -> list.map(SuggestionRecordEntity::toDomain) }
 
-    override fun observeHistory(): Flow<List<SuggestionRecord>> =
-        dao.observeHistory().map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeHistory(): Flow<List<SuggestionRecord>> = dao.observeHistory().map { list -> list.map(SuggestionRecordEntity::toDomain) }
 
-    override fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> =
-        dao.observeRecent(kind.name, sinceEpochDay).map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> = dao.observeRecent(kind.name, sinceEpochDay).map { list -> list.map(SuggestionRecordEntity::toDomain) }
 
-    override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean =
-        dao.existsForDay(sellIsin, buyIsin, epochDay, kind.name)
+    override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = dao.existsForDay(sellIsin, buyIsin, epochDay, kind.name)
 
     override suspend fun record(record: SuggestionRecord) {
         dao.insert(SuggestionRecordEntity.fromDomain(record))
@@ -133,16 +125,14 @@ class RoomSuggestionRecordRepository @Inject constructor(
         }
     }
 
-    override fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> =
-        if (ids.isEmpty()) flowOf(emptyList()) else dao.observeByIds(ids.toList()).map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> = if (ids.isEmpty()) flowOf(emptyList()) else dao.observeByIds(ids.toList()).map { list -> list.map(SuggestionRecordEntity::toDomain) }
 
-    override fun observeLatestPlanRecordsFor(pairs: Set<Pair<String, String>>): Flow<List<SuggestionRecord>> =
-        if (pairs.isEmpty()) {
-            flowOf(emptyList())
-        } else {
-            dao.observeLatestPlanRecordsFor(pairs.map { it.first }.distinct(), pairs.map { it.second }.distinct())
-                .map { list -> list.map(SuggestionRecordEntity::toDomain).filter { (it.sellIsin to it.buyIsin) in pairs } }
-        }
+    override fun observeLatestPlanRecordsFor(pairs: Set<Pair<String, String>>): Flow<List<SuggestionRecord>> = if (pairs.isEmpty()) {
+        flowOf(emptyList())
+    } else {
+        dao.observeLatestPlanRecordsFor(pairs.map { it.first }.distinct(), pairs.map { it.second }.distinct())
+            .map { list -> list.map(SuggestionRecordEntity::toDomain).filter { (it.sellIsin to it.buyIsin) in pairs } }
+    }
 
     override suspend fun setFollowed(id: Long, followed: Boolean) {
         dao.setFollowed(id, followed)

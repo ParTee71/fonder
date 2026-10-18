@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -8,8 +10,6 @@ import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.RiskProfile
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * Läsningen bakom målnivåns förval (SLD-5/BYT-2, ANA-13, issue #150) — regeln själv är
@@ -26,7 +26,7 @@ class TargetLevelPreselection internal constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val switchWatchRepository: SwitchWatchRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository,
+    private val suggestionRecordRepository: SuggestionRecordRepository
 ) {
     @Inject
     constructor(
@@ -34,13 +34,13 @@ class TargetLevelPreselection internal constructor(
         transactionRepository: TransactionRepository,
         fundPriceRepository: FundPriceRepository,
         switchWatchRepository: SwitchWatchRepository,
-        suggestionRecordRepository: SuggestionRecordRepository,
+        suggestionRecordRepository: SuggestionRecordRepository
     ) : this(
         { preferencesRepository.riskProfile.first() },
         transactionRepository,
         fundPriceRepository,
         switchWatchRepository,
-        suggestionRecordRepository,
+        suggestionRecordRepository
     )
 
     /**
@@ -58,12 +58,12 @@ class TargetLevelPreselection internal constructor(
         sellLevel: Int?,
         proceedsKr: Double?,
         today: LocalDate,
-        metadataFor: suspend (List<String>) -> Map<String, FundMetadata>,
+        metadataFor: suspend (List<String>) -> Map<String, FundMetadata>
     ): Int? = SwitchPlanCalc.preselectTargetLevel(
         planToLevel = planToLevel,
         // Planradens nivå är svaret — profilens förslag behöver då inte räknas.
         profileSuggestion = if (planToLevel == null) profileSuggestion(proceedsKr, today, metadataFor) else null,
-        sellLevel = sellLevel,
+        sellLevel = sellLevel
     )
 
     /**
@@ -76,20 +76,25 @@ class TargetLevelPreselection internal constructor(
         proceedsKr: Double?,
         today: LocalDate,
         metadataFor: suspend (List<String>) -> Map<String, FundMetadata>,
-        excludeWatchId: Long? = null,
+        excludeWatchId: Long? = null
     ): SwitchPlanCalc.LevelGap? {
         val allocation = riskProfile()?.effectiveAllocation.orEmpty()
         if (allocation.isEmpty()) return null
         val inputs = SwitchPlanInputs.load(
-            transactionRepository, fundPriceRepository, switchWatchRepository, suggestionRecordRepository, today,
-            metadataFor, excludeWatchId,
+            transactionRepository,
+            fundPriceRepository,
+            switchWatchRepository,
+            suggestionRecordRepository,
+            today,
+            metadataFor,
+            excludeWatchId
         )
         return SwitchPlanCalc.profileSuggestion(
             holdings = inputs.holdings,
             metadataByIsin = inputs.metadataByIsin,
             targetAllocation = allocation,
             proceedsKr = proceedsKr,
-            pendingProceedsByLevel = inputs.pendingProceedsByLevel,
+            pendingProceedsByLevel = inputs.pendingProceedsByLevel
         )
     }
 }

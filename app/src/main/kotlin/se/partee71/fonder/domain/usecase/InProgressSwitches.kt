@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -8,8 +10,6 @@ import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * Vilka planrader som är **sålda, väntar på köp** (BYT-1) — en regel för Beslut
@@ -26,12 +26,12 @@ import javax.inject.Inject
 class InProgressSwitches internal constructor(
     private val switchWatchRepository: SwitchWatchRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val today: () -> LocalDate,
+    private val today: () -> LocalDate
 ) {
     @Inject
     constructor(
         switchWatchRepository: SwitchWatchRepository,
-        suggestionRecordRepository: SuggestionRecordRepository,
+        suggestionRecordRepository: SuggestionRecordRepository
     ) : this(switchWatchRepository, suggestionRecordRepository, LocalDate::now)
 
     /**
@@ -41,18 +41,15 @@ class InProgressSwitches internal constructor(
     data class Keys(
         val recordIds: Set<Long> = emptySet(),
         val pairs: Set<Pair<String, String>> = emptySet(),
-        val sources: Map<Long, SuggestionRecord> = emptyMap(),
+        val sources: Map<Long, SuggestionRecord> = emptyMap()
     ) {
-        fun marks(row: SwitchPlanResolver.Suggestion): Boolean =
-            row.recordId in recordIds || (row.sellIsin to row.buyIsin) in pairs
+        fun marks(row: SwitchPlanResolver.Suggestion): Boolean = row.recordId in recordIds || (row.sellIsin to row.buyIsin) in pairs
 
-        fun mark(plan: List<SwitchPlanResolver.Suggestion>): List<SwitchPlanResolver.Suggestion> =
-            plan.map { it.copy(inProgress = marks(it)) }
+        fun mark(plan: List<SwitchPlanResolver.Suggestion>): List<SwitchPlanResolver.Suggestion> = plan.map { it.copy(inProgress = marks(it)) }
     }
 
     /** Nycklarna ur en egen prenumeration på de öppna bevakningarna — Fonddetalj (ANA-10). */
-    fun observe(): Flow<Keys> =
-        switchWatchRepository.observeOpen().flatMapLatest { watches -> keysFor(watches, today()) }
+    fun observe(): Flow<Keys> = switchWatchRepository.observeOpen().flatMapLatest { watches -> keysFor(watches, today()) }
 
     /**
      * Nycklarna ur en redan läst lista öppna bevakningar — [PendingDecisionsSource] delar en

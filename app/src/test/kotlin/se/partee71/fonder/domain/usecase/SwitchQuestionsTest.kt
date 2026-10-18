@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -9,7 +10,6 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
 
 /**
  * Bytesväljarens frågor i formuläret och PDF-importen (BYT-2, issue #144): Följ och "Köpte den
@@ -28,34 +28,44 @@ class SwitchQuestionsTest {
         buyIsin: String = "SE_KOP",
         toLevel: Int = 3,
         inProgress: Boolean = false,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SwitchPlanResolver.Suggestion(
         recordId = recordId, planIndex = planIndex, sellIsin = sellIsin, buyIsin = buyIsin, sellFundName = sellIsin, buyFundName = buyIsin,
-        fromLevel = 5, toLevel = toLevel, feeDeltaPercent = 0.0, switchValueKr = 1_000.0, inProgress = inProgress, kind = kind,
+        fromLevel = 5, toLevel = toLevel, feeDeltaPercent = 0.0, switchValueKr = 1_000.0, inProgress = inProgress, kind = kind
     )
 
     private fun watch(id: Long, soldAt: Long = day - 2, candidates: List<String> = listOf("SE_KOP"), sellTransactionId: Long? = 5) = SwitchWatch(
-        id = id, sellIsin = "SE_SALJ", sellFundName = "Säljfond", soldAtEpochDay = soldAt, targetLevel = 3,
-        sellTransactionId = sellTransactionId, candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
+        id = id,
+        sellIsin = "SE_SALJ",
+        sellFundName = "Säljfond",
+        soldAtEpochDay = soldAt,
+        targetLevel = 3,
+        sellTransactionId = sellTransactionId,
+        candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) }
     )
 
     private fun inputs(
         plan: List<SwitchPlanResolver.Suggestion> = emptyList(),
         watches: List<SwitchWatch> = emptyList(),
-        cheaper: List<SwitchPlanResolver.Suggestion> = emptyList(),
+        cheaper: List<SwitchPlanResolver.Suggestion> = emptyList()
     ) = SwitchChoicesSource.Inputs(plan, watches, emptyMap(), today, cheaper)
 
     private fun decide(decision: SwitchDecision) = SwitchOption.Decide(decision)
 
     /** Följ på förslaget [recordId], slaget upp i Besluts källa som formuläret gör. */
-    private fun follow(inputs: SwitchChoicesSource.Inputs, fundIsin: String, recordId: Long, lookedUp: FollowedSuggestion? = null) =
-        SwitchQuestions.forTransaction(inputs, TransactionType.SALJ, fundIsin, day, followed = SwitchQuestions.followed(inputs, recordId, lookedUp))
+    private fun follow(inputs: SwitchChoicesSource.Inputs, fundIsin: String, recordId: Long, lookedUp: FollowedSuggestion? = null) = SwitchQuestions.forTransaction(inputs, TransactionType.SALJ, fundIsin, day, followed = SwitchQuestions.followed(inputs, recordId, lookedUp))
 
     @Test
     fun `folj pa en rad som inte star i Besluts kalla anvander raden uppslagen pa id`() {
         val lookedUp = FollowedSuggestion(
-            recordId = 5, sellIsin = "SE_SALJ", buyIsin = "SE_BILLIG", sellFundName = "Sälj", buyFundName = "Billig",
-            toLevel = 4, switchValueKr = null, planIndex = null,
+            recordId = 5,
+            sellIsin = "SE_SALJ",
+            buyIsin = "SE_BILLIG",
+            sellFundName = "Sälj",
+            buyFundName = "Billig",
+            toLevel = 4,
+            switchValueKr = null,
+            planIndex = null
         )
 
         val question = follow(inputs(), "SE_SALJ", 5, lookedUp)
@@ -151,7 +161,7 @@ class SwitchQuestionsTest {
         val questions = SwitchQuestions.forImport(
             inputs(watches = watches),
             rows,
-            listOf(SwitchOption.LinkOtherDay(4), SwitchOption.LinkOtherDay(5), null),
+            listOf(SwitchOption.LinkOtherDay(4), SwitchOption.LinkOtherDay(5), null)
         )
 
         assertTrue(SwitchOption.LinkOtherDay(4) in questions[0].options)
@@ -200,13 +210,13 @@ class SwitchQuestionsTest {
         val rows = listOf(
             importRow(TransactionType.SALJ, "SE_SALJ"),
             importRow(TransactionType.SALJ, "SE_ANDRA", day + 2),
-            importRow(TransactionType.KOP, "SE_KOP"),
+            importRow(TransactionType.KOP, "SE_KOP")
         )
 
         val questions = SwitchQuestions.forImport(
             inputs(),
             rows,
-            listOf(decide(SwitchDecision.None), decide(SwitchDecision.Standalone), null),
+            listOf(decide(SwitchDecision.None), decide(SwitchDecision.Standalone), null)
         )
 
         assertTrue(questions[2].isTrivial)
@@ -222,7 +232,7 @@ class SwitchQuestionsTest {
 
         assertEquals(
             listOf(decide(SwitchDecision.None), decide(SwitchDecision.ClosesWatch(7)), decide(SwitchDecision.ClosesWatchOfEntry(0))),
-            questions[1].options,
+            questions[1].options
         )
         assertTrue(questions[1].required)
     }

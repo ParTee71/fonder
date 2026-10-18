@@ -18,6 +18,5 @@ object SwedishNumberFormat {
      * [value] med exakt [decimals] decimaler och decimalkomma, utan tusentalsavgränsare — så
      * texten går att redigera och tolkas tillbaka av [parse] ("38,4615").
      */
-    fun format(value: Double, decimals: Int): String =
-        java.math.BigDecimal.valueOf(value).setScale(decimals, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',')
+    fun format(value: Double, decimals: Int): String = java.math.BigDecimal.valueOf(value).setScale(decimals, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',')
 }

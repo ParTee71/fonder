@@ -34,7 +34,7 @@ fun AppTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     TopAppBar(
         title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -43,10 +43,10 @@ fun AppTopBar(
             AppIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.back),
-                onClick = onBack,
+                onClick = onBack
             )
         },
-        actions = actions,
+        actions = actions
     )
 }
 
@@ -59,7 +59,7 @@ fun AppTopBar(
 fun AppTabHeading(
     title: String,
     modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -68,7 +68,7 @@ fun AppTabHeading(
             .heightIn(min = 64.dp)
             .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             title,
@@ -77,7 +77,7 @@ fun AppTabHeading(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .semantics { heading() },
+                .semantics { heading() }
         )
         actions()
     }

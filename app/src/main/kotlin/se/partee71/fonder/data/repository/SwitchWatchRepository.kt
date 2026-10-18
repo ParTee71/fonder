@@ -1,6 +1,9 @@
 package se.partee71.fonder.data.repository
 
 import androidx.room.withTransaction
+import java.time.LocalDate
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.room.AppDatabase
@@ -12,9 +15,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Kontrakt för det pågående bytet (ANA-12, issue #114) — perioden mellan sälj och köp, med de
@@ -72,7 +72,7 @@ interface SwitchWatchRepository {
         proceedsKr: Double,
         soldAtEpochDay: Long? = null,
         sourceRecordId: Long? = null,
-        targetLevel: Int? = null,
+        targetLevel: Int? = null
     ): Boolean
 
     /**
@@ -139,7 +139,7 @@ interface SwitchWatchRepository {
         reason: SwitchWatchCloseReason,
         today: LocalDate,
         boughtIsin: String? = null,
-        buyTransactionId: Long? = null,
+        buyTransactionId: Long? = null
     ): Boolean
 
     /** Nollar [SwitchWatch.sellTransactionId]/[SwitchWatch.buyTransactionId] som pekar på en borttagen transaktion (TRX-2). */
@@ -162,26 +162,20 @@ interface SwitchWatchRepository {
 @Singleton
 class RoomSwitchWatchRepository @Inject constructor(
     private val database: AppDatabase,
-    private val dao: SwitchWatchDao,
+    private val dao: SwitchWatchDao
 ) : SwitchWatchRepository {
 
-    override fun observeOpen(): Flow<List<SwitchWatch>> =
-        dao.observeOpen().map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
+    override fun observeOpen(): Flow<List<SwitchWatch>> = dao.observeOpen().map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
 
-    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> =
-        dao.observeClosedSince(epochDay).map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
+    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> = dao.observeClosedSince(epochDay).map { list -> list.map(SwitchWatchWithCandidates::toDomain) }
 
-    override fun observe(id: Long): Flow<SwitchWatch?> =
-        dao.observeById(id).map { it?.toDomain() }
+    override fun observe(id: Long): Flow<SwitchWatch?> = dao.observeById(id).map { it?.toDomain() }
 
-    override suspend fun getAll(): List<SwitchWatch> =
-        dao.getAll().map(SwitchWatchWithCandidates::toDomain)
+    override suspend fun getAll(): List<SwitchWatch> = dao.getAll().map(SwitchWatchWithCandidates::toDomain)
 
-    override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean =
-        dao.hasOpenFor(sellIsin, soldAtEpochDay)
+    override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean = dao.hasOpenFor(sellIsin, soldAtEpochDay)
 
-    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? =
-        dao.getOpenWithoutTransactionFor(sellIsin, soldAtEpochDay).firstOrNull()?.toDomain()
+    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? = dao.getOpenWithoutTransactionFor(sellIsin, soldAtEpochDay).firstOrNull()?.toDomain()
 
     override suspend fun linkSellTransaction(
         watchId: Long,
@@ -189,28 +183,25 @@ class RoomSwitchWatchRepository @Inject constructor(
         proceedsKr: Double,
         soldAtEpochDay: Long?,
         sourceRecordId: Long?,
-        targetLevel: Int?,
-    ): Boolean =
-        database.withTransaction {
-            val current = dao.getById(watchId)?.watch ?: return@withTransaction false
-            val linked = if (soldAtEpochDay == null || soldAtEpochDay == current.soldAtEpochDay) {
-                dao.linkSellTransaction(watchId, transactionId, proceedsKr) == 1
-            } else {
-                // Länk, dag och nollpunkt i **en** transaktion: en flyttad dag med gamla nollpunkter
-                // kvar hade mätt kandidaterna från fel dag tills nästa hämtning råkade skriva om dem.
-                val moved = dao.linkSellTransactionOnDay(watchId, transactionId, proceedsKr, soldAtEpochDay) == 1
-                if (moved) dao.resetCandidateAnchors(watchId)
-                moved
-            }
-            if (linked && sourceRecordId != null && targetLevel != null) dao.adoptSuggestion(watchId, sourceRecordId, targetLevel)
-            linked
+        targetLevel: Int?
+    ): Boolean = database.withTransaction {
+        val current = dao.getById(watchId)?.watch ?: return@withTransaction false
+        val linked = if (soldAtEpochDay == null || soldAtEpochDay == current.soldAtEpochDay) {
+            dao.linkSellTransaction(watchId, transactionId, proceedsKr) == 1
+        } else {
+            // Länk, dag och nollpunkt i **en** transaktion: en flyttad dag med gamla nollpunkter
+            // kvar hade mätt kandidaterna från fel dag tills nästa hämtning råkade skriva om dem.
+            val moved = dao.linkSellTransactionOnDay(watchId, transactionId, proceedsKr, soldAtEpochDay) == 1
+            if (moved) dao.resetCandidateAnchors(watchId)
+            moved
         }
+        if (linked && sourceRecordId != null && targetLevel != null) dao.adoptSuggestion(watchId, sourceRecordId, targetLevel)
+        linked
+    }
 
-    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
-        dao.hasOpenForTransaction(sellTransactionId)
+    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean = dao.hasOpenForTransaction(sellTransactionId)
 
-    override suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean =
-        dao.fillMissingTargetLevel(watchId, targetLevel) == 1
+    override suspend fun fillMissingTargetLevel(watchId: Long, targetLevel: Int): Boolean = dao.fillMissingTargetLevel(watchId, targetLevel) == 1
 
     override suspend fun start(watch: SwitchWatch): Long {
         val row = SwitchWatchWithCandidates.fromDomain(watch)
@@ -228,19 +219,16 @@ class RoomSwitchWatchRepository @Inject constructor(
         }
     }
 
-    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean =
-        changeSelection(watchId) { dao.setTargetLevel(watchId, targetLevel) }
+    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean = changeSelection(watchId) { dao.setTargetLevel(watchId, targetLevel) }
 
-    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean =
-        changeSelection(watchId) { dao.setIndexOnly(watchId, indexOnly) }
+    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean = changeSelection(watchId) { dao.setIndexOnly(watchId, indexOnly) }
 
     /** Valet och borttagningen av appens förslag i **en** transaktion — aldrig en ny nivå med den gamlas förslag kvar. */
-    private suspend fun changeSelection(watchId: Long, write: suspend () -> Int): Boolean =
-        database.withTransaction {
-            val changed = write() == 1
-            if (changed) dao.deleteAutoCandidates(watchId, SwitchWatchCandidateSource.MANUELL.name)
-            changed
-        }
+    private suspend fun changeSelection(watchId: Long, write: suspend () -> Int): Boolean = database.withTransaction {
+        val changed = write() == 1
+        if (changed) dao.deleteAutoCandidates(watchId, SwitchWatchCandidateSource.MANUELL.name)
+        changed
+    }
 
     override suspend fun addCandidates(watchId: Long, candidates: List<SwitchWatchCandidate>): Int {
         if (candidates.isEmpty()) return 0
@@ -275,7 +263,7 @@ class RoomSwitchWatchRepository @Inject constructor(
             .mapIndexed { index, candidate ->
                 SwitchWatchCandidateEntity.fromDomain(
                     candidate.copy(id = 0, position = nextPosition + index),
-                    watchId = existing.watch.id,
+                    watchId = existing.watch.id
                 )
             }
         if (toAdd.isNotEmpty()) dao.insertCandidates(toAdd)
@@ -295,7 +283,7 @@ class RoomSwitchWatchRepository @Inject constructor(
         reason: SwitchWatchCloseReason,
         today: LocalDate,
         boughtIsin: String?,
-        buyTransactionId: Long?,
+        buyTransactionId: Long?
     ): Boolean {
         val bought = reason == SwitchWatchCloseReason.KOPT
         return dao.close(
@@ -303,7 +291,7 @@ class RoomSwitchWatchRepository @Inject constructor(
             closedAtEpochDay = today.toEpochDay(),
             boughtIsin = if (bought) boughtIsin else null,
             closeReason = reason.name,
-            buyTransactionId = if (bought) buyTransactionId else null,
+            buyTransactionId = if (bought) buyTransactionId else null
         ) == 1
     }
 

@@ -226,13 +226,13 @@ class WorkManagerFundPriceRefreshSchedulerTest {
         workManager.enqueueUniquePeriodicWork(
             WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME,
             androidx.work.ExistingPeriodicWorkPolicy.KEEP,
-            legacy,
+            legacy
         ).result.get()
 
         scheduler.cancelRetiredWork()
 
         val infos = workManager.getWorkInfosForUniqueWork(
-            WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME,
+            WorkManagerFundPriceRefreshScheduler.RETIRED_DRIVE_BACKUP_WORK_NAME
         ).get()
         assertTrue(infos.all { it.state == WorkInfo.State.CANCELLED })
     }

@@ -7,11 +7,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.time.LocalDate
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
@@ -32,12 +32,11 @@ class BeslutScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun dyrTillBillig(recordId: Long = 1, planIndex: Int = 0, switchValueKr: Double? = 250.0, followed: Boolean = false) =
-        SwitchPlanResolver.Suggestion(
-            recordId = recordId, planIndex = planIndex, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-            sellFundName = "Dyr fond", buyFundName = "Billig fond",
-            fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = switchValueKr, followed = followed,
-        )
+    private fun dyrTillBillig(recordId: Long = 1, planIndex: Int = 0, switchValueKr: Double? = 250.0, followed: Boolean = false) = SwitchPlanResolver.Suggestion(
+        recordId = recordId, planIndex = planIndex, sellIsin = "SE0004297927", buyIsin = "SE0000581434",
+        sellFundName = "Dyr fond", buyFundName = "Billig fond",
+        fromLevel = 5, toLevel = 3, feeDeltaPercent = -0.7, switchValueKr = switchValueKr, followed = followed
+    )
 
     private fun stateWith(
         plan: List<SwitchPlanResolver.Suggestion> = emptyList(),
@@ -46,7 +45,7 @@ class BeslutScreenTest {
         cheaper: List<CheaperAlternative> = emptyList(),
         dismissed: List<SwitchPlanResolver.Suggestion> = emptyList(),
         canRecompute: Boolean = false,
-        backgroundWorkRunning: Boolean = false,
+        backgroundWorkRunning: Boolean = false
     ) = BeslutUiState(
         loading = false,
         riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
@@ -56,9 +55,9 @@ class BeslutScreenTest {
             openWatches = watches,
             watchedSellIsins = watchedSellIsins,
             cheaperAlternatives = cheaper,
-            dismissedSuggestions = dismissed,
+            dismissedSuggestions = dismissed
         ).withSwitches(emptyList(), LocalDate.now()),
-        backgroundWorkRunning = backgroundWorkRunning,
+        backgroundWorkRunning = backgroundWorkRunning
     )
 
     private fun show(state: BeslutUiState) = composeRule.setContent { FonderTheme { BeslutContent(state = state) } }
@@ -103,7 +102,7 @@ class BeslutScreenTest {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(plan = listOf(dyrTillBillig(recordId = 42))),
-                    onFollow = { followed = it.recordId },
+                    onFollow = { followed = it.recordId }
                 )
             }
         }
@@ -133,7 +132,7 @@ class BeslutScreenTest {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(plan = listOf(dyrTillBillig(recordId = 42))),
-                    onDismissSuggestion = { dismissed = it },
+                    onDismissSuggestion = { dismissed = it }
                 )
             }
         }
@@ -150,7 +149,7 @@ class BeslutScreenTest {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(dismissed = listOf(dyrTillBillig(recordId = 42))),
-                    onUndoDismissal = { undone = it },
+                    onUndoDismissal = { undone = it }
                 )
             }
         }
@@ -166,7 +165,7 @@ class BeslutScreenTest {
     private fun billigareAlternativ(followed: Boolean = false) = CheaperAlternative(
         suggestion = dyrTillBillig(recordId = 77, switchValueKr = 500.0, followed = followed).copy(kind = SuggestionKind.FEE),
         sellFeePercent = 1.40,
-        buyFeePercent = 0.40,
+        buyFeePercent = 0.40
     )
 
     @Test
@@ -176,7 +175,7 @@ class BeslutScreenTest {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(cheaper = listOf(billigareAlternativ())),
-                    onDismissSuggestion = { dismissed = it },
+                    onDismissSuggestion = { dismissed = it }
                 )
             }
         }
@@ -197,7 +196,7 @@ class BeslutScreenTest {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(
-                    state = stateWith(cheaper = listOf(billigareAlternativ(followed = true))),
+                    state = stateWith(cheaper = listOf(billigareAlternativ(followed = true)))
                 )
             }
         }
@@ -256,8 +255,12 @@ class BeslutScreenTest {
     fun kortet_for_pagaende_byte_visar_ledaren_och_oppnar_bevakningen() {
         var opened: Long? = null
         val watch = OpenSwitchWatch(
-            watchId = 7, sellFundName = "Fond A", daysWaiting = 2, candidateCount = 3,
-            leaderName = "Kandidat B", leaderChangeFraction = 0.021,
+            watchId = 7,
+            sellFundName = "Fond A",
+            daysWaiting = 2,
+            candidateCount = 3,
+            leaderName = "Kandidat B",
+            leaderChangeFraction = 0.021
         )
         composeRule.setContent {
             FonderTheme { BeslutContent(state = stateWith(watches = listOf(watch)), onOpenSwitchWatch = { opened = it }) }
@@ -307,7 +310,7 @@ class BeslutScreenTest {
             FonderTheme {
                 BeslutContent(
                     state = stateWith(plan = listOf(dyrTillBillig(followed = true))),
-                    onStartSwitchWatch = { started = it },
+                    onStartSwitchWatch = { started = it }
                 )
             }
         }

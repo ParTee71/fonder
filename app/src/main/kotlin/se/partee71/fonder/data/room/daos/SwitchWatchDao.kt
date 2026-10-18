@@ -66,7 +66,7 @@ interface SwitchWatchDao {
             SELECT 1 FROM switch_watches
             WHERE sellIsin = :sellIsin AND soldAtEpochDay = :soldAtEpochDay AND closedAtEpochDay IS NULL
         )
-        """,
+        """
     )
     suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean
 
@@ -85,7 +85,7 @@ interface SwitchWatchDao {
         WHERE sellIsin = :sellIsin AND soldAtEpochDay = :soldAtEpochDay
           AND closedAtEpochDay IS NULL AND sellTransactionId IS NULL
         ORDER BY id ASC
-        """,
+        """
     )
     suspend fun getOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): List<SwitchWatchWithCandidates>
 
@@ -102,7 +102,7 @@ interface SwitchWatchDao {
         """
         UPDATE switch_watches SET sellTransactionId = :transactionId, proceedsKr = :proceedsKr
         WHERE id = :id AND sellTransactionId IS NULL AND closedAtEpochDay IS NULL
-        """,
+        """
     )
     suspend fun linkSellTransaction(id: Long, transactionId: Long, proceedsKr: Double): Int
 
@@ -116,7 +116,7 @@ interface SwitchWatchDao {
         """
         UPDATE switch_watches SET sellTransactionId = :transactionId, proceedsKr = :proceedsKr, soldAtEpochDay = :soldAtEpochDay
         WHERE id = :id AND sellTransactionId IS NULL AND closedAtEpochDay IS NULL
-        """,
+        """
     )
     suspend fun linkSellTransactionOnDay(id: Long, transactionId: Long, proceedsKr: Double, soldAtEpochDay: Long): Int
 
@@ -148,7 +148,7 @@ interface SwitchWatchDao {
         """
         UPDATE switch_watches SET targetLevel = :targetLevel
         WHERE id = :id AND closedAtEpochDay IS NULL AND (targetLevel IS NULL OR targetLevel <> :targetLevel)
-        """,
+        """
     )
     suspend fun setTargetLevel(id: Long, targetLevel: Int): Int
 
@@ -207,7 +207,7 @@ interface SwitchWatchDao {
         SET closedAtEpochDay = :closedAtEpochDay, boughtIsin = :boughtIsin, closeReason = :closeReason,
             buyTransactionId = :buyTransactionId
         WHERE id = :id AND closedAtEpochDay IS NULL
-        """,
+        """
     )
     suspend fun close(id: Long, closedAtEpochDay: Long, boughtIsin: String?, closeReason: String, buyTransactionId: Long? = null): Int
 
@@ -222,7 +222,7 @@ interface SwitchWatchDao {
         SET sellTransactionId = CASE WHEN sellTransactionId = :transactionId THEN NULL ELSE sellTransactionId END,
             buyTransactionId = CASE WHEN buyTransactionId = :transactionId THEN NULL ELSE buyTransactionId END
         WHERE sellTransactionId = :transactionId OR buyTransactionId = :transactionId
-        """,
+        """
     )
     suspend fun clearTransactionLinks(transactionId: Long)
 

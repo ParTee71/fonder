@@ -19,7 +19,7 @@ import se.partee71.fonder.domain.usecase.SwitchPlanCalc
  */
 open class FakeFundMetadataRepository(
     var metadataByIsin: Map<String, FundMetadata> = emptyMap(),
-    var switchCandidates: List<SwitchPlanCalc.Candidate> = emptyList(),
+    var switchCandidates: List<SwitchPlanCalc.Candidate> = emptyList()
 ) : FundMetadataRepository {
 
     /** Varje `findSwitchCandidates`-anrop som (nivå, uteslutna) — driver att förslagen hämtas en gång. */
@@ -33,11 +33,9 @@ open class FakeFundMetadataRepository(
 
     override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
 
-    override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> =
-        metadataByIsin.filterKeys { it in isins }
+    override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
 
-    override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> =
-        metadataByIsin.filterKeys { it in isins }
+    override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
 
     override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
 

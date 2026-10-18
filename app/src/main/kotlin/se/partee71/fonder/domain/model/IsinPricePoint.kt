@@ -7,5 +7,5 @@ package se.partee71.fonder.domain.model
 data class IsinPricePoint(
     val epochDay: Long,
     val nav: Double,
-    val currency: String,
+    val currency: String
 )

@@ -16,7 +16,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
  */
 @Entity(
     tableName = SuggestionRecordEntity.TABLE_NAME,
-    indices = [Index("kind", "sellIsin", "buyIsin")],
+    indices = [Index("kind", "sellIsin", "buyIsin")]
 )
 data class SuggestionRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -37,7 +37,7 @@ data class SuggestionRecordEntity(
      * kolumn. Okänt värde läses som [SuggestionKind.RISK_PLAN] — en fil från en nyare version
      * ska degradera, inte krascha.
      */
-    val kind: String = SuggestionKind.RISK_PLAN.name,
+    val kind: String = SuggestionKind.RISK_PLAN.name
 ) {
     fun toDomain() = SuggestionRecord(
         id = id,
@@ -50,7 +50,7 @@ data class SuggestionRecordEntity(
         switchValueKr = switchValueKr,
         followed = followed,
         batchEpochMillis = batchEpochMillis,
-        kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN),
+        kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN)
     )
 
     companion object {
@@ -68,7 +68,7 @@ data class SuggestionRecordEntity(
             switchValueKr = record.switchValueKr,
             followed = record.followed,
             batchEpochMillis = record.batchEpochMillis,
-            kind = record.kind.name,
+            kind = record.kind.name
         )
     }
 }

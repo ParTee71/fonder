@@ -32,7 +32,7 @@ fun AppDialog(
     onConfirm: () -> Unit,
     confirmVariant: AppButtonVariant = AppButtonVariant.Primary,
     dismissLabel: String? = null,
-    onDismiss: () -> Unit = onDismissRequest,
+    onDismiss: () -> Unit = onDismissRequest
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -43,7 +43,7 @@ fun AppDialog(
         confirmButton = { AppButton(text = confirmLabel, onClick = onConfirm, variant = confirmVariant) },
         dismissButton = dismissLabel?.let { label ->
             { AppButton(text = label, onClick = onDismiss, variant = AppButtonVariant.Text) }
-        },
+        }
     )
 }
 
@@ -59,7 +59,7 @@ fun ConfirmDialog(
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    destructive: Boolean = false,
+    destructive: Boolean = false
 ) {
     AppDialog(
         title = title,
@@ -68,7 +68,7 @@ fun ConfirmDialog(
         confirmLabel = confirmLabel,
         onConfirm = onConfirm,
         confirmVariant = if (destructive) AppButtonVariant.Danger else AppButtonVariant.Primary,
-        dismissLabel = stringResource(R.string.cancel),
+        dismissLabel = stringResource(R.string.cancel)
     )
 }
 
@@ -83,27 +83,27 @@ fun ConfirmDialog(
 fun LoadingDialog(title: String, body: String) {
     Dialog(
         onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 WorkingIndicator(working = true, contentDescription = title, size = 48.dp)
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = 16.dp)
                 )
                 Text(
                     body,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }

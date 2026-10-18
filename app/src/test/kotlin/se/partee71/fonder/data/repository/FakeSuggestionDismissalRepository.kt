@@ -1,10 +1,10 @@
 package se.partee71.fonder.data.repository
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
-import java.time.LocalDate
 
 /**
  * In-memory-fake av [SuggestionDismissalRepository] (HEM-14) för läsarna av
@@ -26,6 +26,5 @@ class FakeSuggestionDismissalRepository : SuggestionDismissalRepository {
         dismissals.value = dismissals.value.filterNot { it.matches(sellIsin, buyIsin, kind) }
     }
 
-    private fun SuggestionDismissal.matches(sellIsin: String, buyIsin: String, kind: SuggestionKind) =
-        this.sellIsin == sellIsin && this.buyIsin == buyIsin && this.kind == kind
+    private fun SuggestionDismissal.matches(sellIsin: String, buyIsin: String, kind: SuggestionKind) = this.sellIsin == sellIsin && this.buyIsin == buyIsin && this.kind == kind
 }

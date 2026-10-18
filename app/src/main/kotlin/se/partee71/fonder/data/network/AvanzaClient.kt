@@ -1,5 +1,10 @@
 package se.partee71.fonder.data.network
 
+import java.io.IOException
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -7,11 +12,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import se.partee71.fonder.di.IoDispatcher
-import java.io.IOException
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Tunn HTTP-klient mot avanza.se:s odokumenterade fond-API — se risknotis i KRAVLISTA TP-14
@@ -22,7 +22,7 @@ import javax.inject.Singleton
 @Singleton
 class AvanzaClient @Inject constructor(
     private val httpClient: OkHttpClient,
-    @param:IoDispatcher private val io: CoroutineDispatcher,
+    @param:IoDispatcher private val io: CoroutineDispatcher
 ) : AvanzaSource {
 
     override suspend fun search(query: String): String = withContext(io) {
@@ -34,26 +34,23 @@ class AvanzaClient @Inject constructor(
         execute(Request.Builder().url("$GUIDE_URL/$orderbookId").build())
     }
 
-    override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String =
-        withContext(io) {
-            execute(Request.Builder().url(chartUrl(orderbookId, from, to)).build())
-        }
+    override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String = withContext(io) {
+        execute(Request.Builder().url(chartUrl(orderbookId, from, to)).build())
+    }
 
     override suspend fun fetchFundList(requestBody: String): String = withContext(io) {
         val body = requestBody.toRequestBody(JSON_MEDIA_TYPE)
         execute(Request.Builder().url(FUND_LIST_URL).post(body).build())
     }
 
-    private fun execute(request: Request): String =
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("Oväntat svar (${response.code}) från ${request.url}")
-            }
-            response.body?.string() ?: throw IOException("Tomt svar från ${request.url}")
+    private fun execute(request: Request): String = httpClient.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+            throw IOException("Oväntat svar (${response.code}) från ${request.url}")
         }
+        response.body?.string() ?: throw IOException("Tomt svar från ${request.url}")
+    }
 
-    private fun jsonQuote(value: String): String =
-        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    private fun jsonQuote(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
     internal companion object {
         const val SEARCH_URL = "https://www.avanza.se/_api/fund-guide/search"
@@ -76,7 +73,7 @@ class AvanzaClient @Inject constructor(
             orderbookId: String,
             from: LocalDate,
             to: LocalDate,
-            today: LocalDate = LocalDate.now(),
+            today: LocalDate = LocalDate.now()
         ): String {
             val effectiveTo = if (to.isAfter(today)) today else to
             return "$CHART_URL/$orderbookId/${from.format(DATE_FORMAT)}/${effectiveTo.format(DATE_FORMAT)}?raw=true&resolution=DAY"

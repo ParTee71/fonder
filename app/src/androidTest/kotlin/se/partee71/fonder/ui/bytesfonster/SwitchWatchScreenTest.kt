@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -23,7 +24,6 @@ import org.junit.runner.RunWith
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Instrumenterat test av bevakningsskärmens tillståndsdrivna innehåll (ANA-12, issue #114).
@@ -47,7 +47,7 @@ class SwitchWatchScreenTest {
         changeKr: Double? = 320.0,
         partial: Boolean = false,
         historyUnavailable: Boolean = false,
-        manual: Boolean = false,
+        manual: Boolean = false
     ) = CandidateRow(
         candidateId = candidateId,
         isin = isin,
@@ -58,7 +58,7 @@ class SwitchWatchScreenTest {
         changeKr = changeKr,
         partial = partial,
         historyUnavailable = historyUnavailable,
-        manual = manual,
+        manual = manual
     )
 
     private fun state(
@@ -70,7 +70,7 @@ class SwitchWatchScreenTest {
         // rader utanför skärmen — de flesta testerna handlar om raderna, inte om diagrammet,
         // och ska inte behöva skrolla förbi det. Diagrammet har ett eget test nedan.
         candidateSeries: List<Pair<String, List<Pair<Long, Double>>>> = emptyList(),
-        sellSeries: List<Pair<Long, Double>> = emptyList(),
+        sellSeries: List<Pair<Long, Double>> = emptyList()
     ) = SwitchWatchUiState(
         loading = false,
         sellFundName = "Såld fond",
@@ -82,7 +82,7 @@ class SwitchWatchScreenTest {
         boughtFundName = boughtFundName,
         rows = rows.toImmutableList(),
         sellSeries = sellSeries.toImmutableList(),
-        candidateSeries = candidateSeries.map { (name, points) -> name to points.toImmutableList() }.toImmutableList(),
+        candidateSeries = candidateSeries.map { (name, points) -> name to points.toImmutableList() }.toImmutableList()
     )
 
     @Test
@@ -123,9 +123,9 @@ class SwitchWatchScreenTest {
                         sellSeries = listOf(soldAt to 200.0, soldAt + 3 to 198.0),
                         candidateSeries = listOf(
                             "Kandidat A" to listOf(soldAt to 100.0, soldAt + 3 to 103.2),
-                            "Kandidat B" to listOf(soldAt to 50.0, soldAt + 3 to 52.0),
-                        ),
-                    ),
+                            "Kandidat B" to listOf(soldAt to 50.0, soldAt + 3 to 52.0)
+                        )
+                    )
                 )
             }
         }
@@ -143,7 +143,7 @@ class SwitchWatchScreenTest {
     @Test
     fun en_kandidat_utan_hamtbar_historik_sags_ut_i_stallet_for_att_visas_som_noll() {
         val state = state(
-            rows = listOf(row(changeFraction = null, changeKr = null, historyUnavailable = true)),
+            rows = listOf(row(changeFraction = null, changeKr = null, historyUnavailable = true))
         )
 
         composeRule.setContent { FonderTheme { SwitchWatchContent(state = state) } }
@@ -172,9 +172,9 @@ class SwitchWatchScreenTest {
                     state = state(
                         rows = listOf(
                             row(candidateId = 1, isin = "SE_A", name = "Appens förslag", manual = false),
-                            row(candidateId = 2, isin = "SE_B", name = "Eget val", manual = true),
-                        ),
-                    ),
+                            row(candidateId = 2, isin = "SE_B", name = "Eget val", manual = true)
+                        )
+                    )
                 )
             }
         }
@@ -234,7 +234,7 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state(rows = emptyList()).copy(targetLevel = 5, emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE),
+                    state = state(rows = emptyList()).copy(targetLevel = 5, emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE)
                 )
             }
         }
@@ -250,7 +250,7 @@ class SwitchWatchScreenTest {
             FonderTheme {
                 SwitchWatchContent(
                     state = state(rows = emptyList()).copy(emptyReason = SwitchWatchEmptyReason.LOOKUP_FAILED),
-                    onRetryAutoFill = { retries++ },
+                    onRetryAutoFill = { retries++ }
                 )
             }
         }
@@ -278,7 +278,7 @@ class SwitchWatchScreenTest {
         }
 
         composeRule.onNodeWithText(
-            "Du kan bevaka högst ${SwitchWatchCalc.MAX_CANDIDATES} alternativ åt gången.",
+            "Du kan bevaka högst ${SwitchWatchCalc.MAX_CANDIDATES} alternativ åt gången."
         ).assertIsDisplayed()
     }
 
@@ -289,7 +289,7 @@ class SwitchWatchScreenTest {
             FonderTheme {
                 SwitchWatchContent(
                     state = state().copy(targetLevel = 4, sellLevel = 6),
-                    onSelectTargetLevel = { chosen = it },
+                    onSelectTargetLevel = { chosen = it }
                 )
             }
         }
@@ -315,7 +315,7 @@ class SwitchWatchScreenTest {
         }
 
         composeRule.onNodeWithText(
-            "Nivå 4: din riskprofil har 9 procentenheter för lite där. Ramen på 6 är säljfondens egen nivå.",
+            "Nivå 4: din riskprofil har 9 procentenheter för lite där. Ramen på 6 är säljfondens egen nivå."
         ).assertIsDisplayed()
         composeRule.onNodeWithText("Sedan säljdagen · nivå 4").assertExists()
 
@@ -332,7 +332,7 @@ class SwitchWatchScreenTest {
             FonderTheme {
                 SwitchWatchContent(
                     state = state().copy(targetLevel = 4, indexOnly = true),
-                    onIndexOnlyChanged = { indexOnly = it },
+                    onIndexOnlyChanged = { indexOnly = it }
                 )
             }
         }
@@ -350,8 +350,8 @@ class SwitchWatchScreenTest {
                     state = state(rows = emptyList()).copy(
                         targetLevel = 2,
                         indexOnly = true,
-                        emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE,
-                    ),
+                        emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE
+                    )
                 )
             }
         }

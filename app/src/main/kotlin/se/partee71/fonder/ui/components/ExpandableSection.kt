@@ -47,7 +47,7 @@ fun ExpandableSection(
     initiallyExpanded: Boolean = false,
     onExpand: () -> Unit = {},
     header: @Composable () -> Unit,
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     Column(modifier = modifier) {
@@ -59,16 +59,16 @@ fun ExpandableSection(
                     expanded = !expanded
                     if (expanded) onExpand()
                 },
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.weight(1f)) { header() }
             Icon(
                 imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                 contentDescription = stringResource(
-                    if (expanded) R.string.info_collapse else R.string.info_expand,
+                    if (expanded) R.string.info_collapse else R.string.info_expand
                 ),
                 modifier = Modifier.padding(start = 8.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         AnimatedVisibility(visible = expanded) { content() }
@@ -83,13 +83,13 @@ fun ExpandableSection(
     initiallyExpanded: Boolean = false,
     titleStyle: TextStyle = MaterialTheme.typography.titleMedium,
     onExpand: () -> Unit = {},
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     ExpandableSection(
         modifier = modifier,
         initiallyExpanded = initiallyExpanded,
         onExpand = onExpand,
         header = { Text(title, style = titleStyle) },
-        content = content,
+        content = content
     )
 }

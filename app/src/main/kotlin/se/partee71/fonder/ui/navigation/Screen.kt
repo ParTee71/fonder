@@ -34,19 +34,30 @@ enum class Screen(val key: TabKey, val icon: ImageVector, val labelRes: Int) {
  */
 fun titleResFor(key: AppKey): Int? = when (key) {
     is TabKey -> null
+
     SettingsKey -> R.string.nav_settings
+
     is FondDetaljKey -> R.string.fond_title
+
     FundSearchKey -> R.string.fondsok_title
+
     is TransactionFormKey -> when {
         !key.prefilled -> R.string.transaktionsform_title
         key.type == TransactionType.SALJ -> R.string.transaktionsform_title_sale
         else -> R.string.transaktionsform_title_buy
     }
+
     ImportHoldingsKey -> R.string.import_title
+
     ImportOrdersKey -> R.string.import_orders_title
+
     RiskProfileKey -> R.string.riskprofil_title
+
     FacitKey -> R.string.facit_title
+
     BenchmarkPickerKey -> R.string.settings_benchmark_section
+
     is SwitchWatchKey -> R.string.switch_watch_title
+
     is SwitchWatchPickerKey -> R.string.switch_watch_add_candidate
 }

@@ -1,15 +1,15 @@
 package se.partee71.fonder.data.network
 
+import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
-import java.time.LocalDate
 
 /**
  * Enhetstest för de rena URL-byggarna i [HandelsbankenFondlistaClient] (nätverksdelen kräver
@@ -31,7 +31,7 @@ class HandelsbankenFondlistaClientTest {
         assertEquals(
             "https://handelsbanken.fondlista.se/shb/sv/history" +
                 "?startdate=2021-07-27+00%3A00%3A00&enddate=2026-07-27+00%3A00%3A00&s=nav",
-            url,
+            url
         )
     }
 
@@ -61,7 +61,7 @@ class HandelsbankenFondlistaClientTest {
     fun `fondsidans url pekar pa fondens egen sida`() {
         assertEquals(
             "https://handelsbanken.fondlista.se/shb/sv/funds/0P0001KRE7?hb=true&sa=2",
-            HandelsbankenFondlistaClient.fundUrl("0P0001KRE7"),
+            HandelsbankenFondlistaClient.fundUrl("0P0001KRE7")
         )
     }
 
@@ -90,8 +90,14 @@ class HandelsbankenFondlistaClientTest {
 
         val body = HandelsbankenFondlistaClient.fetchWithWafToken(
             "u",
-            token = { rejected -> rejections += rejected; "T1" },
-            fetch = { token -> sent += token; ok },
+            token = { rejected ->
+                rejections += rejected
+                "T1"
+            },
+            fetch = { token ->
+                sent += token
+                ok
+            }
         )
 
         assertEquals("<html>katalog</html>", body)
@@ -107,7 +113,10 @@ class HandelsbankenFondlistaClientTest {
         val body = HandelsbankenFondlistaClient.fetchWithWafToken(
             "u",
             token = { rejected -> if (rejected == "T1") "T2" else "T1" },
-            fetch = { token -> sent += token; if (token == "T2") ok else challenge },
+            fetch = { token ->
+                sent += token
+                if (token == "T2") ok else challenge
+            }
         )
 
         assertEquals("<html>katalog</html>", body)
@@ -123,7 +132,10 @@ class HandelsbankenFondlistaClientTest {
                 HandelsbankenFondlistaClient.fetchWithWafToken(
                     "u",
                     token = { null },
-                    fetch = { fetches++; challenge },
+                    fetch = {
+                        fetches++
+                        challenge
+                    }
                 )
             }
         }
@@ -145,7 +157,10 @@ class HandelsbankenFondlistaClientTest {
 
         assertThrows(IOException::class.java) {
             runBlocking {
-                HandelsbankenFondlistaClient.fetchWithWafToken("u", token = { "T1" }, fetch = { fetches++; challenge })
+                HandelsbankenFondlistaClient.fetchWithWafToken("u", token = { "T1" }, fetch = {
+                    fetches++
+                    challenge
+                })
             }
         }
         assertEquals(1, fetches)
@@ -160,7 +175,10 @@ class HandelsbankenFondlistaClientTest {
                 HandelsbankenFondlistaClient.fetchWithWafToken(
                     "u",
                     token = { rejected -> if (rejected == null) "T1" else null },
-                    fetch = { fetches++; challenge },
+                    fetch = {
+                        fetches++
+                        challenge
+                    }
                 )
             }
         }

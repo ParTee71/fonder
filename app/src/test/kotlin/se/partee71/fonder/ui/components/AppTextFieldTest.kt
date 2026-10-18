@@ -52,7 +52,7 @@ class AppTextFieldTest {
                     onValueChange = {},
                     label = "Kurs",
                     supportingText = "Ange ett tal",
-                    isError = true,
+                    isError = true
                 )
             }
         }
@@ -72,7 +72,7 @@ class AppTextFieldTest {
                 label = "Antal andelar",
                 supportingText = "Ange ett tal",
                 isError = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

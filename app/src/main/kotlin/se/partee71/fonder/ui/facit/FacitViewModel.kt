@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -17,7 +18,6 @@ import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import javax.inject.Inject
 
 @Immutable
 data class FacitUiState(
@@ -28,7 +28,7 @@ data class FacitUiState(
      * Bytesplanen skannas just nu ([BackgroundWork.SWITCH_PLAN_SCAN]) — det är den körningen som
      * spelar in nya rader och fyller på utfallens NAV, alltså precis den data kortet redovisar.
      */
-    val switchPlanWorking: Boolean = false,
+    val switchPlanWorking: Boolean = false
 ) {
     val rows: List<FacitRad> get() = facit.rows
     val planAllSummary: SwitchOutcomeCalc.Summary get() = facit.planAllSummary
@@ -55,7 +55,7 @@ data class FacitUiState(
 class FacitViewModel @Inject constructor(
     facitSummary: FacitSummary,
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
     val uiState: StateFlow<FacitUiState> =
@@ -69,7 +69,7 @@ class FacitViewModel @Inject constructor(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = FacitUiState(),
+            initialValue = FacitUiState()
         )
 
     /**

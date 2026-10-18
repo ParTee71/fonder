@@ -20,7 +20,7 @@ enum class PrimaryGoal { BEVARA, BALANSERAD, MAXIMAL_TILLVAXT }
 data class RiskProfileAnswers(
     val horizon: TimeHorizon,
     val reaction: DownturnReaction,
-    val goal: PrimaryGoal,
+    val goal: PrimaryGoal
 )
 
 /**
@@ -47,7 +47,7 @@ data class RiskProfileAnswers(
 data class RiskProfile(
     val targetAllocation: Map<Int, Double> = emptyMap(),
     val answers: RiskProfileAnswers? = null,
-    val targetRiskLevel: Int? = null,
+    val targetRiskLevel: Int? = null
 ) {
     /**
      * [targetAllocation], eller en migrerad `{N: 1.0}` ur [targetRiskLevel] om fördelningen

@@ -13,8 +13,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PdfBoxTextExtractor @Inject constructor() : PdfTextExtractor {
-    override fun extractText(bytes: ByteArray): String =
-        PDDocument.load(ByteArrayInputStream(bytes)).use { document ->
-            PDFTextStripper().getText(document)
-        }
+    override fun extractText(bytes: ByteArray): String = PDDocument.load(ByteArrayInputStream(bytes)).use { document ->
+        PDFTextStripper().getText(document)
+    }
 }

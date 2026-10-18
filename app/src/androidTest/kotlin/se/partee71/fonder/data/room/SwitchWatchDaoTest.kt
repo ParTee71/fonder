@@ -30,7 +30,7 @@ class SwitchWatchDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext<Context>(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         dao = db.switchWatchDao()
     }
@@ -43,7 +43,7 @@ class SwitchWatchDaoTest {
         soldAtEpochDay: Long = 19_900,
         closedAtEpochDay: Long? = null,
         sellTransactionId: Long? = null,
-        targetLevel: Int? = 4,
+        targetLevel: Int? = 4
     ): Long = dao.insertWatch(
         SwitchWatchEntity(
             sellIsin = sellIsin,
@@ -55,8 +55,8 @@ class SwitchWatchDaoTest {
             closedAtEpochDay = closedAtEpochDay,
             boughtIsin = null,
             closeReason = null,
-            sellTransactionId = sellTransactionId,
-        ),
+            sellTransactionId = sellTransactionId
+        )
     )
 
     @Test
@@ -107,8 +107,8 @@ class SwitchWatchDaoTest {
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = 10.0, navAtStartEpochDay = 19_900, position = 0),
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_EGEN", name = "Egen", navAtStart = 20.0, navAtStartEpochDay = 19_900, source = "MANUELL", position = 1),
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_OKAND", name = "Okänd källa", navAtStart = null, navAtStartEpochDay = null, source = "FRAMTIDA", position = 2),
-                SwitchWatchCandidateEntity(watchId = other, isin = "SE_B", name = "B", navAtStart = null, navAtStartEpochDay = null, position = 0),
-            ),
+                SwitchWatchCandidateEntity(watchId = other, isin = "SE_B", name = "B", navAtStart = null, navAtStartEpochDay = null, position = 0)
+            )
         )
 
         dao.deleteAutoCandidates(watchId, manualSource = "MANUELL")
@@ -126,8 +126,8 @@ class SwitchWatchDaoTest {
             listOf(
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_C", name = "C", navAtStart = null, navAtStartEpochDay = null, position = 2),
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = null, navAtStartEpochDay = null, position = 0),
-                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_B", name = "B", navAtStart = null, navAtStartEpochDay = null, position = 1),
-            ),
+                SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_B", name = "B", navAtStart = null, navAtStartEpochDay = null, position = 1)
+            )
         )
 
         val watch = dao.getById(watchId)!!.toDomain()
@@ -180,7 +180,7 @@ class SwitchWatchDaoTest {
     fun setNavAtStart_ankrar_nollpunkten() = runTest {
         val watchId = insertWatch()
         dao.insertCandidates(
-            listOf(SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = null, navAtStartEpochDay = null)),
+            listOf(SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = null, navAtStartEpochDay = null))
         )
         val candidateId = dao.getById(watchId)!!.candidates.single().id
 
@@ -195,7 +195,7 @@ class SwitchWatchDaoTest {
     fun kandidater_kaskadraderas_med_sin_bevakning() = runTest {
         val watchId = insertWatch()
         dao.insertCandidates(
-            listOf(SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = null, navAtStartEpochDay = null)),
+            listOf(SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = null, navAtStartEpochDay = null))
         )
 
         dao.deleteAll()
@@ -291,8 +291,8 @@ class SwitchWatchDaoTest {
             listOf(
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_A", name = "A", navAtStart = 10.0, navAtStartEpochDay = 19_903, position = 0),
                 SwitchWatchCandidateEntity(watchId = watchId, isin = "SE_B", name = "B", navAtStart = 20.0, navAtStartEpochDay = 19_903, source = "MANUELL", position = 1),
-                SwitchWatchCandidateEntity(watchId = other, isin = "SE_C", name = "C", navAtStart = 30.0, navAtStartEpochDay = 19_903, position = 0),
-            ),
+                SwitchWatchCandidateEntity(watchId = other, isin = "SE_C", name = "C", navAtStart = 30.0, navAtStartEpochDay = 19_903, position = 0)
+            )
         )
 
         assertEquals(1, dao.linkSellTransactionOnDay(watchId, transactionId = 42, proceedsKr = 1_475.0, soldAtEpochDay = 19_900))

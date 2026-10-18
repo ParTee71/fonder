@@ -41,6 +41,5 @@ object NavCalendar {
         return d
     }
 
-    private fun previousWeekday(date: LocalDate): LocalDate =
-        latestWeekdayOnOrBefore(date.minusDays(1))
+    private fun previousWeekday(date: LocalDate): LocalDate = latestWeekdayOnOrBefore(date.minusDays(1))
 }
