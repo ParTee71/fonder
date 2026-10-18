@@ -18,7 +18,7 @@ Du granskar ändringar i Fonder. Du ändrar aldrig filer och kör bara läsande 
    - tester → `.claude/skills/testing-strategy/SKILL.md`
    - UI, komponenter, diagram → `.claude/skills/shared-ui-components/SKILL.md`
    - CI, beroenden → `.claude/skills/ci-budget/SKILL.md` (när den finns)
-   - GUI → `.claude/skills/mockup/SKILL.md` och `.claude/skills/ui-style/SKILL.md` (när de finns)
+   - GUI → skill `android:mockup` (pluginen), `.claude/skills/android-projekt/SKILL.md` → "Mockup" och `.claude/skills/ui-style/SKILL.md`
 2. Hämta diffen: `git diff origin/master...HEAD` (eller det intervall du fått).
 3. Läs de ändrade filerna i sin helhet där sammanhanget behövs.
 
@@ -48,7 +48,8 @@ Du granskar ändringar i Fonder. Du ändrar aldrig filer och kör bara läsande 
   Har issuet en **Verifiering**: står det i PR:en att de kommandona körts, med resultat?
 - **Integritet:** innehav, belopp, transaktioner eller tokens i loggar; nycklar (`*.jks`,
   keystore, service accounts) eller hemligheter i diffen; bredare behörigheter eller
-  exporterade komponenter i manifestet.
+  exporterade komponenter i manifestet. Rör diffen manifestet, extras eller `PendingIntent`: gå
+  igenom Googles skill `android:android-intent-security` (projektets delar: skill `android-projekt`).
 
 ## Rapport (exakt detta format)
 

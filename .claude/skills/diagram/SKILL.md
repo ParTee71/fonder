@@ -31,7 +31,7 @@ för kurs och snitt.
 Inbyggt: periodväljaren (`ChartPeriodFilter.Period`, skrollbar `LazyRow`,
 `CHART_PERIOD_ROW_TEST_TAG`, vald period i `rememberSaveable`), `Zoom.Content` + scroll till slutet,
 y-axel padd runt datans min/max (`PriceRangeProvider`, aldrig tvingad nolla), köpmarkörer i koppar, tonad yta under en ensam kurva, periodväljaren som sammanhängande knappgrupp (`ConnectedChoiceButton`),
-seriefärger ur `ChartSeriesColors`, och en talbar `contentDescription` (skill `accessibility-compose`).
+seriefärger ur `ChartSeriesColors`, och en talbar `contentDescription` (skill `android:accessibility-compose` och `android-projekt` → "Tillgänglighet").
 
 Används i dag i `HemScreen` (avkastningskurva mot referens, `PROCENT`), `FondDetaljScreen`
 (kurshistorik och jämförelse) och `SwitchWatchScreen` (säljfond mot bevakade alternativ).

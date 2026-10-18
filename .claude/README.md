@@ -40,7 +40,7 @@ issue utifrån den här tabellen.
 
 ## Skills (`.claude/skills/`)
 
-Generella Android/Kotlin-skills är kopierade från Dagboken. De projektspecifika är
+De generella Android/Kotlin-skillsen kommer från pluginen (se nedan). De projektspecifika är
 **anpassade till Fonder**, inte kopierade rakt av — Dagbokens backup går mot Drive och
 dess migreringstester mot `MigrationTestHelper`, medan Fonders kontrakt är
 `BackupPayload` mot en lokal fil och migreringstesterna bygger det gamla schemat för
@@ -48,25 +48,28 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 
 | Skill | När |
 |---|---|
-| `android-dev` | Baslinje för all Android/Kotlin-utveckling (ladda alltid). |
+| `android-projekt` | Fonders delar av pluginens `android:`-skills (se nedan) – ladda alltid tillsammans med dem; mockupens data, länk och skärmdumpar. |
 | `android-data-layer` | Repository/Room/DAO/offline-först. |
-| `compose-expert` · `kotlin-coroutines` · `kotlin-flows` | Compose-, coroutine- och flow-detaljer. |
-| `android-gradle-logic` | Gradle/version catalogs/build-konfiguration. |
 | `data-safety-backup` | Regel 1 — persisterad data, backup-kontraktet, rundturen. |
 | `testing-strategy` | Regel 2 — nivåer, fakes, och den flakiness som redan bitit. |
 | `requirements-kravlista` | Regel 3 — ID-serier, hur en kravrad skrivs här, historiken. |
 | `shared-ui-components` | Regel 4 — katalogen i `ui/components/` och `ui/diagram/`. |
 | `room-migrations` | Schemaändringar, defaultvärden och migreringstesterna. |
-| `firebase-auth` | Google-inloggning (TP-6) — Credential Manager, `AuthRepository`. |
 | `refine-issue` | Förfina en idé/bugg till ett planerat GitHub-issue (med DoD enligt reglerna). |
 | `implement-issue` | Genomför ett issue/bugg/feature hela vägen till PR enligt reglerna. |
 | `release` | Endast vid uttrycklig release. |
 | `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
-| `mockup` | Ny skärm, komponent eller ändrat utseende: mockup före kod. |
 | `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
-| `accessibility-compose` | TalkBack, belopp och procent som läses begripligt, tryckytor, dynamisk text. |
 | `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
+
+Tio generella skills kommer från pluginen `android@claude-android` och heter `android:<namn>`
+i sessionen: `android-dev` (baslinje, ladda alltid), `compose-expert`, `kotlin-coroutines`,
+`kotlin-flows`, `navigation-3`, `accessibility-compose`, `android-gradle-logic`, `firebase-auth`,
+`mockup` (mockup före ny GUI) samt Googles `android-intent-security` (manifest, `PendingIntent`,
+Intents). Pluginens `firebase-security-rules-auditor` gäller inte – Fonder har ingen Firestore.
+Pluginen är generell; Fonders delar och nuvarande avvikelser står i `android-projekt`, och där
+de krockar gäller projektets regler.
 
 ## Hooks (`.claude/hooks/`) och inställningar (`.claude/settings.json`)
 
@@ -84,3 +87,11 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
   GitHub- och sessionsverktygen utan fråga och hindrar läsverktyget från att öppna
   signeringsnycklar (`*.jks`, `keystore.properties`), service accounts och `.env`.
   `app/google-services.json` och `app/debug.keystore` är incheckade och ingen hemlighet.
+
+## Gemensam plugin
+
+`.claude/settings.json` slår på pluginen `android@claude-android` från det privata repot
+[ParTee71/claude-android](https://github.com/ParTee71/claude-android) (`extraKnownMarketplaces`
++ `enabledPlugins`), som bär de generella Android-skillsen ovan. Lokalt (Android Studio, CLI)
+installeras den därifrån. Molnsessioner får den via miljöns setup-skript, som klonar repot till
+`/home/user/claude-android`. Repospecifikt hör aldrig hemma i pluginen – det står i `android-projekt`.

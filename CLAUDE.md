@@ -82,7 +82,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - Tumregel: syns förändringen i en tumnagel → mockup först. Padding, ordval eller
   ikonbyte → beskrivningen i PR:en räcker.
 
-→ Skill: **mockup**.
+→ Skills: **android:mockup** (pluginen) och **android-projekt** → "Mockup".
 
 ---
 
@@ -90,7 +90,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 
 1. **Sök efter befintligt mönster.** Det finns nästan alltid en sibling-ViewModel,
    en delad komponent eller en repository-metod som visar hur projektet gör.
-   `Grep`/läs grannfiler först (se skill `android-dev`).
+   `Grep`/läs grannfiler först (se skill `android:android-dev` och `android-projekt`).
 2. **Följ arkitekturen** även om en genväg vore enklare: MVVM, `StateFlow<UiState>`,
    Repository som single source of truth, Hilt-DI, fel mappas i repository-lagret.
 3. **Svenska** i allt användarvänt: UI-strängar (i `strings.xml`), commit-meddelanden
@@ -103,7 +103,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - [ ] **Krav:** KRAVLISTA.md (och ev. README/version) speglar ändringen. (regel 3)
 - [ ] **Återbruk:** ingen ny komponent som dubblerar en befintlig delad. (regel 4)
 - [ ] **CI-budget:** inga nya dyra steg i PR-flödet; byggtidseffekt angiven vid nya beroenden. (regel 5)
-- [ ] **Arkitektur:** följer projektets etablerade mönster (skill `android-dev`).
+- [ ] **Arkitektur:** följer projektets etablerade mönster (skill `android:android-dev` och `android-projekt`).
 - [ ] **GUI:** mockup godkänd; skärmdumpar (ljust + mörkt) i PR:en när Roborazzi finns.
 - [ ] **Granskning:** agenten `granskare` och `/code-review` har körts på diffen – och igen på rättningarna efter dem.
 

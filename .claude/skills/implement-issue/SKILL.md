@@ -43,7 +43,7 @@ Skälet är konkret: parallella PR:ar mot samma bas krockar nästan alltid på
 
 ## Steg 2 – Mockup (ny GUI)
 
-Kräver issuet ny eller tydligt ändrad GUI (tumregel i CLAUDE.md, skill `mockup`) och det
+Kräver issuet ny eller tydligt ändrad GUI (tumregel i CLAUDE.md, skill `android:mockup`; mallen och datan i `android-projekt` → "Mockup") och det
 finns ingen godkänd mockup under **Design** → gör mockupen, visa den och **vänta på ok**
 innan kod.
 
@@ -56,7 +56,7 @@ innan kod.
 ## Steg 4 – Hitta befintliga mönster och delade delar
 
 - Öppna en syskon-ViewModel/skärm/repository och följ dess form (`PortfoljViewModel`,
-  `TransaktionerViewModel`, `FundSearchViewModel`) – skill `android-dev`.
+  `TransaktionerViewModel`, `FundSearchViewModel`) – skill `android:android-dev` och `android-projekt`.
 - Slå upp komponenter, kända dubbletter och byggstenar i skill `shared-ui-components`. Rör du
   en känd dubblett (`TotalCard`, `ComparisonChart`, importens laddningsdialoger) – slå ihop den
   först. Saknas något delat → planera det som **egen commit före** featuren.

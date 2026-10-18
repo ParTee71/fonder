@@ -7,7 +7,7 @@ description: Use when implementing the data layer in Android — Repository patt
 
 The data layer coordinates data from multiple sources. Its public API to the rest of the app is repository interfaces; its internal implementation details (DAOs, API services, DTOs) never leak upward.
 
-**Related skills:** See `android-dev` for how the data layer fits into the overall architecture and error propagation model.
+**Related skills:** See `android:android-dev` (plugin) and `android-projekt` for how the data layer fits into the overall architecture and error propagation model.
 
 ## Repository Pattern
 

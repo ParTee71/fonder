@@ -68,7 +68,7 @@ Anteckna konkreta filsökvägar.
 ## Steg 4 – Mockup (endast ny GUI)
 
 Syns förändringen i en tumnagel (ny skärm, ny delad komponent, tydligt ändrat
-utseende/beteende): bygg mockupen nu (skill `mockup`) av befintliga komponenter, i Fonders
+utseende/beteende): bygg mockupen nu (skill `android:mockup`; mallen och datan i `android-projekt` → "Mockup") av befintliga komponenter, i Fonders
 designspråk, med svenska texter och påhittad data – aldrig användarens riktiga innehav. Visa
 länken och vänta på ok innan issuet skapas. Länken går in under **Design**. Padding, ordval
 eller ikonbyte → ingen mockup.
