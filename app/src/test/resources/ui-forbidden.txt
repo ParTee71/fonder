@@ -6,6 +6,7 @@
 # [component-only] = all Kotlin under app/src/main utom ui/components/ (Material3-delar som bara den
 #                    delade komponenten får linda in)
 # [vico]           = all Kotlin under app/src/main utom ui/diagram/ (diagrambiblioteket bara i FundLineChart, TP-12)
+# [dispatchers]    = all Kotlin under app/src/main utom di/ (skill android:kotlin-coroutines)
 # Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
 # padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
 # kontrolleras därför inte (skill shared-ui-components → Förbjudet).
@@ -52,3 +53,6 @@
 \b[A-Za-z]*Cartesian[A-Za-z]*\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
 \b(VerticalAxis|HorizontalAxis)\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
 \brememberVico[A-Za-z]*\b	FundLineChart i ui/diagram – Vico bara där (TP-12)
+
+[dispatchers]
+\bDispatchers\.(IO|Default|Main|Unconfined)\b	injicerad CoroutineDispatcher (@IoDispatcher/@DefaultDispatcher/@MainDispatcher från di/DispatchersModule)

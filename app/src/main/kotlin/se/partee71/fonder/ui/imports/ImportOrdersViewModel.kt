@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.imports
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.imports.AvrakningsnotaPdfParser
+import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -122,6 +124,7 @@ class ImportOrdersViewModel @Inject constructor(
     private val pdfTextExtractor: PdfTextExtractor,
     private val recordTransaction: RecordTransaction,
     switchChoicesSource: SwitchChoicesSource,
+    private val fileReader: ImportFileReader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportOrdersUiState())
@@ -139,8 +142,16 @@ class ImportOrdersViewModel @Inject constructor(
     /** Pågående import — se [import]. */
     private var importJob: Job? = null
 
-    /** [files] är (filnamn, filinnehåll) för varje vald PDF — flera filer väljs samtidigt via SAF. */
-    fun onFilesSelected(files: List<Pair<String, ByteArray>>) {
+    /** PDF-filerna användaren valt i filväljaren (SAF). Filer som inte går att öppna hoppas över; går ingen att öppna händer inget. */
+    fun onFilesSelected(uris: List<Uri>) {
+        viewModelScope.launch {
+            val files = uris.mapNotNull { uri -> fileReader.readNamed(uri) }
+            if (files.isNotEmpty()) onFilesRead(files)
+        }
+    }
+
+    /** [files] är (filnamn, filinnehåll) för varje vald PDF, lästa av [onFilesSelected]. */
+    internal fun onFilesRead(files: List<Pair<String, ByteArray>>) {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(loading = true, filesSelected = true, rows = emptyList(), unparsedFileNames = emptyList())

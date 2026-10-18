@@ -143,6 +143,15 @@ test('PullToRefreshBox stoppas utanför ui/components – även i data- och di-k
   assert.equal(runHook(dir, writeKt(dir, `${pkg}/ui/components/PullToRefreshContainer.kt`, src), { tool: 'Edit' }).status, 0);
 });
 
+test('Dispatchers stoppas av hooken utanför di/ men släpps i di/', () => {
+  const { dir } = makeProject();
+  const src = 'package x\n\nsuspend fun x() = withContext(Dispatchers.IO) { }\n';
+  const r = runHook(dir, writeKt(dir, `${pkg}/data/network/AvanzaClient.kt`, src));
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /kod utanför di\//);
+  assert.equal(runHook(dir, writeKt(dir, `${pkg}/di/DispatchersModule.kt`, src)).status, 0);
+});
+
 test('delade exempel: ett undantag gäller bara sin fil och sin symbol', () => {
   const scopes = parsePatterns(readPatterns());
   for (const example of readExamples().allowlist) {
@@ -194,10 +203,11 @@ test('tom eller trasig indata ger exit 0', () => {
 
 test('mönsterfilen har alla scope, giltiga regexar och en ersättning per rad', () => {
   const scopes = parsePatterns(readPatterns());
-  assert.deepEqual(Object.keys(scopes).sort(), ['component-only', 'feature', 'vico']);
+  assert.deepEqual(Object.keys(scopes).sort(), ['component-only', 'dispatchers', 'feature', 'vico']);
   assert.ok(scopes.feature.length >= 15);
   assert.ok(scopes['component-only'].length >= 2);
   assert.ok(scopes.vico.length >= 3);
+  assert.ok(scopes.dispatchers.length >= 1);
   for (const rule of Object.values(scopes).flat()) assert.ok(rule.replacement, rule.source);
 });
 

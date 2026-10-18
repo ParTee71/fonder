@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.imports
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.imports.HoldingsImportParser
+import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
@@ -105,6 +107,7 @@ class ImportHoldingsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val recordTransaction: RecordTransaction,
+    private val fileReader: ImportFileReader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportHoldingsUiState())
@@ -113,8 +116,16 @@ class ImportHoldingsViewModel @Inject constructor(
     /** Pågående import — se [import]. */
     private var importJob: Job? = null
 
-    /** [bytes] är hela filens innehåll — läst av anropande skärm (Storage Access Framework). */
-    fun onFileSelected(bytes: ByteArray) {
+    /** Filen användaren valt i filväljaren (Storage Access Framework). Går den inte att öppna händer inget. */
+    fun onFileSelected(uri: Uri) {
+        viewModelScope.launch {
+            val bytes = fileReader.readBytes(uri) ?: return@launch
+            onFileSelected(bytes)
+        }
+    }
+
+    /** [bytes] är hela filens innehåll, läst av [onFileSelected] med en [Uri]. */
+    internal fun onFileSelected(bytes: ByteArray) {
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, fileSelected = true, error = null, rows = emptyList()) }
 

@@ -1,7 +1,5 @@
 package se.partee71.fonder.ui.imports
 
-import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -16,18 +14,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
@@ -53,15 +47,10 @@ fun ImportOrdersScreen(
     viewModel: ImportOrdersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        scope.launch(Dispatchers.IO) {
-            val files = uris.mapNotNull { uri -> readFile(context, uri) }
-            if (files.isNotEmpty()) viewModel.onFilesSelected(files)
-        }
+        viewModel.onFilesSelected(uris)
     }
 
     if (state.imported) {
@@ -179,15 +168,6 @@ fun ImportOrdersReview(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
     }
-}
-
-private fun readFile(context: android.content.Context, uri: Uri): Pair<String, ByteArray>? {
-    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
-    val name = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
-    } ?: uri.lastPathSegment.orEmpty()
-    return name to bytes
 }
 
 @Composable

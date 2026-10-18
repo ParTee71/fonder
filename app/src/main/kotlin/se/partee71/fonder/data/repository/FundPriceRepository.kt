@@ -1,7 +1,7 @@
 package se.partee71.fonder.data.repository
 
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -16,6 +16,7 @@ import se.partee71.fonder.data.room.daos.FundPriceDao
 import se.partee71.fonder.data.room.daos.FxRateDao
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
+import se.partee71.fonder.di.DefaultDispatcher
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
@@ -167,6 +168,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     private val fxRateDao: FxRateDao,
     private val fxRateSource: FxRateSource,
     private val isinSources: List<@JvmSuppressWildcards IsinPriceHistorySource>,
+    @param:DefaultDispatcher private val computation: CoroutineDispatcher,
 ) : FundPriceRepository {
 
     /** Katalogen memoiserad en kort stund — se [catalogFunds]. */
@@ -232,7 +234,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
             // Parsningen (inte bara HTTP-anropet) måste av anroparens tråd: en backfill kan vara
             // flera MB HTML, och FondDetalj/Portfölj anropar det här från viewModelScope
             // (Main.immediate) — DOM-bygget och radselektionen frös då UI:t i sekunder.
-            val prices = withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
+            val prices = withContext(computation) { HandelsbankenHtmlParser.parseHistory(html, cacheFundId) }
             toValueCurrency(prices)
         }.onSuccess { prices ->
             if (prices.isNotEmpty()) {
@@ -464,7 +466,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override suspend fun lookupIsin(fundId: String): String? =
         runCatching {
             val html = fundPageClient.fetchFundPage(fundId)
-            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseIsin(html) }
+            withContext(computation) { HandelsbankenHtmlParser.parseIsin(html) }
         }
             .onFailure { e -> Log.w(TAG, "Kunde inte slå upp ISIN för fund $fundId", e) }
             .getOrNull()
@@ -475,7 +477,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     // drygt hundra kilobyte HTML och hämtas från Fondsöks viewModelScope.
     override suspend fun fetchFundCatalog(): FundCatalog? =
         fetchCatalogPage(company = null)?.let { html ->
-            withContext(Dispatchers.Default) {
+            withContext(computation) {
                 FundCatalog(
                     companies = HandelsbankenHtmlParser.parseFundCompanies(html),
                     funds = HandelsbankenHtmlParser.parseFundCatalog(html),
@@ -485,7 +487,7 @@ class HandelsbankenFundPriceRepository @Inject constructor(
 
     override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
         fetchCatalogPage(company = companyId)?.let { html ->
-            withContext(Dispatchers.Default) { HandelsbankenHtmlParser.parseFundCatalog(html) }
+            withContext(computation) { HandelsbankenHtmlParser.parseFundCatalog(html) }
         }
 
     /** Katalogsidan för ett (eller inget) fondbolag. Null vid fel — anroparen behåller då sin nuvarande lista. */

@@ -119,7 +119,7 @@ Beräkningar ligger i `domain/usecase/`, aldrig i en ViewModel eller composable.
 ## Förbjudet
 
 Mönstren står i **en** fil, `app/src/test/resources/ui-forbidden.txt` (regex + vad som ska
-användas i stället, per scope `feature`, `component-only` och `vico`); den här listan
+användas i stället, per scope `feature`, `component-only`, `vico` och `dispatchers`); den här listan
 sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 (`fil:symbol – motivering`, användarens ok i PR:en).
 
@@ -132,6 +132,9 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
   `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.
 - **All kod utom `ui/diagram/`:** Vico.
 - **All kod utom `ui/components/`:** Material3:s `PullToRefreshBox`, `ExposedDropdownMenuBox`.
+- **All kod utom `di/`:** `Dispatchers.IO`/`Default`/`Main`/`Unconfined`. Klassen tar en
+  `CoroutineDispatcher` med `@IoDispatcher`, `@DefaultDispatcher` eller `@MainDispatcher` från
+  `di/DispatchersModule` (skill `android:kotlin-coroutines`).
 - **En kontroll utan något att skriva mot** – visa den inte alls (ANA-4-principen).
 
 ## Kontroller
