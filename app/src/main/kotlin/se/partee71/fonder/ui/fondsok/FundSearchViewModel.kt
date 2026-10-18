@@ -1,8 +1,18 @@
 package se.partee71.fonder.ui.fondsok
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,18 +31,19 @@ import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.usecase.FundNameKey
 import javax.inject.Inject
 
+@Immutable
 data class FundSearchUiState(
     val loading: Boolean = true,
     val query: String = "",
-    val companies: List<FundCompany> = emptyList(),
+    val companies: ImmutableList<FundCompany> = persistentListOf(),
     val selectedCompany: FundCompany? = null,
-    val results: List<Fund> = emptyList(),
+    val results: ImmutableList<Fund> = persistentListOf(),
     /**
      * Fonder som redan bevakas — både de som lagts till i den här sessionen och de som redan
      * fanns i portföljen. Tidigare bara det förstnämnda, så en fond man redan ägde visades utan
      * bock och med "Lägg till" kvar (issue #78).
      */
-    val addedFundIds: Set<String> = emptySet(),
+    val addedFundIds: ImmutableSet<String> = persistentSetOf(),
     /**
      * Sant om fondkatalogen inte gick att hämta. Skilt från "sökningen gav inga träffar" —
      * annars ser ett nätverksfel ut som ett tomt sökresultat (issue #78).
@@ -51,7 +62,7 @@ data class FundSearchUiState(
      * ([FundMetadataRepository.cachedRiskByFundName]) — en fond som inte hunnit hamna i cachen
      * saknas i kartan och visas som okänd risk, aldrig gissad.
      */
-    val riskLevels: Map<String, Int> = emptyMap(),
+    val riskLevels: ImmutableMap<String, Int> = persistentMapOf(),
 )
 
 /**
@@ -125,19 +136,19 @@ class FundSearchViewModel @Inject constructor(
                 loadFailed = catalog.loadFailed,
                 refreshing = catalog.refreshing,
                 query = query,
-                companies = companies,
+                companies = companies.toImmutableList(),
                 selectedCompany = selected,
-                results = filtered,
+                results = filtered.toImmutableList(),
             )
         }.combine(riskByNameKey) { state, riskByName ->
             state.copy(
                 riskLevels = state.results.mapNotNull { fund ->
                     val risk = riskByName[FundNameKey.of(fund.name)] ?: return@mapNotNull null
                     fund.fundId to risk
-                }.toMap(),
+                }.toMap().toImmutableMap(),
             )
         }.combine(combine(addedThisSession, trackedFundIds) { added, tracked -> added + tracked }) { state, added ->
-            state.copy(addedFundIds = added)
+            state.copy(addedFundIds = added.toImmutableSet())
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

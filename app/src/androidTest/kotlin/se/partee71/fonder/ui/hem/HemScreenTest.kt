@@ -12,6 +12,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -243,7 +245,7 @@ class HemScreenTest {
                     state = HemUiState(
                         loading = false,
                         hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = listOf(FlaggedHolding(fund, analysis))),
+                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = persistentListOf(FlaggedHolding(fund, analysis))),
                     ),
                     onFundClick = { clickedFundId = it },
                 )
@@ -472,7 +474,7 @@ class HemScreenTest {
                     state = HemUiState(
                         loading = false,
                         hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged),
+                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged.toImmutableList()),
                     ),
                 )
             }
@@ -543,7 +545,7 @@ class HemScreenTest {
             hasHoldings = true,
             riskProfile = RiskProfile(targetAllocation = target),
             portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
-            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual),
+            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList(),
         )
 
         composeRule.setContent {
@@ -621,7 +623,7 @@ class HemScreenTest {
         totalGainLossFraction = 0.2,
         returnSeries = PortfolioReturnSeriesCalc.Result(points = points, partial = partial),
         benchmarkSeries = benchmark,
-        purchaseEpochDays = listOf(20_000L),
+        purchaseEpochDays = persistentListOf(20_000L),
     )
 
     @Test
@@ -698,7 +700,7 @@ class HemScreenTest {
         // i teckenförklaringen och i texten under diagrammet.
         val benchmark = BenchmarkSeries(
             fundName = "Länsförsäkringar Global Index",
-            points = listOf(20_000L to 0.0, 20_030L to 0.10),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.10),
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -715,7 +717,7 @@ class HemScreenTest {
         // vad man jämförs med och i vilka proportioner (UI-3).
         val benchmark = BenchmarkSeries(
             fundName = "70,0 % Global Index / 30,0 % Räntefond X",
-            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
         )
 
         composeRule.setContent { FonderTheme { HemContent(state = returnState(benchmark = benchmark)) } }
@@ -732,7 +734,7 @@ class HemScreenTest {
         // approximation, och det ska synas i stället för att gömmas bakom en exakt procentsats.
         val benchmark = BenchmarkSeries(
             fundName = "Global Index",
-            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
             unclassifiedFraction = 0.30,
         )
 
@@ -745,7 +747,7 @@ class HemScreenTest {
     fun liten_oklassificerad_andel_ger_ingen_notis() {
         val benchmark = BenchmarkSeries(
             fundName = "Global Index",
-            points = listOf(20_000L to 0.0, 20_030L to 0.07),
+            points = persistentListOf(20_000L to 0.0, 20_030L to 0.07),
             unclassifiedFraction = 0.02,
         )
 

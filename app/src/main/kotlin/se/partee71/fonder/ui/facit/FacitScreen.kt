@@ -93,11 +93,11 @@ fun FacitContent(
             modifier = modifier,
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(FACIT_LIST_TEST_TAG)) {
-                item { SummaryCard(state = state) }
-                items(state.rows, key = { it.recordId }) { row ->
+                item(contentType = "summary") { SummaryCard(state = state) }
+                items(state.rows, key = { it.recordId }, contentType = { "facit-row" }) { row ->
                     FacitRadCard(row = row, onFollowedChange = onFollowedChange)
                 }
-                item {
+                item(contentType = "disclaimer") {
                     Text(
                         stringResource(R.string.facit_disclaimer),
                         style = MaterialTheme.typography.bodySmall,

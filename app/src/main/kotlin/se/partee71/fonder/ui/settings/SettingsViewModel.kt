@@ -2,6 +2,7 @@ package se.partee71.fonder.ui.settings
 
 import android.app.PendingIntent
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,6 +67,7 @@ private data class AccountState(
     val signInError: SignInException.Reason? = null,
 )
 
+@Immutable
 data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val databaseCleared: Boolean = false,

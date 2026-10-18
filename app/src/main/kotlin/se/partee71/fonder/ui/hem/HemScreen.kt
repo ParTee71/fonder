@@ -112,23 +112,23 @@ fun HemContent(
             // Ordningen enligt Översiktens mockup: värdet, det som väntar på beslut, jämförelsen
             // mot index och påminnelsen om säkerhetskopia; resten av Hems kort under dem.
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
-                item { TotalCard(state = state) }
+                item(contentType = "total") { TotalCard(state = state) }
                 if (state.decisions.count > 0) {
-                    item { DecisionsRow(decisions = state.decisions, onOpen = onOpenBeslut) }
+                    item(contentType = "decisions") { DecisionsRow(decisions = state.decisions, onOpen = onOpenBeslut) }
                 }
-                item { ReturnChartCard(state = state) }
+                item(contentType = "return-chart") { ReturnChartCard(state = state) }
                 state.backupReminder?.let { reminder ->
-                    item { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) }
+                    item(contentType = "backup-reminder") { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) }
                 }
-                item { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
-                item {
+                item(contentType = "performance") { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
+                item(contentType = "analysis") {
                     AnalysisSummaryCard(
                         summary = state.analysisSummary,
                         working = state.analysisWorking,
                         onFundClick = onFundClick,
                     )
                 }
-                item {
+                item(contentType = "fee") {
                     FeeCard(
                         summary = state.feeSummary,
                         working = state.feeWorking,
@@ -136,7 +136,7 @@ fun HemContent(
                     )
                 }
                 state.riskProfile?.let { riskProfile ->
-                    item {
+                    item(contentType = "risk") {
                         RiskCard(
                             riskProfile = riskProfile,
                             portfolioRisk = state.portfolioRisk,

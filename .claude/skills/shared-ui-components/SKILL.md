@@ -135,6 +135,9 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 - **All kod utom `di/`:** `Dispatchers.IO`/`Default`/`Main`/`Unconfined`. Klassen tar en
   `CoroutineDispatcher` med `@IoDispatcher`, `@DefaultDispatcher` eller `@MainDispatcher` från
   `di/DispatchersModule` (skill `android:kotlin-coroutines`).
+- **UiState-typer** (icke-privata data classes som heter `*State` och sealed interfaces `*UiState` i `ui/`)
+  utan `@Immutable` eller `@Stable`. Listor, kartor och mängder i dem är `ImmutableList`/`ImmutableMap`/`ImmutableSet`;
+  domänmodellerna, de beräkningsresultat som ligger i tillstånden och datum-/tidstyperna räknas som stabila via `app/compose-stability.conf` (skill `android:compose-expert`).
 - **En kontroll utan något att skriva mot** – visa den inte alls (ANA-4-principen).
 
 ## Kontroller
@@ -142,7 +145,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 | Kontroll | När | Vad |
 |---|---|---|
 | Hooken `regel4-check` (`.claude/hooks/regel4-check.mjs`) | direkt efter varje `Edit`/`Write` av en `.kt`-fil i `app/src/main` | samma mönster och undantag som testet; exit 2 med rad, träff och ersättning. Kontrollerar bara Fonder (ett grannrepo i samma session har sin egen hook) |
-| `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hooktestet, så att hook och bygge tolkar lika |
+| `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hooktestet, så att hook och bygge tolkar lika; dessutom (bara här) att UiState-typerna är `@Immutable`/`@Stable` |
 | `./gradlew cpdCheck` (PMD CPD, 80 tokens) | `build-and-test` | kopierad Kotlin i `app/src/{main,test,androidTest}`; fäller en kopia vars filuppsättning inte står i `config/cpd-baseline.txt` |
 
 **Baslinjerna** (skuld från före kontrollerna, får bara krympa):

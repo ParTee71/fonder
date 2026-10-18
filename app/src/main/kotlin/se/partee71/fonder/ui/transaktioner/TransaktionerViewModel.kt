@@ -1,8 +1,12 @@
 package se.partee71.fonder.ui.transaktioner
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,10 +49,11 @@ data class TransaktionRad(
     val canStartSwitchWatch: Boolean = false,
 )
 
+@Immutable
 data class TransaktionerUiState(
     val loading: Boolean = true,
     /** Alla transaktioner, senaste först (DAO:ns ordning). */
-    val allRows: List<TransaktionRad> = emptyList(),
+    val allRows: ImmutableList<TransaktionRad> = persistentListOf(),
     val filter: HandelseFilter = HandelseFilter.ALLA,
     /** Realiserat resultat för sälj gjorda i år (TRX-4). */
     val yearRealized: RealizedTotal = EMPTY_TOTAL,
@@ -126,7 +131,7 @@ class TransaktionerViewModel internal constructor(
             }
             TransaktionerUiState(
                 loading = false,
-                allRows = rows,
+                allRows = rows.toImmutableList(),
                 filter = selectedFilter,
                 yearRealized = RealizedGainCalculator.totalForYear(sales, today().year),
                 totalRealized = RealizedGainCalculator.total(sales),

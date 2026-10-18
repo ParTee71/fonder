@@ -1,9 +1,13 @@
 package se.partee71.fonder.ui.imports
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +43,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 /** En parsad transaktion + användarens (eventuellt korrigerade) matchning/fält. */
+@Immutable
 data class ImportOrderRowUiState(
     val transaction: ImportedOrderTransaction,
     val matchedFund: Fund?,
@@ -69,12 +74,13 @@ data class ImportOrderRowUiState(
 
 enum class ImportOrdersError { NONE_PARSED }
 
+@Immutable
 data class ImportOrdersUiState(
     val loading: Boolean = false,
     val filesSelected: Boolean = false,
-    val rows: List<ImportOrderRowUiState> = emptyList(),
-    val catalogFunds: List<Fund> = emptyList(),
-    val unparsedFileNames: List<String> = emptyList(),
+    val rows: ImmutableList<ImportOrderRowUiState> = persistentListOf(),
+    val catalogFunds: ImmutableList<Fund> = persistentListOf(),
+    val unparsedFileNames: ImmutableList<String> = persistentListOf(),
     val error: ImportOrdersError? = null,
     val imported: Boolean = false,
     /**
@@ -154,7 +160,7 @@ class ImportOrdersViewModel @Inject constructor(
     internal fun onFilesRead(files: List<Pair<String, ByteArray>>) {
         viewModelScope.launch {
             _uiState.update {
-                it.copy(loading = true, filesSelected = true, rows = emptyList(), unparsedFileNames = emptyList())
+                it.copy(loading = true, filesSelected = true, rows = persistentListOf(), unparsedFileNames = persistentListOf())
             }
 
             val parsedByFile = files.associate { (name, bytes) ->
@@ -166,7 +172,7 @@ class ImportOrdersViewModel @Inject constructor(
             val transactions = parsedByFile.values.flatten()
 
             if (transactions.isEmpty()) {
-                _uiState.update { it.copy(loading = false, unparsedFileNames = unparsedFileNames, error = ImportOrdersError.NONE_PARSED) }
+                _uiState.update { it.copy(loading = false, unparsedFileNames = unparsedFileNames.toImmutableList(), error = ImportOrdersError.NONE_PARSED) }
                 return@launch
             }
 
@@ -179,7 +185,7 @@ class ImportOrdersViewModel @Inject constructor(
                 .map { tx -> buildRowState(tx, catalog, trackedFunds) }
 
             _uiState.update {
-                it.copy(loading = false, rows = rows, catalogFunds = catalog.funds, unparsedFileNames = unparsedFileNames).withSwitchFields()
+                it.copy(loading = false, rows = rows.toImmutableList(), catalogFunds = catalog.funds.toImmutableList(), unparsedFileNames = unparsedFileNames.toImmutableList()).withSwitchFields()
             }
         }
     }
@@ -259,7 +265,7 @@ class ImportOrdersViewModel @Inject constructor(
         transform: (ImportOrderRowUiState) -> ImportOrderRowUiState,
     ) {
         _uiState.update { state ->
-            val updated = state.copy(rows = state.rows.map { if (it.transaction == transaction) transform(it) else it })
+            val updated = state.copy(rows = state.rows.map { if (it.transaction == transaction) transform(it) else it }.toImmutableList())
             if (recomputeSwitch) updated.withSwitchFields() else updated
         }
     }
@@ -300,7 +306,7 @@ class ImportOrdersViewModel @Inject constructor(
                 candidates.getOrNull(saleIndex)?.transaction?.fundName
             }
         }.toMap()
-        return copy(switchReady = true, rows = rows.map { it.copy(switchField = fields[it.transaction]) })
+        return copy(switchReady = true, rows = rows.map { it.copy(switchField = fields[it.transaction]) }.toImmutableList())
     }
 
     /**

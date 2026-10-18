@@ -88,9 +88,9 @@ fun PortfoljContent(
             modifier = modifier,
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
-                item { TotalCard(state = state) }
-                item { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
-                items(state.holdings, key = { it.fund.fundId }) { holding ->
+                item(contentType = "total") { TotalCard(state = state) }
+                item(contentType = "exposure") { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
+                items(state.holdings, key = { it.fund.fundId }, contentType = { "holding" }) { holding ->
                     HoldingRow(
                         holding = holding,
                         performance = state.performance[holding.fund.fundId],

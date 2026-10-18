@@ -1,8 +1,11 @@
 package se.partee71.fonder.ui.transaktioner
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -36,9 +39,10 @@ data class SwitchOptionUi(val option: SwitchOption, val label: SwitchOptionLabel
  * (IMP-6) visar samma fält med samma texter. [selected] null = frågan är obesvarad, och då är
  * Spara släckt.
  */
+@Immutable
 data class SwitchFieldUi(
     val type: TransactionType,
-    val options: List<SwitchOptionUi>,
+    val options: ImmutableList<SwitchOptionUi>,
     val selected: SwitchOptionUi?,
 ) {
     val unanswered: Boolean get() = selected == null
@@ -64,7 +68,7 @@ data class SwitchFieldUi(
         ): SwitchFieldUi {
             val options = question.options.map { SwitchOptionUi(it, labelFor(it, inputs, followed, saleRowFundName)) }
             val selected = question.resolve(chosen)
-            return SwitchFieldUi(type, options, options.firstOrNull { it.option == selected })
+            return SwitchFieldUi(type, options.toImmutableList(), options.firstOrNull { it.option == selected })
         }
 
         private fun labelFor(

@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -79,9 +80,9 @@ class SwitchWatchScreenTest {
         expired = expired,
         closed = closed,
         boughtFundName = boughtFundName,
-        rows = rows,
-        sellSeries = sellSeries,
-        candidateSeries = candidateSeries,
+        rows = rows.toImmutableList(),
+        sellSeries = sellSeries.toImmutableList(),
+        candidateSeries = candidateSeries.map { (name, points) -> name to points.toImmutableList() }.toImmutableList(),
     )
 
     @Test

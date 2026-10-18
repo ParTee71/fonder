@@ -1,8 +1,14 @@
 package se.partee71.fonder.ui.riskprofil
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,15 +32,16 @@ import kotlin.math.roundToInt
 /** Andelen (0.0..1.0) uttryckt som ett rundat heltalsprocent för visning/redigering i inmatningsfälten. */
 private fun percentTextOf(fraction: Double): String = (fraction * 100).roundToInt().toString()
 
+@Immutable
 data class RiskProfilUiState(
-    val availableLevels: List<Int> = emptyList(),
+    val availableLevels: ImmutableList<Int> = persistentListOf(),
     val horizon: TimeHorizon? = null,
     val reaction: DownturnReaction? = null,
     val goal: PrimaryGoal? = null,
     /** Enkätens förslag ur [RiskProfileCalc.suggest] — null om inte alla tre frågor är besvarade eller skalan är tom. */
-    val suggestedAllocation: Map<Int, Double>? = null,
+    val suggestedAllocation: ImmutableMap<Int, Double>? = null,
     /** Icke-null så fort användaren rör en enskild andel — vinner då alltid över [suggestedAllocation] i sin helhet. */
-    val manualAllocationText: Map<Int, String>? = null,
+    val manualAllocationText: ImmutableMap<Int, String>? = null,
     val saved: Boolean = false,
 ) {
     /** Text att visa per tillgänglig nivås inmatningsfält — förslaget (rundat till heltalsprocent) tills ett eget värde skrivits in, annars de egna värdena (saknad nivå defaultar till "0"). */
@@ -111,12 +118,12 @@ class RiskProfilViewModel @Inject constructor(
     val uiState: StateFlow<RiskProfilUiState> =
         combine(form, availableLevels) { f, levels ->
             RiskProfilUiState(
-                availableLevels = levels,
+                availableLevels = levels.toImmutableList(),
                 horizon = f.horizon,
                 reaction = f.reaction,
                 goal = f.goal,
-                suggestedAllocation = suggestionOrNull(f, levels),
-                manualAllocationText = f.manualAllocationText,
+                suggestedAllocation = suggestionOrNull(f, levels)?.toImmutableMap(),
+                manualAllocationText = f.manualAllocationText?.toImmutableMap(),
                 saved = f.saved,
             )
         }.stateIn(

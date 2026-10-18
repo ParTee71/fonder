@@ -1,11 +1,15 @@
 package se.partee71.fonder.ui.bytesfonster
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
@@ -96,6 +100,7 @@ enum class SwitchWatchEmptyReason {
     LOOKUP_FAILED,
 }
 
+@Immutable
 data class SwitchWatchUiState(
     val loading: Boolean = true,
     /** Bevakningen finns inte (raderad, eller en gammal länk) — skärmen säger det i stället för att visa tomt. */
@@ -109,11 +114,11 @@ data class SwitchWatchUiState(
     val expired: Boolean = false,
     val closed: Boolean = false,
     val boughtFundName: String? = null,
-    val rows: List<CandidateRow> = emptyList(),
+    val rows: ImmutableList<CandidateRow> = persistentListOf(),
     /** Säljfondens egen kurva — diagrammets primärserie, det man bytte *från*. Tom om historiken saknas. */
-    val sellSeries: List<Pair<Long, Double>> = emptyList(),
+    val sellSeries: ImmutableList<Pair<Long, Double>> = persistentListOf(),
     /** Kandidatkurvor i samma ordning som [rows], bara de som gick att hämta. */
-    val candidateSeries: List<Pair<String, List<Pair<Long, Double>>>> = emptyList(),
+    val candidateSeries: ImmutableList<Pair<String, ImmutableList<Pair<Long, Double>>>> = persistentListOf(),
     /** Sant medan appens egna kandidatförslag hämtas (ANA-13) — en källfråga mot nivån. */
     val fillingCandidates: Boolean = false,
     /**
@@ -280,14 +285,14 @@ class SwitchWatchViewModel @AssistedInject constructor(
             boughtFundName = watch.boughtIsin?.let { isin ->
                 watch.candidates.firstOrNull { it.isin == isin }?.name ?: metadataByIsin[isin]?.name ?: isin
             },
-            rows = rows,
-            sellSeries = sellPoints,
+            rows = rows.toImmutableList(),
+            sellSeries = sellPoints.toImmutableList(),
             // Kurvorna följer radordningen, så teckenförklaringen läser i samma ordning som
             // listan under den — en kurva vars rad ligger femma i listan men tvåa i förklaringen
             // hade varit två svar på samma fråga.
             candidateSeries = rows.mapNotNull { row ->
-                (historyByIsin[row.isin] as? CandidateHistory.Ready)?.let { row.name to it.points }
-            },
+                (historyByIsin[row.isin] as? CandidateHistory.Ready)?.let { row.name to it.points.toImmutableList() }
+            }.toImmutableList(),
             fillingCandidates = filling,
             targetLevel = watch.targetLevel,
             sellLevel = metadataByIsin[watch.sellIsin]?.risk,

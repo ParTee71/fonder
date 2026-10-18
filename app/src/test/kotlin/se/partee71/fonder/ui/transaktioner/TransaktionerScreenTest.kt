@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -57,7 +58,7 @@ class TransaktionerScreenTest {
         val salesById = sales.associateBy { it.transactionId }
         return TransaktionerUiState(
             loading = false,
-            allRows = transactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = salesById[tx.id]) },
+            allRows = transactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = salesById[tx.id]) }.toImmutableList(),
             filter = filter,
             yearRealized = RealizedGainCalculator.totalForYear(sales, 2026),
             totalRealized = RealizedGainCalculator.total(sales),
@@ -127,7 +128,7 @@ class TransaktionerScreenTest {
             )
         }
         composeRule.setContent {
-            FonderTheme { TransaktionerContent(state = TransaktionerUiState(loading = false, allRows = many)) }
+            FonderTheme { TransaktionerContent(state = TransaktionerUiState(loading = false, allRows = many.toImmutableList())) }
         }
 
         composeRule.onNodeWithText("Fond nr 1").assertIsDisplayed()

@@ -1,8 +1,12 @@
 package se.partee71.fonder.ui.hem
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -53,23 +57,26 @@ data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysi
  * kosmetiskt: jämförelsen namnger alltid sin egen referens i teckenförklaringen (UI-3), den
  * påstår aldrig att den är "index" i abstrakt mening.
  */
+@Immutable
 data class BenchmarkSeries(
     /** Etikett för teckenförklaringen — en fond namnges rakt av, en blandning som "70 % X / 30 % Y". */
     val fundName: String,
-    val points: List<Pair<Long, Double>>,
+    val points: ImmutableList<Pair<Long, Double>>,
     /** Andel av portföljen som varken kunde klassificeras som aktier eller räntor (blandfonder, okänd typ) — vikterna vilar inte på den delen. */
     val unclassifiedFraction: Double = 0.0,
 )
 
 /** Summering av [FundAnalysisCalc]-status över alla innehav (issue #16, HEM-4). */
+@Immutable
 data class AnalysisSummary(
     val gronCount: Int = 0,
     val gulCount: Int = 0,
     val rodCount: Int = 0,
     /** Bara gul/röd, sorterat mest allvarligt (röd) först — se [HemScreen]. */
-    val flagged: List<FlaggedHolding> = emptyList(),
+    val flagged: ImmutableList<FlaggedHolding> = persistentListOf(),
 )
 
+@Immutable
 data class HemUiState(
     val loading: Boolean = true,
     val hasHoldings: Boolean = false,
@@ -88,7 +95,7 @@ data class HemUiState(
     /** Indexjämförelsen som skuggportfölj (HEM-10), null tills referensens historik finns cachad. */
     val benchmarkSeries: BenchmarkSeries? = null,
     /** Köpdagar (epoch-day) för samtliga innehav — markeras i avkastningsdiagrammet, eftersom de förklarar varför kurvan och totalkortet visar olika tal (HEM-9). */
-    val purchaseEpochDays: List<Long> = emptyList(),
+    val purchaseEpochDays: ImmutableList<Long> = persistentListOf(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,
     /** Portföljens totala fondavgift per år (HEM-5, issue #60). */
@@ -98,7 +105,7 @@ data class HemUiState(
     /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
     /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
-    val riskLevelDeviations: List<PortfolioRiskCalc.LevelDeviation> = emptyList(),
+    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf(),
     /**
      * Det som väntar på ett beslut (HEM-13) — samma källa som fliken Beslut och flikradens märke
      * läser ([PendingDecisionsSource]), så "Att besluta" aldrig kan visa ett annat antal.
@@ -289,7 +296,8 @@ class HemViewModel @Inject constructor(
                         .filter { it.type == TransactionType.KOP }
                         .map { it.epochDay }
                         .distinct()
-                        .sorted(),
+                        .sorted()
+                        .toImmutableList(),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
                     riskProfile = riskProfile,
@@ -299,7 +307,7 @@ class HemViewModel @Inject constructor(
                             targetAllocation = it.effectiveAllocation,
                             actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel),
                         )
-                    }.orEmpty(),
+                    }.orEmpty().toImmutableList(),
                 )
             }
         }.combine(pendingDecisionsSource.observe()) { state, decisions ->
@@ -374,7 +382,8 @@ class HemViewModel @Inject constructor(
             rodCount = analyses.count { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD },
             flagged = analyses
                 .filter { it.analysis.status == FundAnalysisCalc.SignalLevel.GUL || it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
-                .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD },
+                .sortedByDescending { it.analysis.status == FundAnalysisCalc.SignalLevel.ROD }
+                .toImmutableList(),
         )
     }
 
@@ -434,7 +443,7 @@ class HemViewModel @Inject constructor(
         } else {
             refs.zip(labels).joinToString(" / ") { (ref, name) -> "${MoneyFormat.percent(ref.weight)} $name" }
         }
-        return BenchmarkSeries(fundName = label, points = series.points, unclassifiedFraction = unclassifiedFraction)
+        return BenchmarkSeries(fundName = label, points = series.points.toImmutableList(), unclassifiedFraction = unclassifiedFraction)
     }
 
     /**

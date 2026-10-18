@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.hem
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -98,8 +100,8 @@ class HemScreenshotTest {
                 totalGainLossFraction = 0.102,
                 navEpochDay = start + 59,
                 returnSeries = PortfolioReturnSeriesCalc.Result(points = curve(0.002), partial = false),
-                benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015)),
-                purchaseEpochDays = listOf(start + 20),
+                benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015).toImmutableList()),
+                purchaseEpochDays = persistentListOf(start + 20),
                 decisions = decisions,
                 backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L),
             ),

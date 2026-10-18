@@ -106,7 +106,7 @@ fun TransaktionerContent(
             modifier = modifier.fillMaxSize().testTag(HANDELSER_LIST_TEST_TAG),
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
-            item {
+            item(contentType = "filter") {
                 ChoiceChipRow(
                     options = HandelseFilter.entries,
                     selected = state.filter,
@@ -116,14 +116,14 @@ fun TransaktionerContent(
                 )
             }
             if (state.showRealizedCard) {
-                item { RealizedCard(state, modifier = Modifier.padding(top = 10.dp)) }
+                item(contentType = "realized") { RealizedCard(state, modifier = Modifier.padding(top = 10.dp)) }
             }
             if (rows.isEmpty()) {
-                item { FilterEmptyState(state.filter) }
+                item(contentType = "empty") { FilterEmptyState(state.filter) }
             } else {
                 // Varje transaktion är ett eget item, så att hundratals rader (månadssparande) inte
                 // komponeras i förväg; tillsammans ser de ut som ett kort, som i mockupen.
-                itemsIndexed(rows, key = { _, row -> row.transaction.id }) { index, row ->
+                itemsIndexed(rows, key = { _, row -> row.transaction.id }, contentType = { _, _ -> "transaction" }) { index, row ->
                     AppCard(
                         modifier = Modifier
                             .fillMaxWidth()
