@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
-import se.partee71.fonder.domain.model.RiskProfileAnswers
-import se.partee71.fonder.domain.model.TimeHorizon
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.TimeHorizon
 
 /**
  * Föreslår en **målfördelning** över risknivåer ur riskprofilens tre svar (SET-3, issue #68,
@@ -38,7 +38,7 @@ object RiskProfileCalc {
         FORSIKTIG(mapOf(2 to 0.40, 3 to 0.40, 4 to 0.20)),
         BALANSERAD(mapOf(2 to 0.20, 3 to 0.35, 4 to 0.45)),
         TILLVAXT(mapOf(2 to 0.10, 3 to 0.25, 4 to 0.55, 5 to 0.10)),
-        OFFENSIV(mapOf(3 to 0.10, 4 to 0.75, 5 to 0.15)),
+        OFFENSIV(mapOf(3 to 0.10, 4 to 0.75, 5 to 0.15))
     }
 
     /** Full poäng inom taket: [DownturnReaction] 0..3 + [PrimaryGoal] 0..2. */
@@ -69,8 +69,7 @@ object RiskProfileCalc {
     }
 
     /** En fördelning räknas som sparbar bara om den inte är tom och summerar till (i praktiken) exakt 100 % — ingen tyst normalisering av en avvikande summa (issue #71). */
-    fun isCompleteAllocation(allocation: Map<Int, Double>): Boolean =
-        allocation.isNotEmpty() && abs(allocation.values.sum() - 1.0) <= SUM_TOLERANCE
+    fun isCompleteAllocation(allocation: Map<Int, Double>): Boolean = allocation.isNotEmpty() && abs(allocation.values.sum() - 1.0) <= SUM_TOLERANCE
 
     /** Klämmer en fördelnings nivåer mot den faktiskt tillgängliga skalan (samma princip som #68:s tidigare skalär-klämning) — nivåer som saknas i [availableLevels] slås ihop med sin närmaste granne i stället för att tappas bort. */
     private fun remapToAvailable(allocation: Map<Int, Double>, availableLevels: List<Int>): Map<Int, Double> {

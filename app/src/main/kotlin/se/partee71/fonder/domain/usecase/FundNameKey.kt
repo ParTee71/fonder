@@ -21,6 +21,5 @@ object FundNameKey {
     private val nonAlphanumeric = Regex("[^\\p{L}\\p{N}]+")
 
     /** Normaliserad nyckel för [name] — tom sträng om namnet saknar tecken att matcha på. */
-    fun of(name: String): String =
-        name.lowercase().replace(nonAlphanumeric, " ").trim().replace(Regex("\\s+"), " ")
+    fun of(name: String): String = name.lowercase().replace(nonAlphanumeric, " ").trim().replace(Regex("\\s+"), " ")
 }

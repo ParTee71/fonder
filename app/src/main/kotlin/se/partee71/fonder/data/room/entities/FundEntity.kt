@@ -11,14 +11,14 @@ data class FundEntity(
     val currency: String,
     val isin: String? = null,
     /** Fondlista-plattformens kod när [fundId] är ett ISIN — se [Fund.fondlistaFundId] (issue #39). */
-    val fondlistaFundId: String? = null,
+    val fondlistaFundId: String? = null
 ) {
     fun toDomain() = Fund(
         fundId = fundId,
         name = name,
         currency = currency,
         isin = isin,
-        fondlistaFundId = fondlistaFundId,
+        fondlistaFundId = fondlistaFundId
     )
 
     companion object {
@@ -30,7 +30,7 @@ data class FundEntity(
             name = fund.name,
             currency = fund.currency,
             isin = fund.isin,
-            fondlistaFundId = fund.fondlistaFundId,
+            fondlistaFundId = fund.fondlistaFundId
         )
     }
 }

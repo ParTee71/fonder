@@ -1,10 +1,10 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.FundPrice
-import java.time.LocalDate
 
 class CurrencyConverterTest {
 
@@ -59,7 +59,7 @@ class CurrencyConverterTest {
     fun `blandade kronor och usd-rader hanteras rad for rad`() {
         val prices = listOf(
             FundPrice(fundId = "F", epochDay = day1, nav = 100.0, currency = "SEK"),
-            FundPrice(fundId = "F", epochDay = day2, nav = 10.0, currency = "USD"),
+            FundPrice(fundId = "F", epochDay = day2, nav = 10.0, currency = "USD")
         )
 
         val result = CurrencyConverter.toValueCurrency(prices, mapOf(day2 to 9.5))

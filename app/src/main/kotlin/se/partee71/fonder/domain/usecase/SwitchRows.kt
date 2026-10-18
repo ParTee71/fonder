@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import java.time.LocalDate
 
 /** Ett bytes tillstånd på Beslut (BYT-4) — det chipet på raden säger. */
 enum class SwitchRowState {
@@ -26,7 +26,7 @@ enum class SwitchRowState {
     EXPIRED,
 
     /** Förslaget avstått (HEM-14). */
-    DISMISSED,
+    DISMISSED
 }
 
 /** Varifrån ett sålt byte kom — styr radens ursprungsetikett ("Bytesplan · byte 1", "Billigare alternativ"). */
@@ -46,7 +46,7 @@ sealed interface SwitchRow {
     data class Suggested(
         val suggestion: SwitchPlanResolver.Suggestion,
         val cheaper: CheaperAlternative? = null,
-        val watched: Boolean = false,
+        val watched: Boolean = false
     ) : SwitchRow {
         override val key: String get() = "suggestion-${suggestion.recordId}"
         override val state: SwitchRowState get() = if (cheaper != null) SwitchRowState.FEE else SwitchRowState.PROPOSED
@@ -59,7 +59,7 @@ sealed interface SwitchRow {
     data class Sold(
         val watch: OpenSwitchWatch,
         val origin: SwitchOrigin,
-        val planIndex: Int? = null,
+        val planIndex: Int? = null
     ) : SwitchRow {
         override val key: String get() = "watch-${watch.watchId}"
         override val state: SwitchRowState get() = SwitchRowState.SOLD
@@ -72,7 +72,7 @@ sealed interface SwitchRow {
         val sellFundName: String,
         /** Den köpta fondens namn ur bevakningens kandidater; null när köpet inte gjordes eller fonden inte bevakades. */
         val boughtFundName: String? = null,
-        val closedAtEpochDay: Long? = null,
+        val closedAtEpochDay: Long? = null
     ) : SwitchRow {
         override val key: String get() = "closed-$watchId"
     }
@@ -91,7 +91,7 @@ sealed interface SwitchRow {
  */
 data class SwitchRows(
     val active: List<SwitchRow> = emptyList(),
-    val closed: List<SwitchRow> = emptyList(),
+    val closed: List<SwitchRow> = emptyList()
 ) {
     /** Planens förslag som väntar på beslut. */
     val proposedCount: Int get() = active.count { it is SwitchRow.Suggested && it.state == SwitchRowState.PROPOSED && it.waiting }
@@ -135,10 +135,14 @@ data class SwitchRows(
                 val feeRow = if (planRow == null) fees.firstOrNull { watch.isSourceOf(it.suggestion) } else null
                 when {
                     planRow != null -> SwitchRow.Sold(watch, SwitchOrigin.PLAN, planRow.planIndex)
+
                     feeRow != null -> SwitchRow.Sold(watch, SwitchOrigin.FEE)
+
                     watch.sourceKind == SuggestionKind.FEE -> SwitchRow.Sold(watch, SwitchOrigin.FEE)
+
                     // Källraden kan vara gallrad (sourceKind null) — ett känt källförslag är ändå inget eget sälj.
                     watch.sourceRecordId != null -> SwitchRow.Sold(watch, SwitchOrigin.PLAN)
+
                     else -> SwitchRow.Sold(watch, SwitchOrigin.STANDALONE)
                 }
             }
@@ -171,8 +175,7 @@ data class SwitchRows(
             return SwitchRows(active = sold + proposed + cheaper, closed = closed + dismissed)
         }
 
-        private fun OpenSwitchWatch.isSourceOf(row: SwitchPlanResolver.Suggestion): Boolean =
-            (sourceRecordId != null && sourceRecordId == row.recordId) || (sourcePair != null && sourcePair == row.sellIsin to row.buyIsin)
+        private fun OpenSwitchWatch.isSourceOf(row: SwitchPlanResolver.Suggestion): Boolean = (sourceRecordId != null && sourceRecordId == row.recordId) || (sourcePair != null && sourcePair == row.sellIsin to row.buyIsin)
 
         private fun SwitchWatch.toClosedRow(): SwitchRow.Closed {
             val state = when {
@@ -186,7 +189,7 @@ data class SwitchRows(
                 state = state,
                 sellFundName = sellFundName,
                 boughtFundName = if (state == SwitchRowState.BOUGHT) candidates.firstOrNull { it.isin == boughtIsin }?.name else null,
-                closedAtEpochDay = closedAtEpochDay,
+                closedAtEpochDay = closedAtEpochDay
             )
         }
     }

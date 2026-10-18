@@ -16,7 +16,7 @@ class ScreenTest {
     fun `flikraden har fyra flikar i ratt ordning`() {
         assertEquals(
             listOf(OversiktKey, InnehavKey, BeslutKey, HandelserKey),
-            Screen.entries.map { it.key },
+            Screen.entries.map { it.key }
         )
     }
 

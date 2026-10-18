@@ -50,7 +50,7 @@ object DriveBackupFiles {
      */
     fun staleFileIds(
         files: List<DriveBackupFile>,
-        keep: Int = KEEP_COUNT,
+        keep: Int = KEEP_COUNT
     ): List<String> = files
         .filter { isOurs(it.name) }
         .sortedByDescending { it.createdTime }
@@ -63,5 +63,5 @@ data class DriveBackupFile(
     val id: String,
     val name: String,
     /** RFC 3339 från Drive. Jämförs som sträng — formatet är fast bredd och sorterar kronologiskt. */
-    val createdTime: String,
+    val createdTime: String
 )

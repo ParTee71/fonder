@@ -1,17 +1,18 @@
 package se.partee71.fonder.ui.transaktioner
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import java.time.LocalDate
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -23,7 +24,6 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Fliken Händelser i JVM med Robolectric: filterraden (TRX-3), kortet med årets realiserade resultat
@@ -48,7 +48,7 @@ class TransaktionerScreenTest {
         Transaction(id = 5, fundId = "RF", type = TransactionType.KOP, epochDay = day(8, 12), shares = 10.0, pricePerShare = 100.0),
         Transaction(id = 4, fundId = "GI", type = TransactionType.KOP, epochDay = day(7, 25), shares = 10.0, pricePerShare = 200.0),
         Transaction(id = 3, fundId = "TM", type = TransactionType.KOP, epochDay = day(3, 4), shares = 50.0, pricePerShare = 100.0),
-        Transaction(id = 2, fundId = "SB", type = TransactionType.KOP, epochDay = day(5, 10, year = 2024), shares = 100.0, pricePerShare = 278.6),
+        Transaction(id = 2, fundId = "SB", type = TransactionType.KOP, epochDay = day(5, 10, year = 2024), shares = 100.0, pricePerShare = 278.6)
     )
 
     private val names = mapOf("SB" to "Sverige Småbolag", "GI" to "Global Indexfond A", "TM" to "Tillväxtmarknad Bred", "RF" to "Räntefond Kort")
@@ -61,7 +61,7 @@ class TransaktionerScreenTest {
             allRows = transactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = salesById[tx.id]) }.toImmutableList(),
             filter = filter,
             yearRealized = RealizedGainCalculator.totalForYear(sales, 2026),
-            totalRealized = RealizedGainCalculator.total(sales),
+            totalRealized = RealizedGainCalculator.total(sales)
         )
     }
 
@@ -124,7 +124,7 @@ class TransaktionerScreenTest {
         val many = (1..300).map { n ->
             TransaktionRad(
                 transaction = Transaction(id = n.toLong(), fundId = "F$n", type = TransactionType.KOP, epochDay = day(1, 1) - n, shares = 1.0, pricePerShare = 100.0),
-                fundName = "Fond nr $n",
+                fundName = "Fond nr $n"
             )
         }
         composeRule.setContent {

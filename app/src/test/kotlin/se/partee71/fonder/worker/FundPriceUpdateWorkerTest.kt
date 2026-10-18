@@ -1,12 +1,13 @@
 package se.partee71.fonder.worker
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import java.time.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -37,16 +38,15 @@ import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
+import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
-import se.partee71.fonder.domain.model.SwitchWatch
-import se.partee71.fonder.domain.model.SwitchWatchCandidate
-import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
 
 /**
  * Ren logik-test av [FundPriceUpdateWorker.refreshAll] — kringgår CoroutineWorker/WorkManager
@@ -94,8 +94,7 @@ class FundPriceUpdateWorkerTest {
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
         override fun observeTransactions(): Flow<List<Transaction>> = transactions
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> =
-            flowOf(transactions.value.filter { it.fundId == fundId })
+        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flowOf(transactions.value.filter { it.fundId == fundId })
         override suspend fun upsertFund(fund: Fund) {}
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
@@ -142,7 +141,7 @@ class FundPriceUpdateWorkerTest {
         val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
@@ -180,7 +179,7 @@ class FundPriceUpdateWorkerTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
 
         FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
@@ -202,7 +201,7 @@ class FundPriceUpdateWorkerTest {
         refreshResult = false
         funds.value = listOf(
             Fund(fundId = "SHB0000442", name = "Fond A"),
-            Fund(fundId = "SHB0000443", name = "Fond B"),
+            Fund(fundId = "SHB0000443", name = "Fond B")
         )
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
@@ -219,7 +218,7 @@ class FundPriceUpdateWorkerTest {
         // `ok` behöver ett köp för att nå refreshSince-grenen (som lyckas); `fails` går via
         // refresh, som är riggad att misslyckas.
         transactions.value = listOf(
-            Transaction(fundId = ok.fundId, type = TransactionType.KOP, epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = ok.fundId, type = TransactionType.KOP, epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
@@ -312,22 +311,23 @@ class FundPriceUpdateWorkerTest {
             suggestCheaperAlternativesCalls.add(isin to holdingValue)
             return if (isin in cheaperAlternativesByIsin) cheaperAlternativesByIsin[isin] else emptyList()
         }
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> =
-            metadataByIsin.filterKeys { it in isins }
+        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
         override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> =
-            metadataByIsin.filterKeys { it in isins }
+        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
 
     private fun buy(fundId: String, shares: Double, pricePerShare: Double) = Transaction(
-        fundId = fundId, type = TransactionType.KOP,
-        epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), shares = shares, pricePerShare = pricePerShare,
+        fundId = fundId,
+        type = TransactionType.KOP,
+        epochDay = LocalDate.of(2020, 1, 1).toEpochDay(),
+        shares = shares,
+        pricePerShare = pricePerShare
     )
 
     private fun neverScanned(isin: String) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
         category = null, fundType = null, companyName = null, risk = null, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     @Test
@@ -394,7 +394,7 @@ class FundPriceUpdateWorkerTest {
         }
         metadataByIsin["SE_FARSK"] = neverScanned("SE_FARSK").copy(comparisonResolvedAtEpochDay = today.toEpochDay())
         metadataByIsin["SE_UTGANGEN"] = neverScanned("SE_UTGANGEN").copy(
-            comparisonResolvedAtEpochDay = today.minusDays(31).toEpochDay(),
+            comparisonResolvedAtEpochDay = today.minusDays(31).toEpochDay()
         )
         // ALDRIG har ingen fund_metadata-rad alls — aldrig sökt.
 
@@ -420,13 +420,13 @@ class FundPriceUpdateWorkerTest {
             FeeComparisonCalc.Alternative(
                 candidate = candidateMetadata("SE_BILLIG", risk = 5, totalFee = 0.2, developmentOneYear = 0.1),
                 candidateFeePercent = 0.2,
-                annualSavingsKr = 80.0,
+                annualSavingsKr = 80.0
             ),
             FeeComparisonCalc.Alternative(
                 candidate = candidateMetadata("SE_NASTBILLIG", risk = 5, totalFee = 0.4, developmentOneYear = 0.1),
                 candidateFeePercent = 0.4,
-                annualSavingsKr = 60.0,
-            ),
+                annualSavingsKr = 60.0
+            )
         )
         fundByIsin["SE_BILLIG"] = Fund(fundId = "SE_BILLIG", name = "Billig", isin = "SE_BILLIG")
         fundByIsin["SE_NASTBILLIG"] = Fund(fundId = "SE_NASTBILLIG", name = "Näst billigast", isin = "SE_NASTBILLIG")
@@ -440,7 +440,11 @@ class FundPriceUpdateWorkerTest {
         val suggestionRepo = FakeSuggestionRecordRepository()
 
         FundPriceUpdateWorker.scanComparisons(
-            fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, LocalDate.of(2026, 1, 1),
+            fakeTransactionRepo,
+            fakeFundPriceRepo,
+            fakeFundMetadataRepo,
+            suggestionRepo,
+            LocalDate.of(2026, 1, 1)
         )
 
         // Alla visade alternativ, inte bara det billigaste (issue #93): de är varandras
@@ -468,7 +472,7 @@ class FundPriceUpdateWorkerTest {
         setUpHoldingWithCheaperAlternative()
         metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
             comparisonResolvedAtEpochDay = today.toEpochDay(),
-            shownAlternativeIsins = listOf("SE_BILLIG", "SE_NASTBILLIG"),
+            shownAlternativeIsins = listOf("SE_BILLIG", "SE_NASTBILLIG")
         )
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -486,7 +490,7 @@ class FundPriceUpdateWorkerTest {
         // innehav som just skannats om hade gårdagens kandidater spelats in som dagens råd.
         setUpHoldingWithCheaperAlternative()
         metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
-            shownAlternativeIsins = listOf("SE_GAMMAL"),
+            shownAlternativeIsins = listOf("SE_GAMMAL")
         )
         fundByIsin["SE_GAMMAL"] = Fund(fundId = "SE_GAMMAL", name = "Gammal", isin = "SE_GAMMAL")
         isinChainPrices["SE_GAMMAL"] = FundPrice(fundId = "SE_GAMMAL", epochDay = LocalDate.now().toEpochDay(), nav = 10.0)
@@ -504,7 +508,7 @@ class FundPriceUpdateWorkerTest {
         setUpHoldingWithCheaperAlternative()
         cheaperAlternativesByIsin["SE_HELD"] = null
         metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
-            shownAlternativeIsins = listOf("SE_BILLIG"),
+            shownAlternativeIsins = listOf("SE_BILLIG")
         )
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -566,7 +570,7 @@ class FundPriceUpdateWorkerTest {
             // Färsk jämförelse: ingen omskanning, bara inspelning ur den sparade listan.
             metadataByIsin[isin] = heldMetadata(isin, risk = 5, totalFee = 1.0).copy(
                 comparisonResolvedAtEpochDay = today.toEpochDay(),
-                shownAlternativeIsins = listOf(alt),
+                shownAlternativeIsins = listOf(alt)
             )
             fundByIsin[alt] = Fund(fundId = alt, name = alt, isin = alt)
             isinChainPrices[alt] = FundPrice(fundId = alt, epochDay = today.toEpochDay(), nav = 50.0)
@@ -576,10 +580,14 @@ class FundPriceUpdateWorkerTest {
         listOf("SE_F1", "SE_F2", "SE_F3").forEach { isin ->
             suggestionRepo.record(
                 SuggestionRecord(
-                    suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
-                    sellIsin = isin, buyIsin = "ALT_${isin.removePrefix("SE_")}",
-                    sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, kind = SuggestionKind.FEE,
-                ),
+                    suggestedAtEpochDay = today.toEpochDay(),
+                    planIndex = 0,
+                    sellIsin = isin,
+                    buyIsin = "ALT_${isin.removePrefix("SE_")}",
+                    sellNavAtSuggestion = 100.0,
+                    buyNavAtSuggestion = 50.0,
+                    kind = SuggestionKind.FEE
+                )
             )
         }
 
@@ -588,7 +596,7 @@ class FundPriceUpdateWorkerTest {
         // Budgeten är 6 rader: F4…F9 spelas in, F1–F3 hoppas över utan att kosta något.
         assertEquals(
             (4..9).map { "SE_F$it" },
-            suggestionRepo.recorded.drop(3).map { it.sellIsin },
+            suggestionRepo.recorded.drop(3).map { it.sellIsin }
         )
     }
 
@@ -604,7 +612,7 @@ class FundPriceUpdateWorkerTest {
             val alt = "ALT_${fund.fundId}"
             metadataByIsin[isin] = heldMetadata(isin, risk = 5, totalFee = 1.0).copy(
                 comparisonResolvedAtEpochDay = today.toEpochDay(),
-                shownAlternativeIsins = listOf(alt),
+                shownAlternativeIsins = listOf(alt)
             )
             fundByIsin[alt] = Fund(fundId = alt, name = alt, isin = alt)
             isinChainPrices[alt] = FundPrice(fundId = alt, epochDay = today.toEpochDay(), nav = 50.0)
@@ -632,15 +640,15 @@ class FundPriceUpdateWorkerTest {
                 buyIsin = "SE_BILLIG",
                 sellNavAtSuggestion = 100.0,
                 buyNavAtSuggestion = 50.0,
-                kind = SuggestionKind.RISK_PLAN,
-            ),
+                kind = SuggestionKind.RISK_PLAN
+            )
         )
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
 
         assertEquals(
             listOf(SuggestionKind.RISK_PLAN, SuggestionKind.FEE, SuggestionKind.FEE),
-            suggestionRepo.recorded.map { it.kind },
+            suggestionRepo.recorded.map { it.kind }
         )
         assertEquals(listOf("SE_BILLIG", "SE_NASTBILLIG"), suggestionRepo.recorded.drop(1).map { it.buyIsin })
     }
@@ -669,9 +677,10 @@ class FundPriceUpdateWorkerTest {
         }
 
         var prunedAt: LocalDate? = null
-        override suspend fun prune(today: LocalDate) { prunedAt = today }
-        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean =
-            listOf(sellIsin, buyIsin, epochDay, kind) in recordedDays
+        override suspend fun prune(today: LocalDate) {
+            prunedAt = today
+        }
+        override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = listOf(sellIsin, buyIsin, epochDay, kind) in recordedDays
         override suspend fun record(record: SuggestionRecord) {
             // Löpande id som Room — flytten mellan körningar (moveToBatch) nycklar på det.
             recorded += record.copy(id = (recorded.maxOfOrNull { it.id } ?: 0L) + 1)
@@ -685,8 +694,9 @@ class FundPriceUpdateWorkerTest {
             records.forEach { record(it) }
         }
         override fun observeHistory(): Flow<List<SuggestionRecord>> = flowOf(
-            recorded.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex }),
+            recorded.sortedWith(compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }.thenByDescending { it.batchEpochMillis }.thenBy { it.planIndex })
         )
+
         /** Workern skriver aldrig markeringen — den ägs av användaren (SET-5, issue #80). */
         override suspend fun setFollowed(id: Long, followed: Boolean) = Unit
     }
@@ -698,22 +708,22 @@ class FundPriceUpdateWorkerTest {
     private suspend fun scanSwitchPlan(
         suggestionRepo: SuggestionRecordRepository,
         today: LocalDate = LocalDate.now(),
-        batchEpochMillis: Long = System.currentTimeMillis(),
+        batchEpochMillis: Long = System.currentTimeMillis()
     ) = FundPriceUpdateWorker.scanSwitchPlan(
         fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
-        dismissalRepo, switchWatchRepo, calendar = { today }, clock = { batchEpochMillis },
+        dismissalRepo, switchWatchRepo, calendar = { today }, clock = { batchEpochMillis }
     )
 
     private fun heldMetadata(isin: String, risk: Int, totalFee: Double) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     private fun candidateMetadata(isin: String, risk: Int, totalFee: Double, developmentOneYear: Double) = FundMetadata(
         isin = isin, name = "Kandidat $isin", orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), developmentOneYear = developmentOneYear,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), developmentOneYear = developmentOneYear
     )
 
     private fun setUpOverweightedPortfolio() {
@@ -806,7 +816,7 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
             switchWatchRepository = switchWatchRepo,
-            suggestionDismissalRepository = dismissalRepo,
+            suggestionDismissalRepository = dismissalRepo
         )
 
         assertTrue("inget förslag får spelas in på inaktuella kurser", suggestionRepo.recorded.isEmpty())
@@ -833,7 +843,7 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
             switchWatchRepository = switchWatchRepo,
-            suggestionDismissalRepository = dismissalRepo,
+            suggestionDismissalRepository = dismissalRepo
         )
 
         assertEquals(1, suggestionRepo.recorded.size)
@@ -857,7 +867,7 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = suggestionRepo,
             switchWatchRepository = switchWatchRepo,
-            suggestionDismissalRepository = dismissalRepo,
+            suggestionDismissalRepository = dismissalRepo
         )
 
         assertEquals(1, suggestionRepo.recorded.size)
@@ -887,7 +897,7 @@ class FundPriceUpdateWorkerTest {
             rescanIfRequested = true,
             // En begäran "kommer in" efter att skanningen började — men ingen efter sista kollen.
             switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = false).takeIf { since < 1_500 } },
-            now = { clock++ },
+            now = { clock++ }
         )
 
         // Två skanningar (varje skanning frågar källan om nivå 3 en gång), inte tre — och en rad.
@@ -920,7 +930,7 @@ class FundPriceUpdateWorkerTest {
             rescanIfRequested = true,
             startedAt = 500,
             switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(700, force = false).takeIf { since < 700 } },
-            now = { clock++ },
+            now = { clock++ }
         )
 
         assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
@@ -950,7 +960,7 @@ class FundPriceUpdateWorkerTest {
             suggestionDismissalRepository = dismissalRepo,
             rescanIfRequested = true,
             switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = true).takeIf { since < 1_500 } },
-            now = { clock++ },
+            now = { clock++ }
         )
 
         // HELD har färsk kurs och hade aldrig hämtats utan force (ISIN-fond → refreshSince).
@@ -983,7 +993,7 @@ class FundPriceUpdateWorkerTest {
             rescanIfRequested = true,
             switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(1_500, force = true).takeIf { since < 1_500 } },
             enqueueSwitchPlanFollowUp = { force -> followUps += force },
-            now = { clock++ },
+            now = { clock++ }
         )
 
         assertEquals(listOf(3), switchCandidateLevelsQueried)
@@ -1012,7 +1022,7 @@ class FundPriceUpdateWorkerTest {
             // Begäran kommer först efter sista kollen (klockan står då på 1 001).
             switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(2_000, force = true).takeIf { since >= 1_001 } },
             enqueueSwitchPlanFollowUp = { force -> followUps += force },
-            now = { clock++ },
+            now = { clock++ }
         )
 
         assertEquals(listOf(3), switchCandidateLevelsQueried)
@@ -1041,7 +1051,7 @@ class FundPriceUpdateWorkerTest {
             switchWatchRepository = switchWatchRepo,
             suggestionDismissalRepository = dismissalRepo,
             rescanIfRequested = true,
-            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false).takeIf { refreshSinceCalls.count { it.second == "SE_CAND" } >= 2 } },
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false).takeIf { refreshSinceCalls.count { it.second == "SE_CAND" } >= 2 } }
         )
 
         assertEquals(listOf(3, 3), switchCandidateLevelsQueried)
@@ -1081,8 +1091,14 @@ class FundPriceUpdateWorkerTest {
         fun scan(name: String, batch: Long) = launch {
             FundPriceUpdateWorker.scanSwitchPlan(
                 fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, dismissalRepo, switchWatchRepo,
-                calendar = { reads += "dag-$name"; LocalDate.of(2026, 1, 1) },
-                clock = { reads += name; batch },
+                calendar = {
+                    reads += "dag-$name"
+                    LocalDate.of(2026, 1, 1)
+                },
+                clock = {
+                    reads += name
+                    batch
+                }
             )
         }
 
@@ -1115,7 +1131,7 @@ class FundPriceUpdateWorkerTest {
             switchWatchRepository = switchWatchRepo,
             suggestionDismissalRepository = dismissalRepo,
             rescanIfRequested = false,
-            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false) },
+            switchPlanScanRequestedSince = { since -> SwitchPlanScanRequest(since + 1, force = false) }
         )
 
         assertEquals(listOf(3), switchCandidateLevelsQueried)
@@ -1131,7 +1147,7 @@ class FundPriceUpdateWorkerTest {
         // Fem nivåer i målet, men innehavet ligger på nivå 5 och bara nivå 3 är underviktad
         // med marginal; nivå 1, 2 och 4 har målvikter under MIN_GAP_PP.
         preferencesRepository.setRiskProfile(
-            RiskProfile(targetAllocation = mapOf(1 to 0.01, 2 to 0.01, 3 to 0.96, 4 to 0.01, 5 to 0.01)),
+            RiskProfile(targetAllocation = mapOf(1 to 0.01, 2 to 0.01, 3 to 0.96, 4 to 0.01, 5 to 0.01))
         )
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -1200,7 +1216,7 @@ class FundPriceUpdateWorkerTest {
         assertEquals(
             "kandidatens NAV ska hämtas via ISIN-grenen",
             listOf("SE_CAND" to "SE_CAND"),
-            refreshSinceCalls.map { it.first to it.second },
+            refreshSinceCalls.map { it.first to it.second }
         )
         assertFalse("refresh() når aldrig en fond utan plattformskod", refreshedFundIds.contains("SE_CAND"))
     }
@@ -1233,9 +1249,14 @@ class FundPriceUpdateWorkerTest {
             Transaction(id = 42, fundId = sold.fundId, type = TransactionType.SALJ, epochDay = today.minusDays(1).toEpochDay(), shares = 100.0, pricePerShare = 100.0)
         switchWatchRepo.start(
             SwitchWatch(
-                sellIsin = "SE_SOLD", sellFundName = "Såld", soldAtEpochDay = today.minusDays(1).toEpochDay(), proceedsKr = 10_000.0, targetLevel = 3,
-                sellTransactionId = sellTransactionId, candidates = listOf(SwitchWatchCandidate(isin = "SE_CAND", name = "Kandidat")),
-            ),
+                sellIsin = "SE_SOLD",
+                sellFundName = "Såld",
+                soldAtEpochDay = today.minusDays(1).toEpochDay(),
+                proceedsKr = 10_000.0,
+                targetLevel = 3,
+                sellTransactionId = sellTransactionId,
+                candidates = listOf(SwitchWatchCandidate(isin = "SE_CAND", name = "Kandidat"))
+            )
         )
     }
 
@@ -1561,7 +1582,7 @@ class FundPriceUpdateWorkerTest {
         sellIsin = "SE_HELD",
         buyIsin = buyIsin,
         sellNavAtSuggestion = 100.0,
-        buyNavAtSuggestion = 50.0,
+        buyNavAtSuggestion = 50.0
     )
 
     @Test
@@ -1583,9 +1604,9 @@ class FundPriceUpdateWorkerTest {
                 candidates = listOf(
                     SwitchWatchCandidate(isin = "SE_A", name = "Kandidat A"),
                     SwitchWatchCandidate(isin = "SE_B", name = "Kandidat B"),
-                    SwitchWatchCandidate(isin = "SE_TRACKED", name = "Såld"),
-                ),
-            ),
+                    SwitchWatchCandidate(isin = "SE_TRACKED", name = "Såld")
+                )
+            )
         )
 
         FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
@@ -1602,8 +1623,8 @@ class FundPriceUpdateWorkerTest {
             SwitchWatch(
                 sellIsin = "SE_GAMMAL",
                 sellFundName = "Gammal",
-                soldAtEpochDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
-            ),
+                soldAtEpochDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+            )
         )
 
         FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
@@ -1621,7 +1642,7 @@ class FundPriceUpdateWorkerTest {
             fakeTransactionRepo,
             fakeFundPriceRepo,
             FakeSwitchWatchRepository(),
-            LocalDate.now(),
+            LocalDate.now()
         )
 
         assertTrue(refreshSinceCalls.isEmpty())
@@ -1691,8 +1712,8 @@ class FundPriceUpdateWorkerTest {
         indexFund = true, startDateEpochDay = null, minimumBuy = null,
         tags = listOf(
             FundTag(title = IndexBenchmarkSelector.TAG_TYPE_EQUITY, category = FundTag.CATEGORY_TYPE),
-            FundTag(title = IndexBenchmarkSelector.TAG_REGION_GLOBAL, category = FundTag.CATEGORY_COMMON_REGION),
-        ),
+            FundTag(title = IndexBenchmarkSelector.TAG_REGION_GLOBAL, category = FundTag.CATEGORY_COMMON_REGION)
+        )
     )
 
     /** En portfölj med ett köp 2020-01-01 — historikhorisonten skuggportföljen måste nå tillbaka till. */
@@ -1713,7 +1734,7 @@ class FundPriceUpdateWorkerTest {
         // sedan första köpet, annars kan skuggportföljen inte spegla insättningen.
         assertEquals(
             listOf(Triple("SE_BILLIG", "SE_BILLIG", LocalDate.of(2020, 1, 1))),
-            refreshSinceCalls,
+            refreshSinceCalls
         )
     }
 
@@ -1774,7 +1795,7 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
             switchWatchRepository = switchWatchRepo,
-            suggestionDismissalRepository = dismissalRepo,
+            suggestionDismissalRepository = dismissalRepo
         )
         assertTrue(queriesRun.isEmpty())
         assertTrue(refreshSinceCalls.isEmpty())
@@ -1790,7 +1811,7 @@ class FundPriceUpdateWorkerTest {
             preferencesRepository = preferencesRepository,
             suggestionRecordRepository = FakeSuggestionRecordRepository(),
             switchWatchRepository = switchWatchRepo,
-            suggestionDismissalRepository = dismissalRepo,
+            suggestionDismissalRepository = dismissalRepo
         )
         assertEquals(listOf("SE_BILLIG"), preferencesRepository.benchmark.first().map { it.isin })
         assertEquals(listOf("SE_BILLIG"), refreshSinceCalls.map { it.second })
@@ -1800,7 +1821,7 @@ class FundPriceUpdateWorkerTest {
         isin = isin, name = "Ränta $isin", orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
         category = null, fundType = IndexBenchmarkSelector.TAG_TYPE_BOND, companyName = null, risk = 2,
         indexFund = true, startDateEpochDay = null, minimumBuy = null,
-        tags = listOf(FundTag(title = IndexBenchmarkSelector.TAG_TYPE_BOND, category = FundTag.CATEGORY_TYPE)),
+        tags = listOf(FundTag(title = IndexBenchmarkSelector.TAG_TYPE_BOND, category = FundTag.CATEGORY_TYPE))
     )
 
     /** Metadata för ett *innehav* — bara fondtypstaggen behövs, det är den exponeringen läser. */
@@ -1808,7 +1829,7 @@ class FundPriceUpdateWorkerTest {
         isin = isin, name = "Innehav $isin", orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
         category = null, fundType = type, companyName = null, risk = 4, indexFund = false,
         startDateEpochDay = null, minimumBuy = null,
-        tags = listOf(FundTag(title = type, category = FundTag.CATEGORY_TYPE)),
+        tags = listOf(FundTag(title = type, category = FundTag.CATEGORY_TYPE))
     )
 
     @Test
@@ -1817,11 +1838,11 @@ class FundPriceUpdateWorkerTest {
         // viktningen hade jämförelsen mätt tillgångsfördelning i stället för fondval.
         funds.value = listOf(
             Fund(fundId = "AKT", name = "Aktiefond", isin = "SE_H_AKT"),
-            Fund(fundId = "RNT", name = "Räntefond", isin = "SE_H_RNT"),
+            Fund(fundId = "RNT", name = "Räntefond", isin = "SE_H_RNT")
         )
         transactions.value = listOf(
             buy("AKT", shares = 10.0, pricePerShare = 100.0),
-            buy("RNT", shares = 10.0, pricePerShare = 100.0),
+            buy("RNT", shares = 10.0, pricePerShare = 100.0)
         )
         cachedPrices["AKT"] = FundPrice("AKT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)
         cachedPrices["RNT"] = FundPrice("RNT", LocalDate.of(2020, 1, 1).toEpochDay(), 100.0)

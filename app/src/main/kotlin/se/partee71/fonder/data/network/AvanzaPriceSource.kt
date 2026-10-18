@@ -1,11 +1,11 @@
 package se.partee71.fonder.data.network
 
-import se.partee71.fonder.domain.model.FundPrice
-import se.partee71.fonder.domain.model.IsinFundInfo
-import se.partee71.fonder.domain.model.IsinPricePoint
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
+import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.model.IsinFundInfo
+import se.partee71.fonder.domain.model.IsinPricePoint
 
 /**
  * ISIN-baserad kurskälla mot avanza.se (se KRAVLISTA TP-14). Slår upp fondens `orderbookId`
@@ -16,7 +16,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AvanzaPriceSource @Inject constructor(
-    private val source: AvanzaSource,
+    private val source: AvanzaSource
 ) : IsinPriceHistorySource {
 
     /**
@@ -38,12 +38,11 @@ class AvanzaPriceSource @Inject constructor(
         val match = AvanzaJsonParser.findByIsin(source.search(isin), isin) ?: return emptyList()
         return AvanzaJsonParser.parseChart(
             source.fetchChart(match.orderbookId, from, to),
-            FundPrice.VALUE_CURRENCY,
+            FundPrice.VALUE_CURRENCY
         )
     }
 
-    override suspend fun suggestIsin(fundName: String): String? =
-        AvanzaJsonParser.bestMatch(source.search(fundName))?.isin
+    override suspend fun suggestIsin(fundName: String): String? = AvanzaJsonParser.bestMatch(source.search(fundName))?.isin
 
     override suspend fun findFund(isin: String): IsinFundInfo? {
         val (match, currency) = resolve(isin) ?: return null

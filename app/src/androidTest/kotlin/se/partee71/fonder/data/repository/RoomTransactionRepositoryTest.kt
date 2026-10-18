@@ -36,10 +36,16 @@ class RoomTransactionRepositoryTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         repository = RoomTransactionRepository(
-            db, db.fundDao(), db.transactionDao(), db.fundPriceDao(), db.suggestionRecordDao(), db.switchWatchDao(), db.suggestionDismissalDao(),
+            db,
+            db.fundDao(),
+            db.transactionDao(),
+            db.fundPriceDao(),
+            db.suggestionRecordDao(),
+            db.switchWatchDao(),
+            db.suggestionDismissalDao()
         )
     }
 
@@ -50,10 +56,10 @@ class RoomTransactionRepositoryTest {
     fun clearAll_tommer_fonder_transaktioner_kurser_och_inspelade_forslag() = runTest {
         db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033"))
         db.transactionDao().insert(
-            TransactionEntity(fundId = "SHB0000442", type = "KOP", epochDay = 100, shares = 3.0, pricePerShare = 50.0),
+            TransactionEntity(fundId = "SHB0000442", type = "KOP", epochDay = 100, shares = 3.0, pricePerShare = 50.0)
         )
         db.fundPriceDao().upsertAll(
-            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 50.0, currency = "SEK")),
+            listOf(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 50.0, currency = "SEK"))
         )
         // Inspelade bytesförslag (HEM-8) är användardata, inte cache — de måste med i tömningen,
         // annars visar Hem råd som prissatts mot en portfölj som inte längre finns.
@@ -66,8 +72,8 @@ class RoomTransactionRepositoryTest {
                 sellNavAtSuggestion = 50.0,
                 buyNavAtSuggestion = 120.0,
                 switchValueKr = 1_000.0,
-                followed = null,
-            ),
+                followed = null
+            )
         )
 
         // Pågående byten (ANA-12, issue #114) är användardata i samma kategori — och en
@@ -76,21 +82,24 @@ class RoomTransactionRepositoryTest {
             SwitchWatchEntity(
                 sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 100,
                 proceedsKr = 1_000.0, targetLevel = 4, sourceRecordId = null,
-                closedAtEpochDay = null, boughtIsin = null, closeReason = null,
-            ),
+                closedAtEpochDay = null, boughtIsin = null, closeReason = null
+            )
         )
         db.switchWatchDao().insertCandidates(
             listOf(
                 SwitchWatchCandidateEntity(
-                    watchId = watchId, isin = "SE0001466368", name = "Kandidat",
-                    navAtStart = 120.0, navAtStartEpochDay = 100,
-                ),
-            ),
+                    watchId = watchId,
+                    isin = "SE0001466368",
+                    name = "Kandidat",
+                    navAtStart = 120.0,
+                    navAtStartEpochDay = 100
+                )
+            )
         )
 
         // Avståenden (HEM-14) gäller en portfölj som inte längre finns efter tömningen.
         db.suggestionDismissalDao().upsert(
-            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0001466368", kind = "RISK_PLAN", dismissedAtEpochDay = 100),
+            SuggestionDismissalEntity(sellIsin = "SE0000582033", buyIsin = "SE0001466368", kind = "RISK_PLAN", dismissedAtEpochDay = 100)
         )
 
         repository.clearAll()
@@ -137,15 +146,15 @@ class RoomTransactionRepositoryTest {
         // som sidoeffekt — den blir en bevakning utan känd transaktion, som en rad från före 0.67.0.
         db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033"))
         val saleId = db.transactionDao().insert(
-            TransactionEntity(fundId = "SHB0000442", type = "SALJ", epochDay = 100, shares = 3.0, pricePerShare = 50.0),
+            TransactionEntity(fundId = "SHB0000442", type = "SALJ", epochDay = 100, shares = 3.0, pricePerShare = 50.0)
         )
         val watchId = db.switchWatchDao().insertWatch(
             SwitchWatchEntity(
                 sellIsin = "SE0000582033", sellFundName = "Fond A", soldAtEpochDay = 100,
                 proceedsKr = 150.0, targetLevel = 4, sourceRecordId = null,
                 closedAtEpochDay = null, boughtIsin = null, closeReason = null,
-                sellTransactionId = saleId,
-            ),
+                sellTransactionId = saleId
+            )
         )
 
         repository.deleteTransaction(saleId)

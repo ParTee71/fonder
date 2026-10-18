@@ -16,5 +16,5 @@ data class ImportedOrderTransaction(
     val shares: Double,
     val pricePerShare: Double,
     val amount: Double,
-    val sourceFileName: String,
+    val sourceFileName: String
 )

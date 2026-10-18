@@ -11,7 +11,7 @@ class FundNameKeyTest {
     fun `versaler skiljetecken och dubbla blanksteg pavarkar inte nyckeln`() {
         assertEquals(
             FundNameKey.of("Handelsbanken Sverige Index (A1 SEK)"),
-            FundNameKey.of("handelsbanken  sverige index, a1 sek"),
+            FundNameKey.of("handelsbanken  sverige index, a1 sek")
         )
     }
 
@@ -24,7 +24,7 @@ class FundNameKeyTest {
     fun `olika fonder far olika nycklar`() {
         assertNotEquals(
             FundNameKey.of("Handelsbanken Sverige Index"),
-            FundNameKey.of("Handelsbanken Global Index"),
+            FundNameKey.of("Handelsbanken Global Index")
         )
     }
 

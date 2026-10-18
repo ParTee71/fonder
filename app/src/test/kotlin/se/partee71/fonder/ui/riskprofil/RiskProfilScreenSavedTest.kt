@@ -46,7 +46,7 @@ class RiskProfilScreenSavedTest {
     private fun viewModel() = RiskProfilViewModel(
         testPreferencesRepository(dataStoreDispatcher, tempFolder, "riskprofil_screen"),
         metadata,
-        FakeFundPriceRefreshScheduler(),
+        FakeFundPriceRefreshScheduler()
     )
 
     /** Driver DataStore och huvudtråden fram omväxlande tills båda är stilla. */

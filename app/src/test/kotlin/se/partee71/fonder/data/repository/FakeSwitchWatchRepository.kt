@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.repository
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -8,7 +9,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import java.time.LocalDate
 
 /**
  * In-memory-fake av [SwitchWatchRepository] (ANA-12, issue #114) — delad mellan Hems, Sålda
@@ -30,27 +30,22 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
     private var nextWatchId = 1L
     private var nextCandidateId = 1L
 
-    override fun observeOpen(): Flow<List<SwitchWatch>> =
-        watches.map { all -> all.filter { it.isOpen }.sortedByDescending { it.soldAtEpochDay } }
+    override fun observeOpen(): Flow<List<SwitchWatch>> = watches.map { all -> all.filter { it.isOpen }.sortedByDescending { it.soldAtEpochDay } }
 
-    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> =
-        watches.map { all ->
-            all.filter { (it.closedAtEpochDay ?: Long.MIN_VALUE) >= epochDay }
-                .sortedWith(compareByDescending<SwitchWatch> { it.closedAtEpochDay }.thenByDescending { it.id })
-        }
+    override fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>> = watches.map { all ->
+        all.filter { (it.closedAtEpochDay ?: Long.MIN_VALUE) >= epochDay }
+            .sortedWith(compareByDescending<SwitchWatch> { it.closedAtEpochDay }.thenByDescending { it.id })
+    }
 
-    override fun observe(id: Long): Flow<SwitchWatch?> =
-        watches.map { all -> all.firstOrNull { it.id == id } }
+    override fun observe(id: Long): Flow<SwitchWatch?> = watches.map { all -> all.firstOrNull { it.id == id } }
 
     override suspend fun getAll(): List<SwitchWatch> = watches.value
 
-    override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean =
-        watches.value.any { it.isOpen && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
+    override suspend fun hasOpenFor(sellIsin: String, soldAtEpochDay: Long): Boolean = watches.value.any { it.isOpen && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
 
-    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? =
-        watches.value
-            .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
-            .minByOrNull { it.id }
+    override suspend fun findOpenWithoutTransactionFor(sellIsin: String, soldAtEpochDay: Long): SwitchWatch? = watches.value
+        .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == sellIsin && it.soldAtEpochDay == soldAtEpochDay }
+        .minByOrNull { it.id }
 
     /** Sätt till `false` för att spela "någon annan kopplade först": [linkSellTransaction] rör inget och returnerar falskt. */
     var linkResult: Boolean? = null
@@ -61,7 +56,7 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         proceedsKr: Double,
         soldAtEpochDay: Long?,
         sourceRecordId: Long?,
-        targetLevel: Int?,
+        targetLevel: Int?
     ): Boolean {
         linkResult?.let { return it }
         val current = watches.value.firstOrNull { it.id == watchId } ?: return false
@@ -76,14 +71,13 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
                 sourceRecordId = if (adopt) sourceRecordId else watch.sourceRecordId,
                 targetLevel = if (adopt) targetLevel else watch.targetLevel,
                 // Som Room: en flyttad dag nollar bara nollpunkten, kandidaterna ligger kvar.
-                candidates = if (moved) watch.candidates.map { it.copy(navAtStart = null, navAtStartEpochDay = null) } else watch.candidates,
+                candidates = if (moved) watch.candidates.map { it.copy(navAtStart = null, navAtStartEpochDay = null) } else watch.candidates
             )
         }
         return true
     }
 
-    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean =
-        watches.value.any { it.isOpen && it.sellTransactionId == sellTransactionId }
+    override suspend fun hasOpenForTransaction(sellTransactionId: Long): Boolean = watches.value.any { it.isOpen && it.sellTransactionId == sellTransactionId }
 
     /** Körs först i [fillMissingTargetLevel] — spelar en annan väg som hinner sätta nivån före skrivningen. */
     var beforeFillMissingTargetLevel: (Long) -> Unit = {}
@@ -96,11 +90,9 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         return true
     }
 
-    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean =
-        changeSelection(watchId, { it.targetLevel == targetLevel }) { it.copy(targetLevel = targetLevel) }
+    override suspend fun setTargetLevel(watchId: Long, targetLevel: Int): Boolean = changeSelection(watchId, { it.targetLevel == targetLevel }) { it.copy(targetLevel = targetLevel) }
 
-    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean =
-        changeSelection(watchId, { it.indexOnly == indexOnly }) { it.copy(indexOnly = indexOnly) }
+    override suspend fun setIndexOnly(watchId: Long, indexOnly: Boolean): Boolean = changeSelection(watchId, { it.indexOnly == indexOnly }) { it.copy(indexOnly = indexOnly) }
 
     /** Som Room: bara en öppen bevakning och en verklig ändring; appens förslag går, de handplockade ligger kvar. */
     private fun changeSelection(watchId: Long, unchanged: (SwitchWatch) -> Boolean, change: (SwitchWatch) -> SwitchWatch): Boolean {
@@ -163,7 +155,7 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
                     } else {
                         candidate
                     }
-                },
+                }
             )
         }
     }
@@ -176,7 +168,7 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         reason: SwitchWatchCloseReason,
         today: LocalDate,
         boughtIsin: String?,
-        buyTransactionId: Long?,
+        buyTransactionId: Long?
     ): Boolean {
         closeResult?.let { return it }
         val wasOpen = watches.value.firstOrNull { it.id == watchId }?.isOpen == true
@@ -189,7 +181,7 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
                     closedAtEpochDay = today.toEpochDay(),
                     boughtIsin = if (bought) boughtIsin else null,
                     closeReason = reason,
-                    buyTransactionId = if (bought) buyTransactionId else null,
+                    buyTransactionId = if (bought) buyTransactionId else null
                 )
             }
         }
@@ -200,7 +192,7 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         watches.value = watches.value.map { watch ->
             watch.copy(
                 sellTransactionId = watch.sellTransactionId?.takeUnless { it == transactionId },
-                buyTransactionId = watch.buyTransactionId?.takeUnless { it == transactionId },
+                buyTransactionId = watch.buyTransactionId?.takeUnless { it == transactionId }
             )
         }
     }

@@ -22,7 +22,7 @@ data class Transaction(
     val epochDay: Long,
     val shares: Double,
     val pricePerShare: Double,
-    val fee: Double = 0.0,
+    val fee: Double = 0.0
 ) {
     /** Transaktionens totalbelopp (positivt för köp, används med tecken i beräkningar). */
     val amount: Double get() = shares * pricePerShare

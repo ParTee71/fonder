@@ -41,14 +41,14 @@ fun <T> SelectField(
     placeholder: String = "",
     clearOptionLabel: String? = null,
     supportingText: String? = null,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
         expanded = expanded && enabled,
         onExpandedChange = { if (enabled) expanded = it },
-        modifier = modifier,
+        modifier = modifier
     ) {
         OutlinedTextField(
             value = selected?.let(optionLabel) ?: placeholder,
@@ -58,19 +58,25 @@ fun <T> SelectField(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             supportingText = supportingText?.let { text -> { Text(text) } },
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled),
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled)
         )
         ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
             if (clearOptionLabel != null) {
                 DropdownMenuItem(
                     text = { Text(clearOptionLabel) },
-                    onClick = { onSelect(null); expanded = false },
+                    onClick = {
+                        onSelect(null)
+                        expanded = false
+                    }
                 )
             }
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(optionLabel(option)) },
-                    onClick = { onSelect(option); expanded = false },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
                 )
             }
         }

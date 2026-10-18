@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
-import se.partee71.fonder.domain.model.BackupRecord
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import se.partee71.fonder.domain.model.BackupRecord
 
 /**
  * Påminnelsen överst på Hem (HEM-12): data har ändrats sedan senaste säkerhetskopian, eller
@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter
  */
 data class BackupReminder(
     val newTransactions: Int,
-    val lastBackupEpochMillis: Long?,
+    val lastBackupEpochMillis: Long?
 )
 
 /** Det som räknas fram ur dagens innehåll — se [BackupReminderCalc.reminder]. */
@@ -23,7 +23,7 @@ data class BackupContentState(
     val fingerprint: String,
     val transactionCount: Int,
     /** Finns det något alls att förlora — en fond eller en transaktion. */
-    val hasData: Boolean,
+    val hasData: Boolean
 )
 
 object BackupReminderCalc {
@@ -44,6 +44,5 @@ object BackupReminderCalc {
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     /** Datumet för en kopia som det visas på Hem och i Inställningar — samma format som appens övriga datum. */
-    fun formatDate(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
-        Instant.ofEpochMilli(epochMillis).atZone(zone).format(dateFormat)
+    fun formatDate(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String = Instant.ofEpochMilli(epochMillis).atZone(zone).format(dateFormat)
 }

@@ -55,9 +55,9 @@ class PortfoljScreenTest {
             loading = false,
             holdings = persistentListOf(
                 Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0),
-                Holding(fund = annanFond, netShares = 5.0, netInvested = 500.0, currentValue = 520.0),
+                Holding(fund = annanFond, netShares = 5.0, netInvested = 500.0, currentValue = 520.0)
             ),
-            refreshingFundIds = persistentSetOf(fond.fundId),
+            refreshingFundIds = persistentSetOf(fond.fundId)
         )
 
         composeRule.setContent {
@@ -74,7 +74,7 @@ class PortfoljScreenTest {
         val state = PortfoljUiState(
             loading = false,
             holdings = persistentListOf(Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)),
-            pricesWorking = true,
+            pricesWorking = true
         )
 
         composeRule.setContent {
@@ -95,9 +95,9 @@ class PortfoljScreenTest {
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
                     day = PortfolioPerformanceCalc.PeriodResult.Available(amount = 30.0, fraction = 0.03),
                     week = null,
-                    month = null,
-                ),
-            ),
+                    month = null
+                )
+            )
         )
 
         composeRule.setContent {
@@ -136,9 +136,9 @@ class PortfoljScreenTest {
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
                     day = PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
                     week = PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-                    month = null,
-                ),
-            ),
+                    month = null
+                )
+            )
         )
 
         composeRule.setContent {
@@ -157,7 +157,7 @@ class PortfoljScreenTest {
             netShares = 10.0,
             netInvested = 500.0,
             currentValue = 1100.0,
-            firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
+            firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay()
         )
         val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), performance = persistentMapOf())
 
@@ -177,14 +177,14 @@ class PortfoljScreenTest {
             netShares = 10.0,
             netInvested = 1000.0,
             currentValue = 1100.0,
-            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(),
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay()
         )
         val state = PortfoljUiState(
             loading = false,
             holdings = persistentListOf(holding),
             totalValue = 1100.0,
             totalGainLossFraction = 0.1,
-            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay(),
+            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay()
         )
 
         composeRule.setContent {
@@ -202,7 +202,7 @@ class PortfoljScreenTest {
         gavFraction = gavFraction,
         portfolioShareFraction = null,
         annualizedVolatility = null,
-        sharpeRatio = null,
+        sharpeRatio = null
     )
 
     @Test
@@ -215,12 +215,12 @@ class PortfoljScreenTest {
             trend = null,
             momentum = null,
             status = null,
-            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = true, gainFraction = 0.6),
+            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = true, gainFraction = 0.6)
         )
         val state = PortfoljUiState(
             loading = false,
             holdings = persistentListOf(holding),
-            analysis = persistentMapOf(fond.fundId to analysis),
+            analysis = persistentMapOf(fond.fundId to analysis)
         )
 
         composeRule.setContent {
@@ -239,12 +239,12 @@ class PortfoljScreenTest {
             trend = null,
             momentum = null,
             status = null,
-            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = false, gainFraction = 0.1),
+            profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = false, gainFraction = 0.1)
         )
         val state = PortfoljUiState(
             loading = false,
             holdings = persistentListOf(holding),
-            analysis = persistentMapOf(fond.fundId to analysis),
+            analysis = persistentMapOf(fond.fundId to analysis)
         )
 
         composeRule.setContent {
@@ -266,17 +266,21 @@ class PortfoljScreenTest {
             byType = PortfolioExposureCalc.Dimension(
                 buckets = listOf(
                     PortfolioExposureCalc.Bucket("Aktiefond", 800.0, 0.8),
-                    PortfolioExposureCalc.Bucket("Räntefond", 200.0, 0.2),
+                    PortfolioExposureCalc.Bucket("Räntefond", 200.0, 0.2)
                 ),
-                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+                unknownValueKr = 0.0,
+                unknownFraction = 0.0,
+                unknownCount = 0
             ),
             byRegion = PortfolioExposureCalc.Dimension(
                 buckets = listOf(PortfolioExposureCalc.Bucket("Sverige", 1000.0, 1.0)),
-                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+                unknownValueKr = 0.0,
+                unknownFraction = 0.0,
+                unknownCount = 0
             ),
             indexStatus = PortfolioExposureCalc.IndexStatusSplit(indexValueKr = 300.0, indexFraction = 0.3, activeValueKr = 700.0, activeFraction = 0.7),
             includedValueKr = 1000.0,
-            excludedCount = 0,
+            excludedCount = 0
         )
         val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
 
@@ -306,13 +310,15 @@ class PortfoljScreenTest {
             byRiskLevel = PortfolioExposureCalc.Dimension(
                 buckets = listOf(
                     PortfolioExposureCalc.Bucket("3", 100.0, 0.1),
-                    PortfolioExposureCalc.Bucket("6", 900.0, 0.9),
+                    PortfolioExposureCalc.Bucket("6", 900.0, 0.9)
                 ),
-                unknownValueKr = 0.0, unknownFraction = 0.0, unknownCount = 0,
+                unknownValueKr = 0.0,
+                unknownFraction = 0.0,
+                unknownCount = 0
             ),
             indexStatus = emptyIndexStatus,
             includedValueKr = 1000.0,
-            excludedCount = 0,
+            excludedCount = 0
         )
         val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
 
@@ -335,11 +341,13 @@ class PortfoljScreenTest {
             byType = emptyDimension,
             byRegion = PortfolioExposureCalc.Dimension(
                 buckets = listOf(PortfolioExposureCalc.Bucket("Sverige", 600.0, 0.6)),
-                unknownValueKr = 400.0, unknownFraction = 0.4, unknownCount = 1,
+                unknownValueKr = 400.0,
+                unknownFraction = 0.4,
+                unknownCount = 1
             ),
             indexStatus = emptyIndexStatus,
             includedValueKr = 1000.0,
-            excludedCount = 0,
+            excludedCount = 0
         )
         val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
 
@@ -356,8 +364,11 @@ class PortfoljScreenTest {
     fun excludedCount_text_visas_nar_over_noll_och_uteblir_nar_noll() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
         val exposureUtanExkludering = PortfolioExposureCalc.Result(
-            byType = emptyDimension, byRegion = emptyDimension, indexStatus = emptyIndexStatus,
-            includedValueKr = 1000.0, excludedCount = 0,
+            byType = emptyDimension,
+            byRegion = emptyDimension,
+            indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0,
+            excludedCount = 0
         )
         val stateUtan = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposureUtanExkludering)
 
@@ -372,8 +383,11 @@ class PortfoljScreenTest {
     fun excludedCount_text_visas_nar_innehav_ar_exkluderade() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1000.0)
         val exposureMedExkludering = PortfolioExposureCalc.Result(
-            byType = emptyDimension, byRegion = emptyDimension, indexStatus = emptyIndexStatus,
-            includedValueKr = 1000.0, excludedCount = 2,
+            byType = emptyDimension,
+            byRegion = emptyDimension,
+            indexStatus = emptyIndexStatus,
+            includedValueKr = 1000.0,
+            excludedCount = 2
         )
         val stateMed = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposureMedExkludering)
 
@@ -415,7 +429,7 @@ class PortfoljScreenTest {
         val state = PortfoljUiState(
             loading = false,
             holdings = persistentListOf(holding),
-            riskLevels = persistentMapOf(fond.fundId to 5),
+            riskLevels = persistentMapOf(fond.fundId to 5)
         )
 
         composeRule.setContent {

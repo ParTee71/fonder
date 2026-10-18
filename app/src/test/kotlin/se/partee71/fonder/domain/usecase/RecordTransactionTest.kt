@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,7 +24,6 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 /**
  * Den enda skrivvägen för transaktioner (BYT-2, issue #143/#144): en sparad transaktion rör bytet
@@ -49,8 +49,12 @@ class RecordTransactionTest {
     private val prices = FakeCachedPriceRepository()
 
     private val useCase = RecordTransaction(
-        transactions, watches, records, metadata, scheduler,
-        TargetLevelPreselection({ riskProfile }, transactions, prices, watches, records),
+        transactions,
+        watches,
+        records,
+        metadata,
+        scheduler,
+        TargetLevelPreselection({ riskProfile }, transactions, prices, watches, records)
     )
 
     private val sellFund = Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SALJ")
@@ -59,18 +63,22 @@ class RecordTransactionTest {
     private fun meta(isin: String, risk: Int?) = FundMetadata(
         isin = isin, name = "Fond $isin", orderbookId = isin, totalFee = 0.4, managementFee = 0.4,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
-    private fun sale(fundId: String = sellFund.fundId, day: Long = today.toEpochDay(), shares: Double = 10.0, price: Double = 125.0, fee: Double = 25.0) =
-        Transaction(fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
+    private fun sale(fundId: String = sellFund.fundId, day: Long = today.toEpochDay(), shares: Double = 10.0, price: Double = 125.0, fee: Double = 25.0) = Transaction(fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
 
-    private fun purchase(fundId: String = buyFund.fundId, day: Long = today.toEpochDay()) =
-        Transaction(fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = 20.0, pricePerShare = 60.0)
+    private fun purchase(fundId: String = buyFund.fundId, day: Long = today.toEpochDay()) = Transaction(fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = 20.0, pricePerShare = 60.0)
 
     private fun planRecord(id: Long = 7, buyIsin: String = "SE_KOP") = SuggestionRecord(
-        id = id, suggestedAtEpochDay = today.minusDays(1).toEpochDay(), planIndex = 0,
-        sellIsin = "SE_SALJ", buyIsin = buyIsin, sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 60.0, switchValueKr = 4_200.0,
+        id = id,
+        suggestedAtEpochDay = today.minusDays(1).toEpochDay(),
+        planIndex = 0,
+        sellIsin = "SE_SALJ",
+        buyIsin = buyIsin,
+        sellNavAtSuggestion = 120.0,
+        buyNavAtSuggestion = 60.0,
+        switchValueKr = 4_200.0
     )
 
     private suspend fun setUpPlan() {
@@ -112,9 +120,9 @@ class RecordTransactionTest {
             listOf(
                 entry(sale(day = today.minusDays(5).toEpochDay())),
                 entry(purchase(day = today.minusDays(4).toEpochDay())),
-                entry(purchase(day = today.minusDays(3).toEpochDay())),
+                entry(purchase(day = today.minusDays(3).toEpochDay()))
             ),
-            today,
+            today
         )
 
         assertEquals(recorded.map { it.id }, transactions.transactions.value.map { it.id })
@@ -320,9 +328,9 @@ class RecordTransactionTest {
         val recorded = useCase.recordAll(
             listOf(
                 entry(sale(day = soldAt), SwitchDecision.ForSuggestion(recordId = 7, toLevel = 3)),
-                entry(purchase(day = today.minusDays(1).toEpochDay()), SwitchDecision.ClosesWatchOfEntry(entryIndex = 0)),
+                entry(purchase(day = today.minusDays(1).toEpochDay()), SwitchDecision.ClosesWatchOfEntry(entryIndex = 0))
             ),
-            today,
+            today
         )
 
         val watch = watches.watches.value.single()
@@ -344,9 +352,9 @@ class RecordTransactionTest {
             listOf(
                 entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 1)),
                 entry(sale(), SwitchDecision.None),
-                entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 1)),
+                entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 1))
             ),
-            today,
+            today
         )
 
         assertTrue(recorded.all { it.watchId == null })
@@ -362,12 +370,17 @@ class RecordTransactionTest {
         val watchDay = today.minusDays(2).toEpochDay()
         val watchId = watches.start(
             SwitchWatch(
-                sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = watchDay, proceedsKr = 4_200.0, targetLevel = 3, sourceRecordId = 7,
+                sellIsin = "SE_SALJ",
+                sellFundName = "Såld fond",
+                soldAtEpochDay = watchDay,
+                proceedsKr = 4_200.0,
+                targetLevel = 3,
+                sourceRecordId = 7,
                 candidates = listOf(
                     SwitchWatchCandidate(isin = "SE_KOP", name = "Köpt fond", navAtStart = 60.0, navAtStartEpochDay = watchDay),
-                    SwitchWatchCandidate(isin = "SE_EGEN", name = "Egen", navAtStart = 10.0, navAtStartEpochDay = watchDay, source = SwitchWatchCandidateSource.MANUELL),
-                ),
-            ),
+                    SwitchWatchCandidate(isin = "SE_EGEN", name = "Egen", navAtStart = 10.0, navAtStartEpochDay = watchDay, source = SwitchWatchCandidateSource.MANUELL)
+                )
+            )
         )
         val soldAt = today.minusDays(4).toEpochDay()
         val before = scheduler.switchPlanScans
@@ -400,7 +413,7 @@ class RecordTransactionTest {
             useCase.record(entry(sale(), SwitchDecision.LinksWatch(linked)), today),
             useCase.record(entry(sale(), SwitchDecision.LinksWatch(expired)), today),
             useCase.record(entry(sale(), SwitchDecision.LinksWatch(closed)), today),
-            useCase.record(entry(sale(), SwitchDecision.LinksWatch(404)), today),
+            useCase.record(entry(sale(), SwitchDecision.LinksWatch(404)), today)
         )
 
         assertTrue("kopplingen rapporteras som inte gjord", results.all { it.watchId == null })
@@ -431,9 +444,12 @@ class RecordTransactionTest {
         setUpPlan()
         val watchId = watches.start(
             SwitchWatch(
-                sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.toEpochDay(), sourceRecordId = 7,
-                candidates = listOf(SwitchWatchCandidate(isin = "SE_KOP", name = "Köpt fond", navAtStart = 60.0, navAtStartEpochDay = today.toEpochDay())),
-            ),
+                sellIsin = "SE_SALJ",
+                sellFundName = "Såld fond",
+                soldAtEpochDay = today.toEpochDay(),
+                sourceRecordId = 7,
+                candidates = listOf(SwitchWatchCandidate(isin = "SE_KOP", name = "Köpt fond", navAtStart = 60.0, navAtStartEpochDay = today.toEpochDay()))
+            )
         )
         val recorded = useCase.record(entry(sale(), SwitchDecision.LinksWatch(watchId)), today)
 
@@ -455,9 +471,9 @@ class RecordTransactionTest {
         val recorded = useCase.recordAll(
             listOf(
                 entry(sale(day = today.minusDays(2).toEpochDay()), SwitchDecision.LinksWatch(watchId)),
-                entry(purchase(), SwitchDecision.ClosesWatch(watchId)),
+                entry(purchase(), SwitchDecision.ClosesWatch(watchId))
             ),
-            today,
+            today
         )
 
         assertEquals(listOf(watchId, watchId), recorded.map { it.watchId })
@@ -506,9 +522,9 @@ class RecordTransactionTest {
         val recorded = useCase.recordAll(
             listOf(
                 entry(sale(), SwitchDecision.Standalone),
-                entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 0)),
+                entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 0))
             ),
-            today,
+            today
         )
 
         assertNull(recorded[0].watchId)
@@ -526,9 +542,9 @@ class RecordTransactionTest {
             listOf(
                 entry(sale(), SwitchDecision.Standalone),
                 entry(purchase(), SwitchDecision.ClosesWatchOfEntry(entryIndex = 0)),
-                entry(purchase(), SwitchDecision.None),
+                entry(purchase(), SwitchDecision.None)
             ),
-            today,
+            today
         )
 
         assertEquals(1, transactions.fundsReads)
@@ -583,7 +599,7 @@ class RecordTransactionTest {
         transactions.addTransaction(purchase(fundId = other.fundId, day = earlier))
         prices.latestPrices.value = mapOf(
             sellFund.fundId to FundPrice(sellFund.fundId, today.toEpochDay(), 125.0, "SEK"),
-            other.fundId to FundPrice(other.fundId, today.toEpochDay(), 100.0, "SEK"),
+            other.fundId to FundPrice(other.fundId, today.toEpochDay(), 100.0, "SEK")
         )
         riskProfile = RiskProfile(targetAllocation = mapOf(2 to 0.2, 3 to 0.5, 5 to 0.3))
     }
@@ -666,9 +682,14 @@ class RecordTransactionTest {
         setUpPlan()
         val existing = watches.start(
             SwitchWatch(
-                sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.toEpochDay(), proceedsKr = 4_200.0, targetLevel = 3, sourceRecordId = 7,
-                candidates = listOf(SwitchWatchCandidate(isin = "SE_KOP", name = "Köpt fond", navAtStart = 60.0, navAtStartEpochDay = today.toEpochDay())),
-            ),
+                sellIsin = "SE_SALJ",
+                sellFundName = "Såld fond",
+                soldAtEpochDay = today.toEpochDay(),
+                proceedsKr = 4_200.0,
+                targetLevel = 3,
+                sourceRecordId = 7,
+                candidates = listOf(SwitchWatchCandidate(isin = "SE_KOP", name = "Köpt fond", navAtStart = 60.0, navAtStartEpochDay = today.toEpochDay()))
+            )
         )
         val sale = savedSale()
 
@@ -715,14 +736,17 @@ class RecordTransactionTest {
 
     // --- Köpet som avslutar bevakningen (även "Köpte den här", via köpformuläret) ---
 
-    private suspend fun openWatch(sourceRecordId: Long? = 7, candidates: List<String> = listOf("SE_KOP")): Long =
-        watches.start(
-            SwitchWatch(
-                sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(3).toEpochDay(),
-                proceedsKr = 1_225.0, targetLevel = 3, sourceRecordId = sourceRecordId,
-                candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
-            ),
+    private suspend fun openWatch(sourceRecordId: Long? = 7, candidates: List<String> = listOf("SE_KOP")): Long = watches.start(
+        SwitchWatch(
+            sellIsin = "SE_SALJ",
+            sellFundName = "Såld fond",
+            soldAtEpochDay = today.minusDays(3).toEpochDay(),
+            proceedsKr = 1_225.0,
+            targetLevel = 3,
+            sourceRecordId = sourceRecordId,
+            candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) }
         )
+    )
 
     @Test
     fun `forslaget slas upp riktat - aldrig hela historiken`() = runTest {
@@ -778,7 +802,7 @@ class RecordTransactionTest {
 
     private fun suggestion() = SwitchPlanResolver.Suggestion(
         recordId = 7, planIndex = 0, sellIsin = "SE_SALJ", buyIsin = "SE_KOP", sellFundName = "Såld fond",
-        buyFundName = "Köpt fond", fromLevel = 5, toLevel = 3, feeDeltaPercent = 0.0, switchValueKr = 4_200.0, followed = true,
+        buyFundName = "Köpt fond", fromLevel = 5, toLevel = 3, feeDeltaPercent = 0.0, switchValueKr = 4_200.0, followed = true
     )
 
     @Test

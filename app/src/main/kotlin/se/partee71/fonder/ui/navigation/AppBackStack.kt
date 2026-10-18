@@ -79,10 +79,12 @@ class AppBackStack internal constructor(current: Screen, stacks: Map<Screen, Lis
         val stack = mutable(currentTab)
         when {
             stack.size > 1 -> stack.removeAt(stack.lastIndex)
+
             currentTab != START -> {
                 stack.clear()
                 currentTab = START
             }
+
             else -> return false
         }
         return true
@@ -94,8 +96,7 @@ class AppBackStack internal constructor(current: Screen, stacks: Map<Screen, Lis
         if (size > 1) removeRange(1, size)
     }
 
-    internal fun save(): String =
-        json.encodeToString(Saved.serializer(), Saved(currentTab, Screen.entries.map { stack(it).toList() }))
+    internal fun save(): String = json.encodeToString(Saved.serializer(), Saved(currentTab, Screen.entries.map { stack(it).toList() }))
 
     @Serializable
     internal class Saved(val current: Screen, val stacks: List<List<AppKey>>)

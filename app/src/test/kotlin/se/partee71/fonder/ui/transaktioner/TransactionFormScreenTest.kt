@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,7 +26,6 @@ import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Transaktionsformuläret med bytesväljaren (BYT-2, issue #144) i alla lägen: dold när det bara
@@ -47,11 +47,11 @@ class TransactionFormScreenTest {
     private val standalone = SwitchOptionUi(SwitchOption.Decide(SwitchDecision.Standalone), SwitchOptionLabel.Standalone)
     private val planRow = SwitchOptionUi(
         SwitchOption.Decide(SwitchDecision.ForSuggestion(42, 2)),
-        SwitchOptionLabel.PlanRow(planIndex = 1, sellFundName = "SEB Sverige Småbolag", buyFundName = "Spiltan Räntefond Sverige"),
+        SwitchOptionLabel.PlanRow(planIndex = 1, sellFundName = "SEB Sverige Småbolag", buyFundName = "Spiltan Räntefond Sverige")
     )
     private val watch = SwitchOptionUi(
         SwitchOption.Decide(SwitchDecision.ClosesWatch(7)),
-        SwitchOptionLabel.Watch("Swedbank Robur Ny Teknik", LocalDate.of(2026, 10, 10).toEpochDay(), 18_400.0),
+        SwitchOptionLabel.Watch("Swedbank Robur Ny Teknik", LocalDate.of(2026, 10, 10).toEpochDay(), 18_400.0)
     )
 
     /** "Registrera säljet" från Följ: fond och typ låsta, förifyllt, planraden förvald. */
@@ -68,7 +68,7 @@ class TransactionFormScreenTest {
         typeLocked = true,
         followIntro = FollowIntro(planIndex = 1, buyFundName = "Spiltan Räntefond Sverige", amountKr = 12_500.0),
         prefillAmountKr = 12_500.0,
-        switchField = SwitchFieldUi(TransactionType.SALJ, persistentListOf(none, standalone, planRow), selected = planRow),
+        switchField = SwitchFieldUi(TransactionType.SALJ, persistentListOf(none, standalone, planRow), selected = planRow)
     )
 
     /** Köp av en fond som inte är ett bevakat alternativ medan ett byte väntar: frågan krävs. */
@@ -80,7 +80,7 @@ class TransactionFormScreenTest {
         sharesText = "102,5641",
         priceText = "179,40",
         valid = true,
-        switchField = SwitchFieldUi(TransactionType.KOP, persistentListOf(none, watch), selected = null),
+        switchField = SwitchFieldUi(TransactionType.KOP, persistentListOf(none, watch), selected = null)
     )
 
     @Test
@@ -98,7 +98,7 @@ class TransactionFormScreenTest {
 
         composeRule.onNodeWithText(
             "Byte 2 i bytesplanen: sälj för ${MoneyFormat.kr(12_500.0)} och köp Spiltan Räntefond Sverige när likviden landat. " +
-                "Gör säljet i banken först och registrera det här.",
+                "Gör säljet i banken först och registrera det här."
         ).assertIsDisplayed()
         composeRule.onNode(hasText("Fond") and hasText("SEB Sverige Småbolag")).assertIsNotEnabled()
         composeRule.onNodeWithText("Köp").assertIsNotEnabled()
@@ -106,7 +106,7 @@ class TransactionFormScreenTest {
         // Fältets namn, valet och vad valet gör står i samma nod — skärmläsaren läser dem i ett svep.
         composeRule.onNode(
             hasText("Byte") and hasText("Byte 2 · Sälj SEB Sverige Småbolag → Köp Spiltan Räntefond Sverige") and
-                hasText("Bytet syns sedan som Sålt på Beslut", substring = true),
+                hasText("Bytet syns sedan som Sålt på Beslut", substring = true)
         ).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText("Spara säljet").assertIsEnabled()
     }
@@ -119,7 +119,7 @@ class TransactionFormScreenTest {
         composeRule.onNode(hasText("Hör till byte") and hasText("Välj ett svar")).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText(
             "Avanza Global är inte ett av alternativen du bevakar, så appen frågar i stället för att gissa. " +
-                "Väljer du bytet stängs bevakningen som köpt med den här fonden.",
+                "Väljer du bytet stängs bevakningen som köpt med den här fonden."
         ).assertIsDisplayed()
         composeRule.onNodeWithText("Spara").assertIsNotEnabled()
         composeRule.onNodeWithText("Svara på frågan om bytet innan du sparar.").assertIsDisplayed()
@@ -136,7 +136,7 @@ class TransactionFormScreenTest {
 
         composeRule.onNodeWithText(
             "Transaktionen sparades, men bevakningen kunde inte kopplas – den var redan kopplad eller avslutad. " +
-                "Gå tillbaka; säljet finns i Händelser utan koppling.",
+                "Gå tillbaka; säljet finns i Händelser utan koppling."
         ).assertIsDisplayed()
         composeRule.onNodeWithText("Spara säljet").assertIsNotEnabled()
     }

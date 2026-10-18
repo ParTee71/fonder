@@ -1,11 +1,12 @@
 package se.partee71.fonder.ui.hem
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,24 +28,20 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.datastore.BenchmarkComponentRef
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupPayload
 import se.partee71.fonder.data.repository.BackupSerializer
 import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.FakeBackupRepository
-import se.partee71.fonder.domain.model.BackupTarget
-import se.partee71.fonder.domain.usecase.BackupReminder
-import se.partee71.fonder.data.datastore.BenchmarkComponentRef
-import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
-import se.partee71.fonder.domain.usecase.DismissedPlanSource
-import se.partee71.fonder.domain.usecase.InProgressSwitches
-import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.FundMetadata
@@ -56,13 +53,16 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.BackupReminder
+import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.domain.usecase.InProgressSwitches
+import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HemViewModelTest {
@@ -130,13 +130,17 @@ class HemViewModelTest {
         preferencesRepository,
         FakeSuggestionDismissalRepository().let { dismissals ->
             PendingDecisionsSource(
-                preferencesRepository, fakeSuggestionRecordRepo, fakeSwitchWatchRepo, fakeFundPriceRepo, fakeFundMetadataRepo,
+                preferencesRepository,
+                fakeSuggestionRecordRepo,
+                fakeSwitchWatchRepo,
+                fakeFundPriceRepo,
+                fakeFundMetadataRepo,
                 DismissedPlanSource(fakeSuggestionRecordRepo, dismissals, preferencesRepository, fakeFundMetadataRepo),
-                InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
+                InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo)
             )
         },
         fakeScheduler,
-        backupStatus,
+        backupStatus
     )
 
     /** Backup-kontraktets innehåll (HEM-12) — tomt som standard, så påminnelsen syns bara i sina egna tester. */
@@ -150,7 +154,7 @@ class HemViewModelTest {
         // Turbine-timeout om DataStores egen skrivning annars kör på en frikopplad klocka.
         dataStore = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("hem_test.preferences_pb") },
+            produceFile = { tempFolder.newFile("hem_test.preferences_pb") }
         )
         preferencesRepository = PreferencesRepository(dataStore)
     }
@@ -175,15 +179,15 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
                 FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(7).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 80.0),
-            ),
+                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 80.0)
+            )
         )
 
         val vm = viewModel()
@@ -217,7 +221,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 120.0))
 
@@ -237,10 +241,10 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         priceHistoryByFundId = mapOf(
-            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(2).toEpochDay(), nav = 100.0)),
+            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(2).toEpochDay(), nav = 100.0))
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 105.0))
 
@@ -261,11 +265,11 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         // Flat kurshistorik — inga signaler triggade.
         priceHistoryByFundId = mapOf(
-            fond.fundId to (0..730L step 14).map { daysAgo -> FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) },
+            fond.fundId to (0..730L step 14).map { daysAgo -> FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) }
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
@@ -285,14 +289,14 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under både
         // 52-veckorstoppen och 200-dagarssnittet (samma fixturprincip som FundAnalysisCalcTest).
         priceHistoryByFundId = mapOf(
             fond.fundId to (0..730L step 5).map { daysAgo ->
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
-            },
+            }
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
@@ -314,15 +318,15 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
             "SE0001466368" to FundMetadata(
                 isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
                 category = null, fundType = null, companyName = null, risk = null, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
+            )
         )
 
         val vm = viewModel()
@@ -344,7 +348,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A") // inget ISIN
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -368,7 +372,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = emptyMap() // källan känner inte till ISIN:et
@@ -391,7 +395,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
@@ -400,8 +404,8 @@ class HemViewModelTest {
                 category = null, fundType = null, companyName = null, risk = null, indexFund = true,
                 startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
                 cheapestAlternativeIsin = "SE_ALT", cheapestAlternativeFee = 0.21,
-                comparisonResolvedAtEpochDay = today.toEpochDay(),
-            ),
+                comparisonResolvedAtEpochDay = today.toEpochDay()
+            )
         )
 
         val vm = viewModel()
@@ -424,7 +428,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -444,15 +448,15 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
             "SE0001466368" to FundMetadata(
                 isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
                 category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
+            )
         )
         preferencesRepository.setRiskProfile(RiskProfile(targetRiskLevel = 5))
 
@@ -474,7 +478,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = emptyMap()
@@ -496,15 +500,15 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
             "SE0001466368" to FundMetadata(
                 isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
                 category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
+            )
         )
         // Ett enda innehav på nivå 4 -> hela portföljvärdet är den faktiska fördelningen {4: 100 %}.
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 0.5, 4 to 0.5)))
@@ -529,7 +533,7 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -549,29 +553,32 @@ class HemViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_HELD")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
             "SE_HELD" to FundMetadata(
                 isin = "SE_HELD", name = "Innehav", orderbookId = "X", totalFee = 1.0, managementFee = 1.0,
                 category = null, fundType = null, companyName = null, risk = 5, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
             ),
             "SE_CAND" to FundMetadata(
                 isin = "SE_CAND", name = "Kandidat", orderbookId = "Y", totalFee = 0.3, managementFee = 0.3,
                 category = null, fundType = null, companyName = null, risk = 3, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
+            )
         )
         fakeSuggestionRecordRepo.records.value = listOf(
             SuggestionRecord(
                 id = 42,
-                suggestedAtEpochDay = today.toEpochDay(), planIndex = 0,
-                sellIsin = "SE_HELD", buyIsin = "SE_CAND",
-                sellNavAtSuggestion = 120.0, buyNavAtSuggestion = 50.0,
-                switchValueKr = 2_500.0,
-            ),
+                suggestedAtEpochDay = today.toEpochDay(),
+                planIndex = 0,
+                sellIsin = "SE_HELD",
+                buyIsin = "SE_CAND",
+                sellNavAtSuggestion = 120.0,
+                buyNavAtSuggestion = 50.0,
+                switchValueKr = 2_500.0
+            )
         )
     }
 
@@ -634,7 +641,7 @@ class HemViewModelTest {
         setUpHoldingWithMetadataForSwitchPlan()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         fakeSwitchWatchRepo.start(
-            SwitchWatch(sellIsin = "SE_ANNAN_SALJ", sellFundName = "Fond B", soldAtEpochDay = LocalDate.now().toEpochDay()),
+            SwitchWatch(sellIsin = "SE_ANNAN_SALJ", sellFundName = "Fond B", soldAtEpochDay = LocalDate.now().toEpochDay())
         )
 
         viewModel().uiState.test {
@@ -683,14 +690,14 @@ class HemViewModelTest {
         val today = LocalDate.now()
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(15).toEpochDay(), nav = 110.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-            ),
+                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+            )
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
     }
@@ -739,14 +746,14 @@ class HemViewModelTest {
         funds.value = listOf(fondA, fondB)
         transactions.value = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         // Fond B saknar historik helt — den ska utelämnas ur kurvan, inte räknas som en förlust.
         priceHistoryByFundId = mapOf(
             fondA.fundId to listOf(
                 FundPrice(fundId = fondA.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = fondA.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-            ),
+                FundPrice(fundId = fondA.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+            )
         )
 
         val vm = viewModel()
@@ -768,7 +775,7 @@ class HemViewModelTest {
         priceHistoryByFundId = priceHistoryByFundId + (
             BENCHMARK_ISIN to listOf(
                 FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
             )
             )
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
@@ -838,7 +845,7 @@ class HemViewModelTest {
 
             priceHistoryCalls.clear()
             latestPrices.value = mapOf(
-                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0),
+                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0)
             )
             awaitItem()
 
@@ -862,7 +869,7 @@ class HemViewModelTest {
 
             // Ny emission (kursändring) ska inte ge en till skanning.
             latestPrices.value = mapOf(
-                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0),
+                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0)
             )
             awaitItem()
 
@@ -904,23 +911,27 @@ class HemViewModelTest {
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
         priceHistoryByFundId = priceHistoryByFundId +
-            (BENCHMARK_ISIN to listOf(
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
-            )) +
-            (BOND_ISIN to listOf(
-                FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 100.0),
-            ))
+            (
+                BENCHMARK_ISIN to listOf(
+                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
+                )
+                ) +
+            (
+                BOND_ISIN to listOf(
+                    FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                    FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 100.0)
+                )
+                )
         metadataByIsin = mapOf(
             BENCHMARK_ISIN to indexFundMetadata(),
-            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Räntefond X"),
+            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Räntefond X")
         )
         preferencesRepository.setBenchmark(
             listOf(
                 BenchmarkComponentRef(BENCHMARK_ISIN, weight = 0.7),
-                BenchmarkComponentRef(BOND_ISIN, weight = 0.3),
-            ),
+                BenchmarkComponentRef(BOND_ISIN, weight = 0.3)
+            )
         )
 
         val vm = viewModel()
@@ -946,7 +957,7 @@ class HemViewModelTest {
         priceHistoryByFundId = priceHistoryByFundId + (
             BENCHMARK_ISIN to listOf(
                 FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
+                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
             )
             )
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
@@ -968,17 +979,21 @@ class HemViewModelTest {
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
         priceHistoryByFundId = priceHistoryByFundId +
-            (BENCHMARK_ISIN to listOf(
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0),
-            )) +
-            (BOND_ISIN to listOf(
-                FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 130.0),
-            ))
+            (
+                BENCHMARK_ISIN to listOf(
+                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
+                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
+                )
+                ) +
+            (
+                BOND_ISIN to listOf(
+                    FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
+                    FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 130.0)
+                )
+                )
         metadataByIsin = mapOf(
             BENCHMARK_ISIN to indexFundMetadata(),
-            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Mitt val"),
+            BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Mitt val")
         )
         // Appens val: den automatiska blandningen. Användarens val: en helt annan fond.
         preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
@@ -1003,7 +1018,7 @@ class HemViewModelTest {
         funds = listOf(Fund(fundId = "SHB1", name = "Fond A")),
         transactions = (1..transactionCount).map { i ->
             Transaction(id = i.toLong(), fundId = "SHB1", type = TransactionType.KOP, epochDay = 19_000L + i, shares = 1.0, pricePerShare = 100.0)
-        },
+        }
     )
 
     @Test
@@ -1078,7 +1093,7 @@ class HemViewModelTest {
         indexFund = true,
         startDateEpochDay = null,
         minimumBuy = null,
-        tags = emptyList(),
+        tags = emptyList()
     )
 
     private companion object {

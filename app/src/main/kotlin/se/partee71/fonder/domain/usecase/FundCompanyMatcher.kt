@@ -24,7 +24,7 @@ object FundCompanyMatcher {
         "fund management", "asset management", "investment management",
         "global services", "fonder", "capital", "group",
         "gmbh", "llp", "llc", "plc", "oyj", "aps",
-        "s.a.", "sa", "n.v.", "nv", "a/s", "asa", "as", "ab", "ltd", "inc", "corp",
+        "s.a.", "sa", "n.v.", "nv", "a/s", "asa", "as", "ab", "ltd", "inc", "corp"
     )
 
     /**

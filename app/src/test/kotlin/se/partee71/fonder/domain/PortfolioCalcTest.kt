@@ -20,7 +20,7 @@ class PortfolioCalcTest {
     fun `net shares och invested subtraherar salj fran kop`() {
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0)
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
@@ -38,7 +38,7 @@ class PortfolioCalcTest {
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 5.0, pricePerShare = 100.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 2, shares = 5.0, pricePerShare = 200.0),
             // Säljer 6 andelar — äldsta lotten (5 à 100) konsumeras helt, plus 1 av den nya (à 200).
-            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 3, shares = 6.0, pricePerShare = 150.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 3, shares = 6.0, pricePerShare = 150.0)
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
@@ -55,7 +55,7 @@ class PortfolioCalcTest {
         // som fortfarande innehas.
         val txs = listOf(
             Transaction(id = 1, fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
-            Transaction(id = 2, fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0, fee = 20.0),
+            Transaction(id = 2, fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 4.0, pricePerShare = 120.0, fee = 20.0)
         )
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
@@ -70,7 +70,7 @@ class PortfolioCalcTest {
     fun `holdings sorteras pa namn och totalen summeras`() {
         val txs = listOf(
             Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 200.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 300.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 300.0)
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA, fondB), txs)
@@ -82,7 +82,7 @@ class PortfolioCalcTest {
     @Test
     fun `transaktion utan matchande fond ignoreras`() {
         val txs = listOf(
-            Transaction(fundId = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0),
+            Transaction(fundId = "OKAND", type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 10.0)
         )
         assertEquals(0, PortfolioCalc.computeHoldings(listOf(fondA), txs).size)
     }
@@ -91,7 +91,7 @@ class PortfolioCalcTest {
     fun `helt avsald fond (netto noll andelar) utelamnas ur portfoljen`() {
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 10.0, pricePerShare = 120.0, fee = 20.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 10.0, pricePerShare = 120.0, fee = 20.0)
         )
         // Fees dras av från det realiserade resultatet (RealizedGainCalculator), inte från
         // portföljens kvarvarande anskaffningsvärde — här är fonden helt avsåld oavsett.
@@ -104,7 +104,7 @@ class PortfolioCalcTest {
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 2.0, pricePerShare = 90.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 60, shares = 1.0, pricePerShare = 110.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 60, shares = 1.0, pricePerShare = 110.0)
         )
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
@@ -122,7 +122,7 @@ class PortfolioCalcTest {
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 10.0, pricePerShare = 100.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 400, shares = 10.0, pricePerShare = 150.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 900, shares = 10.0, pricePerShare = 200.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 900, shares = 10.0, pricePerShare = 200.0)
         )
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
@@ -137,7 +137,7 @@ class PortfolioCalcTest {
         // är inget köp och ska aldrig bli positionens "första köp".
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 5, shares = 1.0, pricePerShare = 80.0),
-            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 100, shares = 2.0, pricePerShare = 90.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 100, shares = 2.0, pricePerShare = 90.0)
         )
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()

@@ -11,13 +11,12 @@ class PortfolioRiskCalcTest {
 
     private fun fund(fundId: String, isin: String? = "SE$fundId") = Fund(fundId = fundId, name = fundId, isin = isin)
 
-    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") =
-        Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
+    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") = Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
 
     private fun metadata(isin: String, risk: Int?) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = null, managementFee = null,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     @Test
@@ -45,11 +44,11 @@ class PortfolioRiskCalcTest {
     fun `handraknat vardeviktat snitt over tva innehav`() {
         val holdings = listOf(
             holding("A", currentValue = 300.0),
-            holding("B", currentValue = 700.0),
+            holding("B", currentValue = 700.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", risk = 2),
-            "SEB" to metadata("SEB", risk = 6),
+            "SEB" to metadata("SEB", risk = 6)
         )
 
         val result = PortfolioRiskCalc.compute(holdings, metadataByIsin)
@@ -104,7 +103,7 @@ class PortfolioRiskCalcTest {
     fun `ett kant och ett okant innehav ger bara det kandas bidrag`() {
         val holdings = listOf(
             holding("A", currentValue = 500.0),
-            holding("B", currentValue = 500.0, isin = null),
+            holding("B", currentValue = 500.0, isin = null)
         )
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 3))
 
@@ -121,7 +120,7 @@ class PortfolioRiskCalcTest {
     fun `deviationByLevel racknar mal minus faktisk per niva`() {
         val deviations = PortfolioRiskCalc.deviationByLevel(
             targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40),
+            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40)
         )
 
         val byLevel = deviations.associateBy { it.level }
@@ -134,7 +133,7 @@ class PortfolioRiskCalcTest {
     fun `deviationByLevel sorterar storst undervikning forst`() {
         val deviations = PortfolioRiskCalc.deviationByLevel(
             targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40),
+            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40)
         )
 
         assertEquals(listOf(3, 4, 5), deviations.map { it.level })
@@ -144,7 +143,7 @@ class PortfolioRiskCalcTest {
     fun `deviationByLevel tar med niva som bara finns pa ena sidan med full avvikelse`() {
         val deviations = PortfolioRiskCalc.deviationByLevel(
             targetAllocation = mapOf(4 to 1.0),
-            actualAllocation = mapOf(4 to 0.6, 6 to 0.4),
+            actualAllocation = mapOf(4 to 0.6, 6 to 0.4)
         )
 
         val byLevel = deviations.associateBy { it.level }
@@ -165,7 +164,7 @@ class PortfolioRiskCalcTest {
         // summerar till exakt 1 — så varje nivå såg underviktad ut.
         val holdings = listOf(
             holding("A", currentValue = 700.0),
-            holding("B", currentValue = 300.0),
+            holding("B", currentValue = 300.0)
         )
         val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 4), "SEB" to metadata("SEB", risk = null))
         val exposure = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -186,7 +185,7 @@ class PortfolioRiskCalcTest {
     fun `actualAllocation ger en tom fordelning utan klassificerat varde`() {
         val exposure = PortfolioExposureCalc.compute(
             listOf(holding("A", currentValue = 1000.0)),
-            mapOf("SEA" to metadata("SEA", risk = null)),
+            mapOf("SEA" to metadata("SEA", risk = null))
         )
 
         assertEquals(emptyMap<Int, Double>(), PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel))

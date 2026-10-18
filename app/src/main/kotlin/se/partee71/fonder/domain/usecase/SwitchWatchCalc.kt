@@ -1,8 +1,8 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
-import java.time.LocalDate
 
 /**
  * Räknar ut vad de bevakade alternativen gjort sedan säljdagen (ANA-12, issue #114) — ren,
@@ -64,7 +64,7 @@ object SwitchWatchCalc {
         val candidate: SwitchWatchCandidate,
         val changeFraction: Double? = null,
         val changeKr: Double? = null,
-        val partial: Boolean = false,
+        val partial: Boolean = false
     ) {
         val isEvaluated: Boolean get() = changeFraction != null
     }
@@ -80,7 +80,7 @@ object SwitchWatchCalc {
         candidate: SwitchWatchCandidate,
         latestNav: Double?,
         proceedsKr: Double?,
-        soldAtEpochDay: Long,
+        soldAtEpochDay: Long
     ): CandidateOutcome {
         val start = candidate.navAtStart
         if (start == null || start <= 0.0 || latestNav == null) return CandidateOutcome(candidate)
@@ -90,7 +90,7 @@ object SwitchWatchCalc {
             candidate = candidate,
             changeFraction = fraction,
             changeKr = proceedsKr?.let { it * fraction },
-            partial = candidate.navAtStartEpochDay != null && candidate.navAtStartEpochDay > soldAtEpochDay,
+            partial = candidate.navAtStartEpochDay != null && candidate.navAtStartEpochDay > soldAtEpochDay
         )
     }
 
@@ -100,24 +100,21 @@ object SwitchWatchCalc {
      * som gått bäst sedan säljet. En ej utvärderad rad hamnar sist men **försvinner aldrig**,
      * annars hade en kandidat vars kurs inte gick att hämta sett ut som om den aldrig lagts till.
      */
-    fun ranked(outcomes: List<CandidateOutcome>): List<CandidateOutcome> =
-        outcomes.sortedWith(
-            compareByDescending<CandidateOutcome> { it.isEvaluated }
-                .thenByDescending { it.changeFraction ?: Double.NEGATIVE_INFINITY }
-                .thenBy { it.candidate.position },
-        )
+    fun ranked(outcomes: List<CandidateOutcome>): List<CandidateOutcome> = outcomes.sortedWith(
+        compareByDescending<CandidateOutcome> { it.isEvaluated }
+            .thenByDescending { it.changeFraction ?: Double.NEGATIVE_INFINITY }
+            .thenBy { it.candidate.position }
+    )
 
     /** Antal dygn sedan säljdagen, minst 0 — "dag N" i väntan på likviden. */
-    fun daysWaiting(watch: SwitchWatch, today: LocalDate): Long =
-        (today.toEpochDay() - watch.soldAtEpochDay).coerceAtLeast(0)
+    fun daysWaiting(watch: SwitchWatch, today: LocalDate): Long = (today.toEpochDay() - watch.soldAtEpochDay).coerceAtLeast(0)
 
     /**
      * Sant när en **öppen** bevakning passerat [WATCH_TTL_DAYS]. En redan stängd bevakning är
      * aldrig utgången — den har ett avslut, och att räkna om den till "utgången" hade skrivit
      * över vad användaren faktiskt gjorde.
      */
-    fun isExpired(watch: SwitchWatch, today: LocalDate): Boolean =
-        watch.isOpen && daysWaiting(watch, today) > WATCH_TTL_DAYS
+    fun isExpired(watch: SwitchWatch, today: LocalDate): Boolean = watch.isOpen && daysWaiting(watch, today) > WATCH_TTL_DAYS
 
     /**
      * Nollpunkten ur en hämtad kurshistorik: kursen på [soldAtEpochDay], annars **första kända
@@ -128,6 +125,5 @@ object SwitchWatchCalc {
      * @return dagen och kursen, eller null när historiken inte når fram — kandidaten visas då
      *   som ej utvärderad tills en senare hämtning lyckas.
      */
-    fun anchor(history: List<Pair<Long, Double>>, soldAtEpochDay: Long): Pair<Long, Double>? =
-        history.filter { it.first >= soldAtEpochDay }.minByOrNull { it.first }
+    fun anchor(history: List<Pair<Long, Double>>, soldAtEpochDay: Long): Pair<Long, Double>? = history.filter { it.first >= soldAtEpochDay }.minByOrNull { it.first }
 }

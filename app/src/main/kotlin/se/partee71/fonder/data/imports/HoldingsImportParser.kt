@@ -1,12 +1,12 @@
 package se.partee71.fonder.data.imports
 
-import org.w3c.dom.Element
-import se.partee71.fonder.domain.model.ImportedHoldingRow
-import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import java.io.InputStream
 import java.time.LocalDate
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+import se.partee71.fonder.domain.model.ImportedHoldingRow
+import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 
 /**
  * Parsar Handelsbankens "Innehav Fonder"-export till [ImportedHoldingRow] (issue #8).
@@ -36,8 +36,7 @@ object HoldingsImportParser {
         return if (isZip(bytes)) parseZip(bytes) else parseSheetXml(bytes.toString(Charsets.UTF_8), sharedStrings = emptyList())
     }
 
-    private fun isZip(bytes: ByteArray): Boolean =
-        bytes.size >= ZIP_MAGIC.size && bytes.take(ZIP_MAGIC.size).toByteArray().contentEquals(ZIP_MAGIC)
+    private fun isZip(bytes: ByteArray): Boolean = bytes.size >= ZIP_MAGIC.size && bytes.take(ZIP_MAGIC.size).toByteArray().contentEquals(ZIP_MAGIC)
 
     private fun parseZip(bytes: ByteArray): List<ImportedHoldingRow> {
         var sheetXml: String? = null
@@ -49,6 +48,7 @@ object HoldingsImportParser {
                 when {
                     entry.name.matches(Regex("""xl/worksheets/sheet\d+\.xml""")) && sheetXml == null ->
                         sheetXml = zip.readBytes().toString(Charsets.UTF_8)
+
                     entry.name == "xl/sharedStrings.xml" ->
                         sharedStringsXml = zip.readBytes().toString(Charsets.UTF_8)
                 }
@@ -66,11 +66,10 @@ object HoldingsImportParser {
      * användarvald exportfil, inte en betrodd källa. `disallow-doctype-decl` räcker för att
      * stänga av både externa entiteter och DTD-baserade "billion laughs"-attacker.
      */
-    private fun secureDocumentBuilder() =
-        DocumentBuilderFactory.newInstance().apply {
-            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
-            isExpandEntityReferences = false
-        }.newDocumentBuilder()
+    private fun secureDocumentBuilder() = DocumentBuilderFactory.newInstance().apply {
+        runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+        isExpandEntityReferences = false
+    }.newDocumentBuilder()
 
     internal fun parseSharedStrings(xml: String): List<String> {
         val doc = secureDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8))
@@ -108,15 +107,15 @@ object HoldingsImportParser {
         return cells
     }
 
-    private fun cellText(cell: Element, sharedStrings: List<String>): String {
-        return when (cell.getAttribute("t")) {
-            "inlineStr" -> firstChildText(cell, "is") ?: ""
-            "s" -> firstChildText(cell, "v")
-                ?.toIntOrNull()
-                ?.let { sharedStrings.getOrNull(it) }
-                ?: ""
-            else -> firstChildText(cell, "v") ?: ""
-        }
+    private fun cellText(cell: Element, sharedStrings: List<String>): String = when (cell.getAttribute("t")) {
+        "inlineStr" -> firstChildText(cell, "is") ?: ""
+
+        "s" -> firstChildText(cell, "v")
+            ?.toIntOrNull()
+            ?.let { sharedStrings.getOrNull(it) }
+            ?: ""
+
+        else -> firstChildText(cell, "v") ?: ""
     }
 
     private fun firstChildText(parent: Element, tagName: String): String? {
@@ -140,7 +139,7 @@ object HoldingsImportParser {
             currency = cells["F"]?.trim().orEmpty(),
             quoteEpochDay = quoteDate?.toEpochDay() ?: LocalDate.now().toEpochDay(),
             marketValue = cells["H"]?.let(SwedishNumberFormat::parse) ?: 0.0,
-            acquisitionValue = acquisitionValue,
+            acquisitionValue = acquisitionValue
         )
     }
 }

@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -17,8 +19,6 @@ import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * Ett öppet pågående byte, redo för visning (ANA-12, NAV-9) — den enda vägen tillbaka till
@@ -43,7 +43,7 @@ data class OpenSwitchWatch(
     /** Källförslagets fondpar (sälj → köp) — matchar samma byte i en senare inspelning av planen. */
     val sourcePair: Pair<String, String>? = null,
     /** Källförslagets sort, null när bevakningen är fristående eller förslaget inte finns kvar. */
-    val sourceKind: SuggestionKind? = null,
+    val sourceKind: SuggestionKind? = null
 )
 
 /**
@@ -83,7 +83,7 @@ data class PendingDecisions(
      * bevakningarna — sätts av [PendingDecisionsSource] med [withSwitches]. Antalen nedan läser
      * den, så Beslut, "Att besluta" och flikmärket aldrig kan visa olika.
      */
-    val switches: SwitchRows = SwitchRows(),
+    val switches: SwitchRows = SwitchRows()
 ) {
     /** Planens byten som väntar på ett beslut — se [SwitchRows.proposedCount]. */
     val openSwitchCount: Int get() = switches.proposedCount
@@ -101,8 +101,7 @@ data class PendingDecisions(
     val isEmpty: Boolean get() = switches.isEmpty
 
     /** Samma beslut med [switches] byggd ur fälten och [closedWatches] — enda vägen till listan. */
-    fun withSwitches(closedWatches: List<SwitchWatch>, today: LocalDate): PendingDecisions =
-        copy(switches = SwitchRows.build(this, closedWatches, today))
+    fun withSwitches(closedWatches: List<SwitchWatch>, today: LocalDate): PendingDecisions = copy(switches = SwitchRows.build(this, closedWatches, today))
 }
 
 /**
@@ -127,7 +126,7 @@ class PendingDecisionsSource @Inject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val dismissedPlanSource: DismissedPlanSource,
-    private val inProgressSwitches: InProgressSwitches,
+    private val inProgressSwitches: InProgressSwitches
 ) {
 
     fun observe(): Flow<PendingDecisions> {
@@ -140,7 +139,7 @@ class PendingDecisionsSource @Inject constructor(
                 cheaperAlternatives = resolved.cheaper.map { it.copy(suggestion = it.suggestion.copy(inProgress = watches.inProgress.marks(it.suggestion))) },
                 dismissedCheaperAlternatives = resolved.dismissedCheaper,
                 openWatches = watches.visible,
-                watchedSellIsins = watches.sellIsins,
+                watchedSellIsins = watches.sellIsins
             ).withSwitches(closedWatches = watches.expired + closed, today = LocalDate.now())
         }
     }
@@ -150,7 +149,7 @@ class PendingDecisionsSource @Inject constructor(
         val plan: List<SwitchPlanResolver.Suggestion>,
         val dismissedPlan: List<SwitchPlanResolver.Suggestion>,
         val cheaper: List<CheaperAlternative>,
-        val dismissedCheaper: List<CheaperAlternative>,
+        val dismissedCheaper: List<CheaperAlternative>
     )
 
     private class SuggestionInput(
@@ -159,7 +158,7 @@ class PendingDecisionsSource @Inject constructor(
         val batch: List<SuggestionRecord>,
         val feeRecords: List<SuggestionRecord>,
         val dismissedPlan: List<SwitchPlanResolver.Suggestion>,
-        val dismissals: List<SuggestionDismissal>,
+        val dismissals: List<SuggestionDismissal>
     )
 
     /** Bytesplanen och de billigare alternativen, resolvade mot samma metadatauppslag. */
@@ -170,7 +169,7 @@ class PendingDecisionsSource @Inject constructor(
             planGate,
             suggestionRecordRepository.observeLatestBatch(),
             suggestionRecordRepository.observeRecent(SuggestionKind.FEE, feeSince),
-            dismissedPlanSource.observe(),
+            dismissedPlanSource.observe()
         ) { (accountType, emptiedAt), batch, feeRecords, dismissedPlan ->
             SuggestionInput(accountType, emptiedAt, batch, feeRecords, dismissedPlan.suggestions, dismissedPlan.dismissals)
         }
@@ -196,22 +195,21 @@ class PendingDecisionsSource @Inject constructor(
         val expired: List<SwitchWatch>,
         /** Säljfonder med öppen bevakning, **även** utgångna — se [PendingDecisions.watchedSellIsins]. */
         val sellIsins: Set<String>,
-        val inProgress: InProgressSwitches.Keys,
+        val inProgress: InProgressSwitches.Keys
     )
 
-    private fun switchWatches(): Flow<Watches> =
-        switchWatchRepository.observeOpen().flatMapLatest { watches ->
-            val today = LocalDate.now()
-            val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
-            val (expired, visible) = watches.partition { SwitchWatchCalc.isExpired(it, today) }
-            val inProgress = inProgressSwitches.keysFor(watches, today)
-            if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), expired, sellIsins, it) }
+    private fun switchWatches(): Flow<Watches> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
+        val today = LocalDate.now()
+        val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
+        val (expired, visible) = watches.partition { SwitchWatchCalc.isExpired(it, today) }
+        val inProgress = inProgressSwitches.keysFor(watches, today)
+        if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), expired, sellIsins, it) }
 
-            val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()
-            combine(fundPriceRepository.observeLatestPrices(candidateIsins), inProgress) { prices, keys ->
-                Watches(visible = visible.map { it.toOpen(prices, today, keys) }, expired = expired, sellIsins = sellIsins, inProgress = keys)
-            }
+        val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()
+        combine(fundPriceRepository.observeLatestPrices(candidateIsins), inProgress) { prices, keys ->
+            Watches(visible = visible.map { it.toOpen(prices, today, keys) }, expired = expired, sellIsins = sellIsins, inProgress = keys)
         }
+    }
 
     private fun SwitchWatch.toOpen(prices: Map<String, FundPrice>, today: LocalDate, keys: InProgressSwitches.Keys): OpenSwitchWatch {
         val leader = SwitchWatchCalc.ranked(
@@ -220,9 +218,9 @@ class PendingDecisionsSource @Inject constructor(
                     candidate = candidate,
                     latestNav = prices[candidate.isin]?.nav,
                     proceedsKr = proceedsKr,
-                    soldAtEpochDay = soldAtEpochDay,
+                    soldAtEpochDay = soldAtEpochDay
                 )
-            },
+            }
         ).firstOrNull { it.isEvaluated }
         return OpenSwitchWatch(
             watchId = id,
@@ -234,7 +232,7 @@ class PendingDecisionsSource @Inject constructor(
             proceedsKr = proceedsKr,
             sourceRecordId = sourceRecordId,
             sourcePair = sourceRecordId?.let { keys.sources[it] }?.let { it.sellIsin to it.buyIsin },
-            sourceKind = sourceRecordId?.let { keys.sources[it] }?.kind,
+            sourceKind = sourceRecordId?.let { keys.sources[it] }?.kind
         )
     }
 }

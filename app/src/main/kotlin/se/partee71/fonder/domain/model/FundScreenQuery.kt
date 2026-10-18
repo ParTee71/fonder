@@ -31,7 +31,7 @@ data class FundScreenQuery(
     val nameContains: String? = null,
     val sortField: String? = null,
     val sortDirection: FundScreenSortDirection? = null,
-    val startIndex: Int = 0,
+    val startIndex: Int = 0
 ) {
     /**
      * Sant om frågan har minst ett kategoriskt filter satt — de filtren är de enda med
@@ -39,9 +39,8 @@ data class FundScreenQuery(
      * för att ge fel), så bara de är värda att baslinjejämföra i
      * [se.partee71.fonder.data.repository.FundMetadataRepository] (TP-21).
      */
-    fun hasCategoricalFilters(): Boolean =
-        fundType.isNotEmpty() || region.isNotEmpty() || otherRegion.isNotEmpty() || industry.isNotEmpty() ||
-            alignment.isNotEmpty() || interestType.isNotEmpty() || misc.isNotEmpty() || company.isNotEmpty() || risk.isNotEmpty()
+    fun hasCategoricalFilters(): Boolean = fundType.isNotEmpty() || region.isNotEmpty() || otherRegion.isNotEmpty() || industry.isNotEmpty() ||
+        alignment.isNotEmpty() || interestType.isNotEmpty() || misc.isNotEmpty() || company.isNotEmpty() || risk.isNotEmpty()
 }
 
 enum class FundScreenSortDirection { ASCENDING, DESCENDING }

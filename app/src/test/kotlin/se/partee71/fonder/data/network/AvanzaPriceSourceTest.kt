@@ -1,17 +1,17 @@
 package se.partee71.fonder.data.network
 
+import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
-import java.time.LocalDate
 
 private class FakeAvanzaSource(
     private val searchResponse: (String) -> String = { """{"fundSearchViews":[]}""" },
     private val guideResponse: String = """{"currency":"SEK"}""",
-    private val chartResponse: String = """{"dataSerie":[]}""",
+    private val chartResponse: String = """{"dataSerie":[]}"""
 ) : AvanzaSource {
     var lastChartOrderbookId: String? = null
 
@@ -39,7 +39,7 @@ class AvanzaPriceSourceTest {
         val fakeSource = FakeAvanzaSource(
             searchResponse = { searchHit },
             guideResponse = """{"currency":"USD"}""",
-            chartResponse = """{"dataSerie":[{"x":1577919600000,"y":429.25}]}""",
+            chartResponse = """{"dataSerie":[{"x":1577919600000,"y":429.25}]}"""
         )
         val source = AvanzaPriceSource(fakeSource)
 
@@ -63,7 +63,7 @@ class AvanzaPriceSourceTest {
         val fakeSource = FakeAvanzaSource(
             searchResponse = { searchHit },
             guideResponse = """{}""",
-            chartResponse = """{"dataSerie":[{"x":1577919600000,"y":100.0}]}""",
+            chartResponse = """{"dataSerie":[{"x":1577919600000,"y":100.0}]}"""
         )
         val source = AvanzaPriceSource(fakeSource)
 
@@ -80,8 +80,7 @@ class AvanzaPriceSourceTest {
         val guideFails = object : AvanzaSource {
             override suspend fun search(query: String): String = searchHit
             override suspend fun fetchGuide(orderbookId: String): String = throw IOException("500 från /guide")
-            override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String =
-                """{"dataSerie":[{"x":1577919600000,"y":429.25}]}"""
+            override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String = """{"dataSerie":[{"x":1577919600000,"y":429.25}]}"""
             override suspend fun fetchFundList(requestBody: String): String = """{"fundListViews":[]}"""
         }
 
@@ -120,7 +119,7 @@ class AvanzaPriceSourceTest {
     @Test
     fun `findFund returnerar namn och valuta for ett kant isin`() = runTest {
         val source = AvanzaPriceSource(
-            FakeAvanzaSource(searchResponse = { searchHit }, guideResponse = """{"currency":"USD"}"""),
+            FakeAvanzaSource(searchResponse = { searchHit }, guideResponse = """{"currency":"USD"}""")
         )
 
         val info = source.findFund(isin)

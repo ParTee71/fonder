@@ -26,7 +26,7 @@ class EmptyStateTest {
             FonderTheme {
                 EmptyState(
                     title = "Ingen portfölj ännu",
-                    body = "Lägg till din första fondtransaktion för att se en översikt här.",
+                    body = "Lägg till din första fondtransaktion för att se en översikt här."
                 )
             }
         }
@@ -40,7 +40,7 @@ class EmptyStateTest {
         composeRule.captureLightAndDark("EmptyState_default") {
             EmptyState(
                 title = "Inga innehav ännu",
-                body = "Lägg till din första fondtransaktion för att se värde och utveckling.",
+                body = "Lägg till din första fondtransaktion för att se värde och utveckling."
             )
         }
     }

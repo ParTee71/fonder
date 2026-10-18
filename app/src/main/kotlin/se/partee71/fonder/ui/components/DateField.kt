@@ -22,9 +22,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import se.partee71.fonder.R
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import se.partee71.fonder.R
 
 /**
  * Delad datumväljare (regel 4 — återbruk). Använder plattformens `DatePickerDialog` i
@@ -46,7 +46,7 @@ fun DateField(
     label: String,
     date: LocalDate?,
     onDateChange: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
@@ -56,7 +56,7 @@ fun DateField(
     val description = stringResource(
         R.string.format_date_field_description,
         label,
-        formattedDate.ifEmpty { notSet },
+        formattedDate.ifEmpty { notSet }
     )
     val openLabel = stringResource(R.string.date_field_open_picker)
 
@@ -76,7 +76,7 @@ fun DateField(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { Icon(Icons.Outlined.DateRange, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth().clearAndSetSemantics {},
+            modifier = Modifier.fillMaxWidth().clearAndSetSemantics {}
         )
         Box(
             modifier = Modifier
@@ -87,10 +87,10 @@ fun DateField(
                         { _, year, month, dayOfMonth -> onDateChange(LocalDate.of(year, month + 1, dayOfMonth)) },
                         initial.year,
                         initial.monthValue - 1,
-                        initial.dayOfMonth,
+                        initial.dayOfMonth
                     ).also { it.show() }
                 }
-                .semantics { contentDescription = description },
+                .semantics { contentDescription = description }
         )
     }
 }

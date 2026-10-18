@@ -1,9 +1,9 @@
 package se.partee71.fonder.data.imports
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.time.LocalDate
 
 class HoldingsImportParserTest {
 

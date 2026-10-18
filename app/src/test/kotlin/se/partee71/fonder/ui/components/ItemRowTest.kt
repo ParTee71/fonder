@@ -35,7 +35,7 @@ class ItemRowTest {
                 ItemRow(
                     headline = "Handelsbanken Sverige Index",
                     supporting = { RiskBadge(level = 6) },
-                    trailing = { AppButton(text = "Lägg till", onClick = { added++ }, variant = AppButtonVariant.Text) },
+                    trailing = { AppButton(text = "Lägg till", onClick = { added++ }, variant = AppButtonVariant.Text) }
                 )
             }
         }
@@ -48,17 +48,16 @@ class ItemRowTest {
     }
 
     @Test
-    fun `skärmdump av listrad och förloppsstapel`() =
-        composeRule.captureLightAndDark("ItemRow_ProgressBar", animated = true) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ItemRow(
-                    headline = "Global Indexfond A",
-                    supporting = { RiskBadge(level = 4) },
-                    trailing = { AppButton(text = "Lägg till", onClick = {}, variant = AppButtonVariant.Text) },
-                )
-                ItemRow(headline = "Tillväxtmarknad Bred", supporting = { Text("Risk 6 · 0,60 %") })
-                ProgressBar()
-                ProgressBar(progress = { 0.6f })
-            }
+    fun `skärmdump av listrad och förloppsstapel`() = composeRule.captureLightAndDark("ItemRow_ProgressBar", animated = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ItemRow(
+                headline = "Global Indexfond A",
+                supporting = { RiskBadge(level = 4) },
+                trailing = { AppButton(text = "Lägg till", onClick = {}, variant = AppButtonVariant.Text) }
+            )
+            ItemRow(headline = "Tillväxtmarknad Bred", supporting = { Text("Risk 6 · 0,60 %") })
+            ProgressBar()
+            ProgressBar(progress = { 0.6f })
         }
+    }
 }

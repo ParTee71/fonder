@@ -58,7 +58,7 @@ const val HANDELSER_LIST_TEST_TAG = "handelser_list"
 fun TransaktionerScreen(
     onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: TransaktionerViewModel = hiltViewModel(),
+    viewModel: TransaktionerViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -76,7 +76,7 @@ fun TransaktionerScreen(
         onFilterSelected = viewModel::onFilterSelected,
         onDeleteTransaction = viewModel::deleteTransaction,
         onStartSwitchWatch = viewModel::startSwitchWatch,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -87,7 +87,7 @@ fun TransaktionerContent(
     modifier: Modifier = Modifier,
     onFilterSelected: (HandelseFilter) -> Unit = {},
     onDeleteTransaction: (Long) -> Unit = {},
-    onStartSwitchWatch: (TransaktionRad) -> Unit = {},
+    onStartSwitchWatch: (TransaktionRad) -> Unit = {}
 ) {
     // Id:t, inte hela raden: rememberSaveable kräver ett sparbart värde, och raden slås ändå
     // upp ur tillståndet. Utan det försvann bekräftelsedialogen tyst vid rotation (issue #78).
@@ -98,13 +98,13 @@ fun TransaktionerContent(
         EmptyState(
             title = stringResource(R.string.transaktioner_empty_title),
             body = stringResource(R.string.transaktioner_empty_body),
-            modifier = modifier,
+            modifier = modifier
         )
     } else {
         val rows = state.rows
         LazyColumn(
             modifier = modifier.fillMaxSize().testTag(HANDELSER_LIST_TEST_TAG),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item(contentType = "filter") {
                 ChoiceChipRow(
@@ -112,7 +112,7 @@ fun TransaktionerContent(
                     selected = state.filter,
                     optionLabel = { stringResource(it.labelRes()) },
                     onSelect = onFilterSelected,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
             if (state.showRealizedCard) {
@@ -129,12 +129,12 @@ fun TransaktionerContent(
                             .fillMaxWidth()
                             .padding(start = 16.dp, end = 16.dp, top = if (index == 0) 10.dp else 0.dp),
                         contentPadding = PaddingValues(0.dp),
-                        groupPosition = AppCardGroupPosition.of(index, rows.size),
+                        groupPosition = AppCardGroupPosition.of(index, rows.size)
                     ) {
                         HandelseRow(
                             row = row,
                             onLongPress = { pendingDeleteId = row.transaction.id },
-                            onStartSwitchWatch = onStartSwitchWatch,
+                            onStartSwitchWatch = onStartSwitchWatch
                         )
                     }
                 }
@@ -152,7 +152,7 @@ fun TransaktionerContent(
                 pendingDeleteId = null
             },
             onDismiss = { pendingDeleteId = null },
-            destructive = true,
+            destructive = true
         )
     }
 }
@@ -169,12 +169,12 @@ private fun FilterEmptyState(filter: HandelseFilter) {
     if (filter == HandelseFilter.SALJ) {
         EmptyState(
             title = stringResource(R.string.sold_funds_empty_title),
-            body = stringResource(R.string.sold_funds_empty_body),
+            body = stringResource(R.string.sold_funds_empty_body)
         )
     } else {
         EmptyState(
             title = stringResource(R.string.handelser_buy_empty_title),
-            body = stringResource(R.string.handelser_buy_empty_body),
+            body = stringResource(R.string.handelser_buy_empty_body)
         )
     }
 }
@@ -191,20 +191,20 @@ private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modif
             PeriodRow(
                 label = stringResource(R.string.handelser_realized_year),
                 amount = state.yearRealized.realizedGain,
-                fraction = state.yearRealized.realizedGainFraction,
+                fraction = state.yearRealized.realizedGainFraction
             )
             if (showTotal) {
                 PeriodRow(
                     label = stringResource(R.string.sold_funds_total_title),
                     amount = state.totalRealized.realizedGain,
-                    fraction = state.totalRealized.realizedGainFraction,
+                    fraction = state.totalRealized.realizedGainFraction
                 )
             }
             if (state.yearRealized.uncertain || (showTotal && state.totalRealized.uncertain)) {
                 Text(
                     stringResource(R.string.handelser_realized_uncertain),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -221,7 +221,7 @@ private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modif
 private fun HandelseRow(
     row: TransaktionRad,
     onLongPress: () -> Unit,
-    onStartSwitchWatch: (TransaktionRad) -> Unit,
+    onStartSwitchWatch: (TransaktionRad) -> Unit
 ) {
     val tx = row.transaction
     val sale = row.sale
@@ -236,7 +236,7 @@ private fun HandelseRow(
                     onClickLabel = stringResource(if (expanded) R.string.sold_fund_collapse else R.string.sold_fund_expand),
                     onClick = { expanded = !expanded },
                     onLongClickLabel = stringResource(R.string.delete),
-                    onLongClick = onLongPress,
+                    onLongClick = onLongPress
                 )
                 // Raden saknar pil (mockupen); läget läses i stället upp av TalkBack.
                 .semantics { stateDescription = stateText },
@@ -244,14 +244,14 @@ private fun HandelseRow(
                 Text(
                     LocalDate.ofEpochDay(tx.epochDay).format(dateFormatter),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             supporting = {
                 Text(
                     subtitle(tx.type, sale),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             trailing = {
@@ -259,9 +259,9 @@ private fun HandelseRow(
                 Text(
                     MoneyFormat.krSigned(if (isSell) tx.amount else -tx.amount),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                    color = if (isSell) ReturnColors.gain else MaterialTheme.colorScheme.onSurface,
+                    color = if (isSell) ReturnColors.gain else MaterialTheme.colorScheme.onSurface
                 )
-            },
+            }
         )
         AnimatedVisibility(visible = expanded) {
             HandelseDetails(row = row, onStartSwitchWatch = onStartSwitchWatch)
@@ -278,7 +278,7 @@ private fun subtitle(type: TransactionType, sale: RealizedSale?): String {
     val text = stringResource(
         if (gain >= 0.0) R.string.format_handelse_sell_gain else R.string.format_handelse_sell_loss,
         typeLabel,
-        MoneyFormat.krSigned(gain),
+        MoneyFormat.krSigned(gain)
     )
     return if (sale.uncoveredShares > 0.0) stringResource(R.string.format_handelse_uncertain, text) else text
 }
@@ -294,19 +294,19 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
     val sale = row.sale
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             stringResource(R.string.format_transaktion_rad, tx.shares.toString(), MoneyFormat.kr(tx.pricePerShare)),
             style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (sale == null) {
             if (tx.fee > 0.0) {
                 Text(
                     stringResource(R.string.format_transaktion_fee, MoneyFormat.kr(tx.fee)),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             return@Column
@@ -316,28 +316,28 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
                 R.string.format_sold_fund_detail,
                 MoneyFormat.kr(sale.proceeds),
                 MoneyFormat.kr(sale.fee),
-                MoneyFormat.kr(sale.costBasis),
+                MoneyFormat.kr(sale.costBasis)
             ),
             style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         PeriodRow(
             label = stringResource(R.string.handelser_realized_row),
             amount = sale.realizedGain,
-            fraction = sale.realizedGainFraction,
+            fraction = sale.realizedGainFraction
         )
         if (sale.uncoveredShares > 0.0) {
             Text(
                 stringResource(R.string.sold_fund_uncovered_warning),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = MaterialTheme.colorScheme.error
             )
         }
         if (row.canStartSwitchWatch) {
             AppButton(
                 text = stringResource(R.string.switch_watch_start),
                 onClick = { onStartSwitchWatch(row) },
-                variant = AppButtonVariant.Text,
+                variant = AppButtonVariant.Text
             )
         }
     }

@@ -61,5 +61,5 @@ data class FundMetadata(
     val cheapestAlternativeFee: Double? = null,
     val shownAlternativeIsins: List<String> = emptyList(),
     val comparisonResolvedAtEpochDay: Long? = null,
-    val developmentOneYear: Double? = null,
+    val developmentOneYear: Double? = null
 )

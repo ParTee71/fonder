@@ -119,6 +119,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ./gradlew :app:recordRoborazziDebug          # spela in referenserna – bara vid avsiktlig visuell ändring, checka in bilderna
 ./gradlew :app:compileDebugAndroidTestKotlin # kompilera instrumenttester
 ./gradlew cpdCheck                           # copy-paste-detektor (regel 4)
+./gradlew spotlessApply                      # kodstil (ktlint + compose-rules), före push – inte i CI
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
 node --test .claude/hooks/test/*.test.mjs    # hooktest regel4-check + baslinjen (ingen SDK behövs)
 node tools/regel4-baseline.mjs               # skriv om baslinjen i ui-allowlist.txt när en skärm rättats

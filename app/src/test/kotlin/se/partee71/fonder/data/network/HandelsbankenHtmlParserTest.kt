@@ -1,10 +1,10 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Fixturerna nedan är trimmade utdrag av verklig markup från handelsbanken.fondlista.se

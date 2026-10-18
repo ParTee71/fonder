@@ -1,6 +1,8 @@
 package se.partee71.fonder.ui.diagram
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import java.time.LocalDate
+import kotlin.math.sin
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -8,8 +10,6 @@ import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
-import java.time.LocalDate
-import kotlin.math.sin
 
 /**
  * Skärmdumpar ljust + mörkt av [FundLineChart] (UI-12, skill diagram): en ensam kurva med tonad
@@ -39,7 +39,7 @@ class FundLineChartScreenshotTest {
         FundLineChart(
             points = series(300.0, 0.8),
             primaryLabel = "Global Indexfond A",
-            comparisonSeries = listOf(ChartSeries("Tillväxtmarknad Bred", series(120.0, -0.2))),
+            comparisonSeries = listOf(ChartSeries("Tillväxtmarknad Bred", series(120.0, -0.2)))
         )
     }
 

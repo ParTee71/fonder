@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.hem
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import java.time.LocalDate
+import kotlin.math.sin
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Rule
@@ -19,8 +21,6 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
-import kotlin.math.sin
 
 /**
  * Skärmdumpar ljust + mörkt av Översikten enligt mockupen (HEM-13): värdekortet, "Att besluta",
@@ -42,7 +42,7 @@ class HemScreenshotTest {
             SwitchPlanResolver.Suggestion(
                 recordId = index.toLong(), planIndex = index, sellIsin = "SE_S$index", buyIsin = "SE_K$index",
                 sellFundName = "Tillväxtmarknad Bred", buyFundName = "Global Indexfond A",
-                fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.5,
+                fromLevel = 6, toLevel = 4, feeDeltaPercent = -0.5
             )
         },
         cheaperAlternatives = listOf(
@@ -50,13 +50,13 @@ class HemScreenshotTest {
                 suggestion = SwitchPlanResolver.Suggestion(
                     recordId = 9, planIndex = 0, sellIsin = "SE_SB", buyIsin = "SE_SBI",
                     sellFundName = "Sverige Småbolag", buyFundName = "Småbolag Index",
-                    fromLevel = 5, toLevel = 5, feeDeltaPercent = -1.0, switchValueKr = 96_000.0, kind = SuggestionKind.FEE,
+                    fromLevel = 5, toLevel = 5, feeDeltaPercent = -1.0, switchValueKr = 96_000.0, kind = SuggestionKind.FEE
                 ),
                 sellFeePercent = 1.40,
-                buyFeePercent = 0.40,
-            ),
+                buyFeePercent = 0.40
+            )
         ),
-        openWatches = listOf(OpenSwitchWatch(watchId = 1, sellFundName = "Sverige Småbolag", daysWaiting = 2, candidateCount = 3)),
+        openWatches = listOf(OpenSwitchWatch(watchId = 1, sellFundName = "Sverige Småbolag", daysWaiting = 2, candidateCount = 3))
     ).withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
 
     @Test
@@ -77,8 +77,8 @@ class HemScreenshotTest {
                         loading = false,
                         hasHoldings = true,
                         decisions = PendingDecisions(cheaperAlternatives = decisions.cheaperAlternatives)
-                            .withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59)),
-                    ),
+                            .withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
+                    )
                 )
             }
         }
@@ -88,7 +88,7 @@ class HemScreenshotTest {
     @Test
     fun `översikten med att besluta och jämförelsen`() = composeRule.captureLightAndDark(
         "HemScreen_oversikt",
-        ready = { isDrawn(hasContentDescription("Avkastningsdiagram", substring = true)) },
+        ready = { isDrawn(hasContentDescription("Avkastningsdiagram", substring = true)) }
     ) {
         HemContent(
             state = HemUiState(
@@ -103,8 +103,8 @@ class HemScreenshotTest {
                 benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015).toImmutableList()),
                 purchaseEpochDays = persistentListOf(start + 20),
                 decisions = decisions,
-                backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L),
-            ),
+                backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L)
+            )
         )
     }
 }

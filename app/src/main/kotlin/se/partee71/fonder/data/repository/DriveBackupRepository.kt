@@ -14,7 +14,12 @@ import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
+import com.google.api.services.drive.model.File as DriveFile
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.LocalDateTime
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -23,11 +28,6 @@ import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.di.IoDispatcher
 import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.DriveBackupFiles
-import java.time.LocalDateTime
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.coroutines.resume
-import com.google.api.services.drive.model.File as DriveFile
 
 /**
  * Utfallet av en Drive-operation (TP-7 steg 2). Egen typ i stället för `Result`, eftersom två av
@@ -84,7 +84,7 @@ interface DriveBackupRepository {
 class GoogleDriveBackupRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
-    @param:IoDispatcher private val io: CoroutineDispatcher,
+    @param:IoDispatcher private val io: CoroutineDispatcher
 ) : DriveBackupRepository {
 
     private sealed interface Authorization {
@@ -114,7 +114,7 @@ class GoogleDriveBackupRepository @Inject constructor(
                             result.hasResolution() -> Authorization.NeedsUser(result.pendingIntent!!)
                             result.accessToken != null -> Authorization.Token(result.accessToken!!)
                             else -> Authorization.Failed("Ingen åtkomsttoken returnerades")
-                        },
+                        }
                     )
                 }
                 .addOnFailureListener { e ->
@@ -145,7 +145,9 @@ class GoogleDriveBackupRepository @Inject constructor(
         return withContext(io) {
             when (val auth = authorize()) {
                 is Authorization.NeedsUser -> DriveResult.NeedsAuthorization(auth.pendingIntent)
+
                 is Authorization.Failed -> DriveResult.Error(auth.message)
+
                 is Authorization.Token -> try {
                     block(driveFor(auth.accessToken))
                 } catch (e: GoogleJsonResponseException) {
@@ -158,20 +160,18 @@ class GoogleDriveBackupRepository @Inject constructor(
     }
 
     /** Alltid [DriveBackupFiles.QUERY] — se den klassens KDoc för varför det inte är valfritt. */
-    private fun Drive.ourBackups(pageSize: Int? = null): List<DriveBackupFile> =
-        files().list()
-            .setSpaces(APP_DATA_FOLDER)
-            .setQ(DriveBackupFiles.QUERY)
-            .setOrderBy("createdTime desc")
-            .apply { pageSize?.let { setPageSize(it) } }
-            .setFields("files(id,name,createdTime)")
-            .execute()
-            .files
-            .orEmpty()
-            .map { DriveBackupFile(it.id, it.name, it.createdTime?.toString().orEmpty()) }
+    private fun Drive.ourBackups(pageSize: Int? = null): List<DriveBackupFile> = files().list()
+        .setSpaces(APP_DATA_FOLDER)
+        .setQ(DriveBackupFiles.QUERY)
+        .setOrderBy("createdTime desc")
+        .apply { pageSize?.let { setPageSize(it) } }
+        .setFields("files(id,name,createdTime)")
+        .execute()
+        .files
+        .orEmpty()
+        .map { DriveBackupFile(it.id, it.name, it.createdTime?.toString().orEmpty()) }
 
-    override suspend fun list(): DriveResult<List<DriveBackupFile>> =
-        withDrive { drive -> DriveResult.Success(drive.ourBackups()) }
+    override suspend fun list(): DriveResult<List<DriveBackupFile>> = withDrive { drive -> DriveResult.Success(drive.ourBackups()) }
 
     override suspend fun upload(json: String): DriveResult<String> = withDrive { drive ->
         val metadata = DriveFile().apply {

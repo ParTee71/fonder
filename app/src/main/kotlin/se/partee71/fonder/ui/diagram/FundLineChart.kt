@@ -66,6 +66,11 @@ import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
 import com.patrykandpatrick.vico.compose.common.data.ExtraStore
 import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToLong
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.ChartPeriodFilter
 import se.partee71.fonder.domain.usecase.ChartSeriesNormalizer
@@ -76,11 +81,6 @@ import se.partee71.fonder.ui.components.ConnectedChoiceSpacing
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.ChartSeriesColors
 import se.partee71.fonder.ui.theme.MonoAmountStyle
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.roundToLong
 
 /** En namngiven kursserie att rita bredvid innehavets egen i [FundLineChart] (ANA-11, issue #85). */
 data class ChartSeries(val label: String, val points: List<Pair<Long, Double>>)
@@ -156,7 +156,7 @@ fun FundLineChart(
     valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
     movingAverage: List<Pair<Long, Double>>? = null,
     working: Boolean = false,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
     // tillbaka till 1 månad mitt i en jämförelse (issue #78).
@@ -179,10 +179,12 @@ fun FundLineChart(
             // respektive start som parallella band på olika höjd, och den fråga en enmånadsvy
             // ställer — vilken växte mest den här månaden? — går inte att läsa ur bilden.
             valueAxis == ChartValueAxis.PROCENT -> ChartSeriesNormalizer.rebaseReturns(all)
+
             // Rå NAV går inte att jämföra mellan två fonder på en gemensam y-axel; en ensam
             // kurva ska däremot visa fondens verkliga kurs i kronor (se ChartSeriesNormalizer).
             comparisonSeries.isEmpty() ->
                 ChartSeriesNormalizer.Result(listOf(windowedPoints), indexed = false, partial = false, baseEpochDay = null)
+
             else -> ChartSeriesNormalizer.index(all)
         }
     }
@@ -222,6 +224,7 @@ fun FundLineChart(
     // att skalan är ett index.
     val chartDescription = when {
         visibleSeries.isEmpty() -> stringResource(R.string.fond_chart_description_empty)
+
         // Procentläget beskrivs i procent och namnger sina kurvor — informationen får inte bara
         // ligga i linjernas färg (UI-3), och "kr" i beskrivningen hade dessutom varit fel enhet.
         valueAxis == ChartValueAxis.PROCENT -> {
@@ -232,14 +235,16 @@ fun FundLineChart(
                 described.size,
                 MoneyFormat.percentSigned(described.minOf { it.second }),
                 MoneyFormat.percentSigned(described.maxOf { it.second }),
-                visibleSeries.joinToString(", ") { (_, label) -> label },
+                visibleSeries.joinToString(", ") { (_, label) -> label }
             )
         }
+
         normalized.indexed -> stringResource(
             R.string.format_fond_chart_comparison_description,
             stringResource(periodLabelRes(period)),
-            visibleSeries.joinToString(", ") { (_, label) -> label },
+            visibleSeries.joinToString(", ") { (_, label) -> label }
         )
+
         // Beskrivs utifrån den serie som faktiskt ritas — inte utifrån [points], som kan vara
         // tom i det udda fallet att bara en jämförelseserie har data (annars kraschade min/max).
         else -> {
@@ -249,7 +254,7 @@ fun FundLineChart(
                 stringResource(periodLabelRes(period)),
                 described.size,
                 MoneyFormat.kr(described.minOf { it.second }),
-                MoneyFormat.kr(described.maxOf { it.second }),
+                MoneyFormat.kr(described.maxOf { it.second })
             )
             // Snittlinjen nämns med sitt senaste värde (ANA-14) — linjen får inte bara finnas i bilden (UI-3).
             if (showMovingAverage) {
@@ -270,7 +275,7 @@ fun FundLineChart(
         if (working) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.End
             ) {
                 WorkingIndicator(working = true, contentDescription = stringResource(R.string.chart_working))
             }
@@ -279,7 +284,7 @@ fun FundLineChart(
         val lineProvider = rememberSeriesLineProvider(
             seriesColors,
             areaUnderPrimary = visibleSeries.size == 1,
-            movingAverageSecond = showMovingAverage,
+            movingAverageSecond = showMovingAverage
         )
         // Nyckling på perioden: byter man period ska diagrammet zooma/skrolla om till den nya
         // datamängden direkt, inte behålla ett nyp/drag-läge som hörde till den förra periodens
@@ -292,28 +297,32 @@ fun FundLineChart(
             .semantics { contentDescription = chartDescription }
         if (model == null) {
             Box(modifier = chartModifier)
-        } else key(period) { ProvideVicoTheme(rememberM3VicoTheme()) {
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
-                    startAxis = when (valueAxis) {
-                        ChartValueAxis.KRONOR -> VerticalAxis.rememberStart()
-                        ChartValueAxis.PROCENT -> VerticalAxis.rememberStart(valueFormatter = PercentValueFormatter)
-                    },
-                    bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
-                    persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } },
-                ),
-                model = model,
-                scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
-                // Vicos standardzoom (`Zoom.max(Zoom.fixed(), Zoom.Content)`) tillåter aldrig
-                // mer utzoomat än "naturligt" punktavstånd — för en period med fler punkter än
-                // vad som får plats i den bredden (t.ex. "1 år"/"Allt") visades då bara svansen
-                // närmast slutet i stället för hela den valda perioden. `Zoom.Content` ensamt
-                // visar alltid ALLA punkter som skickats in, oavsett antal.
-                zoomState = rememberVicoZoomState(initialZoom = Zoom.Content),
-                modifier = chartModifier,
-            )
-        } }
+        } else {
+            key(period) {
+                ProvideVicoTheme(rememberM3VicoTheme()) {
+                    CartesianChartHost(
+                        chart = rememberCartesianChart(
+                            rememberLineCartesianLayer(lineProvider = lineProvider, rangeProvider = PriceRangeProvider),
+                            startAxis = when (valueAxis) {
+                                ChartValueAxis.KRONOR -> VerticalAxis.rememberStart()
+                                ChartValueAxis.PROCENT -> VerticalAxis.rememberStart(valueFormatter = PercentValueFormatter)
+                            },
+                            bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = DateValueFormatter),
+                            persistentMarkers = { _ -> markerEpochDays.forEach { day -> purchaseMarker at day } }
+                        ),
+                        model = model,
+                        scrollState = rememberVicoScrollState(initialScroll = Scroll.Absolute.End),
+                        // Vicos standardzoom (`Zoom.max(Zoom.fixed(), Zoom.Content)`) tillåter aldrig
+                        // mer utzoomat än "naturligt" punktavstånd — för en period med fler punkter än
+                        // vad som får plats i den bredden (t.ex. "1 år"/"Allt") visades då bara svansen
+                        // närmast slutet i stället för hela den valda perioden. `Zoom.Content` ensamt
+                        // visar alltid ALLA punkter som skickats in, oavsett antal.
+                        zoomState = rememberVicoZoomState(initialZoom = Zoom.Content),
+                        modifier = chartModifier
+                    )
+                }
+            }
+        }
         if (visibleSeries.size > 1) {
             ChartLegend(
                 entries = visibleSeries.mapIndexed { index, (_, label) ->
@@ -321,7 +330,7 @@ fun FundLineChart(
                 },
                 indexed = normalized.indexed,
                 partial = normalized.partial,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
         } else if (showMovingAverage) {
             // Kurs och snitt med sina linjesymboler och senaste värden (ANA-14) — symbolen visar
@@ -332,18 +341,18 @@ fun FundLineChart(
                         label = stringResource(R.string.fond_chart_legend_price),
                         color = seriesColors[0],
                         symbol = LegendSymbol.LINE,
-                        value = MoneyFormat.kr(visibleSeries.first().first.last().second),
+                        value = MoneyFormat.kr(visibleSeries.first().first.last().second)
                     ),
                     LegendEntry(
                         label = stringResource(R.string.fond_chart_legend_moving_average),
                         color = ChartSeriesColors.movingAverage,
                         symbol = LegendSymbol.DOTTED_LINE,
-                        value = MoneyFormat.kr(windowedAverage.last().second),
-                    ),
+                        value = MoneyFormat.kr(windowedAverage.last().second)
+                    )
                 ),
                 indexed = false,
                 partial = false,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
         // Skrollbar rad, inte en vanlig Row: sex perioder får inte plats på en telefonskärm,
@@ -353,7 +362,7 @@ fun FundLineChart(
         val periods = ChartPeriodFilter.Period.entries
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ConnectedChoiceSpacing),
-            modifier = Modifier.padding(top = 8.dp).testTag(CHART_PERIOD_ROW_TEST_TAG),
+            modifier = Modifier.padding(top = 8.dp).testTag(CHART_PERIOD_ROW_TEST_TAG)
         ) {
             itemsIndexed(periods, key = { _, option -> option.name }) { index, option ->
                 ConnectedChoiceButton(
@@ -361,7 +370,7 @@ fun FundLineChart(
                     selected = option == period,
                     index = index,
                     count = periods.size,
-                    onClick = { period = option },
+                    onClick = { period = option }
                 )
             }
         }
@@ -375,8 +384,7 @@ fun FundLineChart(
  * förklaringen peka på fel kurva.
  */
 @Composable
-private fun seriesColors(): List<Color> =
-    listOf(ChartSeriesColors.holding, ChartSeriesColors.candidate)
+private fun seriesColors(): List<Color> = listOf(ChartSeriesColors.holding, ChartSeriesColors.candidate)
 
 /**
  * Linjerna Vico ritar serierna med, i samma ordning som [seriesColors]. Båda skapas alltid,
@@ -394,17 +402,17 @@ private fun seriesColors(): List<Color> =
 private fun rememberSeriesLineProvider(
     colors: List<Color>,
     areaUnderPrimary: Boolean,
-    movingAverageSecond: Boolean = false,
+    movingAverageSecond: Boolean = false
 ): LineCartesianLayer.LineProvider {
     val areaColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = AREA_ALPHA)
     val primary = LineCartesianLayer.rememberLine(
         fill = LineCartesianLayer.LineFill.single(Fill(colors[0])),
-        areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(Fill(areaColor)) else null,
+        areaFill = if (areaUnderPrimary) LineCartesianLayer.AreaFill.single(Fill(areaColor)) else null
     )
     // Referensen/jämförelsen är streckad och i koppar så den skiljs från innehavet både i färg och form.
     val comparison = LineCartesianLayer.rememberLine(
         fill = LineCartesianLayer.LineFill.single(Fill(colors[1])),
-        stroke = LineCartesianLayer.LineStroke.Dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP),
+        stroke = LineCartesianLayer.LineStroke.Dashed(dashLength = COMPARISON_DASH, gapLength = COMPARISON_GAP)
     )
     val movingAverage = LineCartesianLayer.rememberLine(
         fill = LineCartesianLayer.LineFill.single(Fill(ChartSeriesColors.movingAverage)),
@@ -412,8 +420,8 @@ private fun rememberSeriesLineProvider(
             thickness = MOVING_AVERAGE_THICKNESS,
             cap = StrokeCap.Round,
             dashLength = 0.dp,
-            gapLength = MOVING_AVERAGE_DOT_PITCH,
-        ),
+            gapLength = MOVING_AVERAGE_DOT_PITCH
+        )
     )
     return LineCartesianLayer.LineProvider.series(primary, if (movingAverageSecond) movingAverage else comparison)
 }
@@ -426,7 +434,7 @@ internal data class LegendEntry(
     val label: String,
     val color: Color,
     val symbol: LegendSymbol = LegendSymbol.DOT,
-    val value: String? = null,
+    val value: String? = null
 )
 
 /**
@@ -444,7 +452,7 @@ private fun ChartLegend(
     entries: List<LegendEntry>,
     indexed: Boolean,
     partial: Boolean,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         entries.forEach { entry ->
@@ -462,14 +470,14 @@ private fun ChartLegend(
             Text(
                 stringResource(R.string.fond_chart_indexed_explain),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (partial) {
             Text(
                 stringResource(R.string.fond_chart_partial_comparison),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -483,8 +491,9 @@ private fun LegendSymbolMark(symbol: LegendSymbol, color: Color, modifier: Modif
             modifier = modifier
                 .size(10.dp)
                 .clip(CircleShape)
-                .background(color),
+                .background(color)
         )
+
         LegendSymbol.LINE, LegendSymbol.DOTTED_LINE -> Canvas(modifier = modifier.size(width = LEGEND_LINE_WIDTH, height = 10.dp)) {
             val y = size.height / 2
             val thickness = if (symbol == LegendSymbol.LINE) LEGEND_PRICE_THICKNESS.toPx() else MOVING_AVERAGE_THICKNESS.toPx()
@@ -499,7 +508,7 @@ private fun LegendSymbolMark(symbol: LegendSymbol, color: Color, modifier: Modif
                 end = Offset(size.width - thickness / 2, y),
                 strokeWidth = thickness,
                 cap = StrokeCap.Round,
-                pathEffect = dots,
+                pathEffect = dots
             )
         }
     }
@@ -510,12 +519,11 @@ private fun LegendSymbolMark(symbol: LegendSymbol, color: Color, modifier: Modif
  * Alla serier ligger i samma lager, så y-intervallet ([PriceRangeProvider]) räknas över dem
  * tillsammans — ett snitt utanför kursens min/max får alltså plats (ANA-14).
  */
-internal fun chartModel(lines: List<List<Pair<Long, Double>>>): CartesianChartModel =
-    CartesianChartModel(
-        LineCartesianLayerModel.build {
-            lines.forEach { points -> series(x = points.map { it.first }, y = points.map { it.second }) }
-        },
-    )
+internal fun chartModel(lines: List<List<Pair<Long, Double>>>): CartesianChartModel = CartesianChartModel(
+    LineCartesianLayerModel.build {
+        lines.forEach { points -> series(x = points.map { it.first }, y = points.map { it.second }) }
+    }
+)
 
 /** Etikett för en diagramperiod — delad mellan chipparna och diagrammets semantik. */
 private fun periodLabelRes(period: ChartPeriodFilter.Period): Int = when (period) {
@@ -542,17 +550,17 @@ private fun rememberPurchaseMarker(): CartesianMarker {
         padding = Insets(horizontal = 6.dp, vertical = 3.dp),
         background = rememberShapeComponent(
             fill = Fill(MaterialTheme.colorScheme.secondaryContainer),
-            shape = RoundedCornerShape(4.dp),
-        ),
+            shape = RoundedCornerShape(4.dp)
+        )
     )
     val guideline = rememberLineComponent(
         fill = Fill(MaterialTheme.colorScheme.secondary),
-        thickness = 1.dp,
+        thickness = 1.dp
     )
     return rememberDefaultCartesianMarker(
         label = label,
         valueFormatter = PurchaseValueFormatter,
-        guideline = guideline,
+        guideline = guideline
     )
 }
 
@@ -580,11 +588,9 @@ private object PurchaseValueFormatter : DefaultCartesianMarker.ValueFormatter {
  * [FundLineChart]) — inte hela historiken.
  */
 internal object PriceRangeProvider : CartesianLayerRangeProvider {
-    override fun getMinY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
-        minY - padding(minY, maxY)
+    override fun getMinY(minY: Double, maxY: Double, extraStore: ExtraStore): Double = minY - padding(minY, maxY)
 
-    override fun getMaxY(minY: Double, maxY: Double, extraStore: ExtraStore): Double =
-        maxY + padding(minY, maxY)
+    override fun getMaxY(minY: Double, maxY: Double, extraStore: ExtraStore): Double = maxY + padding(minY, maxY)
 
     /** Andel av kursintervallet som läggs till som marginal ovanför/under min/max. */
     private const val PADDING_FRACTION = 0.1
@@ -600,7 +606,7 @@ private object PercentValueFormatter : CartesianValueFormatter {
     override fun format(
         context: CartesianMeasuringContext,
         value: Double,
-        verticalAxisPosition: Axis.Position.Vertical?,
+        verticalAxisPosition: Axis.Position.Vertical?
     ): CharSequence = MoneyFormat.percentSigned(value)
 }
 
@@ -617,7 +623,7 @@ private object DateValueFormatter : CartesianValueFormatter {
     override fun format(
         context: CartesianMeasuringContext,
         value: Double,
-        verticalAxisPosition: Axis.Position.Vertical?,
+        verticalAxisPosition: Axis.Position.Vertical?
     ): CharSequence = LocalDate.ofEpochDay(value.roundToLong()).format(format)
 }
 

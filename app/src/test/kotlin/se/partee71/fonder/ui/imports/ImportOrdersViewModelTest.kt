@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.imports
 import android.net.Uri
 import app.cash.turbine.test
 import io.mockk.mockk
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -44,12 +45,11 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
-import se.partee71.fonder.testing.testTargetLevelPreselection
-import se.partee71.fonder.ui.transaktioner.SwitchOptionLabel
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testSwitchChoicesSource
+import se.partee71.fonder.testing.testTargetLevelPreselection
+import se.partee71.fonder.ui.transaktioner.SwitchOptionLabel
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 private const val NORDEA_TEXT = """
 Nordea Fonder AB
@@ -115,20 +115,26 @@ class ImportOrdersViewModelTest {
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
     private val recordTransaction = RecordTransaction(
-        fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
-        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo),
+        fakeTransactionRepo,
+        switchWatchRepo,
+        suggestionRepo,
+        metadataRepo,
+        scheduler,
+        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo)
     )
 
     private fun viewModel(
         extractor: PdfTextExtractor,
         priceRepo: FundPriceRepository = fakePriceRepo,
-        fileReader: ImportFileReader = FakeImportFileReader(),
-    ) =
-        ImportOrdersViewModel(
-            fakeTransactionRepo, priceRepo, extractor, recordTransaction,
-            testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo),
-            fileReader,
-        )
+        fileReader: ImportFileReader = FakeImportFileReader()
+    ) = ImportOrdersViewModel(
+        fakeTransactionRepo,
+        priceRepo,
+        extractor,
+        recordTransaction,
+        testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo),
+        fileReader
+    )
 
     @Test
     fun `parsar och matchar fond via ISIN fran en PDF`() = runTest(dispatcher) {
@@ -181,7 +187,7 @@ class ImportOrdersViewModelTest {
         val unreadable = mockk<Uri>()
         val vm = viewModel(
             PdfTextExtractor { NORDEA_TEXT },
-            fileReader = FakeImportFileReader(mapOf(readable to ("nota.pdf" to ByteArray(0)))),
+            fileReader = FakeImportFileReader(mapOf(readable to ("nota.pdf" to ByteArray(0))))
         )
 
         vm.uiState.test {
@@ -242,8 +248,8 @@ class ImportOrdersViewModelTest {
                 listOf(
                     "nota1.pdf" to "nota1.pdf".toByteArray(),
                     "nota2.pdf" to "nota2.pdf".toByteArray(),
-                    "unparsable.pdf" to "unparsable.pdf".toByteArray(),
-                ),
+                    "unparsable.pdf" to "unparsable.pdf".toByteArray()
+                )
             )
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
@@ -359,8 +365,7 @@ class ImportOrdersViewModelTest {
     fun `hoppar over kursuppdatering nar fonden redan har en aktuell cachad kurs`() = runTest(dispatcher) {
         findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
         val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
-            override suspend fun latestPrice(fundId: String): FundPrice =
-                FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 294.36, currency = "SEK")
+            override suspend fun latestPrice(fundId: String): FundPrice = FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 294.36, currency = "SEK")
         }
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT }, priceRepoMedFarskKurs)
 
@@ -438,26 +443,31 @@ class ImportOrdersViewModelTest {
     private fun meta(isin: String, name: String, risk: Int) = FundMetadata(
         isin = isin, name = name, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     private suspend fun setUpPlanAndFunds() {
         listOf(
             Fund(fundId = "SE0004297927", name = "Sverige Småbolag", isin = "SE0004297927"),
             Fund(fundId = "SE0000581434", name = "Global Indexnära", isin = "SE0000581434"),
-            Fund(fundId = "SE0000000018", name = "Annan fond", isin = "SE0000000018"),
+            Fund(fundId = "SE0000000018", name = "Annan fond", isin = "SE0000000018")
         ).forEach { fundsByIsin[it.isin!!] = it }
         metadataRepo.metadataByIsin = mapOf(
             "SE0004297927" to meta("SE0004297927", "Sverige Småbolag", 5),
-            "SE0000581434" to meta("SE0000581434", "Global Indexnära", 3),
+            "SE0000581434" to meta("SE0000581434", "Global Indexnära", 3)
         )
         preferences.setAccountType(AccountType.ISK_KF)
         suggestionRepo.records.value = listOf(
             SuggestionRecord(
-                id = 42, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = 0,
-                sellIsin = "SE0004297927", buyIsin = "SE0000581434",
-                sellNavAtSuggestion = 800.0, buyNavAtSuggestion = 430.0, switchValueKr = 18_400.0,
-            ),
+                id = 42,
+                suggestedAtEpochDay = LocalDate.now().toEpochDay(),
+                planIndex = 0,
+                sellIsin = "SE0004297927",
+                buyIsin = "SE0000581434",
+                sellNavAtSuggestion = 800.0,
+                buyNavAtSuggestion = 430.0,
+                switchValueKr = 18_400.0
+            )
         )
     }
 
@@ -481,7 +491,7 @@ class ImportOrdersViewModelTest {
             assertEquals(SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(0)), state.rows[1].switchField?.option)
             assertEquals(
                 SwitchOptionLabel.SaleRow("Sverige Småbolag"),
-                state.rows[1].switchField?.selected?.label,
+                state.rows[1].switchField?.selected?.label
             )
             assertTrue(state.hasSwitchQuestions)
             assertTrue(state.canImport)
@@ -545,9 +555,13 @@ class ImportOrdersViewModelTest {
         setUpPlanAndFunds()
         val watchId = switchWatchRepo.start(
             SwitchWatch(
-                sellIsin = "SE0004297927", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.of(2026, 10, 10).toEpochDay(),
-                targetLevel = 3, sourceRecordId = 42, candidates = listOf(SwitchWatchCandidate(isin = "SE0000581434", name = "Global Indexnära")),
-            ),
+                sellIsin = "SE0004297927",
+                sellFundName = "Sverige Småbolag",
+                soldAtEpochDay = LocalDate.of(2026, 10, 10).toEpochDay(),
+                targetLevel = 3,
+                sourceRecordId = 42,
+                candidates = listOf(SwitchWatchCandidate(isin = "SE0000581434", name = "Global Indexnära"))
+            )
         )
         val vm = viewModel(PdfTextExtractor { bytes -> String(bytes) })
 
@@ -581,7 +595,7 @@ class ImportOrdersViewModelTest {
         setUpPlanAndFunds()
         suggestionRepo.records.value = emptyList()
         val watchId = switchWatchRepo.start(
-            SwitchWatch(sellIsin = "SE0004297927", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.of(2026, 10, 10).toEpochDay(), targetLevel = 3),
+            SwitchWatch(sellIsin = "SE0004297927", sellFundName = "Sverige Småbolag", soldAtEpochDay = LocalDate.of(2026, 10, 10).toEpochDay(), targetLevel = 3)
         )
         switchWatchRepo.linkResult = false
         val vm = viewModel(PdfTextExtractor { bytes -> String(bytes) })

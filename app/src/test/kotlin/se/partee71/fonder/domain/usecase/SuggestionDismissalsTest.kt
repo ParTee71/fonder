@@ -1,12 +1,12 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
-import java.time.LocalDate
 
 /** HEM-14: vilka förslag ett avstående döljer, och hur länge. */
 class SuggestionDismissalsTest {
@@ -19,15 +19,14 @@ class SuggestionDismissalsTest {
         sell: String,
         buy: String,
         followed: Boolean = false,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = SwitchPlanResolver.Suggestion(
         recordId = recordId, planIndex = planIndex, sellIsin = sell, buyIsin = buy,
         sellFundName = sell, buyFundName = buy, fromLevel = 5, toLevel = 3, feeDeltaPercent = 0.0,
-        followed = followed, kind = kind,
+        followed = followed, kind = kind
     )
 
-    private fun dismissal(sell: String, buy: String, daysAgo: Long = 0, kind: SuggestionKind = SuggestionKind.RISK_PLAN) =
-        SuggestionDismissal(sellIsin = sell, buyIsin = buy, kind = kind, dismissedAtEpochDay = today.minusDays(daysAgo).toEpochDay())
+    private fun dismissal(sell: String, buy: String, daysAgo: Long = 0, kind: SuggestionKind = SuggestionKind.RISK_PLAN) = SuggestionDismissal(sellIsin = sell, buyIsin = buy, kind = kind, dismissedAtEpochDay = today.minusDays(daysAgo).toEpochDay())
 
     @Test
     fun `avstaendet galler fran dagen det gjordes till och med TTL_DAYS dagar senare`() {
@@ -81,7 +80,9 @@ class SuggestionDismissalsTest {
         val plan = listOf(suggestion(1, 0, "A", "B"))
 
         val (visible, dismissed) = SuggestionDismissals.partition(
-            plan, listOf(dismissal("A", "B", daysAgo = SuggestionDismissals.TTL_DAYS + 1)), today,
+            plan,
+            listOf(dismissal("A", "B", daysAgo = SuggestionDismissals.TTL_DAYS + 1)),
+            today
         )
 
         assertEquals(plan, visible)
@@ -95,7 +96,9 @@ class SuggestionDismissalsTest {
         val plan = suggestion(2, 0, "A", "B")
 
         val (visible, dismissed) = SuggestionDismissals.partition(
-            listOf(fee, plan), listOf(dismissal("A", "B", kind = SuggestionKind.FEE)), today,
+            listOf(fee, plan),
+            listOf(dismissal("A", "B", kind = SuggestionKind.FEE)),
+            today
         )
 
         assertEquals(listOf(2L), visible.map { it.recordId })
@@ -107,7 +110,9 @@ class SuggestionDismissalsTest {
         val items = listOf("x" to suggestion(1, 0, "A", "B", kind = SuggestionKind.FEE), "y" to suggestion(2, 0, "C", "D", kind = SuggestionKind.FEE))
 
         val (visible, dismissed) = SuggestionDismissals.partition(
-            items, listOf(dismissal("C", "D", kind = SuggestionKind.FEE)), today,
+            items,
+            listOf(dismissal("C", "D", kind = SuggestionKind.FEE)),
+            today
         ) { it.second }
 
         assertEquals(listOf("x"), visible.map { it.first })
@@ -119,9 +124,9 @@ class SuggestionDismissalsTest {
         val active = SuggestionDismissals.activeKeys(
             listOf(
                 dismissal("A", "B", kind = SuggestionKind.FEE),
-                dismissal("C", "D", daysAgo = SuggestionDismissals.TTL_DAYS + 1, kind = SuggestionKind.FEE),
+                dismissal("C", "D", daysAgo = SuggestionDismissals.TTL_DAYS + 1, kind = SuggestionKind.FEE)
             ),
-            today,
+            today
         )
 
         assertTrue(SuggestionDismissals.hides(active, SuggestionKind.FEE, "A", "B", followed = false))

@@ -1,18 +1,17 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
-import java.time.ZoneOffset
 
 /** HEM-12: när Hem påminner om att säkerhetskopiera, och vad raden säger. */
 class BackupReminderCalcTest {
 
     private val current = BackupContentState(fingerprint = "abc", transactionCount = 5, hasData = true)
-    private fun record(fingerprint: String?, count: Int?) =
-        BackupRecord(epochMillis = 1_700_000_000_000L, target = BackupTarget.DRIVE, fingerprint = fingerprint, transactionCount = count)
+    private fun record(fingerprint: String?, count: Int?) = BackupRecord(epochMillis = 1_700_000_000_000L, target = BackupTarget.DRIVE, fingerprint = fingerprint, transactionCount = count)
 
     @Test
     fun `utan data paminns inget, inte ens utan kopia`() {

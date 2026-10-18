@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
@@ -26,8 +28,6 @@ import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import javax.inject.Inject
-import kotlin.math.roundToInt
 
 /** Andelen (0.0..1.0) uttryckt som ett rundat heltalsprocent för visning/redigering i inmatningsfälten. */
 private fun percentTextOf(fraction: Double): String = (fraction * 100).roundToInt().toString()
@@ -46,7 +46,7 @@ data class RiskProfilUiState(
      * Profilen är sparad — en händelse till skärmen, som går tillbaka och kvitterar med
      * [RiskProfilViewModel.onSavedHandled], så att navigeringen sker exakt en gång (även vid rotation).
      */
-    val saved: Boolean = false,
+    val saved: Boolean = false
 ) {
     /** Text att visa per tillgänglig nivås inmatningsfält — förslaget (rundat till heltalsprocent) tills ett eget värde skrivits in, annars de egna värdena (saknad nivå defaultar till "0"). */
     val allocationText: Map<Int, String>
@@ -86,7 +86,7 @@ data class RiskProfilUiState(
 class RiskProfilViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
     private data class FormState(
@@ -94,7 +94,7 @@ class RiskProfilViewModel @Inject constructor(
         val reaction: DownturnReaction? = null,
         val goal: PrimaryGoal? = null,
         val manualAllocationText: Map<Int, String>? = null,
-        val saved: Boolean = false,
+        val saved: Boolean = false
     )
 
     private val form = MutableStateFlow(FormState())
@@ -112,7 +112,7 @@ class RiskProfilViewModel @Inject constructor(
                         horizon = saved.answers?.horizon,
                         reaction = saved.answers?.reaction,
                         goal = saved.answers?.goal,
-                        manualAllocationText = saved.effectiveAllocation.mapValues { (_, fraction) -> percentTextOf(fraction) },
+                        manualAllocationText = saved.effectiveAllocation.mapValues { (_, fraction) -> percentTextOf(fraction) }
                     )
                 }
             }
@@ -128,12 +128,12 @@ class RiskProfilViewModel @Inject constructor(
                 goal = f.goal,
                 suggestedAllocation = suggestionOrNull(f, levels)?.toImmutableMap(),
                 manualAllocationText = f.manualAllocationText?.toImmutableMap(),
-                saved = f.saved,
+                saved = f.saved
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = RiskProfilUiState(),
+            initialValue = RiskProfilUiState()
         )
 
     private fun suggestionOrNull(f: FormState, levels: List<Int>): Map<Int, Double>? {

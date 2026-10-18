@@ -24,13 +24,13 @@ import se.partee71.fonder.R
 fun FollowedToggleRow(
     followed: Boolean,
     onFollowedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     CheckRow(
         checked = followed,
         onCheckedChange = onFollowedChange,
         label = stringResource(R.string.facit_followed_label),
         labelStyle = MaterialTheme.typography.bodySmall,
-        modifier = modifier,
+        modifier = modifier
     )
 }

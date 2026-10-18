@@ -34,8 +34,8 @@ class FundSearchScreenTest {
                     state = FundSearchUiState(
                         loading = false,
                         results = persistentListOf(fondA),
-                        riskLevels = persistentMapOf(fondA.fundId to 6),
-                    ),
+                        riskLevels = persistentMapOf(fondA.fundId to 6)
+                    )
                 )
             }
         }
@@ -52,8 +52,8 @@ class FundSearchScreenTest {
                     state = FundSearchUiState(
                         loading = false,
                         results = persistentListOf(fondA, fondB),
-                        riskLevels = persistentMapOf(fondA.fundId to 6),
-                    ),
+                        riskLevels = persistentMapOf(fondA.fundId to 6)
+                    )
                 )
             }
         }

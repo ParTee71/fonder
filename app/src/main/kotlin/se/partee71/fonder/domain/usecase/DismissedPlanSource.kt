@@ -1,5 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -12,8 +14,6 @@ import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * De avstådda **planbytenas** inspelade rader (HEM-14) — en källa för Beslut
@@ -44,14 +44,14 @@ class DismissedPlanSource internal constructor(
     private val suggestionDismissalRepository: SuggestionDismissalRepository,
     private val preferencesRepository: PreferencesRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    private val today: () -> LocalDate,
+    private val today: () -> LocalDate
 ) {
     @Inject
     constructor(
         suggestionRecordRepository: SuggestionRecordRepository,
         suggestionDismissalRepository: SuggestionDismissalRepository,
         preferencesRepository: PreferencesRepository,
-        fundMetadataRepository: FundMetadataRepository,
+        fundMetadataRepository: FundMetadataRepository
     ) : this(suggestionRecordRepository, suggestionDismissalRepository, preferencesRepository, fundMetadataRepository, LocalDate::now)
 
     /**
@@ -67,29 +67,28 @@ class DismissedPlanSource internal constructor(
      */
     data class DismissedPlan(
         val dismissals: List<SuggestionDismissal>,
-        val suggestions: List<SwitchPlanResolver.Suggestion>,
+        val suggestions: List<SwitchPlanResolver.Suggestion>
     )
 
-    fun observe(): Flow<DismissedPlan> =
-        suggestionDismissalRepository.observeAll().flatMapLatest { dismissals ->
-            // Frågan ställs för paren som var aktiva när tabellen emitterade; giltigheten räknas
-            // om vid **varje** emission (som partition gör), så ett avstående som löper ut utan
-            // att tabellen rörs faller ur nästa gång något annat emitterar — inte först vid nästa skrivning.
-            val pairs = SuggestionDismissals.activeKeys(dismissals, today())
-                .filter { it.kind == SuggestionKind.RISK_PLAN }
-                .mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin }
-            combine(suggestionRecordRepository.observeLatestPlanRecordsFor(pairs), preferencesRepository.accountType) { records, accountType ->
-                records to accountType
-            }.mapLatest { (records, accountType) ->
-                val activeKeys = SuggestionDismissals.activeKeys(dismissals, today())
-                val dismissed = records.filter { SuggestionDismissals.hides(activeKeys, it.kind, it.sellIsin, it.buyIsin, it.followed == true) }
-                val suggestions = if (accountType == AccountType.ISK_KF && dismissed.isNotEmpty()) {
-                    val metadata = fundMetadataRepository.cachedMetadataFor(dismissed.flatMap { listOf(it.sellIsin, it.buyIsin) })
-                    dismissed.mapNotNull { SwitchPlanResolver.resolveRecord(it, metadata) }
-                } else {
-                    emptyList()
-                }
-                DismissedPlan(dismissals = dismissals, suggestions = suggestions)
+    fun observe(): Flow<DismissedPlan> = suggestionDismissalRepository.observeAll().flatMapLatest { dismissals ->
+        // Frågan ställs för paren som var aktiva när tabellen emitterade; giltigheten räknas
+        // om vid **varje** emission (som partition gör), så ett avstående som löper ut utan
+        // att tabellen rörs faller ur nästa gång något annat emitterar — inte först vid nästa skrivning.
+        val pairs = SuggestionDismissals.activeKeys(dismissals, today())
+            .filter { it.kind == SuggestionKind.RISK_PLAN }
+            .mapTo(mutableSetOf()) { it.sellIsin to it.buyIsin }
+        combine(suggestionRecordRepository.observeLatestPlanRecordsFor(pairs), preferencesRepository.accountType) { records, accountType ->
+            records to accountType
+        }.mapLatest { (records, accountType) ->
+            val activeKeys = SuggestionDismissals.activeKeys(dismissals, today())
+            val dismissed = records.filter { SuggestionDismissals.hides(activeKeys, it.kind, it.sellIsin, it.buyIsin, it.followed == true) }
+            val suggestions = if (accountType == AccountType.ISK_KF && dismissed.isNotEmpty()) {
+                val metadata = fundMetadataRepository.cachedMetadataFor(dismissed.flatMap { listOf(it.sellIsin, it.buyIsin) })
+                dismissed.mapNotNull { SwitchPlanResolver.resolveRecord(it, metadata) }
+            } else {
+                emptyList()
             }
+            DismissedPlan(dismissals = dismissals, suggestions = suggestions)
         }
+    }
 }

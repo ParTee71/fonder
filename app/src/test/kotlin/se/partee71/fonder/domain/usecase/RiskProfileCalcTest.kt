@@ -16,7 +16,7 @@ class RiskProfileCalcTest {
     private fun answers(
         horizon: TimeHorizon = TimeHorizon.TRE_TILL_7_AR,
         reaction: DownturnReaction = DownturnReaction.GOR_INGET,
-        goal: PrimaryGoal = PrimaryGoal.BALANSERAD,
+        goal: PrimaryGoal = PrimaryGoal.BALANSERAD
     ) = RiskProfileAnswers(horizon, reaction, goal)
 
     @Test
@@ -47,7 +47,7 @@ class RiskProfileCalcTest {
         // horisont ger ändå Bevarande — motiverat av uppmätt återhämtningstid (issue #71).
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.UNDER_3_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            fullScale,
+            fullScale
         )
         assertEquals(RiskProfileCalc.Profile.BEVARANDE.allocation, level)
     }
@@ -66,7 +66,7 @@ class RiskProfileCalcTest {
     fun `3-7 ar tar aldrig hogre an Balanserad`() {
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            fullScale,
+            fullScale
         )
         assertEquals(RiskProfileCalc.Profile.BALANSERAD.allocation, level)
     }
@@ -75,7 +75,7 @@ class RiskProfileCalcTest {
     fun `7-15 ar tar aldrig hogre an Tillvaxt`() {
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            fullScale,
+            fullScale
         )
         assertEquals(RiskProfileCalc.Profile.TILLVAXT.allocation, level)
     }
@@ -84,7 +84,7 @@ class RiskProfileCalcTest {
     fun `over 15 ar och hogsta risktolerans ger Offensiv`() {
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            fullScale,
+            fullScale
         )
         assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, level)
     }
@@ -93,7 +93,7 @@ class RiskProfileCalcTest {
     fun `lagsta risktoleransen ger Bevarande aven med lang horisont`() {
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.OVER_15_AR, DownturnReaction.SALJER_ALLT, PrimaryGoal.BEVARA),
-            fullScale,
+            fullScale
         )
         assertEquals(RiskProfileCalc.Profile.BEVARANDE.allocation, level)
     }
@@ -122,7 +122,7 @@ class RiskProfileCalcTest {
         // Försiktig = {2: 0,40, 3: 0,40, 4: 0,20}. En skala utan 2 klämmer den nivån mot 3.
         val suggestion = RiskProfileCalc.suggest(
             answers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BEVARA),
-            listOf(3, 4, 5, 6),
+            listOf(3, 4, 5, 6)
         )
         assertEquals(RiskProfileCalc.Profile.FORSIKTIG.allocation, mapOf(2 to 0.40, 3 to 0.40, 4 to 0.20))
         assertEquals(mapOf(3 to 0.80, 4 to 0.20), suggestion)
@@ -132,7 +132,7 @@ class RiskProfileCalcTest {
     fun `dubblettvarden i skalan paverkar inte resultatet`() {
         val level = RiskProfileCalc.suggest(
             answers(TimeHorizon.OVER_15_AR, DownturnReaction.KOPER_MER, PrimaryGoal.MAXIMAL_TILLVAXT),
-            listOf(6, 6, 6, 1, 2, 3, 4, 5),
+            listOf(6, 6, 6, 1, 2, 3, 4, 5)
         )
         assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, level)
     }

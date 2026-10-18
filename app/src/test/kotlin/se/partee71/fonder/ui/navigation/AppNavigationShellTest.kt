@@ -88,7 +88,7 @@ class AppNavigationShellTest {
                 isWorkerRunning = false,
                 beslutBadgeCount = beslutBadgeCount,
                 backStack = backStack,
-                entryProvider = ::stubEntry,
+                entryProvider = ::stubEntry
             )
         }
     }
@@ -121,7 +121,7 @@ class AppNavigationShellTest {
             "Innehav" to "portfolj",
             "Beslut" to "beslut",
             "Händelser" to "transaktioner",
-            "Översikt" to "hem",
+            "Översikt" to "hem"
         ).forEach { (label, route) ->
             composeRule.onNodeWithContentDescription(label).performClick()
             assertOnScreen(route)
@@ -141,7 +141,7 @@ class AppNavigationShellTest {
             "Ny transaktion" to "transaction-form",
             "Importera avräkningsnota" to "import-orders",
             "Importera innehav" to "import-holdings",
-            "Bevaka ny fond" to "fund-search",
+            "Bevaka ny fond" to "fund-search"
         ).forEach { (label, route) ->
             composeRule.onNodeWithContentDescription("Lägg till").performClick()
             composeRule.onNodeWithText(label).performClick()

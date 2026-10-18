@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 
+/** Stapelns tjocklek — 10 dp med helt rundade ändar (M3 Expressive, UI-12). */
+private val BAR_HEIGHT = 10.dp
+
 /**
  * Delad rad för en kategoris andel av en helhet (POR-9, issue #66) — etikett, procent
  * ([MoneyFormat.percent]) och en bredd-proportionell stapel. Ersätter ett tårtdiagram: Vico
@@ -31,20 +34,17 @@ import se.partee71.fonder.ui.theme.MonoAmountStyle
  *   färg (`MaterialTheme.colorScheme.outline`) så de syns som skilda från de riktiga
  *   kategorierna även rent visuellt, inte bara i sin plats sist i listan.
  */
-/** Stapelns tjocklek — 10 dp med helt rundade ändar (M3 Expressive, UI-12). */
-private val BAR_HEIGHT = 10.dp
-
 @Composable
 fun ExposureBar(
     label: String,
     fraction: Double,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.primary,
+    color: Color = MaterialTheme.colorScheme.primary
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Vikt + ellips av samma skäl som i [PeriodRow] (issue #78): utan dem kunde en lång
             // kategorietikett äta upp hela raden och lämna noll bredd till procenten.
@@ -53,7 +53,7 @@ fun ExposureBar(
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
             )
             Text(MoneyFormat.percent(fraction), style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium))
         }
@@ -62,13 +62,13 @@ fun ExposureBar(
                 .fillMaxWidth()
                 .padding(top = 6.dp)
                 .height(BAR_HEIGHT)
-                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(fraction.toFloat().coerceIn(0f, 1f))
-                    .background(color, CircleShape),
+                    .background(color, CircleShape)
             )
         }
     }

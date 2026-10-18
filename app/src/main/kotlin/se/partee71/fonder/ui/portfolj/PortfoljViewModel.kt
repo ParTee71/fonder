@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
@@ -40,8 +42,6 @@ import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import java.time.LocalDate
-import javax.inject.Inject
 
 @Immutable
 data class PortfoljUiState(
@@ -74,7 +74,7 @@ data class PortfoljUiState(
      * Per fond, inte ett gemensamt "något hämtas": en nyss tillagd fond uppdateras medan resten
      * av listan står färdig, och då ska bara **den** raden snurra (NAV-6).
      */
-    val refreshingFundIds: ImmutableSet<String> = persistentSetOf(),
+    val refreshingFundIds: ImmutableSet<String> = persistentSetOf()
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 
@@ -96,7 +96,7 @@ private val EMPTY_EXPOSURE = PortfolioExposureCalc.Result(
     byRegion = EMPTY_DIMENSION,
     indexStatus = PortfolioExposureCalc.IndexStatusSplit(indexValueKr = 0.0, indexFraction = 0.0, activeValueKr = 0.0, activeFraction = 0.0),
     includedValueKr = 0.0,
-    excludedCount = 0,
+    excludedCount = 0
 )
 
 /** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #26) om inget köp finns (bör inte hända för ett verkligt innehav). Samma princip som `HemViewModel`. */
@@ -108,7 +108,7 @@ class PortfoljViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
-    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+    private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
@@ -168,14 +168,14 @@ class PortfoljViewModel @Inject constructor(
     private data class WorkState(
         val running: Set<BackgroundWork>,
         val metadataPending: Boolean,
-        val refreshingFundIds: Set<String>,
+        val refreshingFundIds: Set<String>
     )
 
     private val workState: Flow<WorkState> =
         combine(
             fundPriceRefreshScheduler.observeRunningWork(),
             metadataLoading,
-            refreshingFundIds,
+            refreshingFundIds
         ) { running, metadataPending, refreshing ->
             WorkState(running, metadataPending, refreshing)
         }
@@ -190,7 +190,7 @@ class PortfoljViewModel @Inject constructor(
                     val history = fundPriceRepository.priceHistory(
                         fundId = holding.fund.fundId,
                         fromEpochDay = today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS).toEpochDay(),
-                        toEpochDay = today.toEpochDay(),
+                        toEpochDay = today.toEpochDay()
                     )
                     holding.fund.fundId to PortfolioPerformanceCalc.holdingPerformance(holding, today, history)
                 }
@@ -209,7 +209,7 @@ class PortfoljViewModel @Inject constructor(
                     riskLevels = enriched.mapNotNull { holding ->
                         val risk = holding.fund.isin?.let { metadataByIsin[it]?.risk } ?: return@mapNotNull null
                         holding.fund.fundId to risk
-                    }.toMap().toImmutableMap(),
+                    }.toMap().toImmutableMap()
                 )
             }
         }.combine(workState) { state, work ->
@@ -219,12 +219,12 @@ class PortfoljViewModel @Inject constructor(
             state.copy(
                 pricesWorking = BackgroundWork.PRICE_REFRESH in work.running,
                 metadataWorking = work.metadataPending,
-                refreshingFundIds = work.refreshingFundIds.toImmutableSet(),
+                refreshingFundIds = work.refreshingFundIds.toImmutableSet()
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = PortfoljUiState(),
+            initialValue = PortfoljUiState()
         )
 
     /**
@@ -237,7 +237,7 @@ class PortfoljViewModel @Inject constructor(
     private suspend fun buildAnalysis(
         enriched: List<Holding>,
         transactions: List<Transaction>,
-        today: LocalDate,
+        today: LocalDate
     ): Map<String, FundAnalysisCalc.Analysis> {
         if (enriched.isEmpty()) return emptyMap()
 
@@ -260,7 +260,7 @@ class PortfoljViewModel @Inject constructor(
                 priceHistory = historyByFundId[holding.fund.fundId].orEmpty(),
                 firstPurchaseDate = firstPurchase,
                 portfolioTotalValue = portfolioTotalValue,
-                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories),
+                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
             ) ?: return@mapNotNull null
             holding.fund.fundId to analysis
         }.toMap()

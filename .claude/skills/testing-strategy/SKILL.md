@@ -133,6 +133,7 @@ jämför inga bilder.
 ./gradlew :app:verifyRoborazziDebug            # som CI: enhetstester, Robolectric, UiConsistencyTest och skärmdumpsjämförelsen
 ./gradlew :app:recordRoborazziDebug            # bara vid avsiktlig visuell ändring – checka in bilderna
 ./gradlew cpdCheck                             # copy-paste-detektor (regel 4)
+./gradlew spotlessApply                        # kodstil (ktlint + compose-rules), före push – inte i CI
 ./gradlew :app:compileDebugAndroidTestKotlin   # instrumenttester ska minst kompilera
 ./gradlew :app:connectedDebugAndroidTest       # kräver emulator/enhet
 node --test .claude/hooks/test/*.test.mjs      # hooken regel4-check och baslinjen (ingen SDK behövs)

@@ -27,7 +27,7 @@ class FundDaoTest {
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
-            AppDatabase::class.java,
+            AppDatabase::class.java
         ).build()
         fundDao = db.fundDao()
         transactionDao = db.transactionDao()
@@ -74,7 +74,7 @@ class FundDaoTest {
             name = "Franklin Gold and Prec Mtls A(acc)USD",
             currency = "USD",
             isin = "LU0496367417",
-            fondlistaFundId = "0P0000O30D",
+            fondlistaFundId = "0P0000O30D"
         )
         fundDao.upsert(fund)
 
@@ -97,8 +97,8 @@ class FundDaoTest {
                 type = "KOP",
                 epochDay = 100,
                 shares = 3.0,
-                pricePerShare = 50.0,
-            ),
+                pricePerShare = 50.0
+            )
         )
 
         val stored = transactionDao.observeForFund("SHB0000442").first()

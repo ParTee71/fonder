@@ -33,7 +33,7 @@ object AnalysisGuidance {
         SVAG_MOT_PORTFOLJ,
 
         /** Inga signaler triggade — ett lugnt läge, inget som kräver åtgärd. */
-        LUGNT_LAGE,
+        LUGNT_LAGE
     }
 
     /**

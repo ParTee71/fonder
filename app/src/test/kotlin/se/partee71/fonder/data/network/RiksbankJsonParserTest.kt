@@ -1,9 +1,9 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Fixturen nedan är ett trimmat utdrag av ett verkligt svar från Riksbankens SWEA-API

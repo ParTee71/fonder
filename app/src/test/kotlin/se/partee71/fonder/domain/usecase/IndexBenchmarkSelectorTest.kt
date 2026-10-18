@@ -17,7 +17,7 @@ class IndexBenchmarkSelectorTest {
         indexFund: Boolean = true,
         type: String = IndexBenchmarkSelector.TAG_TYPE_EQUITY,
         region: String? = IndexBenchmarkSelector.TAG_REGION_GLOBAL,
-        startDateEpochDay: Long? = 15_000L,
+        startDateEpochDay: Long? = 15_000L
     ) = FundMetadata(
         isin = isin,
         name = "Fond $isin",
@@ -33,23 +33,20 @@ class IndexBenchmarkSelectorTest {
         minimumBuy = null,
         tags = listOfNotNull(
             FundTag(title = type, category = FundTag.CATEGORY_TYPE),
-            region?.let { FundTag(title = it, category = FundTag.CATEGORY_COMMON_REGION) },
-        ),
+            region?.let { FundTag(title = it, category = FundTag.CATEGORY_COMMON_REGION) }
+        )
     )
 
-    private fun rantefond(isin: String, totalFee: Double = 0.1) =
-        fond(isin, totalFee = totalFee, type = IndexBenchmarkSelector.TAG_TYPE_BOND, region = null)
+    private fun rantefond(isin: String, totalFee: Double = 0.1) = fond(isin, totalFee = totalFee, type = IndexBenchmarkSelector.TAG_TYPE_BOND, region = null)
 
-    private fun bucket(label: String, valueKr: Double) =
-        PortfolioExposureCalc.Bucket(label, valueKr, fraction = 0.0)
+    private fun bucket(label: String, valueKr: Double) = PortfolioExposureCalc.Bucket(label, valueKr, fraction = 0.0)
 
-    private fun dimension(buckets: List<PortfolioExposureCalc.Bucket>, unknownValueKr: Double = 0.0) =
-        PortfolioExposureCalc.Dimension(
-            buckets = buckets,
-            unknownValueKr = unknownValueKr,
-            unknownFraction = 0.0,
-            unknownCount = if (unknownValueKr > 0.0) 1 else 0,
-        )
+    private fun dimension(buckets: List<PortfolioExposureCalc.Bucket>, unknownValueKr: Double = 0.0) = PortfolioExposureCalc.Dimension(
+        buckets = buckets,
+        unknownValueKr = unknownValueKr,
+        unknownFraction = 0.0,
+        unknownCount = if (unknownValueKr > 0.0) 1 else 0
+    )
 
     // --- Aktieandelen ur exponeringen ---
 
@@ -61,8 +58,8 @@ class IndexBenchmarkSelectorTest {
             listOf(
                 bucket(IndexBenchmarkSelector.TAG_TYPE_EQUITY, 500.0),
                 bucket(IndexBenchmarkSelector.TAG_TYPE_BOND, 250.0),
-                bucket("Blandfond", 250.0),
-            ),
+                bucket("Blandfond", 250.0)
+            )
         )
 
         val split = IndexBenchmarkSelector.exposureSplit(byType)
@@ -84,7 +81,7 @@ class IndexBenchmarkSelectorTest {
     @Test
     fun `en ren aktieportfolj ger aktieandel 1 och inget oklassificerat`() {
         val split = IndexBenchmarkSelector.exposureSplit(
-            dimension(listOf(bucket(IndexBenchmarkSelector.TAG_TYPE_EQUITY, 1_000.0))),
+            dimension(listOf(bucket(IndexBenchmarkSelector.TAG_TYPE_EQUITY, 1_000.0)))
         )
 
         assertEquals(1.0, split.equityShare, 1e-9)
@@ -114,7 +111,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_DYR", 0.40), fond("SE_BILLIG", 0.10)),
             bondCandidates = listOf(rantefond("SE_RANTA")),
-            equityShare = 1.0,
+            equityShare = 1.0
         )!!
 
         assertEquals(1, benchmark.components.size)
@@ -128,7 +125,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_AKTIE", 0.15)),
             bondCandidates = listOf(rantefond("SE_RANTA_DYR", 0.30), rantefond("SE_RANTA", 0.05)),
-            equityShare = 0.7,
+            equityShare = 0.7
         )!!
 
         assertEquals(listOf("SE_AKTIE", "SE_RANTA"), benchmark.components.map { it.metadata.isin })
@@ -141,7 +138,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_AKTIE")),
             bondCandidates = listOf(rantefond("SE_RANTA")),
-            equityShare = 0.37,
+            equityShare = 0.37
         )!!
 
         assertEquals(1.0, benchmark.components.sumOf { it.weight }, 1e-9)
@@ -154,7 +151,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_AKTIE")),
             bondCandidates = listOf(rantefond("SE_RANTA")),
-            equityShare = 0.97,
+            equityShare = 0.97
         )!!
 
         assertEquals(listOf("SE_AKTIE"), benchmark.components.map { it.metadata.isin })
@@ -166,7 +163,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_AKTIE")),
             bondCandidates = emptyList(),
-            equityShare = 0.6,
+            equityShare = 0.6
         )!!
 
         assertEquals(listOf("SE_AKTIE"), benchmark.components.map { it.metadata.isin })
@@ -179,7 +176,7 @@ class IndexBenchmarkSelectorTest {
         val benchmark = IndexBenchmarkSelector.select(
             equityCandidates = listOf(fond("SE_AKTIE")),
             bondCandidates = listOf(rantefond("SE_RANTA")),
-            equityShare = 0.0,
+            equityShare = 0.0
         )!!
 
         assertEquals(listOf("SE_RANTA"), benchmark.components.map { it.metadata.isin })
@@ -195,10 +192,10 @@ class IndexBenchmarkSelectorTest {
                 fond("SE_AKTIV", 0.05, indexFund = false),
                 fond("SE_SVERIGE", 0.06, region = "Sverige"),
                 fond("SE_UTAN_AVGIFT", totalFee = null),
-                fond("SE_OK", 0.30),
+                fond("SE_OK", 0.30)
             ),
             bondCandidates = emptyList(),
-            equityShare = 1.0,
+            equityShare = 1.0
         )!!
 
         assertEquals("SE_OK", benchmark.components.single().metadata.isin)
@@ -222,10 +219,10 @@ class IndexBenchmarkSelectorTest {
             equityCandidates = listOf(
                 fond("SE0001", startDateEpochDay = 16_000L),
                 fond("SE0002", startDateEpochDay = 12_000L),
-                fond("SE0003", startDateEpochDay = null),
+                fond("SE0003", startDateEpochDay = null)
             ),
             bondCandidates = emptyList(),
-            equityShare = 1.0,
+            equityShare = 1.0
         )!!
 
         assertEquals("SE0002", benchmark.components.single().metadata.isin)

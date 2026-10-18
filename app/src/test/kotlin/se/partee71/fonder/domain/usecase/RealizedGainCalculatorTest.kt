@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -7,13 +8,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
 
-private fun kop(fundId: String, day: Long, shares: Double, price: Double, id: Long = 0) =
-    Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
+private fun kop(fundId: String, day: Long, shares: Double, price: Double, id: Long = 0) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
 
-private fun salj(fundId: String, day: Long, shares: Double, price: Double, fee: Double = 0.0, id: Long = 0) =
-    Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
+private fun salj(fundId: String, day: Long, shares: Double, price: Double, fee: Double = 0.0, id: Long = 0) = Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
 
 class RealizedGainCalculatorTest {
 
@@ -21,7 +19,7 @@ class RealizedGainCalculatorTest {
     fun `enkel forsaljning av en enda lott ger korrekt realiserat resultat`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
-            salj("F1", day = 200, shares = 10.0, price = 120.0, id = 2),
+            salj("F1", day = 200, shares = 10.0, price = 120.0, id = 2)
         )
 
         val sales = RealizedGainCalculator.compute(transactions)
@@ -39,7 +37,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 6.0, price = 100.0, id = 1),
             kop("F1", day = 150, shares = 8.0, price = 110.0, id = 2),
-            salj("F1", day = 200, shares = 10.0, price = 130.0, id = 3),
+            salj("F1", day = 200, shares = 10.0, price = 130.0, id = 3)
         )
 
         val sales = RealizedGainCalculator.compute(transactions)
@@ -58,7 +56,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
             salj("F1", day = 200, shares = 4.0, price = 120.0, id = 2),
-            salj("F1", day = 300, shares = 6.0, price = 130.0, id = 3),
+            salj("F1", day = 300, shares = 6.0, price = 130.0, id = 3)
         )
 
         val sales = RealizedGainCalculator.compute(transactions)
@@ -73,7 +71,7 @@ class RealizedGainCalculatorTest {
     fun `avgift minskar det realiserade resultatet`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
-            salj("F1", day = 200, shares = 10.0, price = 150.0, fee = 50.0, id = 2),
+            salj("F1", day = 200, shares = 10.0, price = 150.0, fee = 50.0, id = 2)
         )
 
         val sale = RealizedGainCalculator.compute(transactions).first()
@@ -87,7 +85,7 @@ class RealizedGainCalculatorTest {
     @Test
     fun `forsaljning utan matchande kop flaggas som otackt`() {
         val transactions = listOf(
-            salj("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
+            salj("F1", day = 100, shares = 5.0, price = 100.0, id = 1)
         )
 
         val sale = RealizedGainCalculator.compute(transactions).first()
@@ -102,7 +100,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
             kop("F2", day = 100, shares = 5.0, price = 50.0, id = 2),
-            salj("F2", day = 200, shares = 5.0, price = 60.0, id = 3),
+            salj("F2", day = 200, shares = 5.0, price = 60.0, id = 3)
         )
 
         val sales = RealizedGainCalculator.compute(transactions)
@@ -117,7 +115,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 20.0, price = 100.0, id = 1),
             salj("F1", day = 200, shares = 5.0, price = 110.0, id = 2),
-            salj("F1", day = 300, shares = 5.0, price = 120.0, id = 3),
+            salj("F1", day = 300, shares = 5.0, price = 120.0, id = 3)
         )
 
         val sales = RealizedGainCalculator.compute(transactions)
@@ -130,7 +128,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
             kop("F1", day = 150, shares = 5.0, price = 200.0, id = 2),
-            salj("F1", day = 200, shares = 6.0, price = 150.0, id = 3),
+            salj("F1", day = 200, shares = 6.0, price = 150.0, id = 3)
         )
 
         val positions = RealizedGainCalculator.remainingPositions(transactions)
@@ -148,7 +146,7 @@ class RealizedGainCalculatorTest {
         val transactions = listOf(
             kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
             kop("F1", day = 150, shares = 5.0, price = 200.0, id = 2),
-            salj("F1", day = 200, shares = 2.0, price = 150.0, id = 3),
+            salj("F1", day = 200, shares = 2.0, price = 150.0, id = 3)
         )
 
         val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
@@ -161,7 +159,7 @@ class RealizedGainCalculatorTest {
     fun `remainingPositions utelamnar helt avsalda fonder`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
-            salj("F1", day = 200, shares = 10.0, price = 120.0, id = 2),
+            salj("F1", day = 200, shares = 10.0, price = 120.0, id = 2)
         )
 
         assertFalse(RealizedGainCalculator.remainingPositions(transactions).containsKey("F1"))
@@ -173,7 +171,7 @@ class RealizedGainCalculatorTest {
         // kvarvarande andelarnas anskaffningsvärde.
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
-            salj("F1", day = 200, shares = 4.0, price = 120.0, fee = 20.0, id = 2),
+            salj("F1", day = 200, shares = 4.0, price = 120.0, fee = 20.0, id = 2)
         )
 
         val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
@@ -188,8 +186,8 @@ class RealizedGainCalculatorTest {
                 kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
                 salj("F1", day = 200, shares = 10.0, price = 150.0, id = 2),
                 kop("F2", day = 100, shares = 5.0, price = 200.0, id = 3),
-                salj("F2", day = 200, shares = 5.0, price = 190.0, id = 4),
-            ),
+                salj("F2", day = 200, shares = 5.0, price = 190.0, id = 4)
+            )
         )
 
         val total = RealizedGainCalculator.total(sales)
@@ -204,7 +202,7 @@ class RealizedGainCalculatorTest {
     @Test
     fun `total utan anskaffningsvarde saknar andel och ar osaker nar ett salj saknar kop (SLD-2)`() {
         val total = RealizedGainCalculator.total(
-            RealizedGainCalculator.compute(listOf(salj("F1", day = 200, shares = 5.0, price = 150.0, id = 1))),
+            RealizedGainCalculator.compute(listOf(salj("F1", day = 200, shares = 5.0, price = 150.0, id = 1)))
         )
 
         assertNull(total.realizedGainFraction)
@@ -219,8 +217,8 @@ class RealizedGainCalculatorTest {
             listOf(
                 kop("F1", day = lastYear - 100, shares = 20.0, price = 100.0, id = 1),
                 salj("F1", day = lastYear, shares = 10.0, price = 110.0, id = 2),
-                salj("F1", day = thisYear, shares = 10.0, price = 130.0, id = 3),
-            ),
+                salj("F1", day = thisYear, shares = 10.0, price = 130.0, id = 3)
+            )
         )
 
         val total = RealizedGainCalculator.totalForYear(sales, year = 2026)

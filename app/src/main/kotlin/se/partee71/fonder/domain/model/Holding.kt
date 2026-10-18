@@ -22,7 +22,7 @@ data class Holding(
     val netInvested: Double,
     val currentValue: Double? = null,
     val firstPurchaseEpochDay: Long? = null,
-    val navEpochDay: Long? = null,
+    val navEpochDay: Long? = null
 ) {
     /** Vinst/förlust i kr, eller null om [currentValue] är okänt. */
     val gainLoss: Double? get() = currentValue?.minus(netInvested)

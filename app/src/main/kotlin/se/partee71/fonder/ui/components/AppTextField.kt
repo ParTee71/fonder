@@ -24,7 +24,7 @@ fun AppTextField(
     suffix: String? = null,
     supportingText: String? = null,
     isError: Boolean = false,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
@@ -37,6 +37,6 @@ fun AppTextField(
         isError = isError,
         singleLine = singleLine,
         keyboardOptions = keyboardOptions,
-        shape = MaterialTheme.shapes.extraSmall,
+        shape = MaterialTheme.shapes.extraSmall
     )
 }

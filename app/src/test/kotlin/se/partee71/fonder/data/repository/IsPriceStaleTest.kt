@@ -1,5 +1,7 @@
 package se.partee71.fonder.data.repository
 
+import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -9,8 +11,6 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
-import java.time.LocalDate
-import java.time.LocalDateTime
 
 /**
  * Testar [isPriceStale] mot [se.partee71.fonder.domain.usecase.NavCalendar] direkt (issue #27,

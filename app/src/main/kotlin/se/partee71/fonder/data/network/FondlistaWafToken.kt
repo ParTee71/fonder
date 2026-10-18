@@ -7,6 +7,8 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -14,8 +16,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import se.partee71.fonder.di.MainDispatcher
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Nyckeln (`aws-waf-token`) som handelsbanken.fondlista.se kräver sedan källan började svara
@@ -42,7 +42,7 @@ interface FondlistaWafTokenSource {
 @Singleton
 class WebViewFondlistaWafTokenSource @Inject constructor(
     @ApplicationContext private val context: Context,
-    @param:MainDispatcher private val main: CoroutineDispatcher,
+    @param:MainDispatcher private val main: CoroutineDispatcher
 ) : FondlistaWafTokenSource {
 
     private val mutex = Mutex()
@@ -99,10 +99,9 @@ object WafToken {
     const val COOKIE_NAME = "aws-waf-token"
 
     /** Värdet på [COOKIE_NAME] i ett `Cookie`-huvud (`a=1; aws-waf-token=x`), eller null. */
-    fun fromCookieHeader(header: String?): String? =
-        header?.split(';')
-            ?.map { it.trim() }
-            ?.firstOrNull { it.startsWith("$COOKIE_NAME=") }
-            ?.substringAfter('=')
-            ?.takeIf { it.isNotBlank() }
+    fun fromCookieHeader(header: String?): String? = header?.split(';')
+        ?.map { it.trim() }
+        ?.firstOrNull { it.startsWith("$COOKIE_NAME=") }
+        ?.substringAfter('=')
+        ?.takeIf { it.isNotBlank() }
 }

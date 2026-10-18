@@ -5,6 +5,9 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import javax.inject.Inject
+import kotlin.math.abs
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -31,9 +34,6 @@ import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
-import java.time.LocalDate
-import javax.inject.Inject
-import kotlin.math.abs
 
 private const val SHARES_MATCH_TOLERANCE = 1e-6
 
@@ -61,7 +61,7 @@ data class ImportOccasion(
     // Standard Köp — exportens innehav är i praktiken alltid köpta andelar, men en importrad
     // kan sättas till Sälj (t.ex. en manuellt tillagd rad för en avyttring) i stället för att
     // alltid hårdkodas till köp (issue #10, KRAVLISTA IMP-5).
-    val type: TransactionType = TransactionType.KOP,
+    val type: TransactionType = TransactionType.KOP
 ) {
     val shares: Double? get() = SwedishNumberFormat.parse(sharesText)
 }
@@ -75,7 +75,7 @@ data class ImportRowUiState(
     val occasions: ImmutableList<ImportOccasion>,
     val included: Boolean = true,
     /** Sant om ett försök att uppdatera fondens kurscache under import misslyckades (issue #19) — importen fortsätter ändå, men markerad, inte tyst. */
-    val priceFetchFailed: Boolean = false,
+    val priceFetchFailed: Boolean = false
 ) {
     val occasionSharesTotal: Double get() = occasions.sumOf { it.shares ?: 0.0 }
     val sharesMismatch: Boolean get() = abs(occasionSharesTotal - row.shares) > SHARES_MATCH_TOLERANCE
@@ -97,7 +97,7 @@ data class ImportHoldingsUiState(
     val imported: Boolean = false,
     val error: ImportError? = null,
     /** Importen pågår — knappen ska vara släckt, se [ImportHoldingsViewModel.import]. */
-    val importing: Boolean = false,
+    val importing: Boolean = false
 ) {
     val canImport: Boolean get() = rows.any { it.readyToImport } && !importing
 }
@@ -113,7 +113,7 @@ class ImportHoldingsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val recordTransaction: RecordTransaction,
-    private val fileReader: ImportFileReader,
+    private val fileReader: ImportFileReader
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportHoldingsUiState())
@@ -156,16 +156,15 @@ class ImportHoldingsViewModel @Inject constructor(
     }
 
     /** Matchningsordning delad med [se.partee71.fonder.ui.imports.ImportOrdersViewModel] — se [ImportFundMatcher]. */
-    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? =
-        ImportFundMatcher.match(
-            isin = row.isin,
-            fundName = row.fundName,
-            fundCompanyName = row.fundCompanyName,
-            catalogFunds = catalog.funds,
-            trackedFunds = trackedFunds,
-            findFundByIsin = fundPriceRepository::findFundByIsin,
-            lookupIsin = fundPriceRepository::lookupIsin,
-        )
+    private suspend fun matchFund(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): FundNameMatcher.Match? = ImportFundMatcher.match(
+        isin = row.isin,
+        fundName = row.fundName,
+        fundCompanyName = row.fundCompanyName,
+        catalogFunds = catalog.funds,
+        trackedFunds = trackedFunds,
+        findFundByIsin = fundPriceRepository::findFundByIsin,
+        lookupIsin = fundPriceRepository::lookupIsin
+    )
 
     private suspend fun buildRowState(row: ImportedHoldingRow, catalog: FundCatalog, trackedFunds: List<Fund>): ImportRowUiState {
         val match = matchFund(row, catalog, trackedFunds)
@@ -200,7 +199,7 @@ class ImportHoldingsViewModel @Inject constructor(
             matchedFund = match?.fund,
             matchConfidence = match?.confidence,
             occasions = persistentListOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
-            priceFetchFailed = priceFetchFailed,
+            priceFetchFailed = priceFetchFailed
         )
     }
 
@@ -277,8 +276,8 @@ class ImportHoldingsViewModel @Inject constructor(
                                 type = occasion.type,
                                 epochDay = occasion.date.toEpochDay(),
                                 shares = requireNotNull(occasion.shares),
-                                pricePerShare = rowState.row.averageCostPerShare,
-                            ),
+                                pricePerShare = rowState.row.averageCostPerShare
+                            )
                         )
                     }
                 }

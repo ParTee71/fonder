@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -13,7 +14,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.time.LocalDate
 
 /**
  * Migration 4→5 (issue #39) gör två saker: lägger till den nullable kolumnen `fondlistaFundId`
@@ -57,26 +57,26 @@ class Migration45Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             // En importmatchad fond: identiteten ÄR ISIN:et (findFundByIsin, TP-13/TP-14).
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin) " +
-                    "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417')",
+                    "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417')"
             )
             db.execSQL(
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES ('LU0496367417', 'KOP', 100, 2.0, 150.0, 0.0)",
+                    "VALUES ('LU0496367417', 'KOP', 100, 2.0, 150.0, 0.0)"
             )
             // Kronor: det här testet gäller helgfiltret, och migrering 5→6 rensar allt som
             // inte är i FundPrice.VALUE_CURRENCY (issue #41) — annars vore listan tom oavsett
@@ -87,11 +87,11 @@ class Migration45Test {
                 fredag to 100.0,
                 lordag to 101.0,
                 sondag to 102.0,
-                mandag to 103.0,
+                mandag to 103.0
             ).forEach { (day, nav) ->
                 db.execSQL(
                     "INSERT INTO fund_prices (fundId, epochDay, nav, currency) " +
-                        "VALUES ('LU0496367417', $day, $nav, 'SEK')",
+                        "VALUES ('LU0496367417', $day, $nav, 'SEK')"
                 )
             }
             db.version = 4

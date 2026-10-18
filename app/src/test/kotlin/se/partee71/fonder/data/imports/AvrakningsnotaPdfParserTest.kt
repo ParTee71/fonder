@@ -1,10 +1,10 @@
 package se.partee71.fonder.data.imports
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
 
 /**
  * Fixturen nedan är den textextraktion som faktiskt kunde göras av en riktig Handelsbanken-

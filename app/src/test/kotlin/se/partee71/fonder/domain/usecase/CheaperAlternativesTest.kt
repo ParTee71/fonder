@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -7,7 +8,6 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
-import java.time.LocalDate
 
 /** ANA-9 på Beslut (NAV-9): vilka inspelade avgiftsbyten som visas som billigare alternativ. */
 class CheaperAlternativesTest {
@@ -17,7 +17,7 @@ class CheaperAlternativesTest {
     private fun meta(isin: String, fee: Double?, risk: Int? = 5, shown: List<String> = emptyList()) = FundMetadata(
         isin = isin, name = "Fond $isin", orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), shownAlternativeIsins = shown,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), shownAlternativeIsins = shown
     )
 
     private fun fee(
@@ -27,17 +27,17 @@ class CheaperAlternativesTest {
         daysAgo: Long = 0,
         valueKr: Double? = 96_000.0,
         followed: Boolean? = null,
-        kind: SuggestionKind = SuggestionKind.FEE,
+        kind: SuggestionKind = SuggestionKind.FEE
     ) = SuggestionRecord(
         id = id, suggestedAtEpochDay = today.minusDays(daysAgo).toEpochDay(), planIndex = 0,
         sellIsin = sell, buyIsin = buy, sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0,
-        switchValueKr = valueKr, followed = followed, batchEpochMillis = 1_000 - daysAgo, kind = kind,
+        switchValueKr = valueKr, followed = followed, batchEpochMillis = 1_000 - daysAgo, kind = kind
     )
 
     private val metadata = mapOf(
         "S" to meta("S", fee = 1.40, shown = listOf("B1", "B2")),
         "B1" to meta("B1", fee = 0.40),
-        "B2" to meta("B2", fee = 0.90),
+        "B2" to meta("B2", fee = 0.90)
     )
 
     @Test
@@ -66,7 +66,7 @@ class CheaperAlternativesTest {
         val alternatives = CheaperAlternatives.resolve(
             listOf(fee(1, daysAgo = 2, followed = true), fee(2, daysAgo = 0)),
             metadata,
-            today,
+            today
         )
 
         assertEquals(2L, alternatives.single().suggestion.recordId)
@@ -92,7 +92,7 @@ class CheaperAlternativesTest {
             metadata + ("B1" to meta("B1", fee = null)),
             metadata + ("B1" to meta("B1", fee = 0.40, risk = null)),
             metadata + ("B1" to meta("B1", fee = 1.40)),
-            metadata - "B1",
+            metadata - "B1"
         ).forEach { meta ->
             assertTrue(CheaperAlternatives.resolve(listOf(fee(1)), meta, today).isEmpty())
         }

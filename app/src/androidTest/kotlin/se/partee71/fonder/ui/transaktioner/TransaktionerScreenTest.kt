@@ -30,7 +30,13 @@ class TransaktionerScreenTest {
     val composeRule = createComposeRule()
 
     private fun sellTx(id: Long = 1) = Transaction(
-        id = id, fundId = "SHB0000442", type = TransactionType.SALJ, epochDay = 100, shares = 10.0, pricePerShare = 60.0, fee = 10.0,
+        id = id,
+        fundId = "SHB0000442",
+        type = TransactionType.SALJ,
+        epochDay = 100,
+        shares = 10.0,
+        pricePerShare = 60.0,
+        fee = 10.0
     )
 
     private fun sale(id: Long = 1, uncoveredShares: Double = 0.0) = RealizedSale(
@@ -41,27 +47,27 @@ class TransaktionerScreenTest {
         proceeds = 600.0,
         fee = 10.0,
         costBasis = 500.0,
-        uncoveredShares = uncoveredShares,
+        uncoveredShares = uncoveredShares
     )
 
     private fun sellRow(
         fundName: String = "Fond A",
         uncoveredShares: Double = 0.0,
         fundIsin: String? = null,
-        canStartSwitchWatch: Boolean = false,
+        canStartSwitchWatch: Boolean = false
     ) = TransaktionRad(
         transaction = sellTx(),
         fundName = fundName,
         sale = sale(uncoveredShares = uncoveredShares),
         fundIsin = fundIsin,
-        canStartSwitchWatch = canStartSwitchWatch,
+        canStartSwitchWatch = canStartSwitchWatch
     )
 
     private fun state(vararg rows: TransaktionRad, filter: HandelseFilter = HandelseFilter.ALLA) = TransaktionerUiState(
         loading = false,
         allRows = rows.toList().toImmutableList(),
         filter = filter,
-        totalRealized = RealizedGainCalculator.total(rows.mapNotNull { it.sale }),
+        totalRealized = RealizedGainCalculator.total(rows.mapNotNull { it.sale })
     )
 
     @Test
@@ -75,7 +81,7 @@ class TransaktionerScreenTest {
     fun saljfiltret_utan_salj_visar_tomt_tillstand_for_salj() {
         val buy = TransaktionRad(
             transaction = Transaction(id = 2, fundId = "F", type = TransactionType.KOP, epochDay = 100, shares = 1.0, pricePerShare = 10.0),
-            fundName = "Fond K",
+            fundName = "Fond K"
         )
         composeRule.setContent { FonderTheme { TransaktionerContent(state = state(buy, filter = HandelseFilter.SALJ)) } }
 
@@ -90,7 +96,7 @@ class TransaktionerScreenTest {
         val b = TransaktionRad(
             transaction = sellTx(id = 2),
             fundName = "Fond B",
-            sale = sale(id = 2).copy(proceeds = 710.0, fee = 0.0, costBasis = 500.0),
+            sale = sale(id = 2).copy(proceeds = 710.0, fee = 0.0, costBasis = 500.0)
         )
 
         composeRule.setContent { FonderTheme { TransaktionerContent(state = state(a, b, filter = HandelseFilter.SALJ)) } }
@@ -146,7 +152,7 @@ class TransaktionerScreenTest {
             FonderTheme {
                 TransaktionerContent(
                     state = state(sellRow(fundIsin = "SE_A", canStartSwitchWatch = true)),
-                    onStartSwitchWatch = { started = it },
+                    onStartSwitchWatch = { started = it }
                 )
             }
         }

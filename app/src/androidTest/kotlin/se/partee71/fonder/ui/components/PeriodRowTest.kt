@@ -138,7 +138,7 @@ class PeriodRowTest {
                     label = "Handelsbanken Amerika Småbolag Tema Criteria A1 SEK Ackumulerande",
                     amount = null,
                     fraction = null,
-                    valueText = "1 234,00 kr",
+                    valueText = "1 234,00 kr"
                 )
             }
         }

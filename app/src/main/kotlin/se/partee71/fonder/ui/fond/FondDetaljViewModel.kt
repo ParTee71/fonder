@@ -7,6 +7,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
@@ -56,7 +57,6 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
-import java.time.LocalDate
 
 @Immutable
 data class FondDetaljUiState(
@@ -121,7 +121,7 @@ data class FondDetaljUiState(
      * `init`) — rubrikens och diagrammets väntesnurra (NAV-6). En backfillad historik tar
      * sekunder, och utan snurran ser en halvfylld kurva ut som hela sanningen.
      */
-    val priceRefreshing: Boolean = false,
+    val priceRefreshing: Boolean = false
 ) {
     val isEmpty: Boolean get() = !loading && prices.isEmpty()
 
@@ -174,7 +174,7 @@ private data class Snapshot(
     val transactions: List<Transaction>,
     val since: LocalDate?,
     val suggestedIsin: String?,
-    val purchaseEpochDays: List<Long>,
+    val purchaseEpochDays: List<Long>
 )
 
 /** Bytesplanens och avgiftsbytenas indata innan de resolvas — se [FondDetaljViewModel.planInput]. */
@@ -189,7 +189,7 @@ private data class PlanInput(
     /** De avstådda planbytena ur [DismissedPlanSource] — samma källa och samma resolvering som Beslut, så antalen aldrig skiljer sig. */
     val dismissedPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
     /** Se [se.partee71.fonder.data.datastore.PreferencesRepository.switchPlanEmptiedAtEpochMillis]. */
-    val emptiedAtEpochMillis: Long? = null,
+    val emptiedAtEpochMillis: Long? = null
 )
 
 /** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
@@ -234,7 +234,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     switchWatchRepository: SwitchWatchRepository,
     private val recordTransaction: RecordTransaction,
     dismissedPlanSource: DismissedPlanSource,
-    inProgressSwitches: InProgressSwitches,
+    inProgressSwitches: InProgressSwitches
 ) : ViewModel() {
 
     /** Se [FondDetaljUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
@@ -284,14 +284,14 @@ class FondDetaljViewModel @AssistedInject constructor(
         transactionRepository.observeTransactions(),
         earliestPurchase,
         suggestedIsin,
-        purchaseEpochDays,
+        purchaseEpochDays
     ) { funds, transactions, since, suggested, purchases -> Snapshot(funds, transactions, since, suggested, purchases) }
         .flatMapLatest { snapshot ->
             val fundIds = snapshot.funds.map { it.fundId }
             val priceHistoryFlow = fundPriceRepository.observePriceHistory(
                 fundId = fundId,
                 fromEpochDay = (snapshot.since ?: LocalDate.now().minusYears(1)).toEpochDay(),
-                toEpochDay = LocalDate.now().toEpochDay(),
+                toEpochDay = LocalDate.now().toEpochDay()
             )
             combine(fundPriceRepository.observeLatestPrices(fundIds), priceHistoryFlow) { latestPrices, history ->
                 Triple(snapshot, latestPrices, history)
@@ -313,7 +313,7 @@ class FondDetaljViewModel @AssistedInject constructor(
                 netInvested = holding?.netInvested,
                 purchaseEpochDays = snapshot.purchaseEpochDays.toImmutableList(),
                 analysis = buildAnalysis(holdings, holding, latestPrices, history),
-                holdingValue = holdingValue,
+                holdingValue = holdingValue
             )
         }
 
@@ -327,7 +327,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         // här fondens alternativ har en inspelad rad.
         suggestionRecordRepository.observeHistory(),
         // Avståendena och de avstådda planbytenas rader ur samma källa och samma emission som Beslut.
-        dismissedPlanSource.observe(),
+        dismissedPlanSource.observe()
     ) { accountType, batch, metadataByIsin, history, dismissed ->
         PlanInput(accountType, batch, metadataByIsin, history, dismissed.dismissals, dismissed.suggestions)
     }
@@ -339,7 +339,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     private val switchWatchState: Flow<SwitchWatchState> = combine(
         switchWatchRepository.observeOpen().map { watches -> watches.mapTo(mutableSetOf<String>()) { it.sellIsin } },
         inProgressSwitches.observe(),
-        startedSwitchWatchId,
+        startedSwitchWatchId
     ) { sellIsins, inProgress, startedId -> SwitchWatchState(sellIsins, inProgress, startedId) }
 
     val uiState: StateFlow<FondDetaljUiState> = combine(
@@ -347,7 +347,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         feeComparisonState,
         planInput,
         comparisons,
-        switchWatchState,
+        switchWatchState
     ) { state, feeComparison, plan, comparisonsByIsin, watchState ->
         // Metadatan behövs för fondens egen risknivå **och** för att kunna slå upp planens
         // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
@@ -361,14 +361,16 @@ class FondDetaljViewModel @AssistedInject constructor(
         // planen vid nästa omräkning, och fondkortet ska ändå säga att det finns något att ångra.
         val (fundPlan, _) = SuggestionDismissals.partition(
             // Samma regel som Beslut för "sålt, väntar på köp" (BYT-1).
-            watchState.inProgress.mark(SwitchPlanResolver.forFund(resolvedPlan, state.isin)), plan.dismissals, today,
+            watchState.inProgress.mark(SwitchPlanResolver.forFund(resolvedPlan, state.isin)),
+            plan.dismissals,
+            today
         )
         val dismissedPlan = SwitchPlanResolver.forFund(plan.dismissedPlan, state.isin)
         val recordedFee = recordedFeeSwitches(plan.history, state.isin)
         val (visibleFeeComparison, dismissedFeeCount) = feeComparison.withoutDismissed(
             isin = state.isin,
             recorded = recordedFee,
-            activeDismissals = SuggestionDismissals.activeKeys(plan.dismissals, today),
+            activeDismissals = SuggestionDismissals.activeKeys(plan.dismissals, today)
         )
         state.copy(
             feeComparison = visibleFeeComparison,
@@ -379,7 +381,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             comparisons = comparisonsByIsin.toImmutableMap(),
             recordedFeeSwitches = recordedFee.toImmutableMap(),
             watchedSellIsins = watchState.watchedSellIsins.toImmutableSet(),
-            startedSwitchWatchId = watchState.startedWatchId,
+            startedSwitchWatchId = watchState.startedWatchId
         )
     }.combine(priceRefreshing) { state, refreshing ->
         // Eget led i kedjan i stället för en sjätte gren i combinen ovan: `combine` tar som mest
@@ -388,7 +390,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = FondDetaljUiState(),
+        initialValue = FondDetaljUiState()
     )
 
     /**
@@ -427,7 +429,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     private fun FeeComparisonUiState?.withoutDismissed(
         isin: String?,
         recorded: Map<String, RecordedFeeSwitch>,
-        activeDismissals: Set<SuggestionDismissals.Key>,
+        activeDismissals: Set<SuggestionDismissals.Key>
     ): Pair<FeeComparisonUiState?, Int> {
         if (this !is FeeComparisonUiState.Found || isin == null || activeDismissals.isEmpty()) return this to 0
         val (visible, dismissed) = alternatives.partition { alternative ->
@@ -469,7 +471,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         holdings: List<Holding>,
         holding: Holding?,
         latestPrices: Map<String, FundPrice>,
-        thisFundHistory: List<FundPrice>,
+        thisFundHistory: List<FundPrice>
     ): FundAnalysisCalc.Analysis? {
         if (holding == null) return null
         val firstPurchase = holding.firstPurchaseEpochDay?.let(LocalDate::ofEpochDay) ?: return null
@@ -490,7 +492,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             priceHistory = thisFundHistory,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = portfolioTotalValue,
-            otherHoldingsAverageThreeMonthReturn = otherAverage,
+            otherHoldingsAverageThreeMonthReturn = otherAverage
         )
     }
 
@@ -501,6 +503,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     // tidigare gaten "bara om cachen är helt tom" är utbytt mot den delade staleness-regeln
     // (isPriceStale, TP-17, regel 4) — en fond med inaktuell men befintlig kurs uppdateras nu
     // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
+
     /** Pågående kurshämtning — se [refresh]. */
     private var priceRefreshJob: Job? = null
 

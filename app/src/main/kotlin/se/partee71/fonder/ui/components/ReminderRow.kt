@@ -48,14 +48,14 @@ fun ReminderRow(
     icon: ImageVector = Icons.Outlined.Backup,
     count: Int? = null,
     tone: ReminderRowTone = ReminderRowTone.Neutral,
-    chevron: Boolean = false,
+    chevron: Boolean = false
 ) {
     val accent = tone == ReminderRowTone.Accent
     Surface(
         color = if (accent) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (accent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         shape = MaterialTheme.shapes.medium,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
@@ -63,7 +63,7 @@ fun ReminderRow(
                 .heightIn(min = 48.dp)
                 .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (count != null) CountBadge(count, size = CountBadgeSize.Large) else Icon(icon, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
@@ -74,14 +74,14 @@ fun ReminderRow(
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             } else {
                 Text(
                     actionLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
         }

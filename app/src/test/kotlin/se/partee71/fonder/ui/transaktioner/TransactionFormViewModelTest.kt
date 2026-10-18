@@ -2,6 +2,7 @@ package se.partee71.fonder.ui.transaktioner
 
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -48,7 +49,6 @@ import se.partee71.fonder.testing.testSwitchChoicesSource
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TransactionFormViewModelTest {
@@ -119,14 +119,21 @@ class TransactionFormViewModelTest {
     private val switchWatchRepo = FakeSwitchWatchRepository()
     private val metadataRepo = FakeFundMetadataRepository()
     private val recordTransaction = RecordTransaction(
-        fakeTransactionRepo, switchWatchRepo, suggestionRepo, metadataRepo, scheduler,
-        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo),
+        fakeTransactionRepo,
+        switchWatchRepo,
+        suggestionRepo,
+        metadataRepo,
+        scheduler,
+        testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo)
     )
 
     private fun viewModel(key: TransactionFormKey = TransactionFormKey()) = TransactionFormViewModel(
-        key, fakeTransactionRepo, fakePriceRepo, recordTransaction,
+        key,
+        fakeTransactionRepo,
+        fakePriceRepo,
+        recordTransaction,
         testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo),
-        FollowedSuggestionLookup(suggestionRepo, metadataRepo),
+        FollowedSuggestionLookup(suggestionRepo, metadataRepo)
     )
 
     /** Formuläret är laddat: fonderna och bytesväljarens indata är lästa. */
@@ -386,7 +393,7 @@ class TransactionFormViewModelTest {
     private fun meta(isin: String, name: String, risk: Int) = FundMetadata(
         isin = isin, name = name, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
 
     /** En inspelad plan med ett byte Sverige Småbolag → Kandidat, som Beslut visar det (HEM-8). */
@@ -396,20 +403,30 @@ class TransactionFormViewModelTest {
         preferences.setAccountType(AccountType.ISK_KF)
         suggestionRepo.records.value = listOf(
             SuggestionRecord(
-                id = 42, suggestedAtEpochDay = today.toEpochDay(), planIndex = 0, sellIsin = "SE_HELD", buyIsin = "SE_CAND",
-                sellNavAtSuggestion = 300.0, buyNavAtSuggestion = 50.0, switchValueKr = 12_500.0,
-            ),
+                id = 42,
+                suggestedAtEpochDay = today.toEpochDay(),
+                planIndex = 0,
+                sellIsin = "SE_HELD",
+                buyIsin = "SE_CAND",
+                sellNavAtSuggestion = 300.0,
+                buyNavAtSuggestion = 50.0,
+                switchValueKr = 12_500.0
+            )
         )
         pricesByFundId[held.fundId] = FundPrice(fundId = held.fundId, epochDay = today.toEpochDay(), nav = 325.0, currency = "SEK")
     }
 
-    private suspend fun openWatch(candidates: List<String> = listOf("SE_CAND"), soldAt: LocalDate = today.minusDays(2), sellTransactionId: Long? = 9) =
-        switchWatchRepo.start(
-            SwitchWatch(
-                sellIsin = "SE_HELD", sellFundName = "Sverige Småbolag", soldAtEpochDay = soldAt.toEpochDay(), proceedsKr = 18_400.0,
-                targetLevel = 3, sellTransactionId = sellTransactionId, candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) },
-            ),
+    private suspend fun openWatch(candidates: List<String> = listOf("SE_CAND"), soldAt: LocalDate = today.minusDays(2), sellTransactionId: Long? = 9) = switchWatchRepo.start(
+        SwitchWatch(
+            sellIsin = "SE_HELD",
+            sellFundName = "Sverige Småbolag",
+            soldAtEpochDay = soldAt.toEpochDay(),
+            proceedsKr = 18_400.0,
+            targetLevel = 3,
+            sellTransactionId = sellTransactionId,
+            candidates = candidates.map { SwitchWatchCandidate(isin = it, name = it) }
         )
+    )
 
     private suspend fun ReceiveTurbine<TransactionFormUiState>.awaitUntil(predicate: (TransactionFormUiState) -> Boolean): TransactionFormUiState {
         var state = awaitItem()
@@ -450,12 +467,14 @@ class TransactionFormViewModelTest {
     @Test
     fun `det sparade saljet fran folj startar bevakningen ur planraden med koppling till saljet`() = runTest(dispatcher) {
         setUpPlan()
-        val vm = viewModel(TransactionFormKey.follow(
-            se.partee71.fonder.domain.usecase.SwitchPlanResolver.Suggestion(
-                recordId = 42, planIndex = 0, sellIsin = "SE_HELD", buyIsin = "SE_CAND", sellFundName = "Sverige Småbolag",
-                buyFundName = "Kandidat", fromLevel = 5, toLevel = 3, feeDeltaPercent = 0.0, switchValueKr = 12_500.0,
-            ),
-        ))
+        val vm = viewModel(
+            TransactionFormKey.follow(
+                se.partee71.fonder.domain.usecase.SwitchPlanResolver.Suggestion(
+                    recordId = 42, planIndex = 0, sellIsin = "SE_HELD", buyIsin = "SE_CAND", sellFundName = "Sverige Småbolag",
+                    buyFundName = "Kandidat", fromLevel = 5, toLevel = 3, feeDeltaPercent = 0.0, switchValueKr = 12_500.0
+                )
+            )
+        )
 
         vm.uiState.test {
             awaitUntil { it.canSave }
@@ -632,8 +651,8 @@ class TransactionFormViewModelTest {
         suggestionRepo.records.value = listOf(
             SuggestionRecord(
                 id = 77, suggestedAtEpochDay = today.minusDays(40).toEpochDay(), planIndex = 0, sellIsin = "SE_HELD", buyIsin = "SE_BILLIG",
-                sellNavAtSuggestion = 300.0, buyNavAtSuggestion = 50.0, switchValueKr = 9_000.0, kind = SuggestionKind.FEE,
-            ),
+                sellNavAtSuggestion = 300.0, buyNavAtSuggestion = 50.0, switchValueKr = 9_000.0, kind = SuggestionKind.FEE
+            )
         )
         val vm = viewModel(TransactionFormKey.follow(fundId = held.fundId, recordId = 77))
 

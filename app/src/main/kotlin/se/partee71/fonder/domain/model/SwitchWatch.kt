@@ -67,7 +67,7 @@ data class SwitchWatch(
     val candidates: List<SwitchWatchCandidate> = emptyList(),
     val sellTransactionId: Long? = null,
     val buyTransactionId: Long? = null,
-    val indexOnly: Boolean = false,
+    val indexOnly: Boolean = false
 ) {
     /** Öppen = ingen kvittering och ingen utgång skriven. Se [SwitchWatchCalc] för färskhetsgränsen. */
     val isOpen: Boolean get() = closedAtEpochDay == null
@@ -103,14 +103,14 @@ data class SwitchWatchCandidate(
     val navAtStart: Double? = null,
     val navAtStartEpochDay: Long? = null,
     val source: SwitchWatchCandidateSource = SwitchWatchCandidateSource.AUTO,
-    val position: Int = 0,
+    val position: Int = 0
 )
 
 /** Varifrån en bevakad kandidat kom — se [SwitchWatchCandidate.source]. */
 @Serializable
 enum class SwitchWatchCandidateSource {
     AUTO,
-    MANUELL,
+    MANUELL
 }
 
 /**
@@ -123,5 +123,5 @@ enum class SwitchWatchCandidateSource {
 enum class SwitchWatchCloseReason {
     KOPT,
     AVBRUTEN,
-    UTGANGEN,
+    UTGANGEN
 }

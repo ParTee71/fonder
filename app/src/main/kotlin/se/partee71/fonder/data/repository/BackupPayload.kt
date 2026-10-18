@@ -68,7 +68,7 @@ data class BackupPayload(
      * automatiskt valda blandningen (`PreferencesRepository.benchmark`), som är cache i samma
      * kategori som `fundFilterVocabulary`.
      */
-    val chosenBenchmarkIsin: String? = null,
+    val chosenBenchmarkIsin: String? = null
 ) {
     companion object {
         /**
@@ -85,5 +85,5 @@ data class RestoreSummary(
     val funds: Int,
     val transactions: Int,
     val suggestionRecords: Int,
-    val switchWatches: Int = 0,
+    val switchWatches: Int = 0
 )

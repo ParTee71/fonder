@@ -2,11 +2,12 @@ package se.partee71.fonder.data.datastore
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -23,7 +24,6 @@ import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
-import java.io.IOException
 
 /**
  * Riskprofilens DataStore-rundtur (SET-3, issue #68) — genuin användardata, till skillnad
@@ -54,7 +54,7 @@ class PreferencesRepositoryTest {
     fun `riskProfile med svar rundturar genom DataStore`() = runTest {
         val profile = RiskProfile(
             targetRiskLevel = 4,
-            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
+            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD)
         )
 
         repository.setRiskProfile(profile)
@@ -91,7 +91,7 @@ class PreferencesRepositoryTest {
     fun `en malfordelning rundturar genom DataStore`() = runTest {
         val profile = RiskProfile(
             targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD),
+            answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD)
         )
 
         repository.setRiskProfile(profile)
@@ -147,7 +147,7 @@ class PreferencesRepositoryTest {
         corruptFile.writeBytes(byteArrayOf(0x42, 0x00, 0x13, 0x37, 0x7F))
         val corruptStore = PreferenceDataStoreFactory.create(
             corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
-            produceFile = { corruptFile },
+            produceFile = { corruptFile }
         )
 
         val repo = PreferencesRepository(corruptStore)
@@ -177,6 +177,5 @@ class PreferencesRepositoryTest {
 private class FailingDataStore : DataStore<Preferences> {
     override val data: Flow<Preferences> = flow { throw IOException("kunde inte läsa inställningarna") }
 
-    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
-        throw IOException("kunde inte skriva inställningarna")
+    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences = throw IOException("kunde inte skriva inställningarna")
 }

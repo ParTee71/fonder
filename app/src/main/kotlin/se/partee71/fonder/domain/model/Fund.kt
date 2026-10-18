@@ -26,5 +26,5 @@ data class Fund(
     val name: String,
     val currency: String = "SEK",
     val isin: String? = null,
-    val fondlistaFundId: String? = null,
+    val fondlistaFundId: String? = null
 )

@@ -24,19 +24,32 @@ class BackupFingerprintTest {
     private val tx1 = Transaction(id = 1, fundId = "SHB1", type = TransactionType.KOP, epochDay = 19_000, shares = 10.0, pricePerShare = 100.0)
     private val tx2 = Transaction(id = 2, fundId = "SHB2", type = TransactionType.KOP, epochDay = 19_010, shares = 5.0, pricePerShare = 200.0)
     private val record = SuggestionRecord(
-        id = 7, suggestedAtEpochDay = 19_020, planIndex = 0, sellIsin = "SE0000000001", buyIsin = "SE0000000002",
-        sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 200.0, batchEpochMillis = 1_000,
+        id = 7,
+        suggestedAtEpochDay = 19_020,
+        planIndex = 0,
+        sellIsin = "SE0000000001",
+        buyIsin = "SE0000000002",
+        sellNavAtSuggestion = 100.0,
+        buyNavAtSuggestion = 200.0,
+        batchEpochMillis = 1_000
     )
     private val watch = SwitchWatch(
-        id = 3, sellIsin = "SE0000000001", sellFundName = "Fond A", soldAtEpochDay = 19_030,
+        id = 3,
+        sellIsin = "SE0000000001",
+        sellFundName = "Fond A",
+        soldAtEpochDay = 19_030,
         candidates = listOf(
             SwitchWatchCandidate(id = 11, watchId = 3, isin = "SE0000000003", name = "Alt 1", position = 0),
             SwitchWatchCandidate(id = 12, watchId = 3, isin = "SE0000000004", name = "Alt 2", position = 1),
             SwitchWatchCandidate(
-                id = 13, watchId = 3, isin = "SE0000000005", name = "Eget val",
-                source = SwitchWatchCandidateSource.MANUELL, position = 2,
-            ),
-        ),
+                id = 13,
+                watchId = 3,
+                isin = "SE0000000005",
+                name = "Eget val",
+                source = SwitchWatchCandidateSource.MANUELL,
+                position = 2
+            )
+        )
     )
 
     private val payload = BackupPayload(
@@ -46,7 +59,7 @@ class BackupFingerprintTest {
         suggestionRecords = listOf(record.copy(followed = true)),
         switchWatches = listOf(watch),
         accountType = AccountType.ISK_KF,
-        themeMode = ThemeMode.DARK,
+        themeMode = ThemeMode.DARK
     )
 
     @Test
@@ -95,7 +108,7 @@ class BackupFingerprintTest {
         val b = SuggestionDismissal("SE0000000001", "SE0000000002", SuggestionKind.FEE, dismissedAtEpochDay = 19_022)
         assertEquals(
             BackupFingerprint.of(payload.copy(suggestionDismissals = listOf(a, b))),
-            BackupFingerprint.of(payload.copy(suggestionDismissals = listOf(b, a))),
+            BackupFingerprint.of(payload.copy(suggestionDismissals = listOf(b, a)))
         )
     }
 
@@ -109,7 +122,7 @@ class BackupFingerprintTest {
         val reordered = payload.copy(
             funds = listOf(fundB, fundA),
             transactions = listOf(tx2, tx1),
-            switchWatches = listOf(watch.copy(candidates = watch.candidates.reversed())),
+            switchWatches = listOf(watch.copy(candidates = watch.candidates.reversed()))
         )
         assertEquals(BackupFingerprint.of(payload), BackupFingerprint.of(reordered))
     }
@@ -120,7 +133,7 @@ class BackupFingerprintTest {
         // gallras av bytesplansskanningen (HEM-8) — ingen av dem är något användaren gjort.
         val background = payload.copy(
             funds = listOf(fundA.copy(fondlistaFundId = "123"), fundB),
-            suggestionRecords = payload.suggestionRecords + record.copy(id = 8, followed = null),
+            suggestionRecords = payload.suggestionRecords + record.copy(id = 8, followed = null)
         )
         assertEquals(BackupFingerprint.of(payload), BackupFingerprint.of(background))
     }
@@ -133,8 +146,8 @@ class BackupFingerprintTest {
         val refilled = watch.copy(
             candidates = listOf(
                 SwitchWatchCandidate(id = 21, watchId = 3, isin = "SE0000000009", name = "Ny auto", navAtStart = 50.0, navAtStartEpochDay = 19_031),
-                manual.copy(id = 22, position = 0, navAtStart = 101.0, navAtStartEpochDay = 19_031),
-            ),
+                manual.copy(id = 22, position = 0, navAtStart = 101.0, navAtStartEpochDay = 19_031)
+            )
         )
         assertEquals(BackupFingerprint.of(payload), BackupFingerprint.of(payload.copy(switchWatches = listOf(refilled))))
     }
@@ -149,7 +162,7 @@ class BackupFingerprintTest {
     fun `anvandarens egna andringar av bytesfonstret ger ett annat fingeravtryck`() {
         val base = BackupFingerprint.of(payload)
         val added = watch.copy(
-            candidates = watch.candidates + SwitchWatchCandidate(isin = "SE0000000006", name = "Till", source = SwitchWatchCandidateSource.MANUELL),
+            candidates = watch.candidates + SwitchWatchCandidate(isin = "SE0000000006", name = "Till", source = SwitchWatchCandidateSource.MANUELL)
         )
         val removed = watch.copy(candidates = watch.candidates.dropLast(1))
         val bought = watch.copy(closedAtEpochDay = 19_040, closeReason = SwitchWatchCloseReason.KOPT, boughtIsin = "SE0000000003")

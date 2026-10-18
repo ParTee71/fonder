@@ -21,8 +21,7 @@ object MovingAverageCalc {
      * Snittet för dag [epochDay] ur [points] (`epochDay` → NAV, valfri ordning). Null om
      * historiken inte når [windowDays] dagar tillbaka eller fönstret saknar kurser.
      */
-    fun averageAt(points: List<Pair<Long, Double>>, epochDay: Long, windowDays: Long = WINDOW_DAYS): Double? =
-        evaluate(points.sortedBy { it.first }, listOf(epochDay), windowDays).single()
+    fun averageAt(points: List<Pair<Long, Double>>, epochDay: Long, windowDays: Long = WINDOW_DAYS): Double? = evaluate(points.sortedBy { it.first }, listOf(epochDay), windowDays).single()
 
     /**
      * Snittserien för varje kurspunkt i [points] (`epochDay` → NAV), i stigande datumordning.

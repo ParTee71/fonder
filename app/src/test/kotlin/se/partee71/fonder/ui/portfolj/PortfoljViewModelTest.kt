@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.portfolj
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -35,7 +36,6 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortfoljViewModelTest {
@@ -66,8 +66,7 @@ class PortfoljViewModelTest {
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> =
-            priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundIds.add(fundId)
@@ -107,6 +106,7 @@ class PortfoljViewModelTest {
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
@@ -128,7 +128,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0)
         )
 
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
@@ -150,7 +150,7 @@ class PortfoljViewModelTest {
         funds.value = listOf(fond)
         transactions.value = listOf(
             Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
-            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0)
         )
 
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
@@ -167,7 +167,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0)
         )
 
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
@@ -196,13 +196,13 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-            ),
+                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+            )
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -216,7 +216,7 @@ class PortfoljViewModelTest {
             assertEquals(100.0, day.amount, 1e-9) // 1200 - 10*110
             assertEquals(
                 se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
-                performance.week,
+                performance.week
             ) // ingen kurs 7 dagar bak i historiken
             cancelAndIgnoreRemainingEvents()
         }
@@ -228,14 +228,14 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under 200-dagarssnittet
         // (samma fixturprincip som FundAnalysisCalcTest/HemViewModelTest).
         priceHistoryByFundId = mapOf(
             fond.fundId to (0..730L step 5).map { daysAgo ->
                 FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
-            },
+            }
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
 
@@ -256,7 +256,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 80.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 80.0)
         )
         // Kort historik (en enda punkt) — S1/S2/S3 blir otillräcklig data (null), men
         // vinstsignalen (S4) beror bara på GAV mot nuvarande NAV, inte historikens längd.
@@ -283,7 +283,7 @@ class PortfoljViewModelTest {
         val since = java.time.LocalDate.of(2020, 1, 1)
         val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
         funds.value = listOf(fond)
 
@@ -301,7 +301,7 @@ class PortfoljViewModelTest {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         funds.value = listOf(fond)
@@ -323,7 +323,7 @@ class PortfoljViewModelTest {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(10).toEpochDay(), nav = 110.0))
         funds.value = listOf(fond)
@@ -343,7 +343,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataByIsin = mapOf(
@@ -351,8 +351,8 @@ class PortfoljViewModelTest {
                 isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
                 category = null, fundType = null, companyName = null, risk = null, indexFund = true,
                 startDateEpochDay = null, minimumBuy = null,
-                tags = listOf(FundTag(title = "Aktiefond", category = "TYPE")),
-            ),
+                tags = listOf(FundTag(title = "Aktiefond", category = "TYPE"))
+            )
         )
 
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
@@ -385,7 +385,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataForBlocks = true
@@ -423,7 +423,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         metadataForBlocks = true
@@ -443,7 +443,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
         fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
@@ -464,7 +464,7 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = null)
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
@@ -488,18 +488,18 @@ class PortfoljViewModelTest {
         funds.value = listOf(medRisk, utanIsin)
         transactions.value = listOf(
             Transaction(fundId = medRisk.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = utanIsin.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
+            Transaction(fundId = utanIsin.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         )
         latestPrices.value = mapOf(
             medRisk.fundId to FundPrice(fundId = medRisk.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-            utanIsin.fundId to FundPrice(fundId = utanIsin.fundId, epochDay = today.toEpochDay(), nav = 120.0),
+            utanIsin.fundId to FundPrice(fundId = utanIsin.fundId, epochDay = today.toEpochDay(), nav = 120.0)
         )
         metadataByIsin = mapOf(
             "SE0001466368" to FundMetadata(
                 isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
                 category = null, fundType = null, companyName = null, risk = 5, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-            ),
+                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
+            )
         )
 
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)

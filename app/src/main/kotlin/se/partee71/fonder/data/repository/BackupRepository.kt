@@ -2,6 +2,8 @@ package se.partee71.fonder.data.repository
 
 import androidx.room.InvalidationTracker
 import androidx.room.withTransaction
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -22,8 +24,6 @@ import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
 import se.partee71.fonder.data.room.entities.TransactionEntity
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Kontrakt för backup/restore av all användardata (regel 1 — datasäkerhet, NFR-1).
@@ -77,7 +77,7 @@ class LocalBackupRepository @Inject constructor(
     private val suggestionRecordDao: SuggestionRecordDao,
     private val switchWatchDao: SwitchWatchDao,
     private val suggestionDismissalDao: SuggestionDismissalDao,
-    private val preferences: PreferencesRepository,
+    private val preferences: PreferencesRepository
 ) : BackupRepository {
 
     override suspend fun export(): Result<String> = runCatching { BackupSerializer.encode(snapshot()) }
@@ -92,7 +92,7 @@ class LocalBackupRepository @Inject constructor(
         riskProfile = preferences.riskProfile.first(),
         accountType = preferences.accountType.first(),
         themeMode = preferences.themeMode.first(),
-        chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first(),
+        chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first()
     )
 
     /**
@@ -114,7 +114,7 @@ class LocalBackupRepository @Inject constructor(
         preferences.riskProfile.map { },
         preferences.accountType.map { },
         preferences.themeMode.map { },
-        preferences.chosenBenchmarkIsin.map { },
+        preferences.chosenBenchmarkIsin.map { }
     )
 
     /**
@@ -172,7 +172,7 @@ class LocalBackupRepository @Inject constructor(
                 funds = payload.funds.size,
                 transactions = payload.transactions.size,
                 suggestionRecords = payload.suggestionRecords.size,
-                switchWatches = payload.switchWatches.size,
+                switchWatches = payload.switchWatches.size
             )
         }
     }
@@ -185,5 +185,5 @@ private val CONTRACT_TABLES = arrayOf(
     SuggestionRecordEntity.TABLE_NAME,
     SwitchWatchEntity.TABLE_NAME,
     SwitchWatchCandidateEntity.TABLE_NAME,
-    SuggestionDismissalEntity.TABLE_NAME,
+    SuggestionDismissalEntity.TABLE_NAME
 )

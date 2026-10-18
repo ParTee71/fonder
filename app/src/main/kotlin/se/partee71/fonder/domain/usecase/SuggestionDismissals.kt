@@ -1,8 +1,8 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
-import java.time.LocalDate
 
 /**
  * Regeln för avstådda förslag (HEM-14) — ren logik, så Beslut, Översiktens "Att besluta",
@@ -27,27 +27,23 @@ object SuggestionDismissals {
     data class Key(val kind: SuggestionKind, val sellIsin: String, val buyIsin: String)
 
     /** Sant medan avståendet gäller [today] — dagen då det gjordes och [TTL_DAYS] dagar framåt. */
-    fun isActive(dismissal: SuggestionDismissal, today: LocalDate): Boolean =
-        !FundMetadataFreshness.isStale(dismissal.dismissedAtEpochDay, today, TTL_DAYS)
+    fun isActive(dismissal: SuggestionDismissal, today: LocalDate): Boolean = !FundMetadataFreshness.isStale(dismissal.dismissedAtEpochDay, today, TTL_DAYS)
 
     /** Paren som är avstådda [today]. */
-    fun activeKeys(dismissals: List<SuggestionDismissal>, today: LocalDate): Set<Key> =
-        dismissals.filter { isActive(it, today) }.mapTo(mutableSetOf()) { Key(it.kind, it.sellIsin, it.buyIsin) }
+    fun activeKeys(dismissals: List<SuggestionDismissal>, today: LocalDate): Set<Key> = dismissals.filter { isActive(it, today) }.mapTo(mutableSetOf()) { Key(it.kind, it.sellIsin, it.buyIsin) }
 
     /**
      * Sant om ett förslag ska döljas som avstått. Ett **genomfört** förslag (SET-5) räknas aldrig
      * som avstått — kvitteringen är det starkare beskedet, och facit mäter det som följts.
      */
-    fun hides(activeKeys: Set<Key>, kind: SuggestionKind, sellIsin: String, buyIsin: String, followed: Boolean): Boolean =
-        !followed && Key(kind, sellIsin, buyIsin) in activeKeys
+    fun hides(activeKeys: Set<Key>, kind: SuggestionKind, sellIsin: String, buyIsin: String, followed: Boolean): Boolean = !followed && Key(kind, sellIsin, buyIsin) in activeKeys
 
     /** [partition] för en lista förslag. */
     fun partition(
         plan: List<SwitchPlanResolver.Suggestion>,
         dismissals: List<SuggestionDismissal>,
-        today: LocalDate,
-    ): Pair<List<SwitchPlanResolver.Suggestion>, List<SwitchPlanResolver.Suggestion>> =
-        partition(plan, dismissals, today) { it }
+        today: LocalDate
+    ): Pair<List<SwitchPlanResolver.Suggestion>, List<SwitchPlanResolver.Suggestion>> = partition(plan, dismissals, today) { it }
 
     /**
      * Delar [items] i de förslag som visas och de användaren avstått från, efter varje förslags
@@ -59,7 +55,7 @@ object SuggestionDismissals {
         items: List<T>,
         dismissals: List<SuggestionDismissal>,
         today: LocalDate,
-        suggestionOf: (T) -> SwitchPlanResolver.Suggestion,
+        suggestionOf: (T) -> SwitchPlanResolver.Suggestion
     ): Pair<List<T>, List<T>> {
         val active = activeKeys(dismissals, today)
         if (active.isEmpty()) return items to emptyList()

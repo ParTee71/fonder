@@ -5,12 +5,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Snittlinjen i [FundLineChart] (ANA-14): teckenförklaringen med senaste kurs och senaste snitt,
@@ -35,7 +35,7 @@ class FundLineChartMovingAverageTest {
         movingAverage: List<Pair<Long, Double>>?,
         comparison: List<ChartSeries> = emptyList(),
         valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
-        chartPoints: List<Pair<Long, Double>> = points,
+        chartPoints: List<Pair<Long, Double>> = points
     ) {
         composeRule.setContent {
             FonderTheme {
@@ -59,7 +59,7 @@ class FundLineChartMovingAverageTest {
         show(average)
 
         composeRule.onNodeWithContentDescription(
-            "Kursdiagram, 1 mån, 30 kurspunkter mellan 370,00 kr och 384,50 kr, 200-dagarssnitt 367,71 kr",
+            "Kursdiagram, 1 mån, 30 kurspunkter mellan 370,00 kr och 384,50 kr, 200-dagarssnitt 367,71 kr"
         ).assertExists()
     }
 
@@ -71,7 +71,7 @@ class FundLineChartMovingAverageTest {
         composeRule.onAllNodesWithText("200-dagarssnitt").assertCountEquals(0)
         composeRule.onAllNodesWithText("Kurs").assertCountEquals(0)
         composeRule.onNodeWithContentDescription(
-            "Kursdiagram, 1 mån, 30 kurspunkter mellan 370,00 kr och 384,50 kr",
+            "Kursdiagram, 1 mån, 30 kurspunkter mellan 370,00 kr och 384,50 kr"
         ).assertExists()
     }
 

@@ -23,7 +23,7 @@ class FundScreenFilterTest {
         companyName: String? = null,
         risk: Int? = null,
         tags: List<FundTag> = emptyList(),
-        developmentOneYear: Double? = null,
+        developmentOneYear: Double? = null
     ) = FundMetadata(
         developmentOneYear = developmentOneYear,
         isin = isin,
@@ -38,20 +38,20 @@ class FundScreenFilterTest {
         indexFund = false,
         startDateEpochDay = null,
         minimumBuy = null,
-        tags = tags,
+        tags = tags
     )
 
     private val sverigeAktie = fund(
         "SE1",
-        tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Sverige", "COMMON_REGION")),
+        tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Sverige", "COMMON_REGION"))
     )
     private val globalAktie = fund(
         "SE2",
-        tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Global", "COMMON_REGION")),
+        tags = listOf(FundTag("Aktiefond", "TYPE"), FundTag("Global", "COMMON_REGION"))
     )
     private val sverigeRanta = fund(
         "SE3",
-        tags = listOf(FundTag("Räntefond", "TYPE"), FundTag("Sverige", "COMMON_REGION")),
+        tags = listOf(FundTag("Räntefond", "TYPE"), FundTag("Sverige", "COMMON_REGION"))
     )
 
     @Test
@@ -77,7 +77,7 @@ class FundScreenFilterTest {
 
         val sverigeFastighet = fund(
             "SE4",
-            tags = listOf(FundTag("Fastighetsbolag", "INDUSTRY"), FundTag("Sverige", "COMMON_REGION")),
+            tags = listOf(FundTag("Fastighetsbolag", "INDUSTRY"), FundTag("Sverige", "COMMON_REGION"))
         )
         assertTrue(FundScreenFilter.matches(sverigeFastighet, query))
     }
@@ -185,11 +185,11 @@ class FundScreenFilterTest {
         val funds = listOf(
             fund("A", name = "Avanza Global", developmentOneYear = 0.21),
             fund("B", name = "Öhman Sverige", developmentOneYear = 0.05),
-            fund("C", name = "Handelsbanken Global", developmentOneYear = 0.13),
+            fund("C", name = "Handelsbanken Global", developmentOneYear = 0.13)
         )
         val query = FundScreenQuery(
             sortField = FundScreenFilter.SORT_FIELD_DEVELOPMENT_ONE_YEAR,
-            sortDirection = FundScreenSortDirection.DESCENDING,
+            sortDirection = FundScreenSortDirection.DESCENDING
         )
 
         val page = FundScreenFilter.apply(funds, query)
@@ -203,11 +203,11 @@ class FundScreenFilterTest {
         val funds = listOf(
             fund("UTAN", totalFee = null),
             fund("LAG", totalFee = 0.1),
-            fund("HOG", totalFee = 0.9),
+            fund("HOG", totalFee = 0.9)
         )
         val query = FundScreenQuery(
             sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
-            sortDirection = FundScreenSortDirection.DESCENDING,
+            sortDirection = FundScreenSortDirection.DESCENDING
         )
 
         val page = FundScreenFilter.apply(funds, query)
@@ -220,7 +220,7 @@ class FundScreenFilterTest {
         val funds = listOf(fund("UTAN", totalFee = null), fund("HOG", totalFee = 0.9), fund("LAG", totalFee = 0.1))
         val query = FundScreenQuery(
             sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
-            sortDirection = FundScreenSortDirection.ASCENDING,
+            sortDirection = FundScreenSortDirection.ASCENDING
         )
 
         val page = FundScreenFilter.apply(funds, query)

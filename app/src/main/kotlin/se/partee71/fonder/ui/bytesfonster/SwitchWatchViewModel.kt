@@ -7,6 +7,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -37,8 +39,6 @@ import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.domain.usecase.TargetLevelPreselection
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import java.time.LocalDate
-import kotlin.math.roundToInt
 
 /** Kurshistoriken för en bevakad kandidat — samma tre lägen som ANA-11:s jämförelse. */
 sealed interface CandidateHistory {
@@ -73,7 +73,7 @@ data class CandidateRow(
      */
     val historyLoading: Boolean = false,
     /** Handplockad kandidat (ANA-13) — bara de går att ta bort; de automatiska hör till förslaget. */
-    val manual: Boolean = false,
+    val manual: Boolean = false
 )
 
 /** Engångsmeddelande efter en åtgärd — visas och kvitteras, ingen del av det bestående tillståndet. */
@@ -97,7 +97,7 @@ enum class SwitchWatchEmptyReason {
     NONE_AVAILABLE,
 
     /** Köpbarheten kunde inte kontrolleras (katalogen gick inte att hämta) — går att försöka igen. */
-    LOOKUP_FAILED,
+    LOOKUP_FAILED
 }
 
 @Immutable
@@ -144,7 +144,7 @@ data class SwitchWatchUiState(
     val profileGapPp: Int? = null,
     /** Varför listan är tom, bara när den är det och bevakningen är öppen — se [SwitchWatchEmptyReason]. */
     val emptyReason: SwitchWatchEmptyReason? = null,
-    val message: SwitchWatchMessage? = null,
+    val message: SwitchWatchMessage? = null
 ) {
     val canAddCandidate: Boolean get() = !closed && rows.size < SwitchWatchCalc.MAX_CANDIDATES
     val hasChart: Boolean get() = sellSeries.isNotEmpty() || candidateSeries.isNotEmpty()
@@ -192,7 +192,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
     private val targetLevelPreselection: TargetLevelPreselection,
-    private val scheduler: FundPriceRefreshScheduler,
+    private val scheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
@@ -240,7 +240,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
         metadata,
         histories,
         sellSeries,
-        combine(fillingCandidates, emptyReason, message, profileSuggestion, ::Transient),
+        combine(fillingCandidates, emptyReason, message, profileSuggestion, ::Transient)
     ) { watch, metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg, suggestion) ->
         if (watch == null) return@combine SwitchWatchUiState(loading = false, missing = true)
 
@@ -251,9 +251,9 @@ class SwitchWatchViewModel @AssistedInject constructor(
                     candidate = candidate,
                     latestNav = latestNavFor(candidate, historyByIsin),
                     proceedsKr = watch.proceedsKr,
-                    soldAtEpochDay = watch.soldAtEpochDay,
+                    soldAtEpochDay = watch.soldAtEpochDay
                 )
-            },
+            }
         ).map { outcome ->
             val candidate = outcome.candidate
             val meta = metadataByIsin[candidate.isin]
@@ -270,7 +270,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
                 // Också "ännu inte efterfrågad" (null) räknas som pågående: hämtningen köas i
                 // samma svep som raden dyker upp, se ensureHistories.
                 historyLoading = historyByIsin[candidate.isin].let { it == null || it is CandidateHistory.Loading },
-                manual = candidate.source == SwitchWatchCandidateSource.MANUELL,
+                manual = candidate.source == SwitchWatchCandidateSource.MANUELL
             )
         }
 
@@ -302,12 +302,12 @@ class SwitchWatchViewModel @AssistedInject constructor(
             // Bara när listan faktiskt är tom: en handplockad kandidat efter ett misslyckat
             // förslag gör orsaken inaktuell, och en stängd bevakning föreslår inget alls.
             emptyReason = reason.takeIf { rows.isEmpty() && watch.isOpen && !filling },
-            message = msg,
+            message = msg
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SwitchWatchUiState(),
+        initialValue = SwitchWatchUiState()
     )
 
     init {
@@ -352,8 +352,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * ligger per definition inte i kurscachen som ett innehav (ANA-11), så den vore ändå bara
      * en delvis fylld reserv.
      */
-    private fun latestNavFor(candidate: SwitchWatchCandidate, historyByIsin: Map<String, CandidateHistory>): Double? =
-        (historyByIsin[candidate.isin] as? CandidateHistory.Ready)?.points?.maxByOrNull { it.first }?.second
+    private fun latestNavFor(candidate: SwitchWatchCandidate, historyByIsin: Map<String, CandidateHistory>): Double? = (historyByIsin[candidate.isin] as? CandidateHistory.Ready)?.points?.maxByOrNull { it.first }?.second
 
     /**
      * Fyller listan med appens egna förslag (ANA-13) när skärmen öppnas — se [fillAutoCandidates].
@@ -409,10 +408,12 @@ class SwitchWatchViewModel @AssistedInject constructor(
         try {
             val level = watch.targetLevel ?: when (val filled = fillMissingTargetLevel(watch)) {
                 is MissingLevel.Filled -> filled.level
+
                 MissingLevel.Unknown -> {
                     emptyReason.value = SwitchWatchEmptyReason.NO_TARGET_LEVEL
                     return
                 }
+
                 // Profilens förslag gick inte att räkna — ingen nivå sparas på ett tillfälligt fel.
                 MissingLevel.Failed -> {
                     emptyReason.value = SwitchWatchEmptyReason.LOOKUP_FAILED
@@ -430,7 +431,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
                         isin = candidate.metadata.isin,
                         name = candidate.metadata.name,
                         source = SwitchWatchCandidateSource.AUTO,
-                        position = index,
+                        position = index
                     )
                 }
             if (candidates.isNotEmpty()) {
@@ -463,7 +464,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
         val level = SwitchPlanCalc.preselectTargetLevel(
             planToLevel = null,
             profileSuggestion = (suggestion as ProfileSuggestion.Computed).gap,
-            sellLevel = sellLevel,
+            sellLevel = sellLevel
         ) ?: return MissingLevel.Unknown
         if (switchWatchRepository.fillMissingTargetLevel(watch.id, level)) {
             // Likviden räknas på målnivån (BYT-3) — en nivå som nyss blev känd ändrar planen.
@@ -484,26 +485,25 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * Läsningen kan gå till nätet: ett fel ger [ProfileSuggestion.Failed], aldrig en krasch —
      * skärmen visar då bara den valda nivån, och en saknad nivå sparas inte ([fillMissingTargetLevel]).
      */
-    private fun profileSuggestionAsync(watch: SwitchWatch): Deferred<ProfileSuggestion> =
-        profileSuggestionJob ?: viewModelScope.async {
-            val suggestion = try {
-                ProfileSuggestion.Computed(
-                    targetLevelPreselection.profileSuggestion(
-                        proceedsKr = watch.proceedsKr,
-                        today = LocalDate.now(),
-                        metadataFor = fundMetadataRepository::metadataFor,
-                        excludeWatchId = watch.id,
-                    ),
+    private fun profileSuggestionAsync(watch: SwitchWatch): Deferred<ProfileSuggestion> = profileSuggestionJob ?: viewModelScope.async {
+        val suggestion = try {
+            ProfileSuggestion.Computed(
+                targetLevelPreselection.profileSuggestion(
+                    proceedsKr = watch.proceedsKr,
+                    today = LocalDate.now(),
+                    metadataFor = fundMetadataRepository::metadataFor,
+                    excludeWatchId = watch.id
                 )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Ingen detalj i loggen: undantaget kan bära belopp eller innehav.
-                ProfileSuggestion.Failed
-            }
-            profileSuggestion.value = (suggestion as? ProfileSuggestion.Computed)?.gap
-            suggestion
-        }.also { profileSuggestionJob = it }
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Ingen detalj i loggen: undantaget kan bära belopp eller innehav.
+            ProfileSuggestion.Failed
+        }
+        profileSuggestion.value = (suggestion as? ProfileSuggestion.Computed)?.gap
+        suggestion
+    }.also { profileSuggestionJob = it }
 
     /**
      * Glömmer ett **misslyckat** profilförslag, så nästa försök räknar om det. Ett avbrutet räknas
@@ -600,7 +600,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
             .priceHistory(
                 fundId = fund.fundId,
                 fromEpochDay = today.minusYears(CHART_HISTORY_YEARS).toEpochDay(),
-                toEpochDay = today.toEpochDay(),
+                toEpochDay = today.toEpochDay()
             )
             .map { it.epochDay to it.nav }
             .sortedBy { it.first }
@@ -713,9 +713,9 @@ class SwitchWatchViewModel @AssistedInject constructor(
                         watchId = watchId,
                         isin = isin,
                         name = fund.name,
-                        source = SwitchWatchCandidateSource.MANUELL,
-                    ),
-                ),
+                        source = SwitchWatchCandidateSource.MANUELL
+                    )
+                )
             )
             if (added == 0) message.value = SwitchWatchMessage.CandidateLimitReached
         }
@@ -765,5 +765,5 @@ private data class Transient(
     val filling: Boolean,
     val reason: SwitchWatchEmptyReason?,
     val message: SwitchWatchMessage?,
-    val suggestion: SwitchPlanCalc.LevelGap?,
+    val suggestion: SwitchPlanCalc.LevelGap?
 )

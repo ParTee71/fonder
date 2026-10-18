@@ -35,7 +35,7 @@ interface SuggestionRecordDao {
                 AND suggestedAtEpochDay = (SELECT MAX(suggestedAtEpochDay) FROM suggestion_records WHERE kind = 'RISK_PLAN')
           )
         ORDER BY planIndex ASC, id ASC
-        """,
+        """
     )
     fun observeLatestBatch(): Flow<List<SuggestionRecordEntity>>
 
@@ -49,7 +49,7 @@ interface SuggestionRecordDao {
         """
         SELECT * FROM suggestion_records
         ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, planIndex ASC
-        """,
+        """
     )
     fun observeHistory(): Flow<List<SuggestionRecordEntity>>
 
@@ -63,7 +63,7 @@ interface SuggestionRecordDao {
         SELECT * FROM suggestion_records
         WHERE kind = :kind AND suggestedAtEpochDay >= :sinceEpochDay
         ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, id DESC
-        """,
+        """
     )
     fun observeRecent(kind: String, sinceEpochDay: Long): Flow<List<SuggestionRecordEntity>>
 
@@ -89,7 +89,7 @@ interface SuggestionRecordDao {
             SELECT 1 FROM suggestion_records
             WHERE sellIsin = :sellIsin AND buyIsin = :buyIsin AND suggestedAtEpochDay = :epochDay AND kind = :kind
         )
-        """,
+        """
     )
     suspend fun existsForDay(sellIsin: String, buyIsin: String, epochDay: Long, kind: String): Boolean
 
@@ -123,7 +123,7 @@ interface SuggestionRecordDao {
               LIMIT 1
           )
         ORDER BY r.planIndex ASC, r.id ASC
-        """,
+        """
     )
     fun observeLatestPlanRecordsFor(sellIsins: List<String>, buyIsins: List<String>): Flow<List<SuggestionRecordEntity>>
 

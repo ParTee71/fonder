@@ -22,6 +22,8 @@ import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -37,8 +39,6 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.testing.NetworkGuard
 import se.partee71.fonder.ui.portfolj.PORTFOLJ_LIST_TEST_TAG
-import java.time.LocalDate
-import javax.inject.Inject
 
 /**
  * Navigeringen på enhet med appens riktiga Hilt-graf (NAV-7, ANA-12): `MainActivity` startas med
@@ -72,7 +72,7 @@ class AppNavigationTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         WorkManagerTestInitHelper.initializeTestWorkManager(
             context,
-            Configuration.Builder().setExecutor(SynchronousExecutor()).build(),
+            Configuration.Builder().setExecutor(SynchronousExecutor()).build()
         )
         hiltRule.inject()
         val today = LocalDate.now().toEpochDay()
@@ -84,11 +84,11 @@ class AppNavigationTest {
                     type = TransactionType.KOP,
                     epochDay = today - 30,
                     shares = 10.0,
-                    pricePerShare = 100.0,
-                ),
+                    pricePerShare = 100.0
+                )
             )
             switchWatches.start(
-                SwitchWatch(sellIsin = SELL_ISIN, sellFundName = SOLD_FUND_NAME, soldAtEpochDay = today),
+                SwitchWatch(sellIsin = SELL_ISIN, sellFundName = SOLD_FUND_NAME, soldAtEpochDay = today)
             )
         }
     }
@@ -147,8 +147,7 @@ class AppNavigationTest {
         assertEquals("riktiga nätverksanrop", 0, NetworkGuard.realConnectionAttempts.get())
     }
 
-    private fun waitFor(matcher: SemanticsMatcher) =
-        composeRule.waitUntil(TIMEOUT_MS) { composeRule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitFor(matcher: SemanticsMatcher) = composeRule.waitUntil(TIMEOUT_MS) { composeRule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
 
     private companion object {
         const val FUND_ID = "TEST0000001"

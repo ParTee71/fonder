@@ -4,18 +4,18 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import se.partee71.fonder.di.NetworkModule
 import java.io.IOException
 import java.net.InetAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Singleton
 import javax.net.SocketFactory
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import se.partee71.fonder.di.NetworkModule
 
 /**
  * Ersätter [NetworkModule] i alla `@HiltAndroidTest`: appens enda `OkHttpClient` (kurskällorna,
@@ -30,11 +30,10 @@ object OfflineNetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient =
-        OkHttpClient.Builder()
-            .addInterceptor(OfflineInterceptor)
-            .socketFactory(NetworkGuard.socketFactory)
-            .build()
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(OfflineInterceptor)
+        .socketFactory(NetworkGuard.socketFactory)
+        .build()
 }
 
 /** Svarar på varje anrop utan nätverk; anropet når aldrig OkHttps anslutningslager. */
@@ -78,7 +77,7 @@ object NetworkGuard {
             address: InetAddress?,
             port: Int,
             localAddress: InetAddress?,
-            localPort: Int,
+            localPort: Int
         ): Socket = refuse()
     }
 }

@@ -28,7 +28,7 @@ import se.partee71.fonder.R
 data class AppFabMenuItem(
     val label: String,
     val onClick: () -> Unit,
-    val icon: ImageVector? = null,
+    val icon: ImageVector? = null
 )
 
 /** Mått för det som ska ligga bredvid [AppFabMenu] längs nederkanten (flikraden i `AppNavigation`). */
@@ -59,7 +59,7 @@ fun AppFabMenu(
     onExpandedChange: (Boolean) -> Unit,
     items: List<AppFabMenuItem>,
     modifier: Modifier = Modifier,
-    handleBack: Boolean = true,
+    handleBack: Boolean = true
 ) {
     val openDescription = stringResource(R.string.fab_menu_open)
     val closeDescription = stringResource(R.string.fab_menu_close)
@@ -75,24 +75,24 @@ fun AppFabMenu(
                 onCheckedChange = onExpandedChange,
                 containerColor = ToggleFloatingActionButtonDefaults.containerColor(
                     initialColor = MaterialTheme.colorScheme.primary,
-                    finalColor = MaterialTheme.colorScheme.primary,
+                    finalColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier.semantics {
                     contentDescription = if (expanded) closeDescription else openDescription
                     stateDescription = if (expanded) expandedState else collapsedState
-                },
+                }
             ) {
                 val iconColor = ToggleFloatingActionButtonDefaults.iconColor(
                     initialColor = MaterialTheme.colorScheme.onPrimary,
-                    finalColor = MaterialTheme.colorScheme.onPrimary,
+                    finalColor = MaterialTheme.colorScheme.onPrimary
                 )
                 Icon(
                     if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.Add,
                     contentDescription = null,
-                    modifier = Modifier.animateIcon({ checkedProgress }, color = iconColor),
+                    modifier = Modifier.animateIcon({ checkedProgress }, color = iconColor)
                 )
             }
-        },
+        }
     ) {
         items.forEach { item ->
             FloatingActionButtonMenuItem(
@@ -103,7 +103,7 @@ fun AppFabMenu(
                 text = { Text(item.label) },
                 icon = { item.icon?.let { Icon(it, contentDescription = null) } },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }

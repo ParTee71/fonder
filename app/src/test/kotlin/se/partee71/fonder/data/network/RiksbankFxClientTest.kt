@@ -1,8 +1,8 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.LocalDate
 
 /**
  * Enhetstest för den rena URL-byggaren i [RiksbankFxClient] (nätverksdelen kräver riktig HTTP
@@ -22,7 +22,7 @@ class RiksbankFxClientTest {
 
         assertEquals(
             "https://api.riksbank.se/swea/v1/Observations/SEKUSDPMI/2026-07-20/2026-07-28",
-            url,
+            url
         )
     }
 }

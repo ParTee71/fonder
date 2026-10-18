@@ -5,6 +5,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -39,8 +41,6 @@ import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.domain.usecase.SwitchQuestion
 import se.partee71.fonder.domain.usecase.SwitchQuestions
 import se.partee71.fonder.ui.transaktioner.SwitchFieldUi
-import java.time.LocalDate
-import javax.inject.Inject
 
 /** En parsad transaktion + användarens (eventuellt korrigerade) matchning/fält. */
 @Immutable
@@ -59,7 +59,7 @@ data class ImportOrderRowUiState(
     /** Säljraden vars bevakning köpet avslutar ([SwitchDecision.ClosesWatchOfEntry]) — pekas ut med raden, inte med ett index som flyttar när rader väljs bort. */
     val switchSaleRow: ImportedOrderTransaction? = null,
     /** Bytesväljaren för raden; null för en rad som inte importeras eller medan väljarens indata läses. */
-    val switchField: SwitchFieldUi? = null,
+    val switchField: SwitchFieldUi? = null
 ) {
     val readyToImport: Boolean
         get() = included && matchedFund != null &&
@@ -91,7 +91,7 @@ data class ImportOrdersUiState(
     /** Importen pågår — knappen ska vara släckt, se [ImportOrdersViewModel.import]. */
     val importing: Boolean = false,
     /** Bytesväljarens indata är lästa — utan dem går ingen fråga att ställa, och importen väntar. */
-    val switchReady: Boolean = false,
+    val switchReady: Boolean = false
 ) {
     val canImport: Boolean
         get() = rows.any { it.readyToImport } && rows.none { it.switchUnanswered } &&
@@ -130,7 +130,7 @@ class ImportOrdersViewModel @Inject constructor(
     private val pdfTextExtractor: PdfTextExtractor,
     private val recordTransaction: RecordTransaction,
     switchChoicesSource: SwitchChoicesSource,
-    private val fileReader: ImportFileReader,
+    private val fileReader: ImportFileReader
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportOrdersUiState())
@@ -193,7 +193,7 @@ class ImportOrdersViewModel @Inject constructor(
     private suspend fun buildRowState(
         transaction: ImportedOrderTransaction,
         catalog: FundCatalog,
-        trackedFunds: List<Fund>,
+        trackedFunds: List<Fund>
     ): ImportOrderRowUiState {
         val match = ImportFundMatcher.match(
             isin = transaction.isin,
@@ -202,7 +202,7 @@ class ImportOrdersViewModel @Inject constructor(
             catalogFunds = catalog.funds,
             trackedFunds = trackedFunds,
             findFundByIsin = fundPriceRepository::findFundByIsin,
-            lookupIsin = fundPriceRepository::lookupIsin,
+            lookupIsin = fundPriceRepository::lookupIsin
         )
 
         // Till skillnad från ImportHoldingsViewModel hämtade det här flödet tidigare aldrig
@@ -223,7 +223,7 @@ class ImportOrdersViewModel @Inject constructor(
             date = LocalDate.ofEpochDay(transaction.epochDay),
             sharesText = transaction.shares.toString(),
             priceText = transaction.pricePerShare.toString(),
-            priceFetchFailed = priceFetchFailed,
+            priceFetchFailed = priceFetchFailed
         )
     }
 
@@ -262,7 +262,7 @@ class ImportOrdersViewModel @Inject constructor(
     private fun updateRow(
         transaction: ImportedOrderTransaction,
         recomputeSwitch: Boolean = true,
-        transform: (ImportOrderRowUiState) -> ImportOrderRowUiState,
+        transform: (ImportOrderRowUiState) -> ImportOrderRowUiState
     ) {
         _uiState.update { state ->
             val updated = state.copy(rows = state.rows.map { if (it.transaction == transaction) transform(it) else it }.toImmutableList())
@@ -271,24 +271,22 @@ class ImportOrdersViewModel @Inject constructor(
     }
 
     /** Bytesväljarens frågor för [rows] (i importordningen), med användarens val översatta till index i just den listan. */
-    private fun switchQuestions(inputs: SwitchChoicesSource.Inputs, rows: List<ImportOrderRowUiState>): List<SwitchQuestion> =
-        SwitchQuestions.forImport(
-            inputs,
-            rows.map { SwitchImportRow(it.transaction.type, it.transaction.isin, it.date.toEpochDay()) },
-            rows.map { row -> chosenFor(row, rows) },
-        )
+    private fun switchQuestions(inputs: SwitchChoicesSource.Inputs, rows: List<ImportOrderRowUiState>): List<SwitchQuestion> = SwitchQuestions.forImport(
+        inputs,
+        rows.map { SwitchImportRow(it.transaction.type, it.transaction.isin, it.date.toEpochDay()) },
+        rows.map { row -> chosenFor(row, rows) }
+    )
 
-    private fun chosenFor(row: ImportOrderRowUiState, rows: List<ImportOrderRowUiState>): SwitchOption? =
-        row.switchSaleRow
-            ?.let { sale -> rows.indexOfFirst { it.transaction == sale }.takeIf { it >= 0 } }
-            ?.let { SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(it)) }
-            ?: row.switchChoice
+    private fun chosenFor(row: ImportOrderRowUiState, rows: List<ImportOrderRowUiState>): SwitchOption? = row.switchSaleRow
+        ?.let { sale -> rows.indexOfFirst { it.transaction == sale }.takeIf { it >= 0 } }
+        ?.let { SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(it)) }
+        ?: row.switchChoice
 
     /** Ett avslut av en säljrads bevakning pekar på raden bland [candidates]; i skrivningen på dess plats bland [ready]. */
     private fun toEntryIndices(
         decision: SwitchDecision,
         candidates: List<ImportOrderRowUiState>,
-        ready: List<ImportOrderRowUiState>,
+        ready: List<ImportOrderRowUiState>
     ): SwitchDecision {
         if (decision !is SwitchDecision.ClosesWatchOfEntry) return decision
         val sale = candidates.getOrNull(decision.entryIndex) ?: return SwitchDecision.None
@@ -343,9 +341,9 @@ class ImportOrdersViewModel @Inject constructor(
                         type = rowState.transaction.type,
                         epochDay = rowState.date.toEpochDay(),
                         shares = requireNotNull(SwedishNumberFormat.parse(rowState.sharesText)),
-                        pricePerShare = requireNotNull(SwedishNumberFormat.parse(rowState.priceText)),
+                        pricePerShare = requireNotNull(SwedishNumberFormat.parse(rowState.priceText))
                     ),
-                    options[index]?.decision?.let { decision -> toEntryIndices(decision, candidates, ready) } ?: SwitchDecision.None,
+                    options[index]?.decision?.let { decision -> toEntryIndices(decision, candidates, ready) } ?: SwitchDecision.None
                 )
             }
             val recorded = recordTransaction.recordAll(entries)

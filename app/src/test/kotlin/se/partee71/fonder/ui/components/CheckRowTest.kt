@@ -41,7 +41,7 @@ class CheckRowTest {
                     checked = false,
                     onCheckedChange = { checked = it },
                     label = "Global Indexfond A",
-                    supportingText = "ISIN SE0000000001",
+                    supportingText = "ISIN SE0000000001"
                 )
             }
         }
@@ -72,7 +72,7 @@ class CheckRowTest {
                 onCheckedChange = {},
                 label = "Global Indexfond A",
                 supportingText = "ISIN SE0000000001 · avrakningsnota-0812.pdf",
-                labelStyle = MaterialTheme.typography.titleSmall,
+                labelStyle = MaterialTheme.typography.titleSmall
             )
             CheckRow(checked = false, onCheckedChange = {}, label = "Tillväxtmarknad Bred")
         }

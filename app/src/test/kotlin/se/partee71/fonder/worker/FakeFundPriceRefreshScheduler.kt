@@ -57,8 +57,7 @@ class FakeFundPriceRefreshScheduler : FundPriceRefreshScheduler {
         lastSwitchPlanRequest = SwitchPlanScanRequest(System.currentTimeMillis(), force)
     }
 
-    override fun switchPlanScanRequestedSince(epochMillis: Long): SwitchPlanScanRequest? =
-        lastSwitchPlanRequest?.takeIf { it.epochMillis > epochMillis }
+    override fun switchPlanScanRequestedSince(epochMillis: Long): SwitchPlanScanRequest? = lastSwitchPlanRequest?.takeIf { it.epochMillis > epochMillis }
 
     override fun takeForcedSwitchPlanRequest(): Boolean = false
 

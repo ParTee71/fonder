@@ -36,6 +36,5 @@ object FundMetadataFreshness {
     /** Samma 30 dygn som [AVAILABILITY_TTL_DAYS] — jämförelsen vilar ändå på köpbarheten. */
     const val COMPARISON_TTL_DAYS = 30L
 
-    fun isStale(resolvedAtEpochDay: Long, today: LocalDate, ttlDays: Long = AVAILABILITY_TTL_DAYS): Boolean =
-        resolvedAtEpochDay < today.toEpochDay() - ttlDays
+    fun isStale(resolvedAtEpochDay: Long, today: LocalDate, ttlDays: Long = AVAILABILITY_TTL_DAYS): Boolean = resolvedAtEpochDay < today.toEpochDay() - ttlDays
 }

@@ -16,7 +16,7 @@ class SwitchOutcomeCalcTest {
         sellNav: Double = 100.0,
         buyNav: Double = 200.0,
         switchValueKr: Double? = 10_000.0,
-        followed: Boolean? = null,
+        followed: Boolean? = null
     ) = SuggestionRecord(
         id = id,
         suggestedAtEpochDay = 20_000,
@@ -26,7 +26,7 @@ class SwitchOutcomeCalcTest {
         sellNavAtSuggestion = sellNav,
         buyNavAtSuggestion = buyNav,
         switchValueKr = switchValueKr,
-        followed = followed,
+        followed = followed
     )
 
     @Test
@@ -95,7 +95,7 @@ class SwitchOutcomeCalcTest {
     fun `summeringen snittar procenten och summerar kronorna`() {
         val outcomes = listOf(
             SwitchOutcomeCalc.evaluate(record(id = 1), sellNavNow = 105.0, buyNavNow = 224.0), // +7 pp, +700 kr
-            SwitchOutcomeCalc.evaluate(record(id = 2), sellNavNow = 110.0, buyNavNow = 200.0), // −10 pp, −1000 kr
+            SwitchOutcomeCalc.evaluate(record(id = 2), sellNavNow = 110.0, buyNavNow = 200.0) // −10 pp, −1000 kr
         )
 
         val summary = SwitchOutcomeCalc.summarize(outcomes)
@@ -112,7 +112,7 @@ class SwitchOutcomeCalcTest {
         // "vi vet inte än" (ANA-4-principen).
         val outcomes = listOf(
             SwitchOutcomeCalc.evaluate(record(id = 1), sellNavNow = 105.0, buyNavNow = 224.0),
-            SwitchOutcomeCalc.evaluate(record(id = 2), sellNavNow = null, buyNavNow = null),
+            SwitchOutcomeCalc.evaluate(record(id = 2), sellNavNow = null, buyNavNow = null)
         )
 
         val summary = SwitchOutcomeCalc.summarize(outcomes)
@@ -126,7 +126,7 @@ class SwitchOutcomeCalcTest {
     @Test
     fun `helt outvarderad uppsattning ger null i stallet for NaN`() {
         val summary = SwitchOutcomeCalc.summarize(
-            listOf(SwitchOutcomeCalc.evaluate(record(), sellNavNow = null, buyNavNow = null)),
+            listOf(SwitchOutcomeCalc.evaluate(record(), sellNavNow = null, buyNavNow = null))
         )
 
         assertNull(summary.averageExcessReturn)
@@ -139,7 +139,7 @@ class SwitchOutcomeCalcTest {
     fun `kronsumman utelamnar rader utan belopp men snittet raknar dem`() {
         val outcomes = listOf(
             SwitchOutcomeCalc.evaluate(record(id = 1), sellNavNow = 105.0, buyNavNow = 224.0),
-            SwitchOutcomeCalc.evaluate(record(id = 2, switchValueKr = null), sellNavNow = 110.0, buyNavNow = 200.0),
+            SwitchOutcomeCalc.evaluate(record(id = 2, switchValueKr = null), sellNavNow = 110.0, buyNavNow = 200.0)
         )
 
         val summary = SwitchOutcomeCalc.summarize(outcomes)
@@ -152,7 +152,7 @@ class SwitchOutcomeCalcTest {
     fun `snitt per plats i planen sorteras stigande`() {
         val outcomes = listOf(
             SwitchOutcomeCalc.evaluate(record(id = 1, planIndex = 1), sellNavNow = 110.0, buyNavNow = 200.0), // −10 pp
-            SwitchOutcomeCalc.evaluate(record(id = 2, planIndex = 0), sellNavNow = 105.0, buyNavNow = 224.0), // +7 pp
+            SwitchOutcomeCalc.evaluate(record(id = 2, planIndex = 0), sellNavNow = 105.0, buyNavNow = 224.0) // +7 pp
         )
 
         val byIndex = SwitchOutcomeCalc.byPlanIndex(outcomes)

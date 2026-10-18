@@ -37,7 +37,7 @@ fun PullToRefreshContainer(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     val state = rememberPullToRefreshState()
     PullToRefreshBox(
@@ -49,9 +49,9 @@ fun PullToRefreshContainer(
             PullToRefreshDefaults.LoadingIndicator(
                 state = state,
                 isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
+                modifier = Modifier.align(Alignment.TopCenter)
             )
-        },
+        }
     ) {
         content()
     }

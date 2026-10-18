@@ -12,7 +12,7 @@ interface FxRateDao {
     /** Kurser för [currency] inom intervallet (inklusive), i stigande datumordning. */
     @Query(
         "SELECT * FROM fx_rates WHERE currency = :currency " +
-            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC",
+            "AND epochDay BETWEEN :fromEpochDay AND :toEpochDay ORDER BY epochDay ASC"
     )
     suspend fun getRange(currency: String, fromEpochDay: Long, toEpochDay: Long): List<FxRateEntity>
 

@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class FundCompany(
     val id: String,
-    val name: String,
+    val name: String
 ) {
     companion object {
         const val HANDELSBANKEN_ID = "1"

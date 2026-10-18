@@ -64,7 +64,7 @@ class SwitchRowTest {
                 checked = false,
                 onCheckedChange = {},
                 label = "Bara indexfonder",
-                supportingText = "Begränsar appens förslag till indexfonder på nivån",
+                supportingText = "Begränsar appens förslag till indexfonder på nivån"
             )
         }
     }

@@ -1,9 +1,9 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
-import java.time.LocalDate
 
 /**
  * Portföljens totala fondavgift per år (HEM-5, issue #60) och samlade besparingspotential
@@ -37,7 +37,7 @@ object PortfolioFeeCalc {
         val fund: Fund,
         val annualFeeKr: Double,
         val annualSavingsKr: Double? = null,
-        val wasCompared: Boolean = false,
+        val wasCompared: Boolean = false
     )
 
     data class Result(
@@ -50,7 +50,7 @@ object PortfolioFeeCalc {
         /** Antal innehav med ett färskt jämförelseresultat, av [comparableCount] totalt. */
         val comparedCount: Int = 0,
         /** Innehav med känd avgift — de enda som någonsin kan bli genomsökta. */
-        val comparableCount: Int = 0,
+        val comparableCount: Int = 0
     )
 
     fun compute(holdings: List<Holding>, metadataByIsin: Map<String, FundMetadata>, today: LocalDate): Result {
@@ -89,7 +89,7 @@ object PortfolioFeeCalc {
             unknownFeeCount = unknownFeeCount,
             totalAnnualSavingsKr = byHolding.sumOf { it.annualSavingsKr ?: 0.0 },
             comparedCount = comparedCount,
-            comparableCount = byHolding.size,
+            comparableCount = byHolding.size
         )
     }
 }

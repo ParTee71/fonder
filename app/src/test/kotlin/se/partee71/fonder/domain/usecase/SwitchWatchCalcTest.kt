@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,7 +9,6 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
-import java.time.LocalDate
 
 /** Utvecklingen sedan säljdagen, rangordningen och färskhetsgränsen (ANA-12, issue #114). */
 class SwitchWatchCalcTest {
@@ -19,7 +19,7 @@ class SwitchWatchCalcTest {
         isin: String = "SE_A",
         navAtStart: Double? = 100.0,
         navAtStartEpochDay: Long? = soldAt.toEpochDay(),
-        position: Int = 0,
+        position: Int = 0
     ) = SwitchWatchCandidate(
         id = 1,
         watchId = 1,
@@ -27,12 +27,12 @@ class SwitchWatchCalcTest {
         name = "Fond $isin",
         navAtStart = navAtStart,
         navAtStartEpochDay = navAtStartEpochDay,
-        position = position,
+        position = position
     )
 
     private fun watch(
         soldAtEpochDay: Long = soldAt.toEpochDay(),
-        closedAtEpochDay: Long? = null,
+        closedAtEpochDay: Long? = null
     ) = SwitchWatch(
         id = 1,
         sellIsin = "SE_SALJ",
@@ -40,7 +40,7 @@ class SwitchWatchCalcTest {
         soldAtEpochDay = soldAtEpochDay,
         proceedsKr = 10_000.0,
         closedAtEpochDay = closedAtEpochDay,
-        closeReason = closedAtEpochDay?.let { SwitchWatchCloseReason.KOPT },
+        closeReason = closedAtEpochDay?.let { SwitchWatchCloseReason.KOPT }
     )
 
     @Test
@@ -49,7 +49,7 @@ class SwitchWatchCalcTest {
             candidate = candidate(navAtStart = 100.0),
             latestNav = 103.5,
             proceedsKr = 10_000.0,
-            soldAtEpochDay = soldAt.toEpochDay(),
+            soldAtEpochDay = soldAt.toEpochDay()
         )
 
         assertEquals(0.035, outcome.changeFraction!!, 1e-9)
@@ -91,7 +91,7 @@ class SwitchWatchCalcTest {
             candidate = candidate(navAtStartEpochDay = soldAt.toEpochDay() + 2),
             latestNav = 110.0,
             proceedsKr = 10_000.0,
-            soldAtEpochDay = soldAt.toEpochDay(),
+            soldAtEpochDay = soldAt.toEpochDay()
         )
 
         assertTrue(outcome.partial)
@@ -102,7 +102,7 @@ class SwitchWatchCalcTest {
         val outcomes = listOf(
             SwitchWatchCalc.outcome(candidate("SE_A", position = 0), latestNav = 101.0, proceedsKr = null, soldAtEpochDay = soldAt.toEpochDay()),
             SwitchWatchCalc.outcome(candidate("SE_B", navAtStart = null, position = 1), latestNav = null, proceedsKr = null, soldAtEpochDay = soldAt.toEpochDay()),
-            SwitchWatchCalc.outcome(candidate("SE_C", position = 2), latestNav = 105.0, proceedsKr = null, soldAtEpochDay = soldAt.toEpochDay()),
+            SwitchWatchCalc.outcome(candidate("SE_C", position = 2), latestNav = 105.0, proceedsKr = null, soldAtEpochDay = soldAt.toEpochDay())
         )
 
         val ranked = SwitchWatchCalc.ranked(outcomes)
@@ -136,7 +136,7 @@ class SwitchWatchCalcTest {
         val history = listOf(
             soldAt.minusDays(1).toEpochDay() to 99.0,
             soldAt.toEpochDay() to 100.0,
-            soldAt.plusDays(1).toEpochDay() to 101.0,
+            soldAt.plusDays(1).toEpochDay() to 101.0
         )
 
         assertEquals(soldAt.toEpochDay() to 100.0, SwitchWatchCalc.anchor(history, soldAt.toEpochDay()))
@@ -148,7 +148,7 @@ class SwitchWatchCalcTest {
         // fortfarande låg i den sålda fonden.
         val history = listOf(
             soldAt.minusDays(1).toEpochDay() to 99.0,
-            soldAt.plusDays(2).toEpochDay() to 102.0,
+            soldAt.plusDays(2).toEpochDay() to 102.0
         )
 
         assertEquals(soldAt.plusDays(2).toEpochDay() to 102.0, SwitchWatchCalc.anchor(history, soldAt.toEpochDay()))

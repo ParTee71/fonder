@@ -32,10 +32,10 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SuggestionRecordEntity::class,
         SwitchWatchEntity::class,
         SwitchWatchCandidateEntity::class,
-        SuggestionDismissalEntity::class,
+        SuggestionDismissalEntity::class
     ],
     version = 19,
-    exportSchema = true,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fundDao(): FundDao
@@ -73,7 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `currency` TEXT NOT NULL,
                         PRIMARY KEY(`fundId`, `epochDay`)
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
             }
         }
@@ -172,7 +172,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `rate` REAL NOT NULL,
                         PRIMARY KEY(`currency`, `epochDay`)
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
                 db.execSQL("DELETE FROM `fund_prices`")
             }
@@ -209,7 +209,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `fetchedAtEpochDay` INTEGER NOT NULL,
                         PRIMARY KEY(`isin`)
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
             }
         }
@@ -262,7 +262,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `buyNavAtSuggestion` REAL NOT NULL,
                         `followed` INTEGER
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
             }
         }
@@ -360,7 +360,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `boughtIsin` TEXT,
                         `closeReason` TEXT
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
                 db.execSQL(
                     """
@@ -375,10 +375,10 @@ abstract class AppDatabase : RoomDatabase() {
                         `position` INTEGER NOT NULL DEFAULT 0,
                         FOREIGN KEY(`watchId`) REFERENCES `switch_watches`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_switch_watch_candidates_watchId` ON `switch_watch_candidates` (`watchId`)",
+                    "CREATE INDEX IF NOT EXISTS `index_switch_watch_candidates_watchId` ON `switch_watch_candidates` (`watchId`)"
                 )
             }
         }
@@ -403,7 +403,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `dismissedAtEpochDay` INTEGER NOT NULL,
                         PRIMARY KEY(`sellIsin`, `buyIsin`, `kind`)
                     )
-                    """.trimIndent(),
+                    """.trimIndent()
                 )
             }
         }
@@ -433,7 +433,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `switch_watches` ADD COLUMN `buyTransactionId` INTEGER")
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_suggestion_records_kind_sellIsin_buyIsin` " +
-                        "ON `suggestion_records` (`kind`, `sellIsin`, `buyIsin`)",
+                        "ON `suggestion_records` (`kind`, `sellIsin`, `buyIsin`)"
                 )
             }
         }
@@ -469,7 +469,7 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "UPDATE `fund_metadata` SET `availableAtHandelsbanken` = NULL, `availabilityResolvedAtEpochDay` = NULL " +
-                        "WHERE `availableAtHandelsbanken` = 0",
+                        "WHERE `availableAtHandelsbanken` = 0"
                 )
             }
         }
@@ -492,7 +492,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
-            MIGRATION_18_19,
+            MIGRATION_18_19
         )
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +19,6 @@ import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
 import se.partee71.fonder.testing.captureLightAndDark
-import java.time.LocalDate
 
 /**
  * Skärmdumpar ljust + mörkt av varje delad komponent i `ui/components` (UI-12, skill
@@ -61,13 +61,13 @@ class ComponentScreenshotTest {
                 options = listOf("Ljust", "Mörkt", "Auto"),
                 selected = "Auto",
                 optionLabel = { it },
-                onSelect = {},
+                onSelect = {}
             )
             ChoiceChipRow(
                 options = listOf("Under 1 år", "1–3 år", "3–10 år", "Mer än 10 år", "Vet inte"),
                 selected = "3–10 år",
                 optionLabel = { it },
-                onSelect = {},
+                onSelect = {}
             )
         }
     }
@@ -140,7 +140,7 @@ class ComponentScreenshotTest {
             ExpandableSection(title = "Avgifter") { Text("Visas när sektionen fälls ut.") }
             ExpandableInfoRow(
                 explanation = "Risknivån bygger på hur mycket kursen svängt de senaste fem åren, på en skala 1–7.",
-                initiallyExpanded = true,
+                initiallyExpanded = true
             ) {
                 Text("Varför Risk 4?")
             }
@@ -156,7 +156,7 @@ class ComponentScreenshotTest {
                 options = listOf("Köp", "Sälj"),
                 selected = "Köp",
                 optionLabel = { it },
-                onSelect = {},
+                onSelect = {}
             )
             FollowedToggleRow(followed = true, onFollowedChange = {})
         }
@@ -168,7 +168,7 @@ class ComponentScreenshotTest {
             title = "Inga transaktioner än",
             body = "Lägg till ett köp eller importera en avräkningsnota.",
             icon = Icons.AutoMirrored.Outlined.List,
-            modifier = Modifier.height(320.dp),
+            modifier = Modifier.height(320.dp)
         )
     }
 
@@ -178,14 +178,13 @@ class ComponentScreenshotTest {
     }
 
     @Test
-    fun `PullToRefreshContainer under uppdatering`() =
-        composeRule.captureLightAndDark("PullToRefreshContainer_refreshing", animated = true) {
-            PullToRefreshContainer(refreshing = true, onRefresh = {}, modifier = Modifier.height(160.dp)) {
-                Column {
-                    PeriodRow(label = "Idag", amount = 1_284.0, fraction = 0.0031)
-                }
+    fun `PullToRefreshContainer under uppdatering`() = composeRule.captureLightAndDark("PullToRefreshContainer_refreshing", animated = true) {
+        PullToRefreshContainer(refreshing = true, onRefresh = {}, modifier = Modifier.height(160.dp)) {
+            Column {
+                PeriodRow(label = "Idag", amount = 1_284.0, fraction = 0.0031)
             }
         }
+    }
 
     private companion object {
         val sampleAnalysis = FundAnalysisCalc.Analysis(
@@ -197,13 +196,13 @@ class ComponentScreenshotTest {
                 gavFraction = 0.048,
                 portfolioShareFraction = 0.22,
                 annualizedVolatility = 0.148,
-                sharpeRatio = 0.7,
+                sharpeRatio = 0.7
             ),
             distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(SignalLevel.GUL, -0.142),
             trend = FundAnalysisCalc.TrendSignal(SignalLevel.GUL),
             momentum = null,
             status = SignalLevel.GUL,
-            profitTake = null,
+            profitTake = null
         )
     }
 }

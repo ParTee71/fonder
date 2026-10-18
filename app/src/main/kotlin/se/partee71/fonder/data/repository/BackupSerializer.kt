@@ -10,12 +10,13 @@ import kotlinx.serialization.json.jsonPrimitive
  * ska kunna säga *vilket* av felen det är: "filen kommer från en nyare version av appen" och
  * "filen är trasig" leder till helt olika åtgärder för användaren.
  */
-class BackupFormatException(val reason: Reason, val fileVersion: Int? = null) : Exception(
-    when (reason) {
-        Reason.UNSUPPORTED_VERSION -> "Filformatversion $fileVersion är nyare än ${BackupPayload.FORMAT_VERSION}"
-        Reason.UNREADABLE -> "Filen kunde inte tolkas som en säkerhetskopia"
-    },
-) {
+class BackupFormatException(val reason: Reason, val fileVersion: Int? = null) :
+    Exception(
+        when (reason) {
+            Reason.UNSUPPORTED_VERSION -> "Filformatversion $fileVersion är nyare än ${BackupPayload.FORMAT_VERSION}"
+            Reason.UNREADABLE -> "Filen kunde inte tolkas som en säkerhetskopia"
+        }
+    ) {
     enum class Reason { UNSUPPORTED_VERSION, UNREADABLE }
 }
 

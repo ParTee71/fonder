@@ -14,7 +14,7 @@ data class ImportedHoldingRow(
     val currency: String,
     val quoteEpochDay: Long,
     val marketValue: Double,
-    val acquisitionValue: Double,
+    val acquisitionValue: Double
 ) {
     /** Snittkurs vid anskaffning — grund för [se.partee71.fonder.domain.usecase.PurchaseDateEstimator]. */
     val averageCostPerShare: Double get() = acquisitionValue / shares

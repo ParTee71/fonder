@@ -1,13 +1,13 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
+import kotlin.math.ceil
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
-import java.time.LocalDate
-import kotlin.math.ceil
 
 /**
  * Rangordnad bytesplan mot riskprofilens målfördelning (SET-3/#71) — HEM-8, issue #70. Ren,
@@ -76,7 +76,7 @@ object SwitchPlanCalc {
         val buyName: String,
         val fromLevel: Int,
         val toLevel: Int,
-        val feeDelta: Double,
+        val feeDelta: Double
     )
 
     /**
@@ -134,7 +134,7 @@ object SwitchPlanCalc {
         metadataByIsin: Map<String, FundMetadata>,
         targetAllocation: Map<Int, Double>,
         pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
-        unassignedKr: Double = 0.0,
+        unassignedKr: Double = 0.0
     ): List<Int> = underweightedGaps(holdings, metadataByIsin, targetAllocation, pendingProceedsByLevel, unassignedKr).map { it.level }
 
     /** En underviktad nivå och hur mycket den saknar, i procentenheter av portföljen. */
@@ -146,7 +146,7 @@ object SwitchPlanCalc {
         metadataByIsin: Map<String, FundMetadata>,
         targetAllocation: Map<Int, Double>,
         pendingProceedsByLevel: Map<Int, Double>,
-        unassignedKr: Double,
+        unassignedKr: Double
     ): List<LevelGap> {
         if (targetAllocation.isEmpty()) return emptyList()
         val positions = positionsOf(holdings, metadataByIsin)
@@ -173,9 +173,8 @@ object SwitchPlanCalc {
         metadataByIsin: Map<String, FundMetadata>,
         targetAllocation: Map<Int, Double>,
         proceedsKr: Double?,
-        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
-    ): LevelGap? =
-        underweightedGaps(holdings, metadataByIsin, targetAllocation, pendingProceedsByLevel, unassignedKr = proceedsKr ?: 0.0).firstOrNull()
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap()
+    ): LevelGap? = underweightedGaps(holdings, metadataByIsin, targetAllocation, pendingProceedsByLevel, unassignedKr = proceedsKr ?: 0.0).firstOrNull()
 
     /**
      * Förvald målnivå för en bevakning (SLD-5/BYT-2, ANA-13, issue #150) — nivån appens förslag
@@ -192,21 +191,19 @@ object SwitchPlanCalc {
      * Null när inget av det ger en nivå — då föreslås inget, en gissad nivå hade gett alternativ på
      * fel risk (ANA-4-principen).
      */
-    fun preselectTargetLevel(planToLevel: Int?, profileSuggestion: LevelGap?, sellLevel: Int?): Int? =
-        planToLevel ?: profileSuggestion?.level ?: sellLevel
+    fun preselectTargetLevel(planToLevel: Int?, profileSuggestion: LevelGap?, sellLevel: Int?): Int? = planToLevel ?: profileSuggestion?.level ?: sellLevel
 
     /**
      * Innehav vars risknivå går att avgöra. Se [plan] för varför avgiften **inte** krävs här:
      * den behövs bara för att välja säljkandidat, inte för att räkna med värdet i nivåns vikt.
      */
-    private fun positionsOf(holdings: List<Holding>, metadataByIsin: Map<String, FundMetadata>): List<Position> =
-        holdings.mapNotNull { holding ->
-            val isin = holding.fund.isin ?: return@mapNotNull null
-            val value = holding.currentValue ?: return@mapNotNull null
-            val metadata = metadataByIsin[isin] ?: return@mapNotNull null
-            val level = metadata.risk ?: return@mapNotNull null
-            Position(holding, isin, level, metadata.totalFee, value)
-        }
+    private fun positionsOf(holdings: List<Holding>, metadataByIsin: Map<String, FundMetadata>): List<Position> = holdings.mapNotNull { holding ->
+        val isin = holding.fund.isin ?: return@mapNotNull null
+        val value = holding.currentValue ?: return@mapNotNull null
+        val metadata = metadataByIsin[isin] ?: return@mapNotNull null
+        val level = metadata.risk ?: return@mapNotNull null
+        Position(holding, isin, level, metadata.totalFee, value)
+    }
 
     /** Nivåernas värde ur innehaven plus likviden som väntar på köp (BYT-3). */
     private fun levelValuesOf(positions: List<Position>, pendingProceedsByLevel: Map<Int, Double>): MutableMap<Int, Double> {
@@ -248,7 +245,7 @@ object SwitchPlanCalc {
         funds: List<Fund>,
         buyIsinByRecordId: Map<Long, String>,
         metadataByIsin: Map<String, FundMetadata>,
-        today: LocalDate,
+        today: LocalDate
     ): Map<Int, Double> {
         val transactionIds = transactions.mapTo(mutableSetOf()) { it.id }
         val isinByFundId = funds.associate { it.fundId to it.isin }
@@ -286,11 +283,10 @@ object SwitchPlanCalc {
     private fun gapsPp(
         targetAllocation: Map<Int, Double>,
         levelValues: Map<Int, Double>,
-        totalValueKr: Double,
-    ): Map<Int, Double> =
-        (targetAllocation.keys + levelValues.keys).associateWith { level ->
-            ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
-        }
+        totalValueKr: Double
+    ): Map<Int, Double> = (targetAllocation.keys + levelValues.keys).associateWith { level ->
+        ((targetAllocation[level] ?: 0.0) * totalValueKr - (levelValues[level] ?: 0.0)) / totalValueKr * 100.0
+    }
 
     /**
      * Bytena rangordnade så att bara det första ensamt är en giltig handling — se klassens KDoc.
@@ -306,7 +302,7 @@ object SwitchPlanCalc {
         candidates: List<Candidate>,
         targetAllocation: Map<Int, Double>,
         excludedPairs: Set<Pair<String, String>> = emptySet(),
-        pendingProceedsByLevel: Map<Int, Double> = emptyMap(),
+        pendingProceedsByLevel: Map<Int, Double> = emptyMap()
     ): List<Switch> {
         if (targetAllocation.isEmpty()) return emptyList()
 
@@ -360,7 +356,7 @@ object SwitchPlanCalc {
                 buyName = buyCandidate.metadata.name,
                 fromLevel = sellSlot.level,
                 toLevel = underEntry.key,
-                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent!!,
+                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent!!
             )
             usedBuyIsins += buyCandidate.metadata.isin
 

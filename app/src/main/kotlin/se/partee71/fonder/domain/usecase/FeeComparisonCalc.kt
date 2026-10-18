@@ -18,7 +18,7 @@ object FeeComparisonCalc {
     data class Alternative(
         val candidate: FundMetadata,
         val candidateFeePercent: Double,
-        val annualSavingsKr: Double,
+        val annualSavingsKr: Double
     )
 
     /**
@@ -41,7 +41,7 @@ object FeeComparisonCalc {
             misc = titlesFor(FundTag.CATEGORY_MISC),
             maxTotalFee = held.totalFee,
             sortField = FundScreenFilter.SORT_FIELD_TOTAL_FEE,
-            sortDirection = FundScreenSortDirection.ASCENDING,
+            sortDirection = FundScreenSortDirection.ASCENDING
         )
     }
 

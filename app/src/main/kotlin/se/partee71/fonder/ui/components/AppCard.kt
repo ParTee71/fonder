@@ -25,7 +25,7 @@ enum class AppCardVariant {
     Filled,
 
     /** Farozonen: felbehållarens färg, för åtgärder som inte går att ångra. */
-    Error,
+    Error
 }
 
 /**
@@ -35,7 +35,10 @@ enum class AppCardVariant {
  * kort delar kontur i stället för att rita den dubbelt. [Single] är ett vanligt fristående kort.
  */
 enum class AppCardGroupPosition {
-    Single, First, Middle, Last;
+    Single,
+    First,
+    Middle,
+    Last;
 
     companion object {
         /** Platsen för element [index] av [count] i en grupp. */
@@ -71,20 +74,22 @@ fun AppCard(
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = AppCardPadding,
     groupPosition: AppCardGroupPosition = AppCardGroupPosition.Single,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = when (variant) {
         AppCardVariant.Outlined -> CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            contentColor = MaterialTheme.colorScheme.onSurface
         )
+
         AppCardVariant.Filled -> CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            contentColor = MaterialTheme.colorScheme.onSurface
         )
+
         AppCardVariant.Error -> CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         )
     }
     val border = if (variant == AppCardVariant.Outlined) {

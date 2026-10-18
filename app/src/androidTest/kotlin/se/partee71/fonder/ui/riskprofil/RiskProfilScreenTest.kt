@@ -51,7 +51,7 @@ class RiskProfilScreenTest {
         val state = RiskProfilUiState(
             availableLevels = fullScale.toImmutableList(),
             suggestedAllocation = RiskProfileCalc.Profile.BALANSERAD.allocation.toImmutableMap(),
-            manualAllocationText = persistentMapOf(3 to "100"),
+            manualAllocationText = persistentMapOf(3 to "100")
         )
 
         composeRule.setContent {

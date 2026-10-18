@@ -12,14 +12,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.tasks.await
 import se.partee71.fonder.R
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Google-inloggning via **Credential Manager + Firebase Auth** (TP-6).
@@ -30,7 +30,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class FirebaseAuthRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context
 ) : AuthRepository {
 
     private val auth = FirebaseAuth.getInstance()

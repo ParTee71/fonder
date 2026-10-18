@@ -6,6 +6,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +17,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
 import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.AuthUser
 import se.partee71.fonder.data.auth.SignInException
@@ -36,7 +37,6 @@ import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
-import javax.inject.Inject
 
 /**
  * Utfallet av en export eller återställning (SET-6) — en **händelse** som kvitteras bort, aldrig
@@ -64,7 +64,7 @@ sealed interface BackupMessage {
 private data class AccountState(
     val user: AuthUser? = null,
     val signInInProgress: Boolean = false,
-    val signInError: SignInException.Reason? = null,
+    val signInError: SignInException.Reason? = null
 )
 
 @Immutable
@@ -104,7 +104,7 @@ data class SettingsUiState(
     /** Sant när Drive-scopet saknas — kortet erbjuder då knappen som löser det (SET-7). */
     val driveBackupNeedsAuth: Boolean = false,
     /** En kursuppdatering kör just nu ([BackgroundWork.PRICE_REFRESH]) — kurskortets väntesnurra (NAV-6). */
-    val priceRefreshWorking: Boolean = false,
+    val priceRefreshWorking: Boolean = false
 )
 
 /** Referensvalets del av tillståndet — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
@@ -115,7 +115,7 @@ private data class BackupState(
     val inProgress: Boolean = false,
     val message: BackupMessage? = null,
     val lastBackup: BackupRecord? = null,
-    val driveNeedsAuth: Boolean = false,
+    val driveNeedsAuth: Boolean = false
 )
 
 @HiltViewModel
@@ -128,7 +128,7 @@ class SettingsViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val authRepository: AuthRepository,
     private val driveBackupRepository: DriveBackupRepository,
-    private val backupStatusRepository: BackupStatusRepository,
+    private val backupStatusRepository: BackupStatusRepository
 ) : ViewModel() {
 
     private val databaseCleared = MutableStateFlow(false)
@@ -142,7 +142,7 @@ class SettingsViewModel @Inject constructor(
     private val backupState: Flow<BackupState> = combine(
         backupProgress,
         backupStatusRepository.lastBackup,
-        preferences.driveBackupNeedsAuth,
+        preferences.driveBackupNeedsAuth
     ) { progress, lastBackup, needsAuth ->
         progress.copy(lastBackup = lastBackup, driveNeedsAuth = needsAuth)
     }
@@ -167,7 +167,7 @@ class SettingsViewModel @Inject constructor(
         combine(preferences.chosenBenchmarkIsin, benchmarkPickFailed) { isin, failed ->
             BenchmarkState(
                 chosenName = isin?.let { fundMetadataRepository.cachedMetadataFor(listOf(it))[it]?.name ?: it },
-                pickFailed = failed,
+                pickFailed = failed
             )
         }
 
@@ -177,7 +177,7 @@ class SettingsViewModel @Inject constructor(
             databaseCleared,
             preferences.lastPriceSyncEpochMillis,
             preferences.accountType,
-            backupState,
+            backupState
         ) { themeMode, cleared, lastSync, accountType, backup ->
             SettingsUiState(
                 themeMode = themeMode,
@@ -187,18 +187,18 @@ class SettingsViewModel @Inject constructor(
                 backupInProgress = backup.inProgress,
                 backupMessage = backup.message,
                 lastBackup = backup.lastBackup,
-                driveBackupNeedsAuth = backup.driveNeedsAuth,
+                driveBackupNeedsAuth = backup.driveNeedsAuth
             )
         }.combine(benchmarkState) { state, benchmark ->
             state.copy(
                 chosenBenchmarkName = benchmark.chosenName,
-                benchmarkPickFailed = benchmark.pickFailed,
+                benchmarkPickFailed = benchmark.pickFailed
             )
         }.combine(accountState) { state, account ->
             state.copy(
                 googleUser = account.user,
                 signInInProgress = account.signInInProgress,
-                signInError = account.signInError,
+                signInError = account.signInError
             )
         }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
             // Eget led i kedjan av samma skäl som grenarna ovan: körstatusen kommer från
@@ -207,22 +207,13 @@ class SettingsViewModel @Inject constructor(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = SettingsUiState(),
+            initialValue = SettingsUiState()
         )
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { preferences.setThemeMode(mode) }
     }
 
-    /**
-     * Sparar kontotypen (SET-4) och, vid byte **till** ISK/KF, ber om en omräkning av
-     * bytesplanen (HEM-8, issue #88): SET-4-gaten gör att ingen plan alls ges i depå/AF, så
-     * det är först i och med bytet hit som en plan kan finnas — utan triggern dröjer den till
-     * nästa backstop, upp till 12 timmar bort.
-     *
-     * Bara vid faktiskt byte: att välja samma kontotyp igen ska inte kosta en skanning. Byte
-     * *till* depå/AF triggar ingenting alls — där ges ingen plan att räkna om.
-     */
     /**
      * Sparar [fund] som referens för Hems indexjämförelse (HEM-10, issue #102). Katalogens
      * träffar saknar ISIN, så det slås upp när det behövs — hela jämförelsekedjan är
@@ -258,6 +249,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Sparar kontotypen (SET-4) och, vid byte **till** ISK/KF, ber om en omräkning av
+     * bytesplanen (HEM-8, issue #88): SET-4-gaten gör att ingen plan alls ges i depå/AF, så
+     * det är först i och med bytet hit som en plan kan finnas — utan triggern dröjer den till
+     * nästa backstop, upp till 12 timmar bort.
+     *
+     * Bara vid faktiskt byte: att välja samma kontotyp igen ska inte kosta en skanning. Byte
+     * *till* depå/AF triggar ingenting alls — där ges ingen plan att räkna om.
+     */
     fun setAccountType(type: AccountType) {
         viewModelScope.launch {
             val previous = preferences.accountType.first()
@@ -311,7 +311,7 @@ class SettingsViewModel @Inject constructor(
             backupProgress.update {
                 it.copy(
                     inProgress = false,
-                    message = if (result.isSuccess) BackupMessage.Exported else BackupMessage.ExportFailed,
+                    message = if (result.isSuccess) BackupMessage.Exported else BackupMessage.ExportFailed
                 )
             }
         }
@@ -344,18 +344,17 @@ class SettingsViewModel @Inject constructor(
      * kopia på [target], så Hem inte påminner om en ändring som bara är återställningen själv
      * (HEM-12). Delad av fil- och Drive-återställningen.
      */
-    private suspend fun restoreMessage(json: String, target: BackupTarget): BackupMessage =
-        backupRepository.restore(json).fold(
-            onSuccess = {
-                recordBackup(json, target)
-                BackupMessage.Restored(it)
-            },
-            onFailure = { error ->
-                val reason = (error as? BackupFormatException)?.reason
-                    ?: BackupFormatException.Reason.UNREADABLE
-                BackupMessage.RestoreFailed(reason)
-            },
-        )
+    private suspend fun restoreMessage(json: String, target: BackupTarget): BackupMessage = backupRepository.restore(json).fold(
+        onSuccess = {
+            recordBackup(json, target)
+            BackupMessage.Restored(it)
+        },
+        onFailure = { error ->
+            val reason = (error as? BackupFormatException)?.reason
+                ?: BackupFormatException.Reason.UNREADABLE
+            BackupMessage.RestoreFailed(reason)
+        }
+    )
 
     /**
      * Antecknar en lyckad kopia (SET-7, HEM-12) ur exakt den sträng som skrevs eller lästes. Ett fel här får inte göra den lyckade kopian
@@ -422,7 +421,7 @@ class SettingsViewModel @Inject constructor(
                     if (upload is DriveResult.Success) recordBackup(json, BackupTarget.DRIVE)
                     driveMessage(upload, onNeedsAuthorization)
                 },
-                onFailure = { BackupMessage.ExportFailed },
+                onFailure = { BackupMessage.ExportFailed }
             )
             backupProgress.update { it.copy(inProgress = false, message = message) }
         }
@@ -453,12 +452,16 @@ class SettingsViewModel @Inject constructor(
      */
     private suspend fun driveMessage(
         result: DriveResult<*>,
-        onNeedsAuthorization: (PendingIntent) -> Unit,
+        onNeedsAuthorization: (PendingIntent) -> Unit
     ): BackupMessage? = when (result) {
         is DriveResult.Success -> BackupMessage.DriveSaved
+
         DriveResult.NoBackupFound -> BackupMessage.DriveEmpty
+
         DriveResult.NoAccount -> BackupMessage.DriveFailed(signedOut = true)
+
         is DriveResult.Error -> BackupMessage.DriveFailed(signedOut = false)
+
         is DriveResult.NeedsAuthorization -> {
             preferences.setDriveBackupNeedsAuth(true)
             onNeedsAuthorization(result.pendingIntent)

@@ -33,7 +33,7 @@ enum class AppButtonVariant {
     Text,
 
     /** Fylld i felfärgen: en åtgärd som inte går att ångra (Töm databasen, Ta bort). */
-    Danger,
+    Danger
 }
 
 /**
@@ -53,7 +53,7 @@ fun AppButton(
     modifier: Modifier = Modifier,
     variant: AppButtonVariant = AppButtonVariant.Primary,
     enabled: Boolean = true,
-    contentDescription: String? = null,
+    contentDescription: String? = null
 ) {
     val buttonModifier = if (contentDescription != null) {
         modifier.semantics { this.contentDescription = contentDescription }
@@ -65,6 +65,7 @@ fun AppButton(
     when (variant) {
         AppButtonVariant.Primary ->
             Button(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
+
         AppButtonVariant.Tonal ->
             FilledTonalButton(
                 onClick = onClick,
@@ -74,13 +75,16 @@ fun AppButton(
                 // Tonad = primärbehållaren (ljusblå), som i mockupen; M3:s standard är secondaryContainer (koppar).
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             ) { label() }
+
         AppButtonVariant.Outlined ->
             OutlinedButton(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
+
         AppButtonVariant.Text ->
             TextButton(onClick = onClick, shapes = shapes, modifier = buttonModifier, enabled = enabled) { label() }
+
         AppButtonVariant.Danger -> Button(
             onClick = onClick,
             shapes = shapes,
@@ -88,8 +92,8 @@ fun AppButton(
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-            ),
+                contentColor = MaterialTheme.colorScheme.onError
+            )
         ) { label() }
     }
 }
@@ -100,7 +104,7 @@ enum class AppIconButtonVariant {
     Standard,
 
     /** Tonad: rund platta i ytvariant med ikonen i primärfärgen — Översiktens Inställningar (NAV-7). */
-    Tonal,
+    Tonal
 }
 
 /**
@@ -116,12 +120,13 @@ fun AppIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    variant: AppIconButtonVariant = AppIconButtonVariant.Standard,
+    variant: AppIconButtonVariant = AppIconButtonVariant.Standard
 ) {
     val content: @Composable () -> Unit = { Icon(icon, contentDescription = contentDescription) }
     when (variant) {
         AppIconButtonVariant.Standard ->
             IconButton(onClick = onClick, shapes = IconButtonDefaults.shapes(), modifier = modifier, enabled = enabled, content = content)
+
         AppIconButtonVariant.Tonal -> FilledTonalIconButton(
             onClick = onClick,
             shapes = IconButtonDefaults.shapes(),
@@ -129,9 +134,9 @@ fun AppIconButton(
             enabled = enabled,
             colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.primary
             ),
-            content = content,
+            content = content
         )
     }
 }

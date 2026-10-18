@@ -31,7 +31,7 @@ fun SwitchRow(
     label: String,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = modifier
@@ -41,10 +41,10 @@ fun SwitchRow(
                 value = checked,
                 enabled = enabled,
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onValueChange = onCheckedChange
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -52,7 +52,7 @@ fun SwitchRow(
                 Text(
                     supportingText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

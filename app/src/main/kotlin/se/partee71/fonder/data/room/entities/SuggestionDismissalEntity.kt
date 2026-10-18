@@ -14,19 +14,19 @@ import se.partee71.fonder.domain.model.SuggestionKind
  */
 @Entity(
     tableName = SuggestionDismissalEntity.TABLE_NAME,
-    primaryKeys = ["sellIsin", "buyIsin", "kind"],
+    primaryKeys = ["sellIsin", "buyIsin", "kind"]
 )
 data class SuggestionDismissalEntity(
     val sellIsin: String,
     val buyIsin: String,
     val kind: String,
-    val dismissedAtEpochDay: Long,
+    val dismissedAtEpochDay: Long
 ) {
     fun toDomain() = SuggestionDismissal(
         sellIsin = sellIsin,
         buyIsin = buyIsin,
         kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN),
-        dismissedAtEpochDay = dismissedAtEpochDay,
+        dismissedAtEpochDay = dismissedAtEpochDay
     )
 
     companion object {
@@ -37,7 +37,7 @@ data class SuggestionDismissalEntity(
             sellIsin = dismissal.sellIsin,
             buyIsin = dismissal.buyIsin,
             kind = dismissal.kind.name,
-            dismissedAtEpochDay = dismissal.dismissedAtEpochDay,
+            dismissedAtEpochDay = dismissal.dismissedAtEpochDay
         )
     }
 }

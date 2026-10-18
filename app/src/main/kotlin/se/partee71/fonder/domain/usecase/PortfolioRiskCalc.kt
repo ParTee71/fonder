@@ -23,7 +23,7 @@ object PortfolioRiskCalc {
         /** Null om inget innehav har en känd risknivå (t.ex. tom portfölj) — 0 vore inte en risknivå på skalan. */
         val weightedAverageRisk: Double?,
         val includedValueKr: Double,
-        val excludedCount: Int,
+        val excludedCount: Int
     )
 
     fun compute(holdings: List<Holding>, metadataByIsin: Map<String, FundMetadata>): Result {

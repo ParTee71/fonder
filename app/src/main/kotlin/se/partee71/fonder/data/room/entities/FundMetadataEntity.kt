@@ -52,7 +52,7 @@ data class FundMetadataEntity(
     /** Null = aldrig jämfört. Satt (oavsett [cheapestAlternativeIsin]) = jämfört den dagen. */
     val comparisonResolvedAtEpochDay: Long? = null,
     /** Källans 12-månadersavkastning (issue #70) — se [FundMetadata.developmentOneYear]. */
-    val developmentOneYear: Double? = null,
+    val developmentOneYear: Double? = null
 ) {
     fun toDomain() = FundMetadata(
         isin = isin,
@@ -73,14 +73,14 @@ data class FundMetadataEntity(
         cheapestAlternativeFee = cheapestAlternativeFee,
         shownAlternativeIsins = FundAlternativeIsinsCodec.decode(shownAlternativeIsinsJson),
         comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay,
-        developmentOneYear = developmentOneYear,
+        developmentOneYear = developmentOneYear
     )
 
     companion object {
         fun fromDomain(
             metadata: FundMetadata,
             fetchedAtEpochDay: Long,
-            availabilityResolvedAtEpochDay: Long? = null,
+            availabilityResolvedAtEpochDay: Long? = null
         ) = FundMetadataEntity(
             isin = metadata.isin,
             name = metadata.name,
@@ -102,16 +102,11 @@ data class FundMetadataEntity(
             cheapestAlternativeFee = metadata.cheapestAlternativeFee,
             shownAlternativeIsinsJson = FundAlternativeIsinsCodec.encode(metadata.shownAlternativeIsins),
             comparisonResolvedAtEpochDay = metadata.comparisonResolvedAtEpochDay,
-            developmentOneYear = metadata.developmentOneYear,
+            developmentOneYear = metadata.developmentOneYear
         )
     }
 }
 
-/**
- * JSON-(av)kodning av [FundTag]-listan i [FundMetadataEntity.tagsJson] — medvetet **utanför**
- * `FundMetadataEntity` (se dess KDoc för varför: Rooms KSP-processor kunde annars inte
- * resolva `@Entity`-klassen).
- */
 /**
  * JSON-(av)kodning av [FundMetadataEntity.shownAlternativeIsinsJson] — utanför entiteten av
  * samma KSP-skäl som [FundTagsCodec], men `internal` eftersom
@@ -124,16 +119,19 @@ internal object FundAlternativeIsinsCodec {
 
     fun encode(isins: List<String>): String = json.encodeToString(isinListSerializer, isins)
 
-    fun decode(isinsJson: String): List<String> =
-        runCatching { json.decodeFromString(isinListSerializer, isinsJson) }.getOrElse { emptyList() }
+    fun decode(isinsJson: String): List<String> = runCatching { json.decodeFromString(isinListSerializer, isinsJson) }.getOrElse { emptyList() }
 }
 
+/**
+ * JSON-(av)kodning av [FundTag]-listan i [FundMetadataEntity.tagsJson] — medvetet **utanför**
+ * `FundMetadataEntity` (se dess KDoc för varför: Rooms KSP-processor kunde annars inte
+ * resolva `@Entity`-klassen).
+ */
 private object FundTagsCodec {
     private val json = Json { ignoreUnknownKeys = true }
     private val tagListSerializer = ListSerializer(FundTag.serializer())
 
     fun encode(tags: List<FundTag>): String = json.encodeToString(tagListSerializer, tags)
 
-    fun decode(tagsJson: String): List<FundTag> =
-        runCatching { json.decodeFromString(tagListSerializer, tagsJson) }.getOrElse { emptyList() }
+    fun decode(tagsJson: String): List<FundTag> = runCatching { json.decodeFromString(tagListSerializer, tagsJson) }.getOrElse { emptyList() }
 }

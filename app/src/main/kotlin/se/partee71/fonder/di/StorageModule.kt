@@ -12,8 +12,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import se.partee71.fonder.data.room.AppDatabase
 import javax.inject.Singleton
+import se.partee71.fonder.data.room.AppDatabase
 
 /**
  * Inställningarnas DataStore. [ReplaceFileCorruptionHandler] är inte valfri: filen ingår i
@@ -26,7 +26,7 @@ import javax.inject.Singleton
  */
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "fonder_prefs",
-    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
 )
 
 /**
@@ -40,13 +40,11 @@ object StorageModule {
 
     @Provides
     @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        context.dataStore
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
+        .addMigrations(*AppDatabase.MIGRATIONS)
+        .build()
 }

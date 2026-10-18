@@ -45,21 +45,21 @@ class Migration1415Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "CREATE TABLE `fx_rates` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))"
             )
             // Version 14:s fund_metadata — med listan över visade alternativ (13→14).
             db.execSQL(
@@ -76,7 +76,7 @@ class Migration1415Test {
                     `shownAlternativeIsinsJson` TEXT NOT NULL DEFAULT '[]',
                     PRIMARY KEY(`isin`)
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 """
@@ -93,20 +93,20 @@ class Migration1415Test {
                     `batchEpochMillis` INTEGER NOT NULL DEFAULT 0,
                     `kind` TEXT NOT NULL DEFAULT 'RISK_PLAN'
                 )
-                """.trimIndent(),
+                """.trimIndent()
             )
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')",
+                    "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')"
             )
             db.execSQL(
                 "INSERT INTO transactions (id, fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES (11, 'SHB0000442', 'KOP', 19000, 12.5, 178.25, 25.0)",
+                    "VALUES (11, 'SHB0000442', 'KOP', 19000, 12.5, 178.25, 25.0)"
             )
             db.execSQL(
                 "INSERT INTO suggestion_records (id, suggestedAtEpochDay, planIndex, sellIsin, buyIsin, " +
                     "sellNavAtSuggestion, buyNavAtSuggestion, followed, switchValueKr, batchEpochMillis, kind) " +
-                    "VALUES (3, 19800, 0, 'SE0000582033', 'SE0001466368', 201.5, 95.25, 1, 4200.0, 1754200000000, 'RISK_PLAN')",
+                    "VALUES (3, 19800, 0, 'SE0000582033', 'SE0001466368', 201.5, 95.25, 1, 4200.0, 1754200000000, 'RISK_PLAN')"
             )
             db.version = 14
         }
@@ -137,16 +137,20 @@ class Migration1415Test {
                 sourceRecordId = 3,
                 closedAtEpochDay = null,
                 boughtIsin = null,
-                closeReason = null,
-            ),
+                closeReason = null
+            )
         )
         dao.insertCandidates(
             listOf(
                 SwitchWatchCandidateEntity(
-                    watchId = watchId, isin = "SE0001466368", name = "Kandidat A",
-                    navAtStart = 95.25, navAtStartEpochDay = 19_900, position = 0,
-                ),
-            ),
+                    watchId = watchId,
+                    isin = "SE0001466368",
+                    name = "Kandidat A",
+                    navAtStart = 95.25,
+                    navAtStartEpochDay = 19_900,
+                    position = 0
+                )
+            )
         )
 
         val stored = dao.getAll().single()
@@ -164,7 +168,7 @@ class Migration1415Test {
                 .use { cursor ->
                     cursor.moveToFirst()
                     cursor.getInt(0)
-                },
+                }
         )
 
         db.close()

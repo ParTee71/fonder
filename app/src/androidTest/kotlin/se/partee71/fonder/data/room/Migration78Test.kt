@@ -38,29 +38,29 @@ class Migration78Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "CREATE TABLE `fx_rates` (`currency` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))",
+                    "`rate` REAL NOT NULL, PRIMARY KEY(`currency`, `epochDay`))"
             )
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)",
+                    "VALUES ('SHB0000442', 'Handelsbanken Amerika Småbolag Tema', 'SEK', 'SE0000582033', NULL)"
             )
             db.execSQL(
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)",
+                    "VALUES ('SHB0000442', 'KOP', 20000, 2.0, 150.0, 0.0)"
             )
             db.execSQL("INSERT INTO fund_prices VALUES ('SHB0000442', 20658, 164.35, 'SEK')")
             db.execSQL("INSERT INTO fx_rates VALUES ('USD', 20658, 9.73973)")
@@ -80,8 +80,8 @@ class Migration78Test {
                 totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
                 companyName = "Länsförsäkringar", risk = 4, indexFund = true, startDateEpochDay = null,
                 minimumBuy = 100.0, tagsJson = "[]", availableAtHandelsbanken = null,
-                availabilityResolvedAtEpochDay = null, fetchedAtEpochDay = 20658,
-            ),
+                availabilityResolvedAtEpochDay = null, fetchedAtEpochDay = 20658
+            )
         )
         assertEquals("Länsförsäkringar Sverige Index", db.fundMetadataDao().getByIsin("SE0000581434")?.name)
 
@@ -90,7 +90,7 @@ class Migration78Test {
         assertEquals(1, db.transactionDao().observeForFund("SHB0000442").first().size)
         assertTrue(
             db.fundPriceDao().getRange("SHB0000442", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-                .isNotEmpty(),
+                .isNotEmpty()
         )
         assertEquals(9.73973, db.fxRateDao().getLatest("USD")?.rate ?: -1.0, 1e-9)
 

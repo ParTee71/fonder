@@ -31,7 +31,7 @@ enum class CountBadgeSize { Small, Large }
 fun CountBadge(
     count: Int,
     modifier: Modifier = Modifier,
-    size: CountBadgeSize = CountBadgeSize.Small,
+    size: CountBadgeSize = CountBadgeSize.Small
 ) {
     val minSize = if (size == CountBadgeSize.Large) 28.dp else 18.dp
     Box(
@@ -42,7 +42,7 @@ fun CountBadge(
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.secondary)
             .padding(horizontal = if (size == CountBadgeSize.Large) 8.dp else 5.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Text(
             count.toString(),
@@ -51,7 +51,7 @@ fun CountBadge(
             } else {
                 MaterialTheme.typography.labelSmall
             },
-            color = MaterialTheme.colorScheme.onSecondary,
+            color = MaterialTheme.colorScheme.onSecondary
         )
     }
 }

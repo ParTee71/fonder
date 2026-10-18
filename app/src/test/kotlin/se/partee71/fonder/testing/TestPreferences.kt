@@ -12,10 +12,9 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
  * [dispatcher] — utan den kör DataStore på en frikopplad `Dispatchers.IO`-scope och en
  * Turbine-väntan blir tidsberoende (skill testing-strategy → flakiness som redan bitit, punkt 1).
  */
-fun testPreferencesRepository(dispatcher: TestDispatcher, folder: TemporaryFolder, name: String): PreferencesRepository =
-    PreferencesRepository(
-        PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(dispatcher + SupervisorJob()),
-            produceFile = { folder.newFile("$name.preferences_pb") },
-        ),
+fun testPreferencesRepository(dispatcher: TestDispatcher, folder: TemporaryFolder, name: String): PreferencesRepository = PreferencesRepository(
+    PreferenceDataStoreFactory.create(
+        scope = CoroutineScope(dispatcher + SupervisorJob()),
+        produceFile = { folder.newFile("$name.preferences_pb") }
     )
+)

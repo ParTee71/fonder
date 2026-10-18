@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -20,7 +21,6 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.testing.testPreferencesRepository
-import java.time.LocalDate
 
 /**
  * HEM-14 genom den delade källan: Beslut, flikmärket (NAV-9) och "Att besluta" (HEM-13) läser alla
@@ -45,41 +45,46 @@ class PendingDecisionsSourceTest {
             // Ett innehav vars senaste jämförelse (ANA-9) visar ett billigare alternativ.
             mapOf(
                 "SE_DYR" to meta("SE_DYR", 4, fee = 1.4, shown = listOf("SE_BILLIG")),
-                "SE_BILLIG" to meta("SE_BILLIG", 4, fee = 0.4),
-            ),
+                "SE_BILLIG" to meta("SE_BILLIG", 4, fee = 0.4)
+            )
     )
 
     private fun meta(isin: String, risk: Int, fee: Double = 0.5, shown: List<String> = emptyList()) = FundMetadata(
         isin = isin, name = isin, orderbookId = isin, totalFee = fee, managementFee = fee,
         category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), shownAlternativeIsins = shown,
+        startDateEpochDay = null, minimumBuy = null, tags = emptyList(), shownAlternativeIsins = shown
     )
 
     /** Ett inspelat avgiftsbyte (ANA-9) SE_DYR → SE_BILLIG, [daysAgo] dagar gammalt. */
     private fun feeRecord(id: Long, followed: Boolean? = null, daysAgo: Long = 0) = SuggestionRecord(
         id = id, suggestedAtEpochDay = LocalDate.now().minusDays(daysAgo).toEpochDay(), planIndex = 0,
         sellIsin = "SE_DYR", buyIsin = "SE_BILLIG", sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0,
-        switchValueKr = 10_000.0, followed = followed, batchEpochMillis = 2_000, kind = SuggestionKind.FEE,
+        switchValueKr = 10_000.0, followed = followed, batchEpochMillis = 2_000, kind = SuggestionKind.FEE
     )
 
     private fun record(id: Long, planIndex: Int, followed: Boolean? = null) = SuggestionRecord(
         id = id, suggestedAtEpochDay = LocalDate.now().toEpochDay(), planIndex = planIndex,
         sellIsin = "SE_SALJ_${planIndex + 1}", buyIsin = "SE_KOP_${planIndex + 1}",
         sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0,
-        followed = followed, batchEpochMillis = 1_000,
+        followed = followed, batchEpochMillis = 1_000
     )
 
     /** Läser källan när [until] är uppfyllt — som standard när planen (synlig eller avstådd) har kommit fram. */
     private suspend fun TestScope.decisions(
         emptiedAt: Long? = null,
-        until: (PendingDecisions) -> Boolean = { it.switchPlan.size + it.dismissedSuggestions.size == 2 },
+        until: (PendingDecisions) -> Boolean = { it.switchPlan.size + it.dismissedSuggestions.size == 2 }
     ): PendingDecisions {
         val preferences = testPreferencesRepository(dispatcher, tempFolder, "pending_${System.nanoTime()}")
         preferences.setAccountType(AccountType.ISK_KF)
         emptiedAt?.let { preferences.setSwitchPlanEmptiedAt(it) }
         val source = PendingDecisionsSource(
-            preferences, records, watches, FakeCachedPriceRepository(), metadata, DismissedPlanSource(records, dismissals, preferences, metadata),
-            InProgressSwitches(watches, records),
+            preferences,
+            records,
+            watches,
+            FakeCachedPriceRepository(),
+            metadata,
+            DismissedPlanSource(records, dismissals, preferences, metadata),
+            InProgressSwitches(watches, records)
         )
         return source.observe().first(until)
     }
@@ -105,7 +110,7 @@ class PendingDecisionsSourceTest {
             record(1, 0).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
             record(2, 1).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
             // Dagens plan: bara byte 2 kvar, nu som steg 1.
-            record(3, 0).copy(sellIsin = "SE_SALJ_2", buyIsin = "SE_KOP_2"),
+            record(3, 0).copy(sellIsin = "SE_SALJ_2", buyIsin = "SE_KOP_2")
         )
         dismissals.dismiss("SE_SALJ_1", "SE_KOP_1", SuggestionKind.RISK_PLAN, LocalDate.now())
 
@@ -120,7 +125,7 @@ class PendingDecisionsSourceTest {
     fun `en planrad vars forslag har en oppen bevakning ar pagaende`() = runTest(dispatcher) {
         records.records.value = listOf(record(1, 0), record(2, 1))
         watches.start(
-            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 1),
+            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 1)
         )
 
         val decisions = decisions { it.switchPlan.size == 2 && it.openWatches.isNotEmpty() }
@@ -134,10 +139,11 @@ class PendingDecisionsSourceTest {
         // Planen spelas in på nytt varje dag med nya id:n — bytet är detsamma, så raden är pågående.
         records.records.value = listOf(
             record(9, 0).copy(suggestedAtEpochDay = LocalDate.now().minusDays(1).toEpochDay(), batchEpochMillis = 500),
-            record(1, 0), record(2, 1),
+            record(1, 0),
+            record(2, 1)
         )
         watches.start(
-            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 9),
+            SwitchWatch(sellIsin = "SE_SALJ_1", sellFundName = "Såld", soldAtEpochDay = LocalDate.now().toEpochDay(), sellTransactionId = 5, sourceRecordId = 9)
         )
 
         val decisions = decisions { it.switchPlan.size == 2 && it.openWatches.isNotEmpty() }
@@ -151,9 +157,12 @@ class PendingDecisionsSourceTest {
         records.records.value = listOf(record(1, 0), record(2, 1))
         watches.start(
             SwitchWatch(
-                sellIsin = "SE_SALJ_1", sellFundName = "Såld", sellTransactionId = 5, sourceRecordId = 1,
-                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay(),
-            ),
+                sellIsin = "SE_SALJ_1",
+                sellFundName = "Såld",
+                sellTransactionId = 5,
+                sourceRecordId = 1,
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+            )
         )
 
         val decisions = decisions { it.switchPlan.size == 2 && it.watchedSellIsins.isNotEmpty() }

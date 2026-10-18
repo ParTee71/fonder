@@ -3,11 +3,11 @@ package se.partee71.fonder.ui.components
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.ui.theme.FonderTheme
-import java.time.LocalDate
 
 /**
  * Isolerat Compose-test av den delade "Värde per <datum>"-raden (POR-7, issue #27, regel 4) —

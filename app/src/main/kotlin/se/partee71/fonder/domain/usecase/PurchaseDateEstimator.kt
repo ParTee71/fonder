@@ -1,7 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
-import se.partee71.fonder.domain.model.FundPrice
 import kotlin.math.abs
+import se.partee71.fonder.domain.model.FundPrice
 
 /**
  * Uppskattar inköpsdatumet för en importerad innehavsrad (issue #8), som bara anger

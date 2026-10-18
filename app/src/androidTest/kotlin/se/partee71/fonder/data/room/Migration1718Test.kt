@@ -46,19 +46,19 @@ class Migration1718Test {
             exportedSchemaStatements(17).forEach(old::execSQL)
             old.execSQL(
                 "INSERT INTO transactions (id, fundId, type, epochDay, shares, pricePerShare, fee) VALUES " +
-                    "(21, 'SHB0000801', 'SALJ', 20010, 3.25, 412.0, 15.0), (22, 'SHB0000802', 'KOP', 20013, 40.0, 33.5, 0.0)",
+                    "(21, 'SHB0000801', 'SALJ', 20010, 3.25, 412.0, 15.0), (22, 'SHB0000802', 'KOP', 20013, 40.0, 33.5, 0.0)"
             )
             // Öppen, kopplad till sälj 21, målnivå 6 — och stängd som köpt av köp 22 med nivå 2.
             old.execSQL(
                 "INSERT INTO switch_watches (id, sellIsin, sellFundName, soldAtEpochDay, proceedsKr, targetLevel, sourceRecordId, " +
                     "closedAtEpochDay, boughtIsin, closeReason, sellTransactionId, buyTransactionId) VALUES " +
                     "(31, 'LU0099574567', 'Fond Sälj', 20010, 1324.0, 6, NULL, NULL, NULL, NULL, 21, NULL), " +
-                    "(32, 'SE0000709123', 'Fond Gammal', 19980, 880.5, 2, 14, 20013, 'IE00B4L5Y983', 'KOPT', NULL, 22)",
+                    "(32, 'SE0000709123', 'Fond Gammal', 19980, 880.5, 2, 14, 20013, 'IE00B4L5Y983', 'KOPT', NULL, 22)"
             )
             old.execSQL(
                 "INSERT INTO switch_watch_candidates (id, watchId, isin, name, navAtStart, navAtStartEpochDay, source, position) VALUES " +
                     "(41, 31, 'IE00B4L5Y983', 'Global index', 81.75, 20011, 'AUTO', 0), " +
-                    "(42, 31, 'SE0015961909', 'Handplockad', NULL, NULL, 'MANUELL', 3)",
+                    "(42, 31, 'SE0015961909', 'Handplockad', NULL, NULL, 'MANUELL', 3)"
             )
             old.version = 17
         }

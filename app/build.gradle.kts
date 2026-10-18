@@ -52,19 +52,19 @@ android {
         // gör att varje CI-byggd debug-APK signeras med olika nyckel och inte går att
         // installera som uppgradering av föregående. Lösenord/alias är Android-standard.
         getByName("debug") {
-            storeFile     = file("debug.keystore")
+            storeFile = file("debug.keystore")
             storePassword = "android"
-            keyAlias      = "androiddebugkey"
-            keyPassword   = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
         if (hasSigningCredentials) {
             create("release") {
-                storeFile     = file("fonder.jks")
+                storeFile = file("fonder.jks")
                 storePassword = releaseStorePassword
-                keyAlias      = localProps.getProperty("signing.keyAlias")
+                keyAlias = localProps.getProperty("signing.keyAlias")
                     ?: System.getenv("SIGNING_KEY_ALIAS")
                     ?: "fonder"
-                keyPassword   = releaseKeyPassword
+                keyPassword = releaseKeyPassword
             }
         }
     }

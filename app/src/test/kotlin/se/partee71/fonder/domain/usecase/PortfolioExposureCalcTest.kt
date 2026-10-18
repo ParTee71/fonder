@@ -12,8 +12,7 @@ class PortfolioExposureCalcTest {
 
     private fun fund(fundId: String, isin: String? = "SE$fundId") = Fund(fundId = fundId, name = fundId, isin = isin)
 
-    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") =
-        Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
+    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") = Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
 
     private fun metadata(
         isin: String,
@@ -22,7 +21,7 @@ class PortfolioExposureCalcTest {
         regionCategory: String = FundTag.CATEGORY_COMMON_REGION,
         indexFund: Boolean = false,
         fundType: String? = "EQUITY_FUND",
-        risk: Int? = null,
+        risk: Int? = null
     ): FundMetadata {
         val tags = buildList {
             typeTitle?.let { add(FundTag(title = it, category = FundTag.CATEGORY_TYPE)) }
@@ -31,7 +30,7 @@ class PortfolioExposureCalcTest {
         return FundMetadata(
             isin = isin, name = isin, orderbookId = isin, totalFee = 1.0, managementFee = 1.0,
             category = null, fundType = fundType, companyName = null, risk = risk, indexFund = indexFund,
-            startDateEpochDay = null, minimumBuy = null, tags = tags,
+            startDateEpochDay = null, minimumBuy = null, tags = tags
         )
     }
 
@@ -114,11 +113,11 @@ class PortfolioExposureCalcTest {
         // "Aktiefond" och "Alternativa"). Grupperingen måste följa taggen, inte fältet.
         val holdings = listOf(
             holding("A", currentValue = 1000.0),
-            holding("B", currentValue = 500.0),
+            holding("B", currentValue = 500.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", typeTitle = "Aktiefond", fundType = "EQUITY_FUND"),
-            "SEB" to metadata("SEB", typeTitle = "Alternativa", fundType = "EQUITY_FUND"),
+            "SEB" to metadata("SEB", typeTitle = "Alternativa", fundType = "EQUITY_FUND")
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -131,11 +130,11 @@ class PortfolioExposureCalcTest {
     fun `region slar ihop COMMON_REGION och OTHER_REGION till en dimension`() {
         val holdings = listOf(
             holding("A", currentValue = 1000.0),
-            holding("B", currentValue = 1000.0),
+            holding("B", currentValue = 1000.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", regionTitle = "Sverige", regionCategory = FundTag.CATEGORY_COMMON_REGION),
-            "SEB" to metadata("SEB", regionTitle = "Taiwan", regionCategory = FundTag.CATEGORY_OTHER_REGION),
+            "SEB" to metadata("SEB", regionTitle = "Taiwan", regionCategory = FundTag.CATEGORY_OTHER_REGION)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -148,11 +147,11 @@ class PortfolioExposureCalcTest {
     fun `index-aktivt speglar indexFund oberoende av taggar`() {
         val holdings = listOf(
             holding("A", currentValue = 700.0),
-            holding("B", currentValue = 300.0),
+            holding("B", currentValue = 300.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", indexFund = true),
-            "SEB" to metadata("SEB", indexFund = false),
+            "SEB" to metadata("SEB", indexFund = false)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -167,11 +166,11 @@ class PortfolioExposureCalcTest {
     fun `sortering fallande pa varde inom en dimension`() {
         val holdings = listOf(
             holding("Liten", currentValue = 100.0),
-            holding("Stor", currentValue = 900.0),
+            holding("Stor", currentValue = 900.0)
         )
         val metadataByIsin = mapOf(
             "SELiten" to metadata("SELiten", typeTitle = "Räntefond"),
-            "SEStor" to metadata("SEStor", typeTitle = "Aktiefond"),
+            "SEStor" to metadata("SEStor", typeTitle = "Aktiefond")
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -183,11 +182,11 @@ class PortfolioExposureCalcTest {
     fun `procenten summerar till 100 procent inklusive okand-hinken`() {
         val holdings = listOf(
             holding("A", currentValue = 600.0),
-            holding("B", currentValue = 400.0),
+            holding("B", currentValue = 400.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", regionTitle = "Sverige"),
-            "SEB" to metadata("SEB", regionTitle = null),
+            "SEB" to metadata("SEB", regionTitle = null)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -202,12 +201,12 @@ class PortfolioExposureCalcTest {
         val holdings = listOf(
             holding("A", currentValue = 500.0),
             holding("B", currentValue = 300.0),
-            holding("C", currentValue = 200.0),
+            holding("C", currentValue = 200.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", typeTitle = "Aktiefond", regionTitle = "Sverige"),
             "SEB" to metadata("SEB", typeTitle = "Aktiefond", regionTitle = "USA"),
-            "SEC" to metadata("SEC", typeTitle = "Räntefond", regionTitle = null),
+            "SEC" to metadata("SEC", typeTitle = "Räntefond", regionTitle = null)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -229,11 +228,11 @@ class PortfolioExposureCalcTest {
     fun `byRiskLevel sorterar stigande pa niva, inte fallande pa varde`() {
         val holdings = listOf(
             holding("Liten", currentValue = 100.0),
-            holding("Stor", currentValue = 900.0),
+            holding("Stor", currentValue = 900.0)
         )
         val metadataByIsin = mapOf(
             "SELiten" to metadata("SELiten", risk = 6),
-            "SEStor" to metadata("SEStor", risk = 3),
+            "SEStor" to metadata("SEStor", risk = 3)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -246,11 +245,11 @@ class PortfolioExposureCalcTest {
     fun `byRiskLevel sorterar stigande pa niva aven nar det motsager fallande varde`() {
         val holdings = listOf(
             holding("Stor", currentValue = 900.0),
-            holding("Liten", currentValue = 100.0),
+            holding("Liten", currentValue = 100.0)
         )
         val metadataByIsin = mapOf(
             "SEStor" to metadata("SEStor", risk = 6),
-            "SELiten" to metadata("SELiten", risk = 3),
+            "SELiten" to metadata("SELiten", risk = 3)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)
@@ -264,11 +263,11 @@ class PortfolioExposureCalcTest {
     fun `fond utan kand risk hamnar i byRiskLevels okand-hink`() {
         val holdings = listOf(
             holding("A", currentValue = 700.0),
-            holding("B", currentValue = 300.0),
+            holding("B", currentValue = 300.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", risk = 4),
-            "SEB" to metadata("SEB", risk = null),
+            "SEB" to metadata("SEB", risk = null)
         )
 
         val result = PortfolioExposureCalc.compute(holdings, metadataByIsin)

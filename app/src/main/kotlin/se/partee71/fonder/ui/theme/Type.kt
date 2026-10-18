@@ -11,8 +11,8 @@ import se.partee71.fonder.R
 
 private val fontProvider = GoogleFont.Provider(
     providerAuthority = "com.google.android.gms.fonts",
-    providerPackage   = "com.google.android.gms",
-    certificates      = R.array.com_google_android_gms_fonts_certs,
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
 )
 
 // Rubriker/UI: Space Grotesk (distinkt, modern grotesk) — projektets identitet
@@ -23,7 +23,7 @@ val SpaceGroteskFamily = FontFamily(
     Font(googleFont = spaceGrotesk, fontProvider = fontProvider, weight = FontWeight.Normal),
     Font(googleFont = spaceGrotesk, fontProvider = fontProvider, weight = FontWeight.Medium),
     Font(googleFont = spaceGrotesk, fontProvider = fontProvider, weight = FontWeight.SemiBold),
-    Font(googleFont = spaceGrotesk, fontProvider = fontProvider, weight = FontWeight.Bold),
+    Font(googleFont = spaceGrotesk, fontProvider = fontProvider, weight = FontWeight.Bold)
 )
 
 // Tabulära siffror — belopp radar upp sig i kolumner (ekonomi-känsla).
@@ -32,89 +32,89 @@ private const val TABULAR = "tnum"
 
 val FonderTypography = Typography(
     displaySmall = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 36.sp,
-        lineHeight    = 44.sp,
-        letterSpacing = (-0.25).sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.25).sp
     ),
     headlineMedium = TextStyle(
         fontFamily = SpaceGroteskFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize   = 28.sp,
-        lineHeight = 36.sp,
+        fontSize = 28.sp,
+        lineHeight = 36.sp
     ),
     headlineSmall = TextStyle(
         fontFamily = SpaceGroteskFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize   = 24.sp,
-        lineHeight = 32.sp,
+        fontSize = 24.sp,
+        lineHeight = 32.sp
     ),
     titleLarge = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.SemiBold,
-        fontSize      = 20.sp,
-        lineHeight    = 28.sp,
-        letterSpacing = 0.15.sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.15.sp
     ),
     titleMedium = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 16.sp,
-        lineHeight    = 24.sp,
-        letterSpacing = 0.1.sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.1.sp
     ),
     titleSmall = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 14.sp,
-        lineHeight    = 20.sp,
-        letterSpacing = 0.1.sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
     ),
     bodyLarge = TextStyle(
         fontFamily = SpaceGroteskFamily,
         fontWeight = FontWeight.Normal,
-        fontSize   = 16.sp,
-        lineHeight = 24.sp,
+        fontSize = 16.sp,
+        lineHeight = 24.sp
     ),
     bodyMedium = TextStyle(
         fontFamily = SpaceGroteskFamily,
         fontWeight = FontWeight.Normal,
-        fontSize   = 14.sp,
-        lineHeight = 20.sp,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
     ),
     bodySmall = TextStyle(
         fontFamily = SpaceGroteskFamily,
         fontWeight = FontWeight.Normal,
-        fontSize   = 12.sp,
-        lineHeight = 16.sp,
+        fontSize = 12.sp,
+        lineHeight = 16.sp
     ),
     labelLarge = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 14.sp,
-        lineHeight    = 20.sp,
-        letterSpacing = 0.1.sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 12.sp,
-        lineHeight    = 16.sp,
-        letterSpacing = 0.4.sp,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.4.sp
     ),
     labelSmall = TextStyle(
-        fontFamily    = SpaceGroteskFamily,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 10.sp,
-        lineHeight    = 14.sp,
-        letterSpacing = 0.5.sp,
-    ),
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.sp,
+        lineHeight = 14.sp,
+        letterSpacing = 0.5.sp
+    )
 )
 
 // Textstil för belopp/sifferkolumner med tabulära siffror.
 val MonoAmountStyle = TextStyle(
-    fontFamily         = SpaceGroteskFamily,
-    fontWeight         = FontWeight.Medium,
-    fontFeatureSettings = TABULAR,
+    fontFamily = SpaceGroteskFamily,
+    fontWeight = FontWeight.Medium,
+    fontFeatureSettings = TABULAR
 )

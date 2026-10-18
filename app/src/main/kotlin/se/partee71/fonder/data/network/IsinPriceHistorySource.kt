@@ -1,8 +1,8 @@
 package se.partee71.fonder.data.network
 
+import java.time.LocalDate
 import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
-import java.time.LocalDate
 
 /**
  * Källa för kurshistorik nyckelbar på **ISIN** — i motsats till [FondlistaHtmlSource], som

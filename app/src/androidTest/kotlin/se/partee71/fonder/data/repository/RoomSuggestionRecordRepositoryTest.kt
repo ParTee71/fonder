@@ -37,7 +37,7 @@ class RoomSuggestionRecordRepositoryTest {
 
     private fun record(id: Long = 0, planIndex: Int, buyIsin: String, batchEpochMillis: Long) = SuggestionRecord(
         id = id, suggestedAtEpochDay = 20_000, planIndex = planIndex, sellIsin = "SE_SALJ", buyIsin = buyIsin,
-        sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0, batchEpochMillis = batchEpochMillis,
+        sellNavAtSuggestion = 100.0, buyNavAtSuggestion = 50.0, switchValueKr = 1_000.0, batchEpochMillis = batchEpochMillis
     )
 
     @Test
@@ -47,7 +47,7 @@ class RoomSuggestionRecordRepositoryTest {
 
         repository.commitBatch(
             moves = listOf(SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis = 2_000, planIndex = 1, switchValueKr = 2_500.0)),
-            records = listOf(record(planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000)),
+            records = listOf(record(planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000))
         )
 
         val latest = repository.observeLatestBatch().first()
@@ -68,7 +68,7 @@ class RoomSuggestionRecordRepositoryTest {
         try {
             repository.commitBatch(
                 moves = listOf(SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis = 2_000, planIndex = 1, switchValueKr = 2_500.0)),
-                records = listOf(record(id = existing.id, planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000)),
+                records = listOf(record(id = existing.id, planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000))
             )
             fail("insättningen skulle ha fallit på id-krocken")
         } catch (expected: SQLiteConstraintException) {

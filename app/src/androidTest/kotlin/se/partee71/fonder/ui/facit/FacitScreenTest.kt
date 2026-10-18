@@ -31,18 +31,17 @@ class FacitScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun record(id: Long, planIndex: Int = 0, switchValueKr: Double? = 10_000.0, followed: Boolean? = null) =
-        SuggestionRecord(
-            id = id,
-            suggestedAtEpochDay = 20_000,
-            planIndex = planIndex,
-            sellIsin = "SE_SELL",
-            buyIsin = "SE_BUY",
-            sellNavAtSuggestion = 100.0,
-            buyNavAtSuggestion = 200.0,
-            switchValueKr = switchValueKr,
-            followed = followed,
-        )
+    private fun record(id: Long, planIndex: Int = 0, switchValueKr: Double? = 10_000.0, followed: Boolean? = null) = SuggestionRecord(
+        id = id,
+        suggestedAtEpochDay = 20_000,
+        planIndex = planIndex,
+        sellIsin = "SE_SELL",
+        buyIsin = "SE_BUY",
+        sellNavAtSuggestion = 100.0,
+        buyNavAtSuggestion = 200.0,
+        switchValueKr = switchValueKr,
+        followed = followed
+    )
 
     private fun rad(
         id: Long = 1,
@@ -53,7 +52,7 @@ class FacitScreenTest {
         followed: Boolean = false,
         sellNavNow: Double? = 105.0,
         buyNavNow: Double? = 224.0,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN
     ) = FacitRad(
         recordId = id,
         kind = kind,
@@ -66,13 +65,12 @@ class FacitScreenTest {
         outcome = SwitchOutcomeCalc.evaluate(
             record = record(id, planIndex, switchValueKr, followed),
             sellNavNow = sellNavNow,
-            buyNavNow = buyNavNow,
-        ),
+            buyNavNow = buyNavNow
+        )
     )
 
     /** Samma uppdelning per sort (issue #91) som [FacitViewModel] får ur [FacitSummary], så skärmen testas mot ett äkta tillstånd. */
-    private fun state(vararg rows: FacitRad): FacitUiState =
-        FacitUiState(loading = false, facit = FacitSummary.summarize(rows.toList()))
+    private fun state(vararg rows: FacitRad): FacitUiState = FacitUiState(loading = false, facit = FacitSummary.summarize(rows.toList()))
 
     @Test
     fun tomt_tillstand_visas_utan_inspelade_forslag() {
@@ -90,8 +88,8 @@ class FacitScreenTest {
                 FacitContent(
                     state = state(
                         rad(id = 1, sellFundName = "Fond A", buyFundName = "Fond B"),
-                        rad(id = 2, planIndex = 1, sellFundName = "Fond C", buyFundName = "Fond D"),
-                    ),
+                        rad(id = 2, planIndex = 1, sellFundName = "Fond C", buyFundName = "Fond D")
+                    )
                 )
             }
         }
@@ -114,8 +112,8 @@ class FacitScreenTest {
                         rad(id = 1, planIndex = 0, switchValueKr = 1_000.0, followed = true),
                         // Skilda platser i planen: annars visar även "Plats 1"-raden 140,00 kr
                         // och träffen blir tvetydig.
-                        rad(id = 2, planIndex = 1, switchValueKr = 1_000.0),
-                    ),
+                        rad(id = 2, planIndex = 1, switchValueKr = 1_000.0)
+                    )
                 )
             }
         }
@@ -172,7 +170,7 @@ class FacitScreenTest {
             FonderTheme {
                 FacitContent(
                     state = state(rad(id = 7)),
-                    onFollowedChange = { id, followed -> callback = id to followed },
+                    onFollowedChange = { id, followed -> callback = id to followed }
                 )
             }
         }
@@ -226,8 +224,8 @@ class FacitScreenTest {
                         rad(id = 2, planIndex = 1, switchValueKr = 1_000.0),
                         // Avgiftsraderna: +1,0 % på 500 kr vardera → 10,00 kr totalt.
                         rad(id = 3, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
-                        rad(id = 4, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0),
-                    ),
+                        rad(id = 4, switchValueKr = 500.0, kind = SuggestionKind.FEE, buyNavNow = 212.0)
+                    )
                 )
             }
         }

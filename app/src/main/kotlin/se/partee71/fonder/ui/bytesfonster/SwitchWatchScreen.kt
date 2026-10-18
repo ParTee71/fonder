@@ -21,6 +21,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
@@ -37,8 +39,6 @@ import se.partee71.fonder.ui.components.SwitchRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -61,7 +61,7 @@ fun SwitchWatchScreen(
     onBought: (String) -> Unit,
     onClosed: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SwitchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> { it.create(watchId) },
+    viewModel: SwitchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> { it.create(watchId) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -82,7 +82,7 @@ fun SwitchWatchScreen(
         onRetryAutoFill = viewModel::onRetryAutoFill,
         onSelectTargetLevel = viewModel::onSelectTargetLevel,
         onIndexOnlyChanged = viewModel::onIndexOnlyChanged,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -99,13 +99,13 @@ fun SwitchWatchContent(
     onRetryAutoFill: () -> Unit = {},
     onSelectTargetLevel: (Int) -> Unit = {},
     onIndexOnlyChanged: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     if (state.missing) {
         EmptyState(
             title = stringResource(R.string.switch_watch_missing_title),
             body = stringResource(R.string.switch_watch_missing_body),
-            modifier = modifier,
+            modifier = modifier
         )
         return
     }
@@ -116,7 +116,7 @@ fun SwitchWatchContent(
     PullToRefreshContainer(
         refreshing = state.chartWorking,
         onRefresh = onRefresh,
-        modifier = modifier,
+        modifier = modifier
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize().testTag(SWITCH_WATCH_LIST_TEST_TAG)) {
             item(contentType = "header") { HeaderCard(state) }
@@ -127,7 +127,7 @@ fun SwitchWatchContent(
                     TargetLevelCard(
                         state = state,
                         onSelectTargetLevel = onSelectTargetLevel,
-                        onIndexOnlyChanged = onIndexOnlyChanged,
+                        onIndexOnlyChanged = onIndexOnlyChanged
                     )
                 }
             }
@@ -140,23 +140,29 @@ fun SwitchWatchContent(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         val text = when {
                             state.fillingCandidates -> stringResource(R.string.switch_watch_filling)
+
                             // Med filtret är "inga köpbara indexfonder" ett annat besked än inga
                             // köpbara fonder alls — och det säger vad som går att ändra (issue #150).
                             state.emptyBecauseOfIndexFilter && state.targetLevel != null ->
                                 stringResource(R.string.format_switch_watch_empty_index_body, state.targetLevel)
+
                             // Tre orsaker som förr delade samma text (issue #149) — var och en
                             // säger vad användaren kan göra åt den.
                             else -> when (state.emptyReason) {
                                 SwitchWatchEmptyReason.NO_TARGET_LEVEL ->
                                     stringResource(R.string.format_switch_watch_empty_no_level, state.sellFundName)
-                                SwitchWatchEmptyReason.NONE_AVAILABLE -> state.targetLevel
-                                    ?.let { stringResource(R.string.format_switch_watch_empty_none_available, it) }
-                                    ?: stringResource(R.string.switch_watch_empty_body)
+
+                                SwitchWatchEmptyReason.NONE_AVAILABLE ->
+                                    state.targetLevel
+                                        ?.let { stringResource(R.string.format_switch_watch_empty_none_available, it) }
+                                        ?: stringResource(R.string.switch_watch_empty_body)
+
                                 SwitchWatchEmptyReason.LOOKUP_FAILED -> stringResource(R.string.switch_watch_empty_lookup_failed)
+
                                 null -> stringResource(R.string.switch_watch_empty_body)
                             }
                         }
@@ -167,13 +173,13 @@ fun SwitchWatchContent(
                             if (!state.fillingCandidates && state.emptyBecauseOfIndexFilter && state.targetLevel != null) {
                                 Text(
                                     stringResource(R.string.format_switch_watch_empty_index_title, state.targetLevel),
-                                    style = MaterialTheme.typography.titleSmall,
+                                    style = MaterialTheme.typography.titleSmall
                                 )
                             }
                             Text(
                                 text,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -186,7 +192,7 @@ fun SwitchWatchContent(
                             text = stringResource(R.string.switch_watch_retry),
                             onClick = onRetryAutoFill,
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            variant = AppButtonVariant.Text,
+                            variant = AppButtonVariant.Text
                         )
                     }
                 }
@@ -202,10 +208,10 @@ fun SwitchWatchContent(
                             } else {
                                 R.string.format_switch_watch_alternatives_heading
                             },
-                            state.targetLevel,
+                            state.targetLevel
                         ),
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
                     )
                 }
             }
@@ -215,7 +221,7 @@ fun SwitchWatchContent(
                     row = row,
                     closed = state.closed,
                     onBought = onBought,
-                    onRemoveCandidate = onRemoveCandidate,
+                    onRemoveCandidate = onRemoveCandidate
                 )
             }
 
@@ -226,18 +232,19 @@ fun SwitchWatchContent(
                             text = stringResource(R.string.switch_watch_add_candidate),
                             onClick = onAddCandidate,
                             modifier = Modifier.padding(top = 4.dp),
-                            variant = AppButtonVariant.Text,
+                            variant = AppButtonVariant.Text
                         )
                     }
                     state.message?.let { message ->
                         Text(
                             text = when (message) {
                                 SwitchWatchMessage.IsinUnavailable -> stringResource(R.string.switch_watch_isin_unavailable)
+
                                 SwitchWatchMessage.CandidateLimitReached ->
                                     stringResource(R.string.format_switch_watch_limit, SwitchWatchCalc.MAX_CANDIDATES)
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                            color = MaterialTheme.colorScheme.error
                         )
                         // Meddelandet är en kvittens på en åtgärd, inte ett tillstånd — det kvitteras
                         // när det visats så nästa tillägg inte möts av föregående försöks felmeddelande.
@@ -247,7 +254,7 @@ fun SwitchWatchContent(
                         AppButton(
                             text = stringResource(R.string.switch_watch_cancel),
                             onClick = onCancel,
-                            variant = AppButtonVariant.Text,
+                            variant = AppButtonVariant.Text
                         )
                     }
                     if (state.canChangeSelection) {
@@ -255,14 +262,14 @@ fun SwitchWatchContent(
                             stringResource(R.string.switch_watch_level_footer),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
+                            modifier = Modifier.padding(top = 8.dp)
                         )
                     }
                     Text(
                         stringResource(R.string.switch_watch_disclaimer),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
             }
@@ -278,23 +285,26 @@ private fun HeaderCard(state: SwitchWatchUiState) {
             title = stringResource(
                 R.string.format_switch_watch_sold,
                 state.sellFundName,
-                LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter),
+                LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter)
             ),
             working = state.headerWorking,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleSmall
         )
         state.proceedsKr?.let { amount ->
             Text(
                 stringResource(R.string.format_switch_watch_amount, MoneyFormat.kr(amount)),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         val status = when {
             state.closed && state.boughtFundName != null ->
                 stringResource(R.string.format_switch_watch_bought, state.boughtFundName)
+
             state.closed -> stringResource(R.string.switch_watch_closed)
+
             state.expired -> stringResource(R.string.format_switch_watch_expired, state.ttlDays)
+
             else -> stringResource(R.string.format_switch_watch_day, state.daysWaiting, state.ttlDays)
         }
         Text(
@@ -305,7 +315,7 @@ private fun HeaderCard(state: SwitchWatchUiState) {
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -320,7 +330,7 @@ private fun HeaderCard(state: SwitchWatchUiState) {
 private fun TargetLevelCard(
     state: SwitchWatchUiState,
     onSelectTargetLevel: (Int) -> Unit,
-    onIndexOnlyChanged: (Boolean) -> Unit,
+    onIndexOnlyChanged: (Boolean) -> Unit
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
         Text(stringResource(R.string.switch_watch_level_title), style = MaterialTheme.typography.titleSmall)
@@ -329,19 +339,19 @@ private fun TargetLevelCard(
             onSelect = onSelectTargetLevel,
             marked = state.sellLevel,
             markedDescription = stringResource(R.string.switch_watch_level_marked),
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 12.dp)
         )
         Text(
             levelHint(state),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         SwitchRow(
             checked = state.indexOnly,
             onCheckedChange = onIndexOnlyChanged,
             label = stringResource(R.string.switch_watch_index_only),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -368,9 +378,13 @@ private fun levelHint(state: SwitchWatchUiState): String {
                 else -> "$reason ${stringResource(R.string.format_switch_watch_level_hint_frame, sell)}"
             }
         }
+
         profileLevel != null -> stringResource(R.string.format_switch_watch_level_hint_profile_other, target, profileLevel)
+
         sell == null -> stringResource(R.string.format_switch_watch_level_hint_unknown_sell, target)
+
         sell == target -> stringResource(R.string.format_switch_watch_level_hint_same, target)
+
         else -> stringResource(R.string.format_switch_watch_level_hint, target, sell)
     }
 }
@@ -387,7 +401,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
             stringResource(R.string.switch_watch_chart_unavailable),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
         return
     }
@@ -396,7 +410,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
         primaryLabel = state.sellFundName,
         comparisonSeries = state.candidateSeries.map { (label, points) -> ChartSeries(label = label, points = points) },
         working = state.chartWorking,
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = 16.dp)
     )
 }
 
@@ -410,7 +424,7 @@ private fun CandidateCard(
     row: CandidateRow,
     closed: Boolean,
     onBought: (String) -> Unit,
-    onRemoveCandidate: (Long) -> Unit,
+    onRemoveCandidate: (Long) -> Unit
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -419,7 +433,7 @@ private fun CandidateCard(
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
             )
             RiskBadge(level = row.riskLevel)
             // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet
@@ -427,7 +441,7 @@ private fun CandidateCard(
             WorkingIndicator(
                 working = row.historyLoading,
                 contentDescription = stringResource(R.string.format_card_working, row.name),
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
         PeriodRow(
@@ -436,20 +450,20 @@ private fun CandidateCard(
             fraction = row.changeFraction,
             partial = row.partial,
             stackValue = true,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         row.feePercent?.let { fee ->
             Text(
                 stringResource(R.string.format_switch_watch_fee, MoneyFormat.feePercent(fee)),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (row.historyUnavailable) {
             Text(
                 stringResource(R.string.switch_watch_history_unavailable),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (!closed) {
@@ -457,7 +471,7 @@ private fun CandidateCard(
                 AppButton(
                     text = stringResource(R.string.switch_watch_bought_action),
                     onClick = { onBought(row.isin) },
-                    variant = AppButtonVariant.Text,
+                    variant = AppButtonVariant.Text
                 )
                 // Bara handplockade alternativ går att ta bort: de automatiska är appens
                 // förslag för nivån, och att plocka bort ett av dem hade sett ut som ett val
@@ -466,7 +480,7 @@ private fun CandidateCard(
                     AppButton(
                         text = stringResource(R.string.switch_watch_remove_candidate),
                         onClick = { onRemoveCandidate(row.candidateId) },
-                        variant = AppButtonVariant.Text,
+                        variant = AppButtonVariant.Text
                     )
                 }
             }

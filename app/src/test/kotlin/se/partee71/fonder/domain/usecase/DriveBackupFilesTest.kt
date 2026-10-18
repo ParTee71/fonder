@@ -1,10 +1,10 @@
 package se.partee71.fonder.domain.usecase
 
+import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDateTime
 
 /**
  * `appDataFolder` delas med Dagboken (samma Cloud-projekt), så gallringen är den enda plats i
@@ -13,8 +13,7 @@ import java.time.LocalDateTime
  */
 class DriveBackupFilesTest {
 
-    private fun file(name: String, created: String, id: String = name) =
-        DriveBackupFile(id = id, name = name, createdTime = created)
+    private fun file(name: String, created: String, id: String = name) = DriveBackupFile(id = id, name = name, createdTime = created)
 
     @Test
     fun `filnamnet bar prefixet och en sorterbar tidsstampel`() {
@@ -49,9 +48,9 @@ class DriveBackupFilesTest {
             listOf(
                 "fonder-backup-20260823-1200.json",
                 "fonder-backup-20260822-1200.json",
-                "fonder-backup-20260821-1200.json",
+                "fonder-backup-20260821-1200.json"
             ),
-            stale,
+            stale
         )
     }
 
@@ -63,7 +62,7 @@ class DriveBackupFilesTest {
         val files = listOf(
             file("fonder-backup-20260823-1200.json", "2026-08-23T12:00:00Z"),
             file("dagboken-backup-20260101-1200.json", "2026-01-01T12:00:00Z"),
-            file("dagboken-backup-20250101-1200.json", "2025-01-01T12:00:00Z"),
+            file("dagboken-backup-20250101-1200.json", "2025-01-01T12:00:00Z")
         )
 
         val stale = DriveBackupFiles.staleFileIds(files, keep = 1)
@@ -76,14 +75,14 @@ class DriveBackupFilesTest {
         val files = listOf(
             file("fonder-backup-20260101-1200.json", "2026-01-01T12:00:00Z"),
             file("fonder-backup-20260823-1200.json", "2026-08-23T12:00:00Z"),
-            file("fonder-backup-20260501-1200.json", "2026-05-01T12:00:00Z"),
+            file("fonder-backup-20260501-1200.json", "2026-05-01T12:00:00Z")
         )
 
         val stale = DriveBackupFiles.staleFileIds(files, keep = 1)
 
         assertEquals(
             listOf("fonder-backup-20260501-1200.json", "fonder-backup-20260101-1200.json"),
-            stale,
+            stale
         )
     }
 
@@ -98,7 +97,7 @@ class DriveBackupFilesTest {
     fun `keep noll gallrar allt vart — men fortfarande bara vart`() {
         val files = listOf(
             file("fonder-backup-20260823-1200.json", "2026-08-23T12:00:00Z"),
-            file("dagboken-backup-20260823-1200.json", "2026-08-23T12:00:00Z"),
+            file("dagboken-backup-20260823-1200.json", "2026-08-23T12:00:00Z")
         )
 
         assertEquals(listOf("fonder-backup-20260823-1200.json"), DriveBackupFiles.staleFileIds(files, keep = 0))

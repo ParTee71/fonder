@@ -29,20 +29,20 @@ fun ExpandableInfoRow(
     initiallyExpanded: Boolean = false,
     onExpand: () -> Unit = {},
     extraContent: (@Composable () -> Unit)? = null,
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     ExpandableSection(
         modifier = modifier,
         initiallyExpanded = initiallyExpanded,
         onExpand = onExpand,
-        header = content,
+        header = content
     ) {
         Column {
             Text(
                 text = explanation,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
             )
             extraContent?.invoke()
         }

@@ -42,25 +42,25 @@ class Migration67Test {
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL(
                 "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))",
+                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
             )
             db.execSQL(
                 "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                     "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)",
+                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
             )
             db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
             db.execSQL(
                 "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))",
+                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
             )
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
-                    "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417', '0P0000O30D')",
+                    "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417', '0P0000O30D')"
             )
             db.execSQL(
                 "INSERT INTO transactions (fundId, type, epochDay, shares, pricePerShare, fee) " +
-                    "VALUES ('LU0496367417', 'KOP', 20000, 2.0, 150.0, 0.0)",
+                    "VALUES ('LU0496367417', 'KOP', 20000, 2.0, 150.0, 0.0)"
             )
             db.execSQL("INSERT INTO fund_prices VALUES ('LU0496367417', 20658, 164.35, 'SEK')")
             db.version = 6
@@ -75,7 +75,7 @@ class Migration67Test {
         // Kurscachen är tömd — hämtas om vid nästa uppdatering, nu via fondlista + konvertering.
         assertTrue(
             db.fundPriceDao().getRange("LU0496367417", fromEpochDay = Long.MIN_VALUE, toEpochDay = Long.MAX_VALUE)
-                .isEmpty(),
+                .isEmpty()
         )
 
         // fx_rates är skrivbar direkt efter migreringen.

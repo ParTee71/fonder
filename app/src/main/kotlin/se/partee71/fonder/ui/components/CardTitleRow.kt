@@ -31,23 +31,23 @@ fun CardTitleRow(
     title: String,
     modifier: Modifier = Modifier,
     working: Boolean = false,
-    style: TextStyle = MaterialTheme.typography.labelMedium,
+    style: TextStyle = MaterialTheme.typography.labelMedium
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             title,
             style = style,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f, fill = false)
         )
         WorkingIndicator(
             working = working,
-            contentDescription = stringResource(R.string.format_card_working, title),
+            contentDescription = stringResource(R.string.format_card_working, title)
         )
     }
 }

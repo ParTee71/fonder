@@ -20,18 +20,14 @@ class PortfolioReturnSeriesCalcTest {
     private val fondA = Fund(fundId = "A", name = "Fond A")
     private val fondB = Fund(fundId = "B", name = "Fond B")
 
-    private fun kop(fundId: String, day: Long, shares: Double, price: Double) =
-        Transaction(fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
+    private fun kop(fundId: String, day: Long, shares: Double, price: Double) = Transaction(fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
 
-    private fun salj(fundId: String, day: Long, shares: Double, price: Double) =
-        Transaction(fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price)
+    private fun salj(fundId: String, day: Long, shares: Double, price: Double) = Transaction(fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price)
 
-    private fun priser(fundId: String, vararg dagOchNav: Pair<Long, Double>) =
-        dagOchNav.map { (day, nav) -> FundPrice(fundId = fundId, epochDay = day, nav = nav) }
+    private fun priser(fundId: String, vararg dagOchNav: Pair<Long, Double>) = dagOchNav.map { (day, nav) -> FundPrice(fundId = fundId, epochDay = day, nav = nav) }
 
     /** En enkomponentsreferens — motsvarar hela insättningen i en enda fond. */
-    private fun enFond(history: List<FundPrice>) =
-        listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = history))
+    private fun enFond(history: List<FundPrice>) = listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = history))
 
     /** Avrundar bort flyttalsbruset så en hel kurva kan jämföras som lista i stället för punkt för punkt. */
     private fun Double.round9(): Double = kotlin.math.round(this * 1e9) / 1e9
@@ -78,7 +74,7 @@ class PortfolioReturnSeriesCalcTest {
         assertEquals(listOf(0.0, 0.10, 0.21), utan.points.map { it.second.round9() })
         assertEquals(
             utan.points.map { (dag, avkastning) -> dag to avkastning.round9() },
-            med.points.map { (dag, avkastning) -> dag to avkastning.round9() },
+            med.points.map { (dag, avkastning) -> dag to avkastning.round9() }
         )
     }
 
@@ -90,11 +86,11 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             salj("A", day = 11, shares = 10.0, price = 110.0),
-            kop("B", day = 11, shares = 11.0, price = 100.0),
+            kop("B", day = 11, shares = 11.0, price = 100.0)
         )
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 110.0),
-            "B" to priser("B", 10L to 100.0, 11L to 100.0, 12L to 110.0),
+            "B" to priser("B", 10L to 100.0, 11L to 100.0, 12L to 110.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
@@ -107,7 +103,7 @@ class PortfolioReturnSeriesCalcTest {
     fun `en forsaljning med vinst sanker inte kurvan`() {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            salj("A", day = 11, shares = 5.0, price = 150.0),
+            salj("A", day = 11, shares = 5.0, price = 150.0)
         )
         val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 150.0, 12L to 150.0))
 
@@ -123,11 +119,11 @@ class PortfolioReturnSeriesCalcTest {
         // Ett osviktat snitt hade gett +55 %.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            kop("B", day = 10, shares = 10.0, price = 10.0),
+            kop("B", day = 10, shares = 10.0, price = 10.0)
         )
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 110.0),
-            "B" to priser("B", 10L to 10.0, 11L to 20.0),
+            "B" to priser("B", 10L to 10.0, 11L to 20.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
@@ -142,12 +138,12 @@ class PortfolioReturnSeriesCalcTest {
         // Vaktar att kopplingen är medvetet bruten och inte tyst tappad igen.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            kop("A", day = 11, shares = 100.0, price = 110.0),
+            kop("A", day = 11, shares = 100.0, price = 110.0)
         )
         val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 110.0, 12L to 121.0))
         val holdings = PortfolioCalc.withCurrentValue(
             PortfolioCalc.computeHoldings(listOf(fondA), transaktioner),
-            mapOf("A" to FundPrice("A", 12L, 121.0)),
+            mapOf("A" to FundPrice("A", 12L, 121.0))
         )
 
         val kurva = PortfolioReturnSeriesCalc.compute(listOf(fondA), transaktioner, historik)
@@ -177,7 +173,7 @@ class PortfolioReturnSeriesCalcTest {
         val transaktionerBada = transaktioner + kop("B", day = 10, shares = 1.0, price = 50.0)
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 100.0),
-            "B" to priser("B", 10L to 50.0),
+            "B" to priser("B", 10L to 50.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktionerBada, historik)
@@ -190,12 +186,12 @@ class PortfolioReturnSeriesCalcTest {
     fun `innehav utan kurs den dagen utesluts ur bade varde och investerat och markerar partial`() {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            kop("B", day = 10, shares = 10.0, price = 100.0),
+            kop("B", day = 10, shares = 10.0, price = 100.0)
         )
         // Fond B:s historik börjar först dag 12 — dag 10 och 11 kan den inte värderas alls.
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 120.0),
-            "B" to priser("B", 12L to 100.0),
+            "B" to priser("B", 12L to 100.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
@@ -224,7 +220,7 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             kop("A", day = 11, shares = 10.0, price = 200.0),
-            salj("A", day = 12, shares = 10.0, price = 200.0),
+            salj("A", day = 12, shares = 10.0, price = 200.0)
         )
         val historik = mapOf("A" to priser("A", 10L to 100.0, 11L to 200.0, 12L to 200.0, 13L to 220.0))
 
@@ -254,11 +250,11 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             salj("A", day = 11, shares = 10.0, price = 150.0),
-            kop("B", day = 13, shares = 15.0, price = 100.0),
+            kop("B", day = 13, shares = 15.0, price = 100.0)
         )
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 150.0, 12L to 160.0),
-            "B" to priser("B", 13L to 100.0, 14L to 110.0),
+            "B" to priser("B", 13L to 100.0, 14L to 110.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
@@ -276,11 +272,11 @@ class PortfolioReturnSeriesCalcTest {
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
             salj("A", day = 12, shares = 10.0, price = 100.0),
-            kop("B", day = 10, shares = 10.0, price = 100.0),
+            kop("B", day = 10, shares = 10.0, price = 100.0)
         )
         val historik = mapOf(
             "A" to priser("A", 10L to 100.0, 11L to 50.0, 12L to 100.0),
-            "B" to priser("B", 10L to 100.0, 11L to 100.0, 12L to 100.0),
+            "B" to priser("B", 10L to 100.0, 11L to 100.0, 12L to 100.0)
         )
 
         val result = PortfolioReturnSeriesCalc.compute(listOf(fondA, fondB), transaktioner, historik)
@@ -324,7 +320,7 @@ class PortfolioReturnSeriesCalcTest {
         // → 2 andelar bort). Kvar: 2 andelar à 250 = 500 kr mot 500 kr anskaffningsvärde = 0 %.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            salj("A", day = 11, shares = 5.0, price = 100.0),
+            salj("A", day = 11, shares = 5.0, price = 100.0)
         )
         val referens = priser("IDX", 10L to 250.0, 11L to 250.0)
 
@@ -370,7 +366,7 @@ class PortfolioReturnSeriesCalcTest {
         val en = PortfolioReturnSeriesCalc.benchmark(transaktioner, enFond(referens))!!
         val viktad = PortfolioReturnSeriesCalc.benchmark(
             transaktioner,
-            listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = referens)),
+            listOf(PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 1.0, history = referens))
         )!!
 
         assertEquals(en.points, viktad.points)
@@ -387,8 +383,8 @@ class PortfolioReturnSeriesCalcTest {
             transaktioner,
             listOf(
                 PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.7, history = aktier),
-                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.3, history = rantor),
-            ),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.3, history = rantor)
+            )
         )!!
 
         assertEquals(0.0, result.points.first { it.first == 10L }.second, 1e-9)
@@ -400,7 +396,7 @@ class PortfolioReturnSeriesCalcTest {
         // Andra insättningen delas efter samma vikter till den dagens kurser.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),
-            kop("A", day = 11, shares = 10.0, price = 100.0),
+            kop("A", day = 11, shares = 10.0, price = 100.0)
         )
         val aktier = priser("AKT", 10L to 100.0, 11L to 200.0)
         val rantor = priser("RNT", 10L to 100.0, 11L to 100.0)
@@ -409,8 +405,8 @@ class PortfolioReturnSeriesCalcTest {
             transaktioner,
             listOf(
                 PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = aktier),
-                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = rantor),
-            ),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = rantor)
+            )
         )!!
 
         // Dag 11 mäts på köp 1:s andelar: 5 st à 100 i aktier (nu 200) och 5 st à 100 i räntor.
@@ -443,8 +439,8 @@ class PortfolioReturnSeriesCalcTest {
             transaktioner,
             listOf(
                 PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("AKT", 10L to 100.0)),
-                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = emptyList()),
-            ),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = emptyList())
+            )
         )
 
         assertNull(result)
@@ -458,8 +454,8 @@ class PortfolioReturnSeriesCalcTest {
             transaktioner,
             listOf(
                 PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("AKT", 10L to 100.0, 11L to 110.0)),
-                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("RNT", 11L to 100.0)),
-            ),
+                PortfolioReturnSeriesCalc.BenchmarkComponent(weight = 0.5, history = priser("RNT", 11L to 100.0))
+            )
         )
 
         assertNull(result)

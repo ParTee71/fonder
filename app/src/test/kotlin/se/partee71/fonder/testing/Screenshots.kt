@@ -44,7 +44,7 @@ private const val READY_TIMEOUT_MS = 10_000L
  */
 private const val CHANGE_THRESHOLD = 0.001f
 private val screenshotOptions = RoborazziOptions(
-    compareOptions = RoborazziOptions.CompareOptions(resultValidator = ThresholdValidator(CHANGE_THRESHOLD)),
+    compareOptions = RoborazziOptions.CompareOptions(resultValidator = ThresholdValidator(CHANGE_THRESHOLD))
 )
 
 /**
@@ -79,7 +79,7 @@ fun ComposeContentTestRule.captureLightAndDark(
     screen: Boolean = false,
     animated: Boolean = false,
     ready: (ComposeContentTestRule.() -> Boolean)? = null,
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     var dark by mutableStateOf(false)
     // En oändlig animation (laddningsindikatorn) blir aldrig "idle": klockan stegas då för hand.
@@ -92,7 +92,7 @@ fun ComposeContentTestRule.captureLightAndDark(
                         .testTag(SCREENSHOT_TAG)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(16.dp),
+                        .padding(16.dp)
                 ) {
                     content()
                 }
@@ -119,7 +119,7 @@ fun ComposeContentTestRule.captureLightAndDark(
  * noden med en `contentDescription`, vilket i ett ensamt diagram är diagrammet självt.
  */
 fun ComposeContentTestRule.isDrawn(
-    matcher: SemanticsMatcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription),
+    matcher: SemanticsMatcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription)
 ): Boolean {
     val pixels = onAllNodes(matcher).onFirst().captureToImage().toPixelMap()
     val first = pixels[0, 0]

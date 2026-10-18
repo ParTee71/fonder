@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
@@ -42,7 +43,6 @@ import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.labelRes
-import java.time.LocalDate
 
 // Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
 // (se HoldingsImportParser) — filväljaren behöver därför acceptera båda mime-typerna,
@@ -50,7 +50,7 @@ import java.time.LocalDate
 private val IMPORT_MIME_TYPES = arrayOf(
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "text/xml",
-    "application/xml",
+    "application/xml"
 )
 
 /** Importera befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export (issue #8). */
@@ -58,7 +58,7 @@ private val IMPORT_MIME_TYPES = arrayOf(
 fun ImportHoldingsScreen(
     onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: ImportHoldingsViewModel = hiltViewModel(),
+    viewModel: ImportHoldingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -77,22 +77,22 @@ fun ImportHoldingsScreen(
         !state.fileSelected -> Column(
             modifier = modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(stringResource(R.string.import_pick_file_body), style = MaterialTheme.typography.bodyMedium)
             AppButton(
                 text = stringResource(R.string.import_pick_file),
                 onClick = { filePicker.launch(IMPORT_MIME_TYPES) },
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp)
             )
         }
 
         state.error != null -> EmptyState(
             title = stringResource(R.string.import_title),
             body = stringResource(
-                if (state.error == ImportError.EMPTY_FILE) R.string.import_error_empty else R.string.import_error_parse,
+                if (state.error == ImportError.EMPTY_FILE) R.string.import_error_empty else R.string.import_error_parse
             ),
-            modifier = modifier,
+            modifier = modifier
         )
 
         else -> Column(modifier = modifier.fillMaxSize()) {
@@ -107,7 +107,7 @@ fun ImportHoldingsScreen(
                         onOccasionSharesChange = { index, text -> viewModel.onOccasionSharesChange(rowState.row, index, text) },
                         onOccasionTypeChange = { index, type -> viewModel.onOccasionTypeChange(rowState.row, index, type) },
                         onAddOccasion = { viewModel.onAddOccasion(rowState.row) },
-                        onRemoveOccasion = { index -> viewModel.onRemoveOccasion(rowState.row, index) },
+                        onRemoveOccasion = { index -> viewModel.onRemoveOccasion(rowState.row, index) }
                     )
                 }
             }
@@ -115,7 +115,7 @@ fun ImportHoldingsScreen(
                 text = stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }),
                 onClick = viewModel::import,
                 enabled = state.canImport,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
             )
         }
     }
@@ -125,7 +125,7 @@ fun ImportHoldingsScreen(
     if (state.loading) {
         LoadingDialog(
             title = stringResource(R.string.import_loading_title),
-            body = stringResource(R.string.import_loading_body),
+            body = stringResource(R.string.import_loading_body)
         )
     }
 }
@@ -140,7 +140,7 @@ private fun ImportRowCard(
     onOccasionSharesChange: (Int, String) -> Unit,
     onOccasionTypeChange: (Int, TransactionType) -> Unit,
     onAddOccasion: () -> Unit,
-    onRemoveOccasion: (Int) -> Unit,
+    onRemoveOccasion: (Int) -> Unit
 ) {
     val row = rowState.row
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -149,12 +149,12 @@ private fun ImportRowCard(
             onCheckedChange = onIncludedChange,
             label = row.fundName,
             supportingText = stringResource(R.string.format_import_row_isin, row.isin),
-            labelStyle = MaterialTheme.typography.titleSmall,
+            labelStyle = MaterialTheme.typography.titleSmall
         )
         Text(
             stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
             style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
 
         SelectField(
@@ -164,58 +164,58 @@ private fun ImportRowCard(
             optionLabel = { it.name },
             onSelect = onFundOverride,
             placeholder = stringResource(R.string.import_match_none),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
         if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
             Text(
                 stringResource(R.string.import_match_uncertain),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = MaterialTheme.colorScheme.error
             )
         }
         if (rowState.priceFetchFailed) {
             Text(
                 stringResource(R.string.import_price_fetch_failed),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = MaterialTheme.colorScheme.error
             )
         }
 
         Text(
             stringResource(R.string.import_occasions_label),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 12.dp)
         )
         rowState.occasions.forEachIndexed { index, occasion ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     ChoiceChipRow(
                         options = TransactionType.entries,
                         selected = occasion.type,
                         optionLabel = { type -> stringResource(type.labelRes()) },
-                        onSelect = { type -> onOccasionTypeChange(index, type) },
+                        onSelect = { type -> onOccasionTypeChange(index, type) }
                     )
                     DateField(
                         label = stringResource(R.string.import_date_label),
                         date = occasion.date,
                         onDateChange = { date -> onOccasionDateChange(index, date) },
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                     AppTextField(
                         value = occasion.sharesText,
                         onValueChange = { text -> onOccasionSharesChange(index, text) },
                         label = stringResource(R.string.import_occasion_shares_label),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     )
                     if (!occasion.dateConfident) {
                         Text(
                             stringResource(R.string.import_date_uncertain),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 }
@@ -223,7 +223,7 @@ private fun ImportRowCard(
                     AppIconButton(
                         icon = Icons.Filled.Close,
                         contentDescription = stringResource(R.string.import_remove_occasion),
-                        onClick = { onRemoveOccasion(index) },
+                        onClick = { onRemoveOccasion(index) }
                     )
                 }
             }
@@ -232,17 +232,17 @@ private fun ImportRowCard(
             text = stringResource(R.string.import_add_occasion),
             onClick = onAddOccasion,
             modifier = Modifier.padding(top = 4.dp),
-            variant = AppButtonVariant.Text,
+            variant = AppButtonVariant.Text
         )
         if (rowState.sharesMismatch) {
             Text(
                 stringResource(
                     R.string.format_import_shares_mismatch,
                     rowState.occasionSharesTotal.toString(),
-                    row.shares.toString(),
+                    row.shares.toString()
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = MaterialTheme.colorScheme.error
             )
         }
     }

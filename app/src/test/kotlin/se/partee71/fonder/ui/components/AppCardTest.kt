@@ -7,14 +7,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -91,7 +91,7 @@ class AppCardTest {
                     repeat(3) { index ->
                         AppCard(
                             modifier = Modifier.fillMaxWidth().height(50.dp),
-                            groupPosition = AppCardGroupPosition.of(index, 3),
+                            groupPosition = AppCardGroupPosition.of(index, 3)
                         ) { Text("Rad $index") }
                     }
                 }
@@ -116,7 +116,7 @@ class AppCardTest {
             listOf("Sverige Småbolag", "Global Indexfond A", "Räntefond Kort").forEachIndexed { index, name ->
                 AppCard(
                     modifier = Modifier.fillMaxWidth(),
-                    groupPosition = AppCardGroupPosition.of(index, 3),
+                    groupPosition = AppCardGroupPosition.of(index, 3)
                 ) { Text(name, style = MaterialTheme.typography.titleSmall) }
             }
         }

@@ -15,5 +15,5 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class FundFilterVocabulary(
-    val filters: Map<String, List<String>> = emptyMap(),
+    val filters: Map<String, List<String>> = emptyMap()
 )

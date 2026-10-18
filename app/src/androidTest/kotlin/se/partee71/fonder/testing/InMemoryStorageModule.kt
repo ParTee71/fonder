@@ -10,11 +10,11 @@ import dagger.Provides
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
-import se.partee71.fonder.data.room.AppDatabase
-import se.partee71.fonder.di.StorageModule
 import java.io.File
 import java.util.UUID
 import javax.inject.Singleton
+import se.partee71.fonder.data.room.AppDatabase
+import se.partee71.fonder.di.StorageModule
 
 /**
  * Ersätter [StorageModule] i alla `@HiltAndroidTest`: databasen i minnet och inställningarna i en
@@ -27,13 +27,11 @@ object InMemoryStorageModule {
 
     @Provides
     @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create {
-            File(context.cacheDir, "hilt-test-${UUID.randomUUID()}.preferences_pb")
-        }
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = PreferenceDataStoreFactory.create {
+        File(context.cacheDir, "hilt-test-${UUID.randomUUID()}.preferences_pb")
+    }
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
 }

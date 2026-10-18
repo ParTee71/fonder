@@ -17,6 +17,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
@@ -36,8 +38,6 @@ import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -48,14 +48,14 @@ const val PORTFOLJ_LIST_TEST_TAG = "portfolj_list"
 fun PortfoljScreen(
     onFundClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: PortfoljViewModel = hiltViewModel(),
+    viewModel: PortfoljViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     PortfoljContent(
         state = state,
         onFundClick = onFundClick,
         onRefresh = viewModel::refresh,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -65,13 +65,13 @@ fun PortfoljContent(
     state: PortfoljUiState,
     onFundClick: (String) -> Unit,
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     when {
         state.isEmpty -> EmptyState(
             title = stringResource(R.string.portfolj_empty_title),
             body = stringResource(R.string.portfolj_empty_body),
-            modifier = modifier,
+            modifier = modifier
         )
 
         // Både totalkortet och exponeringskortet ligger som `item {}` i samma `LazyColumn` som
@@ -85,7 +85,7 @@ fun PortfoljContent(
         else -> PullToRefreshContainer(
             refreshing = state.pricesWorking || state.refreshingFundIds.isNotEmpty(),
             onRefresh = onRefresh,
-            modifier = modifier,
+            modifier = modifier
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
                 item(contentType = "total") { TotalCard(state = state) }
@@ -97,7 +97,7 @@ fun PortfoljContent(
                         analysis = state.analysis[holding.fund.fundId],
                         riskLevel = state.riskLevels[holding.fund.fundId],
                         working = state.holdingWorking(holding.fund.fundId),
-                        onClick = { onFundClick(holding.fund.fundId) },
+                        onClick = { onFundClick(holding.fund.fundId) }
                     )
                 }
             }
@@ -110,7 +110,7 @@ private fun TotalCard(state: PortfoljUiState) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         CardTitleRow(
             title = stringResource(R.string.portfolj_total_value),
-            working = state.totalWorking,
+            working = state.totalWorking
         )
         val fraction = state.totalGainLossFraction
         if (fraction != null) {
@@ -118,7 +118,7 @@ private fun TotalCard(state: PortfoljUiState) {
             Text(
                 "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
                 style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = ReturnColors.forAmount(state.totalGainLoss),
+                color = ReturnColors.forAmount(state.totalGainLoss)
             )
             ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
         } else {
@@ -126,7 +126,7 @@ private fun TotalCard(state: PortfoljUiState) {
             Text(
                 stringResource(R.string.portfolj_price_missing),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -148,24 +148,24 @@ private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolea
         ExposureDimensionSection(
             title = stringResource(R.string.portfolj_exposure_type_title),
             dimension = exposure.byType,
-            unknownLabel = stringResource(R.string.portfolj_exposure_unknown_type),
+            unknownLabel = stringResource(R.string.portfolj_exposure_unknown_type)
         )
         ExposureDimensionSection(
             title = stringResource(R.string.portfolj_exposure_region_title),
             dimension = exposure.byRegion,
             unknownLabel = stringResource(R.string.portfolj_exposure_unknown_region),
-            explain = stringResource(R.string.portfolj_exposure_region_explain),
+            explain = stringResource(R.string.portfolj_exposure_region_explain)
         )
         ExposureDimensionSection(
             title = stringResource(R.string.portfolj_exposure_risk_title),
             dimension = exposure.byRiskLevel,
-            unknownLabel = stringResource(R.string.portfolj_exposure_unknown_risk),
+            unknownLabel = stringResource(R.string.portfolj_exposure_unknown_risk)
         )
 
         Text(
             stringResource(R.string.portfolj_exposure_index_title),
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 12.dp)
         )
         ExposureBar(label = stringResource(R.string.portfolj_exposure_index_label), fraction = exposure.indexStatus.indexFraction)
         ExposureBar(label = stringResource(R.string.portfolj_exposure_active_label), fraction = exposure.indexStatus.activeFraction)
@@ -175,7 +175,7 @@ private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolea
                 stringResource(R.string.format_portfolj_exposure_excluded, exposure.excludedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
@@ -186,7 +186,7 @@ private fun ExposureDimensionSection(
     title: String,
     dimension: PortfolioExposureCalc.Dimension,
     unknownLabel: String,
-    explain: String? = null,
+    explain: String? = null
 ) {
     Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
     if (explain != null) {
@@ -207,17 +207,17 @@ private fun HoldingRow(
     analysis: FundAnalysisCalc.Analysis?,
     riskLevel: Int?,
     working: Boolean,
-    onClick: () -> Unit,
+    onClick: () -> Unit
 ) {
     AppCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 holding.fund.name,
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f, fill = false)
             )
             // Säljsignal-status (ANA-3) bredvid fondnamnet — samma StatusDot som Fonddetalj/
             // Hem (regel 4), utan att behöva öppna Fonddetalj för att se den (POR-8, issue #26).
@@ -231,7 +231,7 @@ private fun HoldingRow(
             WorkingIndicator(
                 working = working,
                 contentDescription = stringResource(R.string.format_card_working, holding.fund.name),
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
         // Vinstsignalen (S4, ANA-8) är ingen risk och visas därför separat från StatusDot
@@ -245,13 +245,13 @@ private fun HoldingRow(
         if (value != null) {
             Text(
                 MoneyFormat.kr(value),
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium)
             )
             if (fraction != null) {
                 Text(
                     "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(holding.gainLoss ?: 0.0)}",
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                    color = ReturnColors.forAmount(holding.gainLoss ?: 0.0),
+                    color = ReturnColors.forAmount(holding.gainLoss ?: 0.0)
                 )
             }
             ValueAsOfRow(navEpochDay = holding.navEpochDay, modifier = Modifier.padding(top = 2.dp))
@@ -260,30 +260,30 @@ private fun HoldingRow(
                 label = stringResource(R.string.period_day),
                 amount = dayAmount,
                 fraction = dayFraction,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp)
             )
             val (weekAmount, weekFraction) = performance?.week.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_week),
                 amount = weekAmount,
-                fraction = weekFraction,
+                fraction = weekFraction
             )
             val (monthAmount, monthFraction) = performance?.month.toRowArgs()
             PeriodRow(
                 label = stringResource(R.string.period_month),
                 amount = monthAmount,
-                fraction = monthFraction,
+                fraction = monthFraction
             )
         } else {
             Text(
                 MoneyFormat.kr(holding.netInvested),
                 style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 stringResource(R.string.portfolj_price_missing),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -297,11 +297,11 @@ private fun FirstPurchaseRow(holding: Holding, modifier: Modifier = Modifier) {
         stringResource(
             R.string.format_holding_first_purchase,
             LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
-            MoneyFormat.kr(holding.netInvested),
+            MoneyFormat.kr(holding.netInvested)
         ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 

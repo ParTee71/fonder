@@ -1,6 +1,7 @@
 package se.partee71.fonder.ui.fondsok
 
 import app.cash.turbine.test
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +32,6 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundNameKey
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FundSearchViewModelTest {
@@ -50,12 +50,12 @@ class FundSearchViewModelTest {
 
     private val catalog = FundCatalog(
         companies = listOf(handelsbanken, aberdeen),
-        funds = listOf(handelsbankenFond, handelsbankenFond2, extern),
+        funds = listOf(handelsbankenFond, handelsbankenFond2, extern)
     )
 
     private val fundsByCompany = mapOf(
         FundCompany.HANDELSBANKEN_ID to listOf(handelsbankenFond, handelsbankenFond2),
-        aberdeen.id to listOf(extern),
+        aberdeen.id to listOf(extern)
     )
 
     private val addedFunds = mutableListOf<Fund>()
@@ -72,6 +72,7 @@ class FundSearchViewModelTest {
         override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = "SE000$fundId"
+
         // Nullbar som i kontraktet, så en subklass kan simulera en misslyckad hämtning.
         override suspend fun fetchFundCatalog(): FundCatalog? = catalog
         override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? {
@@ -89,7 +90,9 @@ class FundSearchViewModelTest {
         override fun observeFunds(): Flow<List<Fund>> = trackedFunds
         override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
         override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = MutableStateFlow(emptyList())
-        override suspend fun upsertFund(fund: Fund) { addedFunds.add(fund) }
+        override suspend fun upsertFund(fund: Fund) {
+            addedFunds.add(fund)
+        }
         override suspend fun addTransaction(tx: Transaction): Long = 0
         override suspend fun deleteTransaction(id: Long) {}
         override suspend fun clearAll() {}
@@ -111,6 +114,7 @@ class FundSearchViewModelTest {
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
+
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
@@ -192,8 +196,7 @@ class FundSearchViewModelTest {
     @Test
     fun `misslyckad bolagshamtning behaller foregaende lista`() = runTest(dispatcher) {
         val failing = object : FakePriceRepo() {
-            override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? =
-                if (companyId == FundCompany.HANDELSBANKEN_ID) super.fetchFundsForCompany(companyId) else null
+            override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = if (companyId == FundCompany.HANDELSBANKEN_ID) super.fetchFundsForCompany(companyId) else null
         }
         val vm = FundSearchViewModel(failing, fakeTransactionRepo, fakeMetadataRepo)
         vm.uiState.test {

@@ -1,10 +1,10 @@
 package se.partee71.fonder.domain
 
+import java.time.LocalDate
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import se.partee71.fonder.domain.usecase.TransactionFormValidator
-import java.time.LocalDate
 
 class TransactionFormValidatorTest {
 

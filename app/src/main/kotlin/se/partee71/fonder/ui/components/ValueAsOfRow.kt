@@ -5,9 +5,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import se.partee71.fonder.R
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import se.partee71.fonder.R
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -24,6 +24,6 @@ fun ValueAsOfRow(navEpochDay: Long?, modifier: Modifier = Modifier) {
         stringResource(R.string.format_value_as_of, LocalDate.ofEpochDay(navEpochDay).format(dateFormatter)),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
+        modifier = modifier
     )
 }

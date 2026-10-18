@@ -7,6 +7,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -37,7 +38,6 @@ import se.partee71.fonder.domain.usecase.SwitchQuestions
 import se.partee71.fonder.domain.usecase.TransactionFormValidator
 import se.partee71.fonder.domain.usecase.TransactionPrefill
 import se.partee71.fonder.ui.navigation.TransactionFormKey
-import java.time.LocalDate
 
 /**
  * Inledningen i säljformuläret från Följ (BYT-2): vilket förslag säljet registreras för.
@@ -80,7 +80,7 @@ data class TransactionFormUiState(
     /** Beloppet andelarna förifylldes ur — anteckningen under fälten. Null utan förifyllning. */
     val prefillAmountKr: Double? = null,
     /** Bytesväljaren (BYT-2); null medan dess indata läses. */
-    val switchField: SwitchFieldUi? = null,
+    val switchField: SwitchFieldUi? = null
 ) {
     /** Spara kräver giltiga fält **och** ett svar på bytesfrågan (BYT-2: släckt tills en fråga utan förval besvarats). */
     val canSave: Boolean get() = valid && switchField != null && !switchField.unanswered && !linkFailed
@@ -95,7 +95,7 @@ private data class FormFields(
     val date: LocalDate,
     val sharesText: String,
     val priceText: String,
-    val feeText: String,
+    val feeText: String
 )
 
 /** Det förifyllda lägets flaggor ur nyckeln — låst och laddande från start, löses av uppslaget. */
@@ -103,7 +103,7 @@ private data class PrefillState(
     val fundLocked: Boolean = false,
     val fundLoading: Boolean = false,
     val fundLookupFailed: Boolean = false,
-    val prefillAmountKr: Double? = null,
+    val prefillAmountKr: Double? = null
 )
 
 /**
@@ -124,7 +124,7 @@ class TransactionFormViewModel @AssistedInject constructor(
     private val fundPriceRepository: FundPriceRepository,
     private val recordTransaction: RecordTransaction,
     switchChoicesSource: SwitchChoicesSource,
-    private val followedSuggestionLookup: FollowedSuggestionLookup,
+    private val followedSuggestionLookup: FollowedSuggestionLookup
 ) : ViewModel() {
 
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
@@ -139,6 +139,7 @@ class TransactionFormViewModel @AssistedInject constructor(
     private val feeText = MutableStateFlow("")
     private val saved = MutableStateFlow(false)
     private val linkFailed = MutableStateFlow(false)
+
     // Låst från start när nyckeln pekar ut en fond: annars hann ett val i fondväljaren göras
     // under uppslaget och skrivas över av det.
     private val prefill = MutableStateFlow(PrefillState(fundLocked = key.prefilled, fundLoading = key.prefilled))
@@ -173,7 +174,7 @@ class TransactionFormViewModel @AssistedInject constructor(
         val inputs: SwitchChoicesSource.Inputs?,
         val chosen: SwitchOption?,
         val lookedUp: FollowedSuggestion?,
-        val linkFailed: Boolean,
+        val linkFailed: Boolean
     )
 
     val uiState: StateFlow<TransactionFormUiState> =
@@ -199,7 +200,7 @@ class TransactionFormViewModel @AssistedInject constructor(
                 fundLoading = prefill.fundLoading,
                 followIntro = inputs?.let { followIntro(followed(it, lookedUp), prefill.prefillAmountKr) },
                 prefillAmountKr = prefill.prefillAmountKr,
-                switchField = inputs?.let { switchField(it, lookedUp, fields.fund, fields.type, fields.date, chosen) },
+                switchField = inputs?.let { switchField(it, lookedUp, fields.fund, fields.type, fields.date, chosen) }
             )
         }.stateIn(
             scope = viewModelScope,
@@ -209,8 +210,8 @@ class TransactionFormViewModel @AssistedInject constructor(
                 prefilled = key.prefilled,
                 typeLocked = key.type != null,
                 fundLocked = key.prefilled,
-                fundLoading = key.prefilled,
-            ),
+                fundLoading = key.prefilled
+            )
         )
 
     init {
@@ -248,14 +249,11 @@ class TransactionFormViewModel @AssistedInject constructor(
         prefill.value = PrefillState(fundLocked = true, prefillAmountKr = amount.takeIf { shares != null })
     }
 
-    private fun followed(inputs: SwitchChoicesSource.Inputs, lookedUp: FollowedSuggestion?): FollowedSuggestion? =
-        key.suggestionRecordId?.let { SwitchQuestions.followed(inputs, it, lookedUp) }
+    private fun followed(inputs: SwitchChoicesSource.Inputs, lookedUp: FollowedSuggestion?): FollowedSuggestion? = key.suggestionRecordId?.let { SwitchQuestions.followed(inputs, it, lookedUp) }
 
-    private fun followIntro(followed: FollowedSuggestion?, amountKr: Double?): FollowIntro? =
-        followed?.let { FollowIntro(planIndex = it.planIndex, buyFundName = it.buyFundName, amountKr = amountKr ?: it.switchValueKr) }
+    private fun followIntro(followed: FollowedSuggestion?, amountKr: Double?): FollowIntro? = followed?.let { FollowIntro(planIndex = it.planIndex, buyFundName = it.buyFundName, amountKr = amountKr ?: it.switchValueKr) }
 
-    private fun question(inputs: SwitchChoicesSource.Inputs, lookedUp: FollowedSuggestion?, fund: Fund?, type: TransactionType, date: LocalDate) =
-        SwitchQuestions.forTransaction(inputs, type, fund?.isin, date.toEpochDay(), followed(inputs, lookedUp), key.watchId)
+    private fun question(inputs: SwitchChoicesSource.Inputs, lookedUp: FollowedSuggestion?, fund: Fund?, type: TransactionType, date: LocalDate) = SwitchQuestions.forTransaction(inputs, type, fund?.isin, date.toEpochDay(), followed(inputs, lookedUp), key.watchId)
 
     private fun switchField(
         inputs: SwitchChoicesSource.Inputs,
@@ -263,7 +261,7 @@ class TransactionFormViewModel @AssistedInject constructor(
         fund: Fund?,
         type: TransactionType,
         date: LocalDate,
-        chosen: SwitchOption?,
+        chosen: SwitchOption?
     ) = SwitchFieldUi.of(type, question(inputs, lookedUp, fund, type, date), chosen, inputs, followed(inputs, lookedUp))
 
     /**
@@ -336,7 +334,7 @@ class TransactionFormViewModel @AssistedInject constructor(
                 epochDay = date.value.toEpochDay(),
                 shares = shares,
                 pricePerShare = price,
-                fee = fee,
+                fee = fee
             )
             val recorded = recordTransaction.record(RecordTransaction.Entry(transaction, option.decision))
             if (option.decision is SwitchDecision.LinksWatch && recorded.watchId == null) {
