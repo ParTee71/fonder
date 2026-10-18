@@ -39,7 +39,8 @@ ska fixas, inte ignoreras.
 ### 3. Kraven hålls aktuella
 Ändrar du synligt beteende ska [KRAVLISTA.md](KRAVLISTA.md) uppdateras i samma
 ändring — nytt krav läggs till, borttaget beteende stryks med
-`~~…~~ *(borttaget)*`. Versionstabellen i README och `versionName` följer med.
+`~~…~~ *(borttaget)*`. Versionstabellen i README och `versionName` följer med i samma PR
+(se PR-flöde); själva releasen görs via skill **android:release**.
 → Skill: **requirements-kravlista**.
 
 ### 4. Återanvänd generiska komponenter
@@ -158,10 +159,12 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   versionen i samma ändring, så att ingen separat release-PR behövs. Välj semver efter
   ändringen: **major** = brytande/borttagen funktion eller backupformat som äldre appar inte
   läser, **minor** = ny funktion, **patch** = fix, chore, refactor. Höj `versionCode` med 1,
-  uppdatera `versionName` i `app/build.gradle.kts` och versionstabellen i README, och skriv versionen i PR-beskrivningen. Ren dokument-,
-  test- eller CI-ändring utan effekt i appen höjer inte. Är versionen redan höjd sedan senaste
-  tagg, höj bara om denna PR är allvarligare. Själva releasen (tagg, bygge, publicering) körs
-  fortfarande bara på uttrycklig begäran (skill **release**) och kräver då ingen ny PR.
+  uppdatera `versionName` i `app/build.gradle.kts`, versionsraden överst i README och
+  versionstabellen (raden i "Versionshistorik") – i funktions-PR:en, inte vid release – och skriv
+  versionen i PR-beskrivningen. Ren dokument-, test- eller CI-ändring utan effekt i appen höjer
+  inte. Är versionen redan höjd sedan senaste tagg, höj bara om denna PR är allvarligare. Själva
+  releasen (tagg, bygge, publicering) körs fortfarande bara på uttrycklig begäran (skill
+  **android:release**), frågar inte om versionen och kräver då ingen ny PR.
 - **Prenumerera automatiskt** på PR-aktivitet (`subscribe_pr_activity`) så fort en PR
   skapas, utan att fråga. Bevaka tills den är mergad eller stängd: fixa CI-fel, hantera
   granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `ci-doktor`
@@ -173,8 +176,9 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
 - **Modell efter uppgift:** sessionen och varje agent väljer modell och effort efter uppgiftens
   komplexitet – Opus är standard; byt via `/model` eller låt en billigare agent ta rutindelar,
   och starta agenter med `model` efter uppgiften ([.claude/README.md](.claude/README.md) → Modellval).
-- **Varje issue anger Agent · modell · effort** (skill `refine-issue`), och agenten körs med
-  just den modellen och effort (skill `implement-issue`).
+- **Varje issue anger Agent · modell · effort** (skill `android:refine-issue`), och agenten körs med
+  just den modellen och effort (skill `android:implement-issue`). Fonders delar av de tre
+  arbetsflödesskillsen står i skill **android-projekt** (Arbetsflöde, Issues, Release).
 
 ## Arkitektur i korthet
 

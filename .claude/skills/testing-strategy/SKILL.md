@@ -132,6 +132,19 @@ jämför inga bilder.
 node --test .claude/hooks/test/*.test.mjs      # hooken regel4-check och baslinjen (ingen SDK behövs)
 ```
 
+**Manifest, resurser, `proguard-rules.pro` eller byggfiler ändrade** (`app/build.gradle.kts`,
+`build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`) → kör dessutom
+release-bygget och lint lokalt före push:
+
+```bash
+./gradlew :app:assembleRelease                 # R8 + resursskrympning; osignerat utan SIGNING_*
+./gradlew :app:lintDebug                       # i ett eget anrop
+```
+
+Två anrop, inte `./gradlew :app:lintDebug :app:assembleRelease`: i samma anrop kör
+`kspDebugKotlin` och `kspReleaseKotlin` parallellt och krockar om Room-schemat i `app/schemas/`
+("Empty schema file", se `quality.yml`). De körs inte i PR-flödet (skill `ci-budget`).
+
 **Kör det du ändrat lokalt innan varje push** när Android SDK finns (session-start-hooken
 säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
 taget. `LC_ALL=C.UTF-8` (testnamn med å/ä/ö) sätts av `.claude/settings.json`. Saknas SDK:
