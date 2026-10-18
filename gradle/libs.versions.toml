@@ -49,7 +49,7 @@ jsoup                   = "1.23.2"
 pdfboxAndroid           = "2.0.27.0"
 # Kontroller och JVM-UI-tester (regel 2 och 4).
 # - Robolectric är ren Java (inget Kotlin-metadata); sdk=36 i robolectric.properties, vilket
-#   kräver Java 21 i Robolectric – CI:s build-and-test kör JDK 21.
+#   kräver Java 21 i Robolectric – CI kör JDK 21.
 # - Konsist tolkar källkoden med kotlin-compiler-embeddable i samma version som projektets
 #   Kotlin (bara testets körklassväg) – höj Konsist i takt med Kotlin.
 # - PMD (CPD i cpdCheck) är ren Java och körs via sin CLI i en egen konfiguration.

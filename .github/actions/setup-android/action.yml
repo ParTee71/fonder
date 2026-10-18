@@ -1,0 +1,24 @@
+name: Förbered Android-bygge
+description: >-
+  JDK 21 och Gradle med cache. Enda stället för dessa steg i alla arbetsflöden (skill ci-budget).
+  JDK 21 för att Robolectric kräver det för SDK 36; koden byggs fortfarande för Java 17.
+  Kräver att repot redan är utcheckat.
+
+inputs:
+  cache-read-only:
+    description: Gradles cache skrivs bara från master och läses annars.
+    default: ${{ github.ref != 'refs/heads/master' }}
+
+runs:
+  using: composite
+  steps:
+    - name: JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+    - name: Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-read-only: ${{ inputs.cache-read-only }}

@@ -138,8 +138,8 @@ SDK-nivåer uppdaterar TP-1 i samma PR.
 - Plugins i `:app`: `android.application` (AGP 9, inbyggd Kotlin), `kotlin.compose`, `ksp`,
   `hilt`, `kotlin.serialization`, `google-services`, `roborazzi`.
 - Java 17 utan toolchain: `sourceCompatibility`/`targetCompatibility` 17 och `jvmTarget` 17 i
-  `app/build.gradle.kts`. Enhetstesterna kör på JDK 21 lokalt och i CI:s `build-and-test`, eftersom
-  Robolectric kräver 21 för SDK 36; övriga jobb kör JDK 17.
+  `app/build.gradle.kts`. JDK 21 kör bygget lokalt och i alla CI-jobb (`.github/actions/setup-android`),
+  eftersom Robolectric kräver 21 för SDK 36.
 - KSP för Room (`room.schemaLocation` = `app/schemas`, även som `androidTest`-assets för
   migreringstesterna) och Hilt.
 - `cpdCheck` (PMD CPD via CLI som `JavaExec`, 80 tokens, baslinjen `config/cpd-baseline.txt`)
