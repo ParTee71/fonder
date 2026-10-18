@@ -119,10 +119,10 @@ fun BeslutContent(
 ) {
     val switches = state.switches
     LazyColumn(modifier = modifier.fillMaxSize().testTag(BESLUT_LIST_TEST_TAG)) {
-        item { ProfileHeader(state.riskProfile, state.accountType, onOpenRiskProfile) }
+        item(contentType = "profile-header") { ProfileHeader(state.riskProfile, state.accountType, onOpenRiskProfile) }
 
         if (state.isEmpty) {
-            item {
+            item(contentType = "empty") {
                 EmptyState(
                     title = stringResource(R.string.beslut_empty_title),
                     body = stringResource(R.string.beslut_empty_body),
@@ -130,8 +130,8 @@ fun BeslutContent(
                 )
             }
         } else {
-            item { SwitchesHeading(waiting = switches.waitingCount, working = state.switchesWorking) }
-            items(switches.active, key = { it.key }) { row ->
+            item(contentType = "switches-heading") { SwitchesHeading(waiting = switches.waitingCount, working = state.switchesWorking) }
+            items(switches.active, key = { it.key }, contentType = { "switch-row" }) { row ->
                 SwitchRowCard(
                     row = row,
                     onOpenSwitchWatch = onOpenSwitchWatch,
@@ -144,7 +144,7 @@ fun BeslutContent(
 
         // Planens förbehåll (HEM-8) så länge planen har ett förslag på listan.
         if (switches.active.any { it.state == SwitchRowState.PROPOSED }) {
-            item {
+            item(contentType = "caption") {
                 CaptionText(stringResource(R.string.switch_plan_disclaimer) + " " + stringResource(R.string.beslut_never_switches))
             }
         }
@@ -153,7 +153,7 @@ fun BeslutContent(
         // profil, SET-3/SET-4); även utan plan, för det är just då man vill fråga igen. Släckt
         // medan något jobb kör, samma signal som chromets indikator (NAV-6).
         if (state.canRecomputeSwitchPlan) {
-            item {
+            item(contentType = "recompute") {
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppButton(
                         text = stringResource(
@@ -175,11 +175,11 @@ fun BeslutContent(
         // Avslutade (14 dagar efter stängningen) och avstådda (HEM-14) — hopfällt; ingen snackbar finns
         // i appen, så ångra-vägen är raden här.
         if (switches.closed.isNotEmpty()) {
-            item { ClosedSection(switches.closed, onUndo = onUndoDismissal) }
+            item(contentType = "closed") { ClosedSection(switches.closed, onUndo = onUndoDismissal) }
         }
 
-        item { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
-        item { FacitRow(followedCount = state.followedCount, followedExcessKr = state.followedExcessKr, onOpen = onOpenFacit) }
+        item(contentType = "section-heading") { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
+        item(contentType = "facit-row") { FacitRow(followedCount = state.followedCount, followedExcessKr = state.followedExcessKr, onOpen = onOpenFacit) }
     }
 }
 

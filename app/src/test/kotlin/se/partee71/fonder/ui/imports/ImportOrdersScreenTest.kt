@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -64,18 +66,18 @@ class ImportOrdersScreenTest {
     private val state = ImportOrdersUiState(
         filesSelected = true,
         switchReady = true,
-        rows = listOf(
+        rows = persistentListOf(
             row(
                 "Swedbank Robur Ny Teknik", "SE0000000101", TransactionType.SALJ, 10, 22.716, 810.0,
-                SwitchFieldUi(TransactionType.SALJ, listOf(none, standalone, planRow), selected = planRow),
+                SwitchFieldUi(TransactionType.SALJ, persistentListOf(none, standalone, planRow), selected = planRow),
             ),
             row(
                 "Spiltan Aktiefond Investmentbolag", "SE0000000102", TransactionType.SALJ, 10, 31.0, 412.5,
-                SwitchFieldUi(TransactionType.SALJ, listOf(none, standalone), selected = none),
+                SwitchFieldUi(TransactionType.SALJ, persistentListOf(none, standalone), selected = none),
             ),
             row(
                 "Länsförsäkringar Global Indexnära", "SE0000000103", TransactionType.KOP, 13, 41.9649, 438.46,
-                SwitchFieldUi(TransactionType.KOP, listOf(none, fromSaleRow), selected = fromSaleRow),
+                SwitchFieldUi(TransactionType.KOP, persistentListOf(none, fromSaleRow), selected = fromSaleRow),
             ),
         ),
     )
@@ -109,7 +111,7 @@ class ImportOrdersScreenTest {
         val unanswered = state.copy(
             rows = state.rows.mapIndexed { index, row ->
                 if (index == 2) row.copy(switchField = row.switchField!!.copy(selected = null)) else row
-            },
+            }.toImmutableList(),
         )
         composeRule.setContent { FonderTheme { Review(unanswered) } }
 

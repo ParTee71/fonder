@@ -17,6 +17,7 @@ hilt = "2.60.1"
 hiltLifecycle = "1.4.0"
 kotlinxSerializationJson = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+kotlinxCollections = "0.4.0"
 # Coil 3 (gruppen io.coil-kt.coil3) – deklarerad, ännu oanvänd i koden
 coil                    = "3.6.3"
 workManager = "2.12.0"
@@ -86,6 +87,7 @@ hilt-lifecycle-viewmodel-compose     = { group = "androidx.hilt",            nam
 kotlinx-serialization-json           = { group = "org.jetbrains.kotlinx",    name = "kotlinx-serialization-json",     version.ref = "kotlinxSerializationJson" }
 kotlinx-coroutines-android           = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-android",     version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test              = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-test",        version.ref = "kotlinxCoroutines" }
+kotlinx-collections-immutable        = { group = "org.jetbrains.kotlinx",    name = "kotlinx-collections-immutable",  version.ref = "kotlinxCollections" }
 # Task.await() för Firebase Auth (TP-6) — samma coroutines-version som resten av projektet
 kotlinx-coroutines-play-services     = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutines" }
 coil-compose                         = { group = "io.coil-kt.coil3",         name = "coil-compose",                   version.ref = "coil" }

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import kotlinx.collections.immutable.persistentListOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -55,7 +56,7 @@ class TransactionFormScreenTest {
 
     /** "Registrera säljet" från Följ: fond och typ låsta, förifyllt, planraden förvald. */
     private val follow = TransactionFormUiState(
-        funds = listOf(smabolag),
+        funds = persistentListOf(smabolag),
         selectedFund = smabolag,
         type = TransactionType.SALJ,
         date = today,
@@ -67,24 +68,24 @@ class TransactionFormScreenTest {
         typeLocked = true,
         followIntro = FollowIntro(planIndex = 1, buyFundName = "Spiltan Räntefond Sverige", amountKr = 12_500.0),
         prefillAmountKr = 12_500.0,
-        switchField = SwitchFieldUi(TransactionType.SALJ, listOf(none, standalone, planRow), selected = planRow),
+        switchField = SwitchFieldUi(TransactionType.SALJ, persistentListOf(none, standalone, planRow), selected = planRow),
     )
 
     /** Köp av en fond som inte är ett bevakat alternativ medan ett byte väntar: frågan krävs. */
     private val buyRequired = TransactionFormUiState(
-        funds = listOf(smabolag, avanza),
+        funds = persistentListOf(smabolag, avanza),
         selectedFund = avanza,
         type = TransactionType.KOP,
         date = today.plusDays(2),
         sharesText = "102,5641",
         priceText = "179,40",
         valid = true,
-        switchField = SwitchFieldUi(TransactionType.KOP, listOf(none, watch), selected = null),
+        switchField = SwitchFieldUi(TransactionType.KOP, persistentListOf(none, watch), selected = null),
     )
 
     @Test
     fun `utan nagot att koppla till visas ingen valjare och Spara ar tand`() {
-        val state = buyRequired.copy(switchField = SwitchFieldUi(TransactionType.KOP, listOf(none), selected = none))
+        val state = buyRequired.copy(switchField = SwitchFieldUi(TransactionType.KOP, persistentListOf(none), selected = none))
         composeRule.setContent { FonderTheme { TransactionFormContent(state = state) } }
 
         composeRule.onAllNodesWithText("Hör till byte").assertCountEquals(0)

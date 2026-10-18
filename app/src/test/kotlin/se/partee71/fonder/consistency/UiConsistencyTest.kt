@@ -1,6 +1,7 @@
 package se.partee71.fonder.consistency
 
 import com.lemonappdev.konsist.api.Konsist
+import com.lemonappdev.konsist.api.ext.list.withNameEndingWith
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -57,6 +58,17 @@ class UiConsistencyTest {
                 "Regel 4: förbjudna mönster (skill shared-ui-components).\n" + hits.joinToString("\n") +
                     "\nUndantag bara via ui-allowlist.txt med motivering och användarens ok.",
             )
+        }
+    }
+
+    @Test
+    fun `UiState-typer är @Immutable eller @Stable`() {
+        // En lista, karta eller mängd i tillståndet är ImmutableList/ImmutableMap/ImmutableSet; annoteringen gör hela typen stabil (skill compose-expert).
+        val states = production.classes().filter { it.hasDataModifier && !it.hasPrivateModifier && it.name.endsWith("State") && it.resideInPackage("..ui..") } +
+            production.interfaces().withNameEndingWith("UiState").filter { it.resideInPackage("..ui..") }
+        assertTrue("hittade inga UiState-typer i ui/", states.isNotEmpty())
+        states.forEach { state ->
+            assertTrue("${state.name} ska vara @Immutable eller @Stable", state.hasAnnotationWithName("Immutable", "Stable"))
         }
     }
 

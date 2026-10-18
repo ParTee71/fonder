@@ -1,11 +1,21 @@
 package se.partee71.fonder.ui.fond
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -48,25 +58,26 @@ import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import java.time.LocalDate
 
+@Immutable
 data class FondDetaljUiState(
     val loading: Boolean = true,
     val fundName: String? = null,
     val isin: String? = null,
     val suggestedIsin: String? = null,
-    val prices: List<FundPrice> = emptyList(),
+    val prices: ImmutableList<FundPrice> = persistentListOf(),
     /**
      * 200-dagarssnittet (epochDay, NAV) för varje kurspunkt där historiken räcker, i stigande
      * ordning (ANA-14, [MovingAverageCalc]) — räknat ur hela den laddade historiken, inte ur
      * diagrammets valda period, så diagrammet bara behöver beskära den. Tom = historiken räcker
      * inte, ingen snittlinje (ANA-4).
      */
-    val movingAverage: List<Pair<Long, Double>> = emptyList(),
+    val movingAverage: ImmutableList<Pair<Long, Double>> = persistentListOf(),
     /** Första köp-datum och kvarvarande (FIFO) inköpsvärde — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
     val firstPurchaseEpochDay: Long? = null,
     val netInvested: Double? = null,
     /** Köpdagar (epochDay) för den här fonden — markeras i diagrammet när de ingår i den
      *  valda perioden, se [se.partee71.fonder.ui.diagram.FundLineChart] (issue #55). */
-    val purchaseEpochDays: List<Long> = emptyList(),
+    val purchaseEpochDays: ImmutableList<Long> = persistentListOf(),
     /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
     val analysis: FundAnalysisCalc.Analysis? = null,
     /** Innehavets nuvarande värde (netShares × senaste NAV) — null om okänt/inte ett innehav. Underlag för [feeComparison]. */
@@ -80,20 +91,20 @@ data class FondDetaljUiState(
      * eller köp hit (ANA-10, issue #85). Tom lista utan ISK/KF (SET-4), utan inspelad plan,
      * eller när planen inte nämner fonden.
      */
-    val switchPlan: List<SwitchPlanResolver.Suggestion> = emptyList(),
+    val switchPlan: ImmutableList<SwitchPlanResolver.Suggestion> = persistentListOf(),
     /**
      * Kurshistorik för föreslagna fonder, nycklad på kandidatens ISIN (ANA-11) — hämtas först
      * när ett förslag fälls ut ([FondDetaljViewModel.onSuggestionExpanded]) och hålls bara i
      * minnet, aldrig i kurscachen (se [FundPriceRepository.historyForIsin]).
      */
-    val comparisons: Map<String, ComparisonUiState> = emptyMap(),
+    val comparisons: ImmutableMap<String, ComparisonUiState> = persistentMapOf(),
     /**
      * De inspelade avgiftsbytena (ANA-9, issue #91) för den här fonden, nycklade på
      * kandidatens ISIN. Ett alternativ som saknas här har ingen inspelad rad — då visas ingen
      * kvittering alls, aldrig en kryssruta som inte skriver någonstans. Asymmetrin är väntad:
      * listan räknas fram live vid skärmöppning, raden skrivs av bakgrundsskanningen.
      */
-    val recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap(),
+    val recordedFeeSwitches: ImmutableMap<String, RecordedFeeSwitch> = persistentMapOf(),
     /**
      * Bytesplanens förslag för fonden som användaren avstått från (HEM-14) — de saknas i [switchPlan]
      * och visas bara som ett antal med vägen till Ångra på Beslut.
@@ -102,7 +113,7 @@ data class FondDetaljUiState(
     /** Billigare alternativ (ANA-9) användaren avstått från — de saknas i [feeComparison], se [dismissedPlanCount]. */
     val dismissedFeeCount: Int = 0,
     /** Säljfonder som redan har en öppen bevakning (ANA-12) — styr om ett kvitterat byte erbjuder "Bevaka alternativ". */
-    val watchedSellIsins: Set<String> = emptySet(),
+    val watchedSellIsins: ImmutableSet<String> = persistentSetOf(),
     /** Sätts när en bevakning just startats, så skärmen kan navigera dit. Kvitteras med [FondDetaljViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null,
     /**
@@ -125,6 +136,7 @@ data class FondDetaljUiState(
 data class RecordedFeeSwitch(val recordId: Long, val followed: Boolean)
 
 /** Kurshistoriken för en föreslagen fond, till jämförelsediagrammet (ANA-11, issue #85). */
+@Immutable
 sealed interface ComparisonUiState {
     /** Hämtningen pågår — ett nätverksanrop mot ISIN-källkedjan (TP-14). */
     data object Loading : ComparisonUiState
@@ -133,7 +145,7 @@ sealed interface ComparisonUiState {
     data object Unavailable : ComparisonUiState
 
     /** Kandidatens kurshistorik, (epochDay, NAV) i stigande datumordning. */
-    data class Ready(val points: List<Pair<Long, Double>>) : ComparisonUiState
+    data class Ready(val points: ImmutableList<Pair<Long, Double>>) : ComparisonUiState
 }
 
 /**
@@ -143,6 +155,7 @@ sealed interface ComparisonUiState {
  * ("engångsuppdatering", samma princip som prisuppdateringen nedan), inte reaktivt vid varje
  * NAV-tick, eftersom den kan kosta flera nätverksanrop (budgeterad köpbarhetsverifiering).
  */
+@Immutable
 sealed interface FeeComparisonUiState {
     /** Jämförelsen pågår — flera nätverksanrop kan behövas. */
     data object Loading : FeeComparisonUiState
@@ -153,7 +166,7 @@ sealed interface FeeComparisonUiState {
     /** Inga alternativ med identisk exponering och lägre avgift hittades — fonden är redan bland de billigaste i sin kategori. */
     data object NoCheaperAlternative : FeeComparisonUiState
 
-    data class Found(val alternatives: List<FeeComparisonCalc.Alternative>) : FeeComparisonUiState
+    data class Found(val alternatives: ImmutableList<FeeComparisonCalc.Alternative>) : FeeComparisonUiState
 }
 
 private data class Snapshot(
@@ -294,11 +307,11 @@ class FondDetaljViewModel @AssistedInject constructor(
                 fundName = fund?.name,
                 isin = fund?.isin,
                 suggestedIsin = snapshot.suggestedIsin,
-                prices = history.sortedByDescending { it.epochDay },
-                movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }),
+                prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
+                movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
                 firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
                 netInvested = holding?.netInvested,
-                purchaseEpochDays = snapshot.purchaseEpochDays,
+                purchaseEpochDays = snapshot.purchaseEpochDays.toImmutableList(),
                 analysis = buildAnalysis(holdings, holding, latestPrices, history),
                 holdingValue = holdingValue,
             )
@@ -360,12 +373,12 @@ class FondDetaljViewModel @AssistedInject constructor(
         state.copy(
             feeComparison = visibleFeeComparison,
             riskLevel = state.isin?.let { plan.metadataByIsin[it]?.risk },
-            switchPlan = fundPlan,
+            switchPlan = fundPlan.toImmutableList(),
             dismissedPlanCount = dismissedPlan.size,
             dismissedFeeCount = dismissedFeeCount,
-            comparisons = comparisonsByIsin,
-            recordedFeeSwitches = recordedFee,
-            watchedSellIsins = watchState.watchedSellIsins,
+            comparisons = comparisonsByIsin.toImmutableMap(),
+            recordedFeeSwitches = recordedFee.toImmutableMap(),
+            watchedSellIsins = watchState.watchedSellIsins.toImmutableSet(),
             startedSwitchWatchId = watchState.startedWatchId,
         )
     }.combine(priceRefreshing) { state, refreshing ->
@@ -421,7 +434,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             val candidateIsin = alternative.candidate.isin
             !SuggestionDismissals.hides(activeDismissals, SuggestionKind.FEE, isin, candidateIsin, recorded[candidateIsin]?.followed == true)
         }
-        return FeeComparisonUiState.Found(visible) to dismissed.size
+        return FeeComparisonUiState.Found(visible.toImmutableList()) to dismissed.size
     }
 
     /**
@@ -440,7 +453,7 @@ class FondDetaljViewModel @AssistedInject constructor(
                 isin to if (points.isEmpty()) {
                     ComparisonUiState.Unavailable
                 } else {
-                    ComparisonUiState.Ready(points.map { it.epochDay to it.nav }.sortedBy { it.first })
+                    ComparisonUiState.Ready(points.map { it.epochDay to it.nav }.sortedBy { it.first }.toImmutableList())
                 }
                 )
         }
@@ -554,7 +567,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             feeComparisonState.value = when {
                 alternatives == null -> FeeComparisonUiState.Unavailable
                 alternatives.isEmpty() -> FeeComparisonUiState.NoCheaperAlternative
-                else -> FeeComparisonUiState.Found(alternatives)
+                else -> FeeComparisonUiState.Found(alternatives.toImmutableList())
             }
         }
     }

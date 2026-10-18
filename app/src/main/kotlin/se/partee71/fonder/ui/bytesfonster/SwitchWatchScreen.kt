@@ -119,11 +119,11 @@ fun SwitchWatchContent(
         modifier = modifier,
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize().testTag(SWITCH_WATCH_LIST_TEST_TAG)) {
-            item { HeaderCard(state) }
+            item(contentType = "header") { HeaderCard(state) }
             // Nivå och filter går bara att ändra medan bytet pågår (ANA-13) — en stängd
             // bevakning bär vad som hände och visar ingen väljare.
             if (state.canChangeSelection) {
-                item {
+                item(contentType = "target-level") {
                     TargetLevelCard(
                         state = state,
                         onSelectTargetLevel = onSelectTargetLevel,
@@ -131,10 +131,10 @@ fun SwitchWatchContent(
                     )
                 }
             }
-            item { ComparisonChart(state) }
+            item(contentType = "chart") { ComparisonChart(state) }
 
             if (state.rows.isEmpty()) {
-                item {
+                item(contentType = "empty") {
                     // Ingen `EmptyState` här: den fyller skärmen och hade tryckt bort kortet med
                     // säljfond, belopp och dag — den informationen gäller även utan alternativ.
                     Row(
@@ -181,7 +181,7 @@ fun SwitchWatchContent(
                 // Bara när kontrollen misslyckades: "inga köpbara" och "okänd nivå" blir inte
                 // annorlunda av ett nytt försök, ett misslyckat uppslag kan bli det.
                 if (state.emptyReason == SwitchWatchEmptyReason.LOOKUP_FAILED) {
-                    item {
+                    item(contentType = "retry") {
                         AppButton(
                             text = stringResource(R.string.switch_watch_retry),
                             onClick = onRetryAutoFill,
@@ -194,7 +194,7 @@ fun SwitchWatchContent(
 
             // Rubriken över alternativen: vad talen mäter och vilken nivå (och filter) förslagen gäller.
             if (state.rows.isNotEmpty() && state.targetLevel != null) {
-                item {
+                item(contentType = "heading") {
                     Text(
                         stringResource(
                             if (state.indexOnly) {
@@ -210,7 +210,7 @@ fun SwitchWatchContent(
                 }
             }
 
-            items(state.rows, key = { it.candidateId }) { row ->
+            items(state.rows, key = { it.candidateId }, contentType = { "candidate" }) { row ->
                 CandidateCard(
                     row = row,
                     closed = state.closed,
@@ -219,7 +219,7 @@ fun SwitchWatchContent(
                 )
             }
 
-            item {
+            item(contentType = "add-candidate") {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (state.canAddCandidate) {
                         AppButton(

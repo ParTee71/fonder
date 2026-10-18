@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -58,7 +59,7 @@ class TransaktionerScreenTest {
 
     private fun state(vararg rows: TransaktionRad, filter: HandelseFilter = HandelseFilter.ALLA) = TransaktionerUiState(
         loading = false,
-        allRows = rows.toList(),
+        allRows = rows.toList().toImmutableList(),
         filter = filter,
         totalRealized = RealizedGainCalculator.total(rows.mapNotNull { it.sale }),
     )

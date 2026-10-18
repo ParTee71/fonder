@@ -355,7 +355,7 @@ fun FundLineChart(
             horizontalArrangement = Arrangement.spacedBy(ConnectedChoiceSpacing),
             modifier = Modifier.padding(top = 8.dp).testTag(CHART_PERIOD_ROW_TEST_TAG),
         ) {
-            itemsIndexed(periods) { index, option ->
+            itemsIndexed(periods, key = { _, option -> option.name }) { index, option ->
                 ConnectedChoiceButton(
                     label = stringResource(periodLabelRes(option)),
                     selected = option == period,

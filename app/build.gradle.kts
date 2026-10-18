@@ -143,6 +143,11 @@ ksp {
     arg("room.incremental", "true")
 }
 
+// Typer Compose-kompilatorn inte kan bevisa oföränderliga men som är det (skill compose-expert).
+composeCompiler {
+    stabilityConfigurationFiles.add(project.layout.projectDirectory.file("compose-stability.conf"))
+}
+
 dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.compose.ui.text.googlefonts)
@@ -157,6 +162,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.collections.immutable)
 
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))

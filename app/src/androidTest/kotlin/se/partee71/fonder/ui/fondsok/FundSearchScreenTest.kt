@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.fondsok
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,8 +33,8 @@ class FundSearchScreenTest {
                 FundSearchContent(
                     state = FundSearchUiState(
                         loading = false,
-                        results = listOf(fondA),
-                        riskLevels = mapOf(fondA.fundId to 6),
+                        results = persistentListOf(fondA),
+                        riskLevels = persistentMapOf(fondA.fundId to 6),
                     ),
                 )
             }
@@ -49,8 +51,8 @@ class FundSearchScreenTest {
                 FundSearchContent(
                     state = FundSearchUiState(
                         loading = false,
-                        results = listOf(fondA, fondB),
-                        riskLevels = mapOf(fondA.fundId to 6),
+                        results = persistentListOf(fondA, fondB),
+                        riskLevels = persistentMapOf(fondA.fundId to 6),
                     ),
                 )
             }

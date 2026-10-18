@@ -42,8 +42,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   Room- och Compose-tester även i `androidTest/` (skill `testing-strategy`).
 - **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
   anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); targetSdk 35
-  (pluginen säger 36; compileSdk 37, TP-1); inga `ImmutableList` och ingen `@Immutable` i
-  `UiState`; ingen Spotless/ktlint (ingen `.editorconfig`); ingen Renovate eller Dependabot;
+  (pluginen säger 36; compileSdk 37, TP-1); ingen Spotless/ktlint (ingen `.editorconfig`); ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
   pluginen (beta), men utan kommentar i katalogen om varför. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.

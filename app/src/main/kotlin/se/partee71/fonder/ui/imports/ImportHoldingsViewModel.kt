@@ -1,9 +1,13 @@
 package se.partee71.fonder.ui.imports
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,11 +67,12 @@ data class ImportOccasion(
 }
 
 /** En importerad rad + användarens (eventuellt korrigerade) matchning/inköpstillfällen (issue #8). */
+@Immutable
 data class ImportRowUiState(
     val row: ImportedHoldingRow,
     val matchedFund: Fund?,
     val matchConfidence: Double?,
-    val occasions: List<ImportOccasion>,
+    val occasions: ImmutableList<ImportOccasion>,
     val included: Boolean = true,
     /** Sant om ett försök att uppdatera fondens kurscache under import misslyckades (issue #19) — importen fortsätter ändå, men markerad, inte tyst. */
     val priceFetchFailed: Boolean = false,
@@ -83,11 +88,12 @@ data class ImportRowUiState(
 
 enum class ImportError { PARSE_FAILED, EMPTY_FILE }
 
+@Immutable
 data class ImportHoldingsUiState(
     val loading: Boolean = false,
     val fileSelected: Boolean = false,
-    val rows: List<ImportRowUiState> = emptyList(),
-    val catalogFunds: List<Fund> = emptyList(),
+    val rows: ImmutableList<ImportRowUiState> = persistentListOf(),
+    val catalogFunds: ImmutableList<Fund> = persistentListOf(),
     val imported: Boolean = false,
     val error: ImportError? = null,
     /** Importen pågår — knappen ska vara släckt, se [ImportHoldingsViewModel.import]. */
@@ -127,7 +133,7 @@ class ImportHoldingsViewModel @Inject constructor(
     /** [bytes] är hela filens innehåll, läst av [onFileSelected] med en [Uri]. */
     internal fun onFileSelected(bytes: ByteArray) {
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, fileSelected = true, error = null, rows = emptyList()) }
+            _uiState.update { it.copy(loading = true, fileSelected = true, error = null, rows = persistentListOf()) }
 
             val parsedRows = runCatching {
                 HoldingsImportParser.parse(bytes.inputStream())
@@ -145,7 +151,7 @@ class ImportHoldingsViewModel @Inject constructor(
             val catalog = fundPriceRepository.fetchFundCatalog() ?: FundCatalog(companies = emptyList(), funds = emptyList())
             val trackedFunds = transactionRepository.observeFunds().first()
             val rowStates = parsedRows.map { row -> buildRowState(row, catalog, trackedFunds) }
-            _uiState.update { it.copy(loading = false, rows = rowStates, catalogFunds = catalog.funds) }
+            _uiState.update { it.copy(loading = false, rows = rowStates.toImmutableList(), catalogFunds = catalog.funds.toImmutableList()) }
         }
     }
 
@@ -193,7 +199,7 @@ class ImportHoldingsViewModel @Inject constructor(
             row = row,
             matchedFund = match?.fund,
             matchConfidence = match?.confidence,
-            occasions = listOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
+            occasions = persistentListOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
             priceFetchFailed = priceFetchFailed,
         )
     }
@@ -220,25 +226,25 @@ class ImportHoldingsViewModel @Inject constructor(
 
     /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
     fun onAddOccasion(row: ImportedHoldingRow) {
-        updateRow(row) { it.copy(occasions = it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")) }
+        updateRow(row) { it.copy(occasions = (it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")).toImmutableList()) }
     }
 
     fun onRemoveOccasion(row: ImportedHoldingRow, index: Int) {
         updateRow(row) { state ->
             if (state.occasions.size <= 1) return@updateRow state
-            state.copy(occasions = state.occasions.filterIndexed { i, _ -> i != index })
+            state.copy(occasions = state.occasions.filterIndexed { i, _ -> i != index }.toImmutableList())
         }
     }
 
     private fun updateOccasion(row: ImportedHoldingRow, index: Int, transform: (ImportOccasion) -> ImportOccasion) {
         updateRow(row) { state ->
-            state.copy(occasions = state.occasions.mapIndexed { i, occasion -> if (i == index) transform(occasion) else occasion })
+            state.copy(occasions = state.occasions.mapIndexed { i, occasion -> if (i == index) transform(occasion) else occasion }.toImmutableList())
         }
     }
 
     private fun updateRow(row: ImportedHoldingRow, transform: (ImportRowUiState) -> ImportRowUiState) {
         _uiState.update { state ->
-            state.copy(rows = state.rows.map { if (it.row == row) transform(it) else it })
+            state.copy(rows = state.rows.map { if (it.row == row) transform(it) else it }.toImmutableList())
         }
     }
 

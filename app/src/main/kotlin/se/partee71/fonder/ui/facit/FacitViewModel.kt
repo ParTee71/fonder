@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.facit
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,7 @@ import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import javax.inject.Inject
 
+@Immutable
 data class FacitUiState(
     val loading: Boolean = true,
     /** Raderna och summeringarna, räknade av [FacitSummary] — se [FacitSnapshot]. */

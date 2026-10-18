@@ -1,11 +1,15 @@
 package se.partee71.fonder.ui.transaktioner
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,8 +45,9 @@ import java.time.LocalDate
  */
 data class FollowIntro(val planIndex: Int?, val buyFundName: String, val amountKr: Double?)
 
+@Immutable
 data class TransactionFormUiState(
-    val funds: List<Fund> = emptyList(),
+    val funds: ImmutableList<Fund> = persistentListOf(),
     val selectedFund: Fund? = null,
     val type: TransactionType = TransactionType.KOP,
     val date: LocalDate = LocalDate.now(),
@@ -173,7 +178,7 @@ class TransactionFormViewModel @AssistedInject constructor(
             val price = SwedishNumberFormat.parse(fields.priceText)
             val fee = parseFee(fields.feeText)
             TransactionFormUiState(
-                funds = funds,
+                funds = funds.toImmutableList(),
                 selectedFund = fields.fund,
                 type = fields.type,
                 date = fields.date,

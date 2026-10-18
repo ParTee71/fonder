@@ -1,8 +1,18 @@
 package se.partee71.fonder.ui.portfolj
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -33,19 +43,20 @@ import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import java.time.LocalDate
 import javax.inject.Inject
 
+@Immutable
 data class PortfoljUiState(
     val loading: Boolean = true,
-    val holdings: List<Holding> = emptyList(),
+    val holdings: ImmutableList<Holding> = persistentListOf(),
     val totalInvested: Double = 0.0,
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
     val totalGainLossFraction: Double? = null,
     /** Dag/vecka/månads-förändring per fond, se issue #14 (POR-5). Nyckel: `Fund.fundId`. */
-    val performance: Map<String, PortfolioPerformanceCalc.HoldingPerformance> = emptyMap(),
+    val performance: ImmutableMap<String, PortfolioPerformanceCalc.HoldingPerformance> = persistentMapOf(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
     val navEpochDay: Long? = null,
     /** Säljsignal-status och ev. vinstsignal per innehav (ANA-3/ANA-8, POR-8, issue #26). Nyckel: `Fund.fundId`. */
-    val analysis: Map<String, FundAnalysisCalc.Analysis> = emptyMap(),
+    val analysis: ImmutableMap<String, FundAnalysisCalc.Analysis> = persistentMapOf(),
     /** Exponeringskarta: andel per fondtyp/region/index-aktivt (POR-9, issue #66). */
     val exposure: PortfolioExposureCalc.Result = EMPTY_EXPOSURE,
     /**
@@ -53,7 +64,7 @@ data class PortfoljUiState(
      * känd risknivå saknas i kartan och visas som okänd — aldrig gissad (ANA-4-principen).
      * Läses ur samma [metadata]-flöde som exponeringskartan, alltså utan extra nätverksanrop.
      */
-    val riskLevels: Map<String, Int> = emptyMap(),
+    val riskLevels: ImmutableMap<String, Int> = persistentMapOf(),
     /** Kurserna hämtas just nu i bakgrunden ([BackgroundWork.PRICE_REFRESH]) — kortens väntesnurra (NAV-6). */
     val pricesWorking: Boolean = false,
     /** Fondmetadatan slås upp just nu (nätverk per okänd ISIN) — exponeringskartan vilar på den. */
@@ -63,7 +74,7 @@ data class PortfoljUiState(
      * Per fond, inte ett gemensamt "något hämtas": en nyss tillagd fond uppdateras medan resten
      * av listan står färdig, och då ska bara **den** raden snurra (NAV-6).
      */
-    val refreshingFundIds: Set<String> = emptySet(),
+    val refreshingFundIds: ImmutableSet<String> = persistentSetOf(),
 ) {
     val isEmpty: Boolean get() = !loading && holdings.isEmpty()
 
@@ -186,19 +197,19 @@ class PortfoljViewModel @Inject constructor(
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 PortfoljUiState(
                     loading = false,
-                    holdings = enriched,
+                    holdings = enriched.toImmutableList(),
                     totalInvested = PortfolioCalc.totalInvested(enriched),
                     totalValue = PortfolioCalc.totalValue(enriched),
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
-                    performance = performance,
+                    performance = performance.toImmutableMap(),
                     navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
-                    analysis = buildAnalysis(enriched, transactions, today),
+                    analysis = buildAnalysis(enriched, transactions, today).toImmutableMap(),
                     exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin),
                     riskLevels = enriched.mapNotNull { holding ->
                         val risk = holding.fund.isin?.let { metadataByIsin[it]?.risk } ?: return@mapNotNull null
                         holding.fund.fundId to risk
-                    }.toMap(),
+                    }.toMap().toImmutableMap(),
                 )
             }
         }.combine(workState) { state, work ->
@@ -208,7 +219,7 @@ class PortfoljViewModel @Inject constructor(
             state.copy(
                 pricesWorking = BackgroundWork.PRICE_REFRESH in work.running,
                 metadataWorking = work.metadataPending,
-                refreshingFundIds = work.refreshingFundIds,
+                refreshingFundIds = work.refreshingFundIds.toImmutableSet(),
             )
         }.stateIn(
             scope = viewModelScope,
