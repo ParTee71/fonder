@@ -4,8 +4,10 @@ import android.util.Log
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -108,6 +110,7 @@ private class RecordingFxRateSource(
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class HandelsbankenFundPriceRepositoryTest {
 
     private val dao = FakeFundPriceDao()
@@ -128,7 +131,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `refresh parsar och cachar kurser fran kallan`() = runTest {
         val html = historyHtml(fundId = "SHB0000442", nav = "150,00", currency = "SEK", date = "2026-07-01")
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> html }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> html }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         val success = repo.refresh("SHB0000442")
 
@@ -152,7 +155,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `refresh utan känd historikhorisont hamtar bara ett kort farskt fonster`() = runTest {
         // En bevakad men aldrig köpt fond behöver bara en färsk kurs — inte hela historiken.
         val client = RecordingSource()
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         repo.refresh("SHB0000442", since = null)
 
@@ -168,7 +171,7 @@ class HandelsbankenFundPriceRepositoryTest {
         // anrop, till skillnad från tidigare `minusYears(5)` + ett extra förtätningsanrop.
         val since = LocalDate.of(1998, 3, 2)
         val client = RecordingSource()
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         repo.refresh("SHB0000442", since = since)
 
@@ -184,7 +187,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val since = LocalDate.of(2020, 1, 1)
         dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = since.minusDays(1).toEpochDay(), nav = 100.0, currency = "SEK"))
         val client = RecordingSource()
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         repo.refresh("SHB0000442", since = since)
 
@@ -197,7 +200,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val since = LocalDate.of(2010, 1, 1)
         dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = LocalDate.of(2020, 1, 1).toEpochDay(), nav = 100.0, currency = "SEK"))
         val client = RecordingSource()
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         repo.refresh("SHB0000442", since = since)
 
@@ -208,7 +211,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `refresh skickar inget fondbolag — kurstabellen ar bolagsoberoende`() = runTest {
         val client = RecordingSource()
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         repo.refresh("0P0001KRE7", since = LocalDate.of(2020, 1, 1))
 
@@ -219,7 +222,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `refresh vid natverksfel behaller cachad data`() = runTest {
         dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = LocalDate.of(2026, 6, 30).toEpochDay(), nav = 140.0, currency = "SEK"))
         val failingClient = FondlistaHtmlSource { _, _, _, _ -> throw IOException("nätverksfel") }
-        val repo = HandelsbankenFundPriceRepository(client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         val success = repo.refresh("SHB0000442")
 
@@ -230,7 +233,7 @@ class HandelsbankenFundPriceRepositoryTest {
 
     @Test
     fun `latestPrice for okand fond ar null`() = runTest {
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
         assertNull(repo.latestPrice("OKAND"))
     }
 
@@ -247,7 +250,7 @@ class HandelsbankenFundPriceRepositoryTest {
             </select>
         """.trimIndent()
         val client = RecordingSource(html)
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         val catalog = repo.fetchFundCatalog()!!
 
@@ -267,7 +270,7 @@ class HandelsbankenFundPriceRepositoryTest {
             </select>
         """.trimIndent()
         val client = RecordingSource(html)
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         val funds = repo.fetchFundsForCompany("1372")
 
@@ -278,7 +281,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `fetchFundsForCompany ar null vid natverksfel sa anroparen kan behalla sin lista`() = runTest {
         val failingClient = FondlistaHtmlSource { _, _, _, _ -> throw IOException("nätverksfel") }
-        val repo = HandelsbankenFundPriceRepository(client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         assertNull(repo.fetchFundsForCompany("1372"))
     }
@@ -287,6 +290,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `lookupIsin laser fondens isin fran fondsidan`() = runTest {
         val fundPage = """<a href="/x?IdentifierType=1&Identifier=LU1989766289&Country=SE">Faktablad</a>"""
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { fundPage },
             dao = dao,
@@ -300,6 +304,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `lookupIsin ar null vid natverksfel`() = runTest {
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { throw IOException("nätverksfel") },
             dao = dao,
@@ -316,7 +321,7 @@ class HandelsbankenFundPriceRepositoryTest {
         // FundMetadataRepository.resolveHandelsbankenAvailability) måste kunna skilja
         // "hämtningen misslyckades" från "källan känner inte till någon sådan fond".
         val failingClient = FondlistaHtmlSource { _, _, _, _ -> throw IOException("nätverksfel") }
-        val repo = HandelsbankenFundPriceRepository(client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = failingClient, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = emptyList())
 
         assertNull(repo.fetchFundCatalog())
     }
@@ -354,6 +359,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 1.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> html },
             fundPageClient = { "" },
             dao = dao,
@@ -375,6 +381,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 55.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -434,6 +441,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(FxRatePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), rate = 9.73973))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> html },
             fundPageClient = { "" },
             dao = dao,
@@ -461,6 +469,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 164.35, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> usdHtml },
             fundPageClient = { "" },
             dao = dao,
@@ -487,6 +496,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val html = historyHtml(fundId = "0P0001KRE7", nav = "193,48", currency = "USD", date = "2026-07-23")
         val fx = RecordingFxRateSource()
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> html },
             fundPageClient = { "" },
             dao = dao,
@@ -512,6 +522,7 @@ class HandelsbankenFundPriceRepositoryTest {
             (from.toEpochDay()..to.toEpochDay()).map { FxRatePoint(epochDay = it, rate = 9.7) }
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> html },
             fundPageClient = { "" },
             dao = dao,
@@ -530,6 +541,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `SEK-fond fran fondlista cachas som vanligt`() = runTest {
         val html = historyHtml(fundId = "0P00000L4S", nav = "323,07", currency = "SEK", date = "2026-07-24")
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> html },
             fundPageClient = { "" },
             dao = dao,
@@ -557,6 +569,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 1.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = client,
             fundPageClient = { fundPageMedIsin("LU0496367417") },
             dao = dao,
@@ -612,6 +625,7 @@ class HandelsbankenFundPriceRepositoryTest {
             "0P00000F8J" to "SE0000582033",
         )
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = client,
             fundPageClient = { fundId -> fundPageMedIsin(requireNotNull(fundPageIsinByCandidate[fundId])) },
             dao = dao,
@@ -636,6 +650,7 @@ class HandelsbankenFundPriceRepositoryTest {
             ),
         )
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = client,
             fundPageClient = { throw IOException("ska inte behövas") },
             dao = dao,
@@ -658,6 +673,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = LocalDate.of(2026, 7, 23).toEpochDay(), nav = 55.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = client,
             fundPageClient = { fundPageMedIsin("SE0009999999") },
             dao = dao,
@@ -680,6 +696,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val client = CatalogAndHistorySource(catalogHtml = katalogHtml, historyByFundId = emptyMap())
         var sidanrop = 0
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = client,
             fundPageClient = { sidanrop++; fundPageMedIsin("SE0009999999") },
             dao = dao,
@@ -702,7 +719,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val avanza = FakeIsinSource(history = { _, _, _ ->
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 12.0, currency = "SEK"))
         })
-        val repo = HandelsbankenFundPriceRepository(client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(avanza))
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = client, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(avanza))
 
         repo.refreshSince("LU0496367417", "LU0496367417", since)
 
@@ -716,7 +733,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val source = FakeIsinSource(history = { _, _, _ ->
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 123.45, currency = "SEK"))
         })
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
 
         val success = repo.refreshSince("SHB0000442", "SE0004297927", since)
 
@@ -734,6 +751,7 @@ class HandelsbankenFundPriceRepositoryTest {
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 99.0, currency = "SEK"))
         })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -757,7 +775,7 @@ class HandelsbankenFundPriceRepositoryTest {
             calls.add(Triple(since, from, to))
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 123.45, currency = "SEK"))
         })
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
 
         repo.refreshSince("SHB0000442", "SE0004297927", since)
 
@@ -776,7 +794,7 @@ class HandelsbankenFundPriceRepositoryTest {
             callCount++
             listOf(IsinPricePoint(epochDay = since.toEpochDay(), nav = 100.0, currency = "SEK"))
         })
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
 
         repo.refreshSince("SHB0000442", "SE0004297927", since)
 
@@ -787,6 +805,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `refreshSince behaller cache om ingen kalla ger traff`() = runTest {
         dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = 100, nav = 140.0, currency = "SEK"))
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -803,6 +822,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `suggestIsin returnerar forsta kallans forslag`() = runTest {
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -816,6 +836,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `suggestIsin ar null om ingen kalla har ett forslag`() = runTest {
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -831,7 +852,7 @@ class HandelsbankenFundPriceRepositoryTest {
         val source = FakeIsinSource(fundInfo = { isin ->
             if (isin == "LU0496367417") IsinFundInfo(name = "Franklin Gold and Prec Mtls A(acc)USD", currency = "USD") else null
         })
-        val repo = HandelsbankenFundPriceRepository(client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
+        val repo = HandelsbankenFundPriceRepository(computation = UnconfinedTestDispatcher(), client = FondlistaHtmlSource { _, _, _, _ -> "" }, fundPageClient = { "" }, dao = dao, fundDao = fundDao, fxRateDao = fxRateDao, fxRateSource = fxRateSource, isinSources = listOf(source))
 
         val fund = repo.findFundByIsin("LU0496367417")
 
@@ -845,6 +866,7 @@ class HandelsbankenFundPriceRepositoryTest {
     fun `findFundByIsin provar nasta kalla om forsta ger fel`() = runTest {
         val working = FakeIsinSource(fundInfo = { IsinFundInfo(name = "Nordea Småbolagsfond Norden", currency = "SEK") })
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,
@@ -860,6 +882,7 @@ class HandelsbankenFundPriceRepositoryTest {
     @Test
     fun `findFundByIsin ar null om ingen kalla kanner till isin`() = runTest {
         val repo = HandelsbankenFundPriceRepository(
+            computation = UnconfinedTestDispatcher(),
             client = FondlistaHtmlSource { _, _, _, _ -> "" },
             fundPageClient = { "" },
             dao = dao,

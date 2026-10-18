@@ -1,9 +1,10 @@
 package se.partee71.fonder.data.network
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import se.partee71.fonder.di.IoDispatcher
 import java.io.IOException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -24,10 +25,11 @@ import javax.inject.Singleton
 @Singleton
 class RiksbankFxClient @Inject constructor(
     private val httpClient: OkHttpClient,
+    @param:IoDispatcher private val io: CoroutineDispatcher,
 ) : FxRateSource {
 
     override suspend fun fetchRates(currency: String, from: LocalDate, to: LocalDate): List<FxRatePoint> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val url = seriesUrl(currency, from, to)
             val request = Request.Builder().url(url).build()
             httpClient.newCall(request).execute().use { response ->

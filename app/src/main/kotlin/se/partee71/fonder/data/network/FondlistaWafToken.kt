@@ -7,12 +7,13 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import se.partee71.fonder.di.MainDispatcher
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,12 +42,13 @@ interface FondlistaWafTokenSource {
 @Singleton
 class WebViewFondlistaWafTokenSource @Inject constructor(
     @ApplicationContext private val context: Context,
+    @param:MainDispatcher private val main: CoroutineDispatcher,
 ) : FondlistaWafTokenSource {
 
     private val mutex = Mutex()
 
     override suspend fun token(rejected: String?): String? = mutex.withLock {
-        withContext(Dispatchers.Main) {
+        withContext(main) {
             val cookies = runCatching { CookieManager.getInstance() }.getOrNull() ?: return@withContext null
             // Har ett annat anrop redan löst om kontrollen medan detta väntade på låset används den
             // nyckeln — samtidiga avvisningar ger en enda ny laddning, inte en var.

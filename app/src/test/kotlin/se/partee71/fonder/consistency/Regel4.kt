@@ -64,6 +64,7 @@ object Regel4 {
     /**
      * `feature`: ui-paket utom components/diagram/theme (även filer direkt i ui/).
      * `component-only`: allt utom ui/components/. `vico`: allt utom ui/diagram/.
+     * `dispatchers`: allt utom di/.
      */
     fun scopesFor(relPath: String): List<String> {
         val p = relPath.replace('\\', '/')
@@ -76,6 +77,7 @@ object Regel4 {
         }
         if (!p.contains("/ui/components/")) scopes += "component-only"
         if (!p.contains("/ui/diagram/")) scopes += "vico"
+        if (!p.contains("/di/")) scopes += "dispatchers"
         return scopes
     }
 

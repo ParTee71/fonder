@@ -15,11 +15,12 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import se.partee71.fonder.data.auth.AuthRepository
+import se.partee71.fonder.di.IoDispatcher
 import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.DriveBackupFiles
 import java.time.LocalDateTime
@@ -83,6 +84,7 @@ interface DriveBackupRepository {
 class GoogleDriveBackupRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
+    @param:IoDispatcher private val io: CoroutineDispatcher,
 ) : DriveBackupRepository {
 
     private sealed interface Authorization {
@@ -140,7 +142,7 @@ class GoogleDriveBackupRepository @Inject constructor(
     private suspend fun <T> withDrive(block: (Drive) -> DriveResult<T>): DriveResult<T> {
         if (authRepository.currentUser.first() == null) return DriveResult.NoAccount
 
-        return withContext(Dispatchers.IO) {
+        return withContext(io) {
             when (val auth = authorize()) {
                 is Authorization.NeedsUser -> DriveResult.NeedsAuthorization(auth.pendingIntent)
                 is Authorization.Failed -> DriveResult.Error(auth.message)

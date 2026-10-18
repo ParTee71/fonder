@@ -1,12 +1,15 @@
 package se.partee71.fonder.ui.imports
 
+import android.net.Uri
 import app.cash.turbine.test
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -20,6 +23,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.imports.FakeImportFileReader
+import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
@@ -114,10 +119,15 @@ class ImportOrdersViewModelTest {
         testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo),
     )
 
-    private fun viewModel(extractor: PdfTextExtractor, priceRepo: FundPriceRepository = fakePriceRepo) =
+    private fun viewModel(
+        extractor: PdfTextExtractor,
+        priceRepo: FundPriceRepository = fakePriceRepo,
+        fileReader: ImportFileReader = FakeImportFileReader(),
+    ) =
         ImportOrdersViewModel(
             fakeTransactionRepo, priceRepo, extractor, recordTransaction,
             testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo),
+            fileReader,
         )
 
     @Test
@@ -127,7 +137,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             assertTrue(awaitItem().rows.isEmpty())
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -155,11 +165,49 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
             assertEquals(handelsbankenFund, state.rows.first().matchedFund)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `valda filer lases via filelasaren och de som inte gar att oppna hoppas over`() = runTest(dispatcher) {
+        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        val readable = mockk<Uri>()
+        val unreadable = mockk<Uri>()
+        val vm = viewModel(
+            PdfTextExtractor { NORDEA_TEXT },
+            fileReader = FakeImportFileReader(mapOf(readable to ("nota.pdf" to ByteArray(0)))),
+        )
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesSelected(listOf(unreadable, readable))
+            var state = awaitItem()
+            while (state.loading || !state.switchReady) state = awaitItem()
+
+            assertTrue(state.filesSelected)
+            assertEquals("SE0003653302", state.rows.single().transaction.isin)
+            assertTrue(state.unparsedFileNames.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen fil gar att oppna lamnar skarmen orord`() = runTest(dispatcher) {
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
+
+        vm.uiState.test {
+            var initial = awaitItem()
+            while (!initial.switchReady) initial = awaitItem()
+            vm.onFilesSelected(listOf(mockk<Uri>()))
+            advanceUntilIdle()
+            expectNoEvents()
+            assertFalse(initial.filesSelected)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -170,7 +218,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("skrap.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("skrap.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -190,7 +238,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(
+            vm.onFilesRead(
                 listOf(
                     "nota1.pdf" to "nota1.pdf".toByteArray(),
                     "nota2.pdf" to "nota2.pdf".toByteArray(),
@@ -217,7 +265,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -242,7 +290,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -273,7 +321,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -297,7 +345,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -318,7 +366,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -341,7 +389,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -359,7 +407,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf("nota1.pdf" to ByteArray(0), "nota2.pdf" to ByteArray(0), "nota3.pdf" to ByteArray(0)))
+            vm.onFilesRead(listOf("nota1.pdf" to ByteArray(0), "nota2.pdf" to ByteArray(0), "nota3.pdf" to ByteArray(0)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
             assertEquals(3, state.rows.size)
@@ -424,7 +472,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             // Köpet först i filordningen — importen visar och skriver ändå sälj före köp.
-            vm.onFilesSelected(files(buyNota, saleNota))
+            vm.onFilesRead(files(buyNota, saleNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
@@ -462,7 +510,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(files(saleNota, otherBuyNota))
+            vm.onFilesRead(files(saleNota, otherBuyNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
@@ -505,7 +553,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(files(saleNota, buyNota))
+            vm.onFilesRead(files(saleNota, buyNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
@@ -540,7 +588,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(files(saleNota))
+            vm.onFilesRead(files(saleNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
             vm.onSwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId))
@@ -563,7 +611,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(files(saleNota, buyNota))
+            vm.onFilesRead(files(saleNota, buyNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
@@ -590,7 +638,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(files(saleNota, buyNota))
+            vm.onFilesRead(files(saleNota, buyNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
             val sale = state.rows[0].transaction

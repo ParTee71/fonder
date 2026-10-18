@@ -1,9 +1,10 @@
 package se.partee71.fonder.data.network
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import se.partee71.fonder.di.IoDispatcher
 import java.io.IOException
 import java.net.URLEncoder
 import java.time.LocalDate
@@ -20,6 +21,7 @@ import javax.inject.Singleton
 class HandelsbankenFondlistaClient @Inject constructor(
     private val httpClient: OkHttpClient,
     private val wafToken: FondlistaWafTokenSource,
+    @param:IoDispatcher private val io: CoroutineDispatcher,
 ) : FondlistaHtmlSource, FondlistaFundPageSource {
 
     /**
@@ -36,7 +38,7 @@ class HandelsbankenFondlistaClient @Inject constructor(
     private suspend fun get(url: String): String =
         fetchWithWafToken(url, wafToken::token) { token -> fetchOnce(url, token) }
 
-    private suspend fun fetchOnce(url: String, token: String?): Response = withContext(Dispatchers.IO) {
+    private suspend fun fetchOnce(url: String, token: String?): Response = withContext(io) {
         val request = Request.Builder().url(url).apply {
             if (token != null) header("Cookie", "${WafToken.COOKIE_NAME}=$token")
         }.build()

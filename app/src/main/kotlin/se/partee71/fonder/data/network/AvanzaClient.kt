@@ -1,11 +1,12 @@
 package se.partee71.fonder.data.network
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import se.partee71.fonder.di.IoDispatcher
 import java.io.IOException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -21,23 +22,24 @@ import javax.inject.Singleton
 @Singleton
 class AvanzaClient @Inject constructor(
     private val httpClient: OkHttpClient,
+    @param:IoDispatcher private val io: CoroutineDispatcher,
 ) : AvanzaSource {
 
-    override suspend fun search(query: String): String = withContext(Dispatchers.IO) {
+    override suspend fun search(query: String): String = withContext(io) {
         val body = """{"name":${jsonQuote(query)}}""".toRequestBody(JSON_MEDIA_TYPE)
         execute(Request.Builder().url(SEARCH_URL).post(body).build())
     }
 
-    override suspend fun fetchGuide(orderbookId: String): String = withContext(Dispatchers.IO) {
+    override suspend fun fetchGuide(orderbookId: String): String = withContext(io) {
         execute(Request.Builder().url("$GUIDE_URL/$orderbookId").build())
     }
 
     override suspend fun fetchChart(orderbookId: String, from: LocalDate, to: LocalDate): String =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             execute(Request.Builder().url(chartUrl(orderbookId, from, to)).build())
         }
 
-    override suspend fun fetchFundList(requestBody: String): String = withContext(Dispatchers.IO) {
+    override suspend fun fetchFundList(requestBody: String): String = withContext(io) {
         val body = requestBody.toRequestBody(JSON_MEDIA_TYPE)
         execute(Request.Builder().url(FUND_LIST_URL).post(body).build())
     }

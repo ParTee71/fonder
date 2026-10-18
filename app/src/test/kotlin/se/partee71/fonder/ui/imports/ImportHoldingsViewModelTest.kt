@@ -1,6 +1,8 @@
 package se.partee71.fonder.ui.imports
 
+import android.net.Uri
 import app.cash.turbine.test
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +20,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.imports.FakeImportFileReader
+import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -94,8 +98,11 @@ class ImportHoldingsViewModelTest {
         testTargetLevelPreselection(transactionRepo, switchWatchRepo),
     )
 
-    private fun viewModel(priceRepo: FundPriceRepository = fakePriceRepo, transactionRepo: TransactionRepository = fakeTransactionRepo) =
-        ImportHoldingsViewModel(transactionRepo, priceRepo, recordTransaction(transactionRepo))
+    private fun viewModel(
+        priceRepo: FundPriceRepository = fakePriceRepo,
+        transactionRepo: TransactionRepository = fakeTransactionRepo,
+        fileReader: ImportFileReader = FakeImportFileReader(),
+    ) = ImportHoldingsViewModel(transactionRepo, priceRepo, recordTransaction(transactionRepo), fileReader)
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -133,6 +140,35 @@ class ImportHoldingsViewModelTest {
             assertEquals(1, state.rows.first().occasions.size)
             assertEquals(1.9378, state.rows.first().occasions.first().shares!!, 1e-9)
             assertNull(state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `vald fil lases via filelasaren och tolkas`() = runTest(dispatcher) {
+        val uri = mockk<Uri>()
+        val vm = viewModel(fileReader = FakeImportFileReader(mapOf(uri to ("innehav.xlsx" to xlsxBytes(sampleSheetXml)))))
+        vm.uiState.test {
+            assertFalse(awaitItem().fileSelected)
+            vm.onFileSelected(uri)
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+
+            assertTrue(state.fileSelected)
+            assertEquals(handelsbankenFund, state.rows.single().matchedFund)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `fil som inte gar att oppna lamnar skarmen orord`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.uiState.test {
+            val initial = awaitItem()
+            vm.onFileSelected(mockk<Uri>())
+            advanceUntilIdle()
+            expectNoEvents()
+            assertEquals(ImportHoldingsUiState(), initial)
             cancelAndIgnoreRemainingEvents()
         }
     }

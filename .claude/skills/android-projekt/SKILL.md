@@ -53,14 +53,11 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Room:s suspend-DAO:er och DataStore är main-safe – ingen `withContext` runt dem.
 - OkHttp-anropen i `data/network/` blockerar och måste köras utanför huvudtråden; Jsoup-
   tolkningen i `FundPriceRepository` är CPU-arbete.
-- **Nuvarande läge, avviker från pluginen:** `di/` har inga dispatcher-qualifiers, och
-  `Dispatchers.` nämns direkt i produktionskoden: `data/network/AvanzaClient.kt`,
-  `RiksbankFxClient.kt`, `HandelsbankenFondlistaClient.kt` (`withContext(Dispatchers.IO)`),
-  `FondlistaWafToken.kt` (`Dispatchers.Main`), `data/repository/FundPriceRepository.kt`
-  (`Dispatchers.Default`, fyra ställen), `DriveBackupRepository.kt` (`Dispatchers.IO`) och
-  `ui/imports/ImportHoldingsScreen.kt`/`ImportOrdersScreen.kt` (`scope.launch(Dispatchers.IO)`
-  i composablen, filläsningen). Repot ska migrera enligt pluginen (dispatcher injiceras bara där
-  kod väljer en, och bara `di/` nämner `Dispatchers`) i en egen PR senare; ny kod följer pluginen.
+- Dispatchers: `di/DispatchersModule` ger `@IoDispatcher`, `@DefaultDispatcher` och
+  `@MainDispatcher` (WebView i `FondlistaWafToken`); bara `di/` nämner `Dispatchers.`, vilket
+  scopet `[dispatchers]` i `ui-forbidden.txt` kontrollerar i `UiConsistencyTest` och hooken.
+  Filläsningen i importen går via `data/imports/ImportFileReader`, inte i composablen.
+  Enhetstester ger `UnconfinedTestDispatcher()` eller `StandardTestDispatcher(testScheduler)`.
 
 ## Flöden (android:kotlin-flows)
 

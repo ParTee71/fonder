@@ -3,7 +3,7 @@
 // filändring. Stop (`--stop`): alla filer som ändrats mot origin/master innan Claude avslutar
 // turen. Mönster och undantag läses från samma filer som
 // UiConsistencyTest använder – hooken har inga egna mönster (skill shared-ui-components).
-// Port av Dagbokens hook, med Fonders scope (feature, component-only, vico).
+// Port av Dagbokens hook, med Fonders scope (feature, component-only, vico, dispatchers).
 //
 // PostToolUse: exit 0 = inget att anmärka (tyst), exit 2 = träff; stderr går till Claude.
 // Stop: alltid exit 0; vid träff `{"decision":"block"}` på stdout så att Claude rättar först.
@@ -84,6 +84,7 @@ export function isAllowed(allowlist, file, match) {
  *   (även filer direkt under ui/).
  * - `component-only`: all Kotlin under app/src/main utom ui/components/.
  * - `vico`: all Kotlin under app/src/main utom ui/diagram/ (diagrambiblioteket bara i diagrammen).
+ * - `dispatchers`: all Kotlin under app/src/main utom di/.
  */
 export function scopesFor(relPath) {
   const p = relPath.split(path.sep).join('/');
@@ -96,6 +97,7 @@ export function scopesFor(relPath) {
   }
   if (!/\/ui\/components\//.test(p)) scopes.push('component-only');
   if (!/\/ui\/diagram\//.test(p)) scopes.push('vico');
+  if (!/\/di\//.test(p)) scopes.push('dispatchers');
   return scopes;
 }
 
@@ -134,6 +136,7 @@ const SCOPE_TEXT = {
   feature: 'feature-kod (ui/<feature>/)',
   'component-only': 'kod utanför ui/components/',
   vico: 'kod utanför ui/diagram/',
+  dispatchers: 'kod utanför di/',
 };
 
 /** Detta repos rot: hooken ligger i <rot>/.claude/hooks/. */

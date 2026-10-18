@@ -105,7 +105,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - [ ] **Återbruk:** ingen ny komponent som dubblerar en befintlig delad. (regel 4)
 - [ ] **CI-budget:** inga nya dyra steg i PR-flödet; byggtidseffekt angiven vid nya beroenden. (regel 5)
 - [ ] **Arkitektur:** följer projektets etablerade mönster (skill `android:android-dev` och `android-projekt`).
-- [ ] **GUI:** mockup godkänd; skärmdumpar (ljust + mörkt) i PR:en när Roborazzi finns.
+- [ ] **GUI:** mockup godkänd; skärmdumpar (ljust + mörkt) i PR:en.
 - [ ] **Granskning:** agenten `granskare` och `/code-review` har körts på diffen – och igen på rättningarna efter dem.
 
 ---

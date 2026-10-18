@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.FirebaseAuthRepository
+import se.partee71.fonder.data.imports.ContentResolverImportFileReader
+import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.imports.PdfBoxTextExtractor
 import se.partee71.fonder.data.imports.PdfTextExtractor
 import se.partee71.fonder.data.network.AvanzaClient
@@ -79,6 +81,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindPdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
+
+    @Binds
+    abstract fun bindImportFileReader(impl: ContentResolverImportFileReader): ImportFileReader
 
     @Binds
     abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
