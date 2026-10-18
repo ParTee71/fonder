@@ -132,10 +132,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # JDK 21: Robolectric kräver det för SDK 36. Koden byggs fortfarande för Java 17.
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       # Beroende- och build cache skrivs bara från master och läses i PR.
