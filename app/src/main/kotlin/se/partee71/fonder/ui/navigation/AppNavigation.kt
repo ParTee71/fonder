@@ -333,7 +333,7 @@ fun fonderEntries(
         ImportOrdersScreen(onDone = { backStack.popIfTop(key) })
     }
     entry<RiskProfileKey> { key ->
-        RiskProfilScreen(onSaved = { backStack.popIfTop(key) })
+        RiskProfilScreen(onClose = { backStack.popIfTop(key) })
     }
     // Fondsök i valläge (HEM-10, issue #102): samma skärm, men träffraden pekar ut en
     // jämförelsefond i stället för att lägga till den i bevakningen. Valet skrivs av

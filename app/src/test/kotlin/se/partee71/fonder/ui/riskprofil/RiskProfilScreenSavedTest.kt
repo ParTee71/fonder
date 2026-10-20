@@ -22,7 +22,7 @@ import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
 /**
  * Kvitteringen av "sparad" (skill android:kotlin-flows, "One-Off Events Belong in UiState"):
- * [RiskProfilScreen] går tillbaka exakt en gång och kvitterar till ViewModel:n — inte igen när
+ * [RiskProfilScreen] (ramen `EntityEditScreen`) går tillbaka exakt en gång och kvitterar till ViewModel:n — inte igen när
  * skärmen byggs upp på nytt (rotation), och inte bortslarvad när skärmen inte visades då
  * profilen sparades.
  */
@@ -62,16 +62,16 @@ class RiskProfilScreenSavedTest {
         val vm = viewModel()
         var backs = 0
         val restoration = StateRestorationTester(composeRule)
-        restoration.setContent { FonderTheme { RiskProfilScreen(onSaved = { backs++ }, viewModel = vm) } }
+        restoration.setContent { FonderTheme { RiskProfilScreen(onClose = { backs++ }, viewModel = vm) } }
         settle()
 
         vm.onAllocationPercentChanged(3, "100")
         settle()
-        assertTrue(vm.uiState.value.canSave)
+        assertTrue(vm.uiState.value.editor.canSave)
         vm.save()
         settle()
         assertEquals(1, backs)
-        assertFalse(vm.uiState.value.saved)
+        assertFalse(vm.uiState.value.editor.done)
 
         // Rotation: kompositionen byggs om med samma ViewModel — ingen andra navigering.
         restoration.emulateSavedInstanceStateRestore()
@@ -85,12 +85,12 @@ class RiskProfilScreenSavedTest {
         var backs = 0
         var shown by mutableStateOf(true)
         composeRule.setContent {
-            FonderTheme { if (shown) RiskProfilScreen(onSaved = { backs++ }, viewModel = vm) }
+            FonderTheme { if (shown) RiskProfilScreen(onClose = { backs++ }, viewModel = vm) }
         }
         settle()
         vm.onAllocationPercentChanged(3, "100")
         settle()
-        assertTrue(vm.uiState.value.canSave)
+        assertTrue(vm.uiState.value.editor.canSave)
 
         // Sparningen startas, och skärmen försvinner innan den hunnit skrivas klart.
         vm.save()
@@ -102,6 +102,6 @@ class RiskProfilScreenSavedTest {
         shown = true
         settle()
         assertEquals(1, backs)
-        assertFalse(vm.uiState.value.saved)
+        assertFalse(vm.uiState.value.editor.done)
     }
 }

@@ -104,9 +104,12 @@ data object ImportHoldingsKey : AppKey
 @Serializable
 data object ImportOrdersKey : AppKey
 
-/** Riskprofil — engångsenkät och målrisknivå, från Beslut och Inställningar (SET-3). */
+/**
+ * Riskprofil — engångsenkät och målfördelning, från Beslut och Inställningar (SET-3); en ramskärm
+ * på android-ui:s `EntityEditScreen` med egen topprad ([FrameKey], UI-15).
+ */
 @Serializable
-data object RiskProfileKey : AppKey
+data object RiskProfileKey : FrameKey
 
 /** Fondsök i valläge för jämförelsefonden (HEM-10). */
 @Serializable

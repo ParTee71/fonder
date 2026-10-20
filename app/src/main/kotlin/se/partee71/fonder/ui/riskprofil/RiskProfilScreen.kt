@@ -1,21 +1,17 @@
 package se.partee71.fonder.ui.riskprofil
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -28,76 +24,71 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.TimeHorizon
-import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.ui.common.EditorEvents
+import se.partee71.ui.components.EntityEditScreen
 import se.partee71.ui.theme.Spacing
 
 @Composable
 fun RiskProfilScreen(
-    onSaved: () -> Unit = {},
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RiskProfilViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val notifySaved by rememberUpdatedState(onSaved)
-    LaunchedEffect(state.saved) {
-        if (state.saved) {
-            notifySaved()
-            viewModel.onSavedHandled()
-        }
-    }
     RiskProfilContent(
         state = state,
+        events = viewModel.events,
+        onClose = onClose,
         onHorizonSelected = viewModel::onHorizonSelected,
         onReactionSelected = viewModel::onReactionSelected,
         onGoalSelected = viewModel::onGoalSelected,
         onAllocationPercentChanged = viewModel::onAllocationPercentChanged,
         onSave = viewModel::save,
+        onRetry = viewModel::retry,
         modifier = modifier
     )
 }
 
 /**
- * Tillståndsdriven, testbar del av [RiskProfilScreen] — inget ViewModel/Hilt-beroende (issue
- * #68, samma mönster som Hem/Portfölj sedan issue #14). Fast `Column` +
- * `verticalScroll` (inte en lazy `items()`-lista) — rätt UI-5-metod för en formulärvy där
- * innehållet inte växer med antalet innehav.
+ * Tillståndsdriven, testbar del av [RiskProfilScreen] — inget ViewModel/Hilt-beroende. Ramen är
+ * android-ui:s `EntityEditScreen` (UI-15): liten topprad med "Riskprofil" och Spara, "Släng
+ * ändringar?" vid bakåt med osparade ändringar, sparfel som snackbar, läsfel med "Försök igen"
+ * ([onRetry]) och tillbaka efter lyckad sparning ([onClose]). Ramens kolumn rullar (UI-5) och lägger
+ * 16 dp mellan avsnitten.
  *
- * Målnivån ersattes av en **målfördelning** i issue #71: en rad per tillgänglig risknivå med
- * ett procentfält, i stället för [ChoiceChipRow]s enda-val. Summan måste bli exakt 100 % för
- * att Spara-knappen ska aktiveras — går den inte ihop sparas ingenting (ingen tyst
- * normalisering, [RiskProfilUiState.effectiveAllocation]).
+ * Målfördelningen har en rad per tillgänglig risknivå med ett procentfält. Summan måste bli exakt
+ * 100 % för att Spara ska aktiveras — går den inte ihop sparas ingenting (ingen tyst normalisering,
+ * [RiskProfilUiState.effectiveAllocation]).
  */
 @Composable
 fun RiskProfilContent(
     state: RiskProfilUiState,
+    events: EditorEvents,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
     onHorizonSelected: (TimeHorizon) -> Unit = {},
     onReactionSelected: (DownturnReaction) -> Unit = {},
     onGoalSelected: (PrimaryGoal) -> Unit = {},
     onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
     onSave: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onRetry: () -> Unit = {}
 ) {
-    // Den sparade profilen gick inte att läsa: en tom enkät hade sett ut som att ingen profil
-    // fanns, och en sparning hade skrivit över den (NFR-6).
-    state.loadError?.let { error ->
-        EmptyState(error = error, modifier = modifier)
-        return
-    }
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(Spacing.l)
+    EntityEditScreen(
+        title = stringResource(R.string.riskprofil_title),
+        state = state.editor,
+        events = events,
+        onSave = onSave,
+        onClose = onClose,
+        modifier = modifier,
+        onRetry = onRetry,
+        horizontalMargin = Spacing.l
     ) {
-        Text(stringResource(R.string.riskprofile_title), style = MaterialTheme.typography.titleLarge)
         Text(
             stringResource(R.string.riskprofile_intro),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.l)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         QuestionSection(stringResource(R.string.riskprofile_q_horizon)) {
@@ -126,17 +117,29 @@ fun RiskProfilContent(
         }
 
         if (state.suggestedAllocation != null && !state.hasManualEdit) {
-            Text(
-                stringResource(R.string.riskprofile_suggestion_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = Spacing.l)
-            )
+            Text(stringResource(R.string.riskprofile_suggestion_hint), style = MaterialTheme.typography.bodyMedium)
         }
 
+        AllocationSection(state, onAllocationPercentChanged)
+    }
+}
+
+@Composable
+private fun QuestionSection(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        content()
+    }
+}
+
+/** Målfördelningen: rubrik, förbehållet, en rad per nivå och summan med sitt fel. */
+@Composable
+private fun AllocationSection(state: RiskProfilUiState, onAllocationPercentChanged: (Int, String) -> Unit) {
+    Column {
         Text(
             stringResource(R.string.riskprofile_allocation_title),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = Spacing.l, bottom = Spacing.xs)
+            modifier = Modifier.padding(bottom = Spacing.xs)
         )
         Text(
             stringResource(R.string.riskprofile_allocation_disclaimer),
@@ -173,28 +176,7 @@ fun RiskProfilContent(
                 )
             }
         }
-
-        AppButton(
-            text = stringResource(R.string.riskprofile_save_button),
-            onClick = onSave,
-            enabled = state.canSave,
-            modifier = Modifier.padding(top = Spacing.xl)
-        )
-        state.failure?.let { failure ->
-            Text(
-                stringResource(failure.message),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = Spacing.xs)
-            )
-        }
     }
-}
-
-@Composable
-private fun QuestionSection(title: String, content: @Composable () -> Unit) {
-    Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = Spacing.l, bottom = Spacing.s))
-    content()
 }
 
 @Composable

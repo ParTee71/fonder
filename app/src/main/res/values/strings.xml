@@ -443,7 +443,6 @@
     <string name="settings_import_orders_body">Importera exakta köp/sälj-transaktioner från Handelsbankens PDF-orderbekräftelser, en eller flera samtidigt.</string>
 
     <!-- Riskprofil (SET-3, issue #68, målfördelning i issue #71) -->
-    <string name="riskprofile_title">Riskprofil</string>
     <string name="riskprofile_intro">Tre frågor föreslår en målfördelning över risknivåer för portföljen. Förslaget är bara ett förslag — du justerar och sparar din egen fördelning.</string>
     <string name="riskprofile_q_horizon">Tidshorisont</string>
     <string name="risk_horizon_under_3">Mindre än 3 år</string>
@@ -466,7 +465,6 @@
     <string name="format_riskprofile_allocation_sum">Summa: %1$d %%</string>
     <string name="riskprofile_allocation_sum_error" formatted="false">Summan måste bli 100 % för att kunna sparas.</string>
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
-    <string name="riskprofile_save_button">Spara</string>
 
     <!-- Riskprofil på Hem (HEM-7, issue #68, mål-mot-faktisk per nivå i issue #71) -->
     <string name="hem_risk_title">Riskprofil</string>

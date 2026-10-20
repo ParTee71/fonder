@@ -10,6 +10,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import se.partee71.ui.components.AppButtonStyle
+import se.partee71.ui.components.LocalAppButtonStyle
 import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Tone
 
@@ -29,6 +32,9 @@ private val LocalFonderColors = staticCompositionLocalOf { FonderLightColors }
  * Bibliotekets tema tar inte Material 3:s `Shapes`; den inre [MaterialExpressiveTheme] lägger
  * [FonderShapes] ovanpå och ärver färger, typografi och rörelse, så att M3-komponenterna behåller
  * sina hörn.
+ *
+ * [FonderButtonStyle] ges till bibliotekets knappar ([LocalAppButtonStyle]) här, en gång, så att
+ * ramarnas och dialogernas knappar (t.ex. `EntityEditScreen`) ser ut som Fonders egna `AppButton`.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -43,11 +49,20 @@ fun FonderTheme(
         typeScale = FonderTypography,
         motionScheme = MotionScheme.expressive()
     ) {
-        CompositionLocalProvider(LocalFonderColors provides if (darkTheme) FonderDarkColors else FonderLightColors) {
+        CompositionLocalProvider(
+            LocalFonderColors provides if (darkTheme) FonderDarkColors else FonderLightColors,
+            LocalAppButtonStyle provides FonderButtonStyle
+        ) {
             MaterialExpressiveTheme(shapes = FonderShapes, content = content)
         }
     }
 }
+
+/**
+ * Fonders knappstil för android-ui:s knappar: Material 3:s 40 dp, Expressive-formmorf och den tonade
+ * knappen i primärbehållaren (ljusblå) – samma som Fonders egna `AppButton` (UI-13).
+ */
+private val FonderButtonStyle = AppButtonStyle(minHeight = 40.dp, morph = true, secondaryTone = Tone.Primary)
 
 /** Semantiska avkastningsfärger. Får aldrig bäras av enbart färg — para med tecken/pil. */
 object ReturnColors {
