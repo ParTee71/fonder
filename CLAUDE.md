@@ -2,7 +2,7 @@
 
 > Fondbevakning (Android/Kotlin · Compose · MVVM · Hilt · Room · DataStore).
 > Håller koll på fonder: kurser, transaktioner, värde och utveckling — med molnbackup.
-> Kravspecifikation: [KRAVLISTA.md](KRAVLISTA.md) · Arkitektur: [README.md](README.md)
+> Kravspecifikation: [KRAVLISTA.md](KRAVLISTA.md) · Arkitektur: [ARKITEKTUR.md](ARKITEKTUR.md)
 
 Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, för alla
 ändringar, oavsett storlek. De detaljerade reglerna ligger som skills i
@@ -160,7 +160,7 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   versionen i samma ändring, så att ingen separat release-PR behövs. Välj semver efter
   ändringen: **major** = brytande/borttagen funktion eller backupformat som äldre appar inte
   läser, **minor** = ny funktion, **patch** = fix, chore, refactor. Höj `versionCode` med 1,
-  uppdatera `versionName` i `app/build.gradle.kts`, versionsraden överst i README och
+  uppdatera `versionCode`/`versionName` i `version.properties`, versionsraden överst i README och
   versionstabellen (raden i "Versionshistorik") – i funktions-PR:en, inte vid release – och skriv
   versionen i PR-beskrivningen. Ren dokument-, test- eller CI-ändring utan effekt i appen höjer
   inte. Är versionen redan höjd sedan senaste tagg, höj bara om denna PR är allvarligare. Själva
@@ -187,7 +187,7 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
 Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 `data/` (auth, datastore, imports, network, repository, room) · `di/` · `domain/` (model, usecase) ·
 `ui/<feature>/` + `ui/components/` + `ui/diagram/` + `ui/theme/` · `worker/`.
-Detaljer i [README.md](README.md).
+Detaljer i [ARKITEKTUR.md](ARKITEKTUR.md) (enda källan för paketträd, dataflöde och datamodell).
 
 ---
 

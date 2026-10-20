@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name (e.g. 0.2.0) — leave blank to use value in build.gradle.kts'
+        description: 'Version name (e.g. 0.2.0) — leave blank to use value in version.properties'
         required: false
         type: string
       publish_release:

@@ -11,7 +11,7 @@ granskar och committar; du skriver koden och testerna och rapporterar ärligt va
 
 ## Förberedelse
 
-1. Läs `CLAUDE.md` (de fem reglerna, mockup-regeln) och `README.md` (arkitekturen). Läs
+1. Läs `CLAUDE.md` (de fem reglerna, mockup-regeln) och `ARKITEKTUR.md` (arkitekturen). Läs
    `KRAVLISTA.md` för de krav-ID:n uppdraget nämner.
 2. Ladda de skills som berörs: alltid `android:android-dev` (pluginen) och `android-projekt`;
    UI → `shared-ui-components`, `android:compose-expert`, `ui-style` och

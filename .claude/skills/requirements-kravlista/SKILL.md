@@ -46,7 +46,7 @@ så att det går att pröva med ett test eller i appen. Skriv kort och sakligt.
 **Hör inte hemma i raden:**
 - **Motiv och bortvalda alternativ** ("valdes i stället för …", "eftersom …") → PR- eller
   issuebeskrivningen.
-- **Implementation** (klassnamn, Room-tabeller, workers, bibliotek) → README:s arkitekturavsnitt,
+- **Implementation** (klassnamn, Room-tabeller, workers, bibliotek) → ARKITEKTUR.md,
   KDoc i koden eller PR:en. Undantag: ett namn som *är* beteendet för användaren eller ett
   extern kontrakt (t.ex. filprefixet `fonder-backup-` i Drive, eftersom det skyddar Dagbokens filer).
 - **Issue-historik** ("sedan issue #93", "tidigare gjorde den …") → git-historiken och PR:en.
@@ -92,9 +92,10 @@ eller en vanlig ändring får ingen historikpost – det är vad git och README:
 
 ## Följdartefakter
 
-- **README** – funktionslistan under "Status" bockas av när en funktion landar;
-  arkitekturavsnittet uppdateras när en ny klass eller ett nytt paket tillkommit.
-- **`versionName` och `versionCode`** i `app/build.gradle.kts` höjs i funktions-PR:en (CLAUDE.md
+- **README** – funktionslistan under "Status" bockas av när en funktion landar.
+- **ARKITEKTUR.md** – paketträdet och datamodellen uppdateras när en ny klass, ett nytt paket
+  eller en ny tabell tillkommit.
+- **`versionName` och `versionCode`** i `version.properties` höjs i funktions-PR:en (CLAUDE.md
   → PR-flöde, skill `android:release` → Versionshöjning). Själva releasen görs separat och bara
   på uttrycklig begäran.
 - **Versionshistorik-tabellen i README** och versionsraden överst skrivs i funktions-PR:en, inte
@@ -108,7 +109,7 @@ omskrivning av befintliga rader är ett eget issue.
 - [ ] Rätt tabell och ID-serie.
 - [ ] Nytt ID / redigerat / helt struket med `~~…~~ *(borttaget)*`; `*(planerad)*` borttaget när det byggts.
 - [ ] Inga ID:n återanvända eller raderade.
-- [ ] Raden beskriver beteende – motiv och implementation ligger i PR/issue/README.
+- [ ] Raden beskriver beteende – motiv och implementation ligger i PR/issue/ARKITEKTUR.md.
 - [ ] Gemensamma beteenden refererade, inte upprepade.
 - [ ] Versionen höjd och README:s versionsrad och versionstabell uppdaterade om appens beteende ändrats.
 - [ ] Historikpost bara om ett tidigare antagande rättas.

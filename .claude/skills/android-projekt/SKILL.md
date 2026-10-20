@@ -8,7 +8,7 @@ description: Fonders anpassningar av de generella android:-skillsen från plugin
 De generella skillsen kommer från pluginen `android@claude-android` och heter `android:<namn>`.
 Pluginen är generell; det som bara gäller Fonder står här, en sektion per pluginskill.
 **CLAUDE.md:s fem regler och repots egna skills går före båda.** Arkitekturen, paketträdet och
-versionstabellen står i [README.md](../../../README.md); tekniska krav i
+datamodellen står i [ARKITEKTUR.md](../../../ARKITEKTUR.md), versionstabellen i [README.md](../../../README.md); tekniska krav i
 [KRAVLISTA.md](../../../KRAVLISTA.md) (TP-serien). Fonder har ingen Firestore och därför inga
 security rules – `android:firebase-security-rules-auditor` gäller inte här.
 
@@ -43,7 +43,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
   anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); sex compose-rules-regler som kräver API-ändringar i befintliga komponenter är avstängda i ktlint (`parameter-naming`, `lambda-param-event-trailing`, `multiple-emitters-check`, `modifier-naming`, `modifier-missing-check`, `param-order-check`) och `vm-injection-check` för att dess autorättning bryter `AppNavigation` (två `hiltViewModel()`); ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
-  pluginen (beta), men utan kommentar i katalogen om varför. Tas i egna PR:er senare; ny kod
+  pluginen (beta); skälet står i katalogen och i ARKITEKTUR.md → Verifierade API:er. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.
 
 ## Coroutines (android:kotlin-coroutines)
@@ -271,7 +271,7 @@ Stegen står i pluginen; det här är Fonders delar.
   före push, i två Gradle-anrop (`./gradlew :app:assembleRelease` och sedan
   `./gradlew :app:lintDebug`); de körs inte i PR-flödet (skill `ci-budget`).
 - **I PR:en:** krav-ID:n, testplanen (och vad som inte kunde köras lokalt), versionen
-  (`versionName`/`versionCode` ur `app/build.gradle.kts`, eller "ingen höjning"), byggtidseffekten
+  (`versionName`/`versionCode` ur `version.properties`, eller "ingen höjning"), byggtidseffekten
   vid nya beroenden, och för GUI mockup-länken med Roborazzi-skärmdumpar ljust + mörkt
   (`captureLightAndDark`).
 - **Emulatortesterna:** jobbet `instrumented-tests` körs i PR:er som rör filtret `instrumented`,
@@ -297,9 +297,9 @@ Release här; GUI → avsnittet Mockup här och `ui-style`.
   `BackupRoundTripTest`? Serializer som inte tål äldre payload eller okända fält?
 - **Regel 2:** nivåerna är JUnit/MockK/Turbine i `test/`, Room och Compose-UI i `androidTest/`
   och migreringstest.
-- **Version:** beteende är `app/src/main/**`, `app/build.gradle.kts` utöver versionen,
-  `gradle/libs.versions.toml` och andra byggfiler. Versionen står i `app/build.gradle.kts`
-  (strängen efter `versionNameOverride ?:`, aldrig override-logiken), plus versionsraden överst
+- **Version:** beteende är `app/src/main/**`, `app/build.gradle.kts`,
+  `gradle/libs.versions.toml` och andra byggfiler. Versionen står i `version.properties`
+  (`versionCode` och `versionName`, aldrig override-logiken i `app/build.gradle.kts`), plus versionsraden överst
   i README och raden i "Versionshistorik".
 - **Regel 4:** avvikelse från nordisk blå/koppar, Space Grotesk eller tabulära siffror för
   belopp; en egen listrad i stället för `ItemRow`; en tredje kopia av en känd dubblett
@@ -361,9 +361,9 @@ Release här; GUI → avsnittet Mockup här och `ui-style`.
 
 ## Release (android:release)
 
-- **Versionsfilen** är `app/build.gradle.kts`: `versionCode = <n>` och
-  `versionName = versionNameOverride ?: "<version>"`. Ändra bara strängen – `versionNameOverride`
-  sätts enbart av workflowernas `-PversionNameOverride`. README har två ställen: versionsraden
+- **Versionsfilen** är `version.properties`: `versionCode=<n>` och `versionName=<version>`, som
+  `app/build.gradle.kts` läser. `versionNameOverride` sätts enbart av workflowernas
+  `-PversionNameOverride` och går före `versionName`. README har två ställen: versionsraden
   överst (`> Version: <version> …`) och raden under "Versionshistorik". Alla höjs och skrivs i
   funktions-PR:en.
 - **Workflow:** `release.yml` (owner `ParTee71`, repo `fonder`), tre jobb (detaljer och kostnad i
