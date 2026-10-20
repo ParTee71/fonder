@@ -85,7 +85,9 @@ de krockar gäller projektets regler.
   flera repon under en gemensam katalog kontrollerar Stop-hooken varje repo med det repots
   egen hook; ett repo utan hook lämnas därhän.
 - **`session-start.sh`** säger i molnsessioner om Android SDK finns och skriver `sdk.dir` i
-  `local.properties` när den saknas där.
+  `local.properties` när den saknas där. Den lägger också `maven-central-mirror.init.gradle.kts`
+  i `~/.gradle/init.d/`, så att sessionens Gradle hämtar från Googles spegel av Maven Central i
+  stället för att få 429 från `repo.maven.apache.org`. CI och Android Studio påverkas inte.
 - **`install-android-sdk.sh`** installerar Android SDK i `/opt/android-sdk` (≈450 MB) och
   pekar ut den i `local.properties`. Körs vid behov, inte automatiskt.
 - **`settings.json`** sätter `LC_ALL=C.UTF-8` (testnamn med å/ä/ö), tillåter de läsande
