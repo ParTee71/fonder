@@ -199,6 +199,15 @@ fun TransactionFormContent(
                 modifier = Modifier.padding(top = Spacing.xs)
             )
         }
+        // Sparfelet under Spara, som i Riskprofilen (NFR-6) — formuläret står kvar med inmatningen.
+        state.failure?.let { failure ->
+            Text(
+                stringResource(failure.message),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = Spacing.xs)
+            )
+        }
         if (state.linkFailed) {
             Text(
                 stringResource(R.string.transaktionsform_link_failed),

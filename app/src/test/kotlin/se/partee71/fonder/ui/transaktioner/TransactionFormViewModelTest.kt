@@ -3,6 +3,8 @@ package se.partee71.fonder.ui.transaktioner
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -23,6 +25,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
@@ -65,6 +68,13 @@ class TransactionFormViewModelTest {
     private val foundByIsin = mutableMapOf<String, Fund>()
     private val upsertedFunds = mutableListOf<Fund>()
 
+    /** Det som skrivningen av en transaktion kastar — se testerna om sparfel och avbrott (NFR-6). */
+    private var addFailure: Exception? = null
+
+    /** Håller kvar skrivningen tills testet släpper den — så att det pågående sparandet syns. */
+    private var addGate: CompletableDeferred<Unit>? = null
+    private var addCalls = 0
+
     /** Fonden vars kursuppslag är långsamt — se testet om avbrutet uppslag. */
     private var slowFundId: String? = null
 
@@ -77,6 +87,9 @@ class TransactionFormViewModelTest {
             funds.value = funds.value.filterNot { it.fundId == fund.fundId } + fund
         }
         override suspend fun addTransaction(tx: Transaction): Long {
+            addCalls++
+            addGate?.await()
+            addFailure?.let { throw it }
             addedTransactions.add(tx)
             return 1
         }
@@ -682,5 +695,84 @@ class TransactionFormViewModelTest {
             assertFalse(state.fundLoading)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Fel vid sparning (NFR-6) ---
+
+    /** Formuläret ifyllt med [fund], 2 andelar à 150 kr — klart att spara. */
+    private suspend fun ReceiveTurbine<TransactionFormUiState>.fillValidForm(vm: TransactionFormViewModel) {
+        awaitUntil { it.loaded() }
+        vm.onFundSelected(fund)
+        vm.onSharesTextChange("2")
+        vm.onPriceTextChange("150")
+        awaitUntil { it.canSave }
+    }
+
+    @Test
+    fun `ett sparfel sags och formularet star kvar med inmatningen`() = runTest(dispatcher) {
+        addFailure = IllegalStateException("trasig")
+        addGate = CompletableDeferred()
+        val vm = viewModel()
+        vm.uiState.test {
+            fillValidForm(vm)
+
+            vm.save()
+            advanceUntilIdle()
+            var state = expectMostRecentItem()
+            assertTrue(state.saving)
+            assertFalse("Spara är släckt medan det sparar", state.canSave)
+            vm.save()
+            advanceUntilIdle()
+            assertEquals("ett dubbeltryck sparar inte två gånger", 1, addCalls)
+
+            addGate!!.complete(Unit)
+            state = awaitUntil { it.failure != null }
+            assertEquals(DataError.Unknown, state.failure?.cause)
+            assertFalse(state.saving)
+            assertFalse(state.saved)
+            assertEquals(fund, state.selectedFund)
+            assertEquals("2", state.sharesText)
+            assertEquals("150", state.priceText)
+            assertTrue("ett nytt försök går att göra", state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(addedTransactions.isEmpty())
+    }
+
+    @Test
+    fun `ett nytt forsok efter ett sparfel tar bort felet och sparar`() = runTest(dispatcher) {
+        addFailure = IllegalStateException("trasig")
+        val vm = viewModel()
+        vm.uiState.test {
+            fillValidForm(vm)
+            vm.save()
+            awaitUntil { it.failure != null }
+
+            addFailure = null
+            vm.save()
+            val state = awaitUntil { it.saved }
+            assertEquals(null, state.failure)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(1, addedTransactions.size)
+    }
+
+    @Test
+    fun `ett avbrott under sparningen visas inte som fel`() = runTest(dispatcher) {
+        addFailure = CancellationException("avbruten")
+        val vm = viewModel()
+        vm.uiState.test {
+            fillValidForm(vm)
+
+            vm.save()
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals(null, state.failure)
+            assertFalse(state.saved)
+            assertFalse(state.saving)
+            assertEquals("2", state.sharesText)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(addedTransactions.isEmpty())
     }
 }

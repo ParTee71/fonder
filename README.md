@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.72.4 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.72.5 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.72.5 | Ett misslyckat sparande i transaktionsformuläret sägs under Spara i stället för att appen kraschar, formuläret står kvar med inmatningen, och Spara är släckt medan transaktionen sparas (NFR-6, #185). |
 | 0.72.4 | Intern: Hem, Fonddetalj och Pågående byte har sitt lästa innehåll som android-ui:s `DetailUiState`, riskprofilen går via `EditorState`/`EditorLoader`, och inloggningens och säkerhetskopians fel tas ur samma felmappning med oförändrade texter (NFR-6, #173). En detaljskärm eller riskprofil som inte går att läsa visar ett fel i stället för att appen kraschar, ett misslyckat sparande av riskprofilen sägs under Spara, och Spara är släckt medan profilen läses eller sparas. Ingen synlig ändring i övrigt. |
 | 0.72.3 | Intern: listskärmarnas tillstånd (Händelser, Beslut, Facit, Fondsök, Portfölj) och felen går via komponentbiblioteket android-ui (`ListUiState`, `UiError`), och datalagrets fel mappas på ett ställe till en svensk text per fel (NFR-6, #173). En lista som inte går att läsa ur databasen visar ett fel i stället för att appen kraschar. Ingen synlig ändring i övrigt. |
 | 0.72.2 | Intern: temat går via komponentbiblioteket android-ui (`AppTheme`) med Fonders palett, former och Space Grotesk-typskala; avstånden i skärmarna tas ur `Spacing`, och regel 4-kontrollen fäller nya literala avstånds-dp. Ingen synlig ändring. |
