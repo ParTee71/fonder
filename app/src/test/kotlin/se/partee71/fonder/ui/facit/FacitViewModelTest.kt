@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -19,6 +20,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -51,14 +53,21 @@ class FacitViewModelTest {
     private val followedCalls = mutableListOf<Pair<Long, Boolean>>()
     private var metadataForCalled = false
 
+    /** Historiken går inte att läsa ur databasen (NFR-6). */
+    private var historyFails = false
+
     private val fakeSuggestionRepo = object : SuggestionRecordRepository {
         override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records
-        override fun observeHistory(): Flow<List<SuggestionRecord>> = records.map { all ->
-            all.sortedWith(
-                compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
-                    .thenByDescending { it.batchEpochMillis }
-                    .thenBy { it.planIndex }
-            )
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = if (historyFails) {
+            flow { throw DataError.Database }
+        } else {
+            records.map { all ->
+                all.sortedWith(
+                    compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                        .thenByDescending { it.batchEpochMillis }
+                        .thenBy { it.planIndex }
+                )
+            }
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) {}
@@ -171,6 +180,19 @@ class FacitViewModelTest {
             val loaded = awaitItem()
             assertFalse(loaded.loading)
             assertTrue(loaded.isEmpty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett läsfel i databasen visas som fel i stället för ett tomt facit (NFR-6)`() = runTest(dispatcher) {
+        historyFails = true
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
+            assertTrue(state.rows.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -13,7 +13,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import java.time.LocalDate
-import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -24,6 +23,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.toListUiState
 
 /**
  * Fliken Händelser i JVM med Robolectric: filterraden (TRX-3), kortet med årets realiserade resultat
@@ -57,8 +57,7 @@ class TransaktionerScreenTest {
         val sales = RealizedGainCalculator.compute(transactions)
         val salesById = sales.associateBy { it.transactionId }
         return TransaktionerUiState(
-            loading = false,
-            allRows = transactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = salesById[tx.id]) }.toImmutableList(),
+            list = transactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = salesById[tx.id]) }.toListUiState(),
             filter = filter,
             yearRealized = RealizedGainCalculator.totalForYear(sales, 2026),
             totalRealized = RealizedGainCalculator.total(sales)
@@ -128,7 +127,7 @@ class TransaktionerScreenTest {
             )
         }
         composeRule.setContent {
-            FonderTheme { TransaktionerContent(state = TransaktionerUiState(loading = false, allRows = many.toImmutableList())) }
+            FonderTheme { TransaktionerContent(state = TransaktionerUiState(list = many.toListUiState())) }
         }
 
         composeRule.onNodeWithText("Fond nr 1").assertIsDisplayed()

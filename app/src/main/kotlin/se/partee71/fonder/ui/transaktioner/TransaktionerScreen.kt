@@ -97,12 +97,15 @@ fun TransaktionerContent(
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     val pendingDelete = pendingDeleteId?.let { id -> state.allRows.firstOrNull { it.transaction.id == id } }
 
+    val error = state.error
     if (state.isEmpty) {
         EmptyState(
             title = stringResource(R.string.transaktioner_empty_title),
             body = stringResource(R.string.transaktioner_empty_body),
             modifier = modifier
         )
+    } else if (error != null) {
+        EmptyState(error = error, modifier = modifier)
     } else {
         val rows = state.rows
         LazyColumn(

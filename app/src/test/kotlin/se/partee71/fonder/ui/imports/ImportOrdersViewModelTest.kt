@@ -23,6 +23,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.imports.FakeImportFileReader
 import se.partee71.fonder.data.imports.ImportFileReader
@@ -228,7 +229,7 @@ class ImportOrdersViewModelTest {
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
-            assertEquals(ImportOrdersError.NONE_PARSED, state.error)
+            assertEquals(DataError.ImportNoTransactions, state.error?.cause)
             assertTrue(state.rows.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }

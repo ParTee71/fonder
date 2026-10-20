@@ -47,17 +47,17 @@ class BeslutScreenTest {
         canRecompute: Boolean = false,
         backgroundWorkRunning: Boolean = false
     ) = BeslutUiState(
-        loading = false,
         riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
         accountType = if (canRecompute) AccountType.ISK_KF else AccountType.DEPA_AF,
-        decisions = PendingDecisions(
+        backgroundWorkRunning = backgroundWorkRunning
+    ).withDecisions(
+        PendingDecisions(
             switchPlan = plan,
             openWatches = watches,
             watchedSellIsins = watchedSellIsins,
             cheaperAlternatives = cheaper,
             dismissedSuggestions = dismissed
-        ).withSwitches(emptyList(), LocalDate.now()),
-        backgroundWorkRunning = backgroundWorkRunning
+        ).withSwitches(emptyList(), LocalDate.now())
     )
 
     private fun show(state: BeslutUiState) = composeRule.setContent { FonderTheme { BeslutContent(state = state) } }

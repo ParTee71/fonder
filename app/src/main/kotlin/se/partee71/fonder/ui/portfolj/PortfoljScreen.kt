@@ -68,12 +68,15 @@ fun PortfoljContent(
     onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val error = state.error
     when {
         state.isEmpty -> EmptyState(
             title = stringResource(R.string.portfolj_empty_title),
             body = stringResource(R.string.portfolj_empty_body),
             modifier = modifier
         )
+
+        error != null -> EmptyState(error = error, modifier = modifier)
 
         // Både totalkortet och exponeringskortet ligger som `item {}` i samma `LazyColumn` som
         // innehavsraderna (inte i en fast `Column` ovanför) — annars äter de permanent

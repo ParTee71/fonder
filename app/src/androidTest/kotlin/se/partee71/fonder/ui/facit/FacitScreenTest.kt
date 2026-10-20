@@ -19,6 +19,7 @@ import se.partee71.fonder.domain.usecase.FacitRad
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.ListUiState
 
 /**
  * Instrumenterat test av facit-skärmens tillståndsdrivna innehåll (SET-5, issue #80). Bygger
@@ -70,12 +71,12 @@ class FacitScreenTest {
     )
 
     /** Samma uppdelning per sort (issue #91) som [FacitViewModel] får ur [FacitSummary], så skärmen testas mot ett äkta tillstånd. */
-    private fun state(vararg rows: FacitRad): FacitUiState = FacitUiState(loading = false, facit = FacitSummary.summarize(rows.toList()))
+    private fun state(vararg rows: FacitRad): FacitUiState = FacitUiState().withFacit(FacitSummary.summarize(rows.toList()))
 
     @Test
     fun tomt_tillstand_visas_utan_inspelade_forslag() {
         composeRule.setContent {
-            FonderTheme { FacitContent(state = FacitUiState(loading = false)) }
+            FonderTheme { FacitContent(state = FacitUiState(list = ListUiState.Empty)) }
         }
 
         composeRule.onNodeWithText("Inget facit än").assertExists()

@@ -57,6 +57,8 @@ Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 ```
 data/
 ├── auth/         AuthRepository + FirebaseAuthRepository (Google-inloggning via Credential Manager, TP-6/#106)
+├── common/       DataError + DataError.of (Room/SQLite, källorna, importerna) · AppErrors (android-ui:s ErrorMapper,
+│                 den enda felmappningen, NFR-6/#173)
 ├── datastore/    PreferencesRepository (tema, riskprofil #68 m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·
@@ -127,6 +129,8 @@ ui/
 ├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
 ├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
 │                 sälj och köp, ANA-12/ANA-13, #114)
+├── common/       DataErrorMessage (DataError.toMessage(), felens svenska texter) · ListStates (ListUiState-hjälpare:
+│                 itemsOrEmpty, errorOrNull, catchAsListError – NFR-6/#173)
 ├── navigation/   AppNavigation (Navigation 3: NavDisplay, en dekorerad stack per flik) · AppBackStack (stack per
 │                 flik, sparas över rotation och processdöd) · AppKeys (@Serializable NavKey per skärm) · Screen ·
 │                 Transitions · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
@@ -152,7 +156,21 @@ använder `FakeFundPriceRefreshScheduler`.
 
 ```
 Compose → ViewModel (StateFlow<UiState>) → Repository → Room / DataStore
+                ↑ ListUiState, UiError (android-ui:s ui-common) ← AppErrors ← DataError (data/common)
 ```
+
+**Tillstånd och fel (NFR-6, #173):** listskärmarnas tillstånd (Händelser, Beslut, Facit, Fondsök,
+Portfölj) har listan som ett `ListUiState<T>`-fält från android-ui:s `ui-common` – laddning, tomt, fel
+eller innehåll – bredvid skärmens övriga fält (filter, summeringar, körstatus). Ett fel i källan
+fångas med `catchAsListError` och blir `ListUiState.Error` i stället för en krasch. Felmappningen
+finns på ett ställe: `DataError.of` översätter Room/SQLite till `Database`, ett I/O-fel från en källa
+till `Network` och resten till `Unknown`; importerna sätter sina egna (`ImportUnreadable`,
+`ImportEmpty`, `ImportNoTransactions`). `AppErrors` gör ett `UiError` av det med texten ur
+`DataError.toMessage()`, och skärmen visar det med `EmptyState(error)`. Fondsök sätter
+`DataError.Network` när katalogen inte kom (källan svarar `null`) med sin egen text. Inloggningens
+och backupens fel (`SignInException.Reason`, `BackupFormatException.Reason`, `DriveResult`) och
+Översikt, Fonddetalj, Pågående byte och formulären är inte flyttade än – `DetailUiState` och
+`EditorState`/`EditorLoader` från `ui-common` är målet för dem.
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —
@@ -257,6 +275,6 @@ versionen i tabellen.
 | Compose | BOM 2026.09.00, `material3` 1.5.0-beta01 | se Verifierade API:er |
 | Kontroller | Konsist (`UiConsistencyTest`), PMD CPD (`cpdCheck`), Spotless/ktlint lokalt | skill `shared-ui-components`, `ci-budget` |
 | Moduler | `:app` | `:core` är #171 |
-| android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Temat (`AppTheme`, `Spacing`) sedan #172 |
+| android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, med `ui-theme` och `ui-common` transitivt; i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Temat (`AppTheme`, `Spacing`) sedan #172, listtillstånd och fel (`ListUiState`, `UiError`, `ErrorMapper`) sedan #173 |
 
 Övrig Gradle-uppsättning (plugins, KSP-inställningar, cache) står i skill `android-projekt` → Gradle.

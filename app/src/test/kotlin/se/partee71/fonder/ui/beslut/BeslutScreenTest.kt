@@ -23,6 +23,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
@@ -40,6 +42,7 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.ListUiState
 
 /**
  * Fliken Beslut (NAV-9) i JVM med Robolectric: rubrikraden mot riskprofilen, listan Byten (BYT-4)
@@ -114,12 +117,12 @@ class BeslutScreenTest {
      * utgånget och ett avstått byte; sju följda i facit med deras resultat i kronor.
      */
     private val full = BeslutUiState(
-        loading = false,
         riskProfile = balanced,
         accountType = AccountType.ISK_KF,
         followedCount = 7,
-        followedExcessKr = 4_210.0,
-        decisions = PendingDecisions(
+        followedExcessKr = 4_210.0
+    ).withDecisions(
+        PendingDecisions(
             openWatches = listOf(
                 OpenSwitchWatch(
                     watchId = 3, sellFundName = "Tillväxtmarknad Bred", daysWaiting = 2, candidateCount = 3,
@@ -134,8 +137,8 @@ class BeslutScreenTest {
     )
 
     /** Allt avstått (HEM-14), ett byte i planen och ett billigare alternativ: inget att besluta, men raden för att ångra finns kvar. */
-    private val withDismissed = full.copy(
-        decisions = PendingDecisions(
+    private val withDismissed = full.withDecisions(
+        PendingDecisions(
             dismissedSuggestions = listOf(planRow2),
             dismissedCheaperAlternatives = listOf(cheaper)
         ).withSwitches(emptyList(), today)
@@ -154,7 +157,7 @@ class BeslutScreenTest {
 
     @Test
     fun `utan profil sags det ut i stallet for en gissad niva`() {
-        composeRule.setContent { FonderTheme { BeslutContent(state = BeslutUiState(loading = false)) } }
+        composeRule.setContent { FonderTheme { BeslutContent(state = BeslutUiState(list = ListUiState.Empty)) } }
 
         composeRule.onNodeWithText("Ingen riskprofil satt").assertIsDisplayed()
     }
@@ -163,7 +166,7 @@ class BeslutScreenTest {
     fun `tomt lage visar tomt tillstand men behaller vagen till facit`() {
         var facit = 0
         composeRule.setContent {
-            FonderTheme { BeslutContent(state = BeslutUiState(loading = false, followedCount = 1), onOpenFacit = { facit++ }) }
+            FonderTheme { BeslutContent(state = BeslutUiState(list = ListUiState.Empty, followedCount = 1), onOpenFacit = { facit++ }) }
         }
 
         composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
@@ -172,6 +175,19 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("Facit · 1 följt förslag").performClick()
 
         assertEquals(1, facit)
+    }
+
+    @Test
+    fun `lasfel visar bara felet utan profilrad och facitrad`() {
+        composeRule.setContent {
+            FonderTheme {
+                BeslutContent(state = BeslutUiState(list = ListUiState.Error(AppErrors.map(DataError.Database)), followedCount = 1))
+            }
+        }
+
+        composeRule.onNodeWithText("Kunde inte visa innehållet").assertIsDisplayed()
+        composeRule.onNodeWithText("Ingen riskprofil satt").assertDoesNotExist()
+        composeRule.onNodeWithText("Facit · 1 följt förslag").assertDoesNotExist()
     }
 
     @Test
@@ -336,7 +352,7 @@ class BeslutScreenTest {
 
     @Test
     fun `utan avslutade eller avstadda visas ingen hopfalld sektion`() {
-        val noClosed = full.copy(decisions = full.decisions.copy(dismissedSuggestions = emptyList()).withSwitches(emptyList(), today))
+        val noClosed = full.withDecisions(full.decisions.copy(dismissedSuggestions = emptyList()).withSwitches(emptyList(), today))
         composeRule.setContent { FonderTheme { BeslutContent(state = noClosed) } }
 
         composeRule.onNodeWithText("Avslutade och avstådda", substring = true).assertDoesNotExist()
@@ -356,6 +372,6 @@ class BeslutScreenTest {
 
     @Test
     fun `skärmdump utan något att besluta`() = composeRule.captureLightAndDark("BeslutScreen_empty") {
-        BeslutContent(state = BeslutUiState(loading = false, riskProfile = balanced, accountType = AccountType.ISK_KF))
+        BeslutContent(state = BeslutUiState(list = ListUiState.Empty, riskProfile = balanced, accountType = AccountType.ISK_KF))
     }
 }

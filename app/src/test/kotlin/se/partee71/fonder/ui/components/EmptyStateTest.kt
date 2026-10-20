@@ -6,6 +6,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
 
@@ -33,6 +35,22 @@ class EmptyStateTest {
 
         composeRule.onNodeWithText("Ingen portfölj ännu").assertExists()
         composeRule.onNodeWithText("Lägg till din första fondtransaktion för att se en översikt här.").assertExists()
+    }
+
+    @Test
+    fun `ett läsfel visas som tomt tillstånd med felets text (NFR-6)`() {
+        composeRule.setContent { FonderTheme { EmptyState(error = AppErrors.map(DataError.Database)) } }
+
+        composeRule.onNodeWithText("Kunde inte visa innehållet").assertExists()
+        composeRule.onNodeWithText("Appens data gick inte att läsa. Lämna skärmen och försök igen.").assertExists()
+    }
+
+    @Test
+    fun `ett läsfel kan få skärmens egen rubrik`() {
+        composeRule.setContent { FonderTheme { EmptyState(error = AppErrors.map(DataError.ImportEmpty), title = "Importera innehav") } }
+
+        composeRule.onNodeWithText("Importera innehav").assertExists()
+        composeRule.onNodeWithText("Inga rader hittades i filen.").assertExists()
     }
 
     @Test

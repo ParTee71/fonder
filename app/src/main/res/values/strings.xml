@@ -10,6 +10,12 @@
     <string name="close">Stäng</string>
     <string name="edit">Redigera</string>
     <string name="add">Lägg till</string>
+    <!-- Datalagrets fel (NFR-6) — en text per DataError, se ui/common/DataErrorMessage.kt; importfelen har sina egna texter längre ned -->
+    <string name="error_load_title">Kunde inte visa innehållet</string>
+    <string name="error_database">Appens data gick inte att läsa. Lämna skärmen och försök igen.</string>
+    <string name="error_network">Kunde inte nå källan. Kontrollera uppkopplingen och försök igen.</string>
+    <string name="error_not_found">Det finns inte längre.</string>
+    <string name="error_unknown">Något gick fel. Försök igen.</string>
     <!-- Bakgrundsindikator för pågående kursuppdatering (NAV-6, issue #27) -->
     <string name="worker_status_running">Uppdaterar kurser i bakgrunden</string>
     <!-- Kortens egen väntesnurra (NAV-6) — %1$s är kortets rubrik, så flera samtidiga snurror går att skilja åt -->

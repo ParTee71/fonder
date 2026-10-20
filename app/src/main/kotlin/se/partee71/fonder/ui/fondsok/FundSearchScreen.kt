@@ -30,6 +30,7 @@ import se.partee71.fonder.ui.components.ProgressBar
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.ui.common.ListUiState
 import se.partee71.ui.theme.Spacing
 
 @Composable
@@ -99,27 +100,24 @@ fun FundSearchContent(
             refreshing = state.refreshing,
             onRefresh = onRefresh
         ) {
-            when {
-                state.loading -> ProgressBar(modifier = Modifier.padding(top = Spacing.l))
+            when (val list = state.list) {
+                ListUiState.Loading -> ProgressBar(modifier = Modifier.padding(top = Spacing.l))
 
                 // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
-                // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).
-                state.loadFailed -> PullableMessage {
-                    EmptyState(
-                        title = stringResource(R.string.fondsok_load_failed_title),
-                        body = stringResource(R.string.fondsok_load_failed_body)
-                    )
+                // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78, NFR-6).
+                is ListUiState.Error -> PullableMessage {
+                    EmptyState(error = list.error, title = stringResource(R.string.fondsok_load_failed_title))
                 }
 
-                state.results.isEmpty() -> PullableMessage {
+                ListUiState.Empty -> PullableMessage {
                     EmptyState(
                         title = stringResource(R.string.fondsok_empty_title),
                         body = stringResource(R.string.fondsok_empty_body)
                     )
                 }
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.results, key = { it.fundId }) { fund ->
+                is ListUiState.Content -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(list.items, key = { it.fundId }) { fund ->
                         FundResultRow(
                             fund = fund,
                             added = onPickFund == null && fund.fundId in state.addedFundIds,

@@ -62,6 +62,7 @@ fun ImportOrdersScreen(
         )
     }
 
+    val error = state.error
     when {
         state.imported -> Unit
 
@@ -78,9 +79,9 @@ fun ImportOrdersScreen(
             )
         }
 
-        state.error != null -> EmptyState(
+        error != null -> EmptyState(
+            error = error,
             title = stringResource(R.string.import_orders_title),
-            body = stringResource(R.string.import_orders_error_none_parsed),
             modifier = modifier
         )
 

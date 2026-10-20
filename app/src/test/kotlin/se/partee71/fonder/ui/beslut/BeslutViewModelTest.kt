@@ -4,6 +4,8 @@ import app.cash.turbine.test
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -18,6 +20,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
@@ -25,6 +28,7 @@ import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FakeTransactionRepository
+import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.Fund
@@ -81,7 +85,7 @@ class BeslutViewModelTest {
     private val dismissalRepo = FakeSuggestionDismissalRepository()
     private val transactionRepo = FakeTransactionRepository()
 
-    private fun viewModel() = BeslutViewModel(
+    private fun viewModel(facitTransactions: TransactionRepository = transactionRepo) = BeslutViewModel(
         PendingDecisionsSource(
             preferencesRepository,
             suggestionRepo,
@@ -91,7 +95,7 @@ class BeslutViewModelTest {
             DismissedPlanSource(suggestionRepo, dismissalRepo, preferencesRepository, metadataRepo),
             InProgressSwitches(switchWatchRepo, suggestionRepo)
         ),
-        FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo),
+        FacitSummary(suggestionRepo, facitTransactions, priceRepo, metadataRepo),
         preferencesRepository,
         RecordTransaction(
             transactionRepo,
@@ -160,6 +164,20 @@ class BeslutViewModelTest {
             while (state.loading) state = awaitItem()
             assertTrue(state.isEmpty)
             assertEquals(0, state.decisions.count)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett läsfel i databasen visas som fel i stället för en tom lista (NFR-6)`() = runTest(dispatcher) {
+        val failing = object : TransactionRepository by transactionRepo {
+            override fun observeFunds(): Flow<List<Fund>> = flow { throw DataError.Database }
+        }
+        viewModel(facitTransactions = failing).uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
     }

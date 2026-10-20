@@ -23,6 +23,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.imports.FakeImportFileReader
 import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
@@ -405,7 +406,7 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(ImportError.PARSE_FAILED, state.error)
+            assertEquals(DataError.ImportUnreadable, state.error?.cause)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -426,7 +427,7 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(ImportError.EMPTY_FILE, state.error)
+            assertEquals(DataError.ImportEmpty, state.error?.cause)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -440,7 +441,7 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(ImportError.PARSE_FAILED, state.error)
+            assertEquals(DataError.ImportUnreadable, state.error?.cause)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -16,12 +16,19 @@ import se.partee71.fonder.domain.usecase.FacitRad
 import se.partee71.fonder.domain.usecase.FacitSnapshot
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
+import se.partee71.fonder.ui.common.catchAsListError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.itemsOrEmpty
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.UiError
+import se.partee71.ui.common.toListUiState
 
 @Immutable
 data class FacitUiState(
-    val loading: Boolean = true,
+    /** Facits rader — laddning, tomt, fel eller rader (NFR-6); samma rader som i [facit]. */
+    val list: ListUiState<FacitRad> = ListUiState.Loading,
     /** Raderna och summeringarna, räknade av [FacitSummary] — se [FacitSnapshot]. */
     val facit: FacitSnapshot = FacitSnapshot(),
     /**
@@ -30,17 +37,25 @@ data class FacitUiState(
      */
     val switchPlanWorking: Boolean = false
 ) {
-    val rows: List<FacitRad> get() = facit.rows
+    val loading: Boolean get() = list is ListUiState.Loading
+    val rows: List<FacitRad> get() = list.itemsOrEmpty()
+
+    /** Läsfelet som visas i stället för facit (NFR-6). */
+    val error: UiError? get() = list.errorOrNull()
+
     val planAllSummary: SwitchOutcomeCalc.Summary get() = facit.planAllSummary
     val planFollowedSummary: SwitchOutcomeCalc.Summary get() = facit.planFollowedSummary
     val feeAllSummary: SwitchOutcomeCalc.Summary get() = facit.feeAllSummary
     val feeFollowedSummary: SwitchOutcomeCalc.Summary get() = facit.feeFollowedSummary
     val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> get() = facit.byPlanIndex
 
-    val isEmpty: Boolean get() = !loading && rows.isEmpty()
+    val isEmpty: Boolean get() = list is ListUiState.Empty
 
     /** Summeringskortets väntesnurra (NAV-6) — härlett här, så kopplingen är enhetstestbar. */
     val summaryWorking: Boolean get() = loading || switchPlanWorking
+
+    /** Tillståndet med [snapshot] — listan och summeringarna ur samma rader, så de aldrig kan skilja sig. */
+    fun withFacit(snapshot: FacitSnapshot): FacitUiState = copy(list = snapshot.rows.toListUiState(), facit = snapshot)
 }
 
 /**
@@ -60,8 +75,8 @@ class FacitViewModel @Inject constructor(
 
     val uiState: StateFlow<FacitUiState> =
         facitSummary.observe().map { snapshot ->
-            FacitUiState(loading = false, facit = snapshot)
-        }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+            FacitUiState().withFacit(snapshot)
+        }.catchAsListError { FacitUiState(list = it) }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
             // Eget led, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
             // ska inte kunna räkna om facit bara för att ett jobb startade (samma gräns som
             // HemViewModel drar).

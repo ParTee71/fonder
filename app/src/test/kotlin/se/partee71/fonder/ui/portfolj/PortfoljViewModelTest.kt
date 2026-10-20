@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -20,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -119,6 +121,22 @@ class PortfoljViewModelTest {
             val loaded = awaitItem()
             assertFalse(loaded.loading)
             assertTrue(loaded.isEmpty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett läsfel i databasen visas som fel i stället för en tom portfölj (NFR-6)`() = runTest(dispatcher) {
+        val failingRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactions(): Flow<List<Transaction>> = flow { throw DataError.Database }
+        }
+        val vm = PortfoljViewModel(failingRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
+            assertTrue(state.holdings.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }

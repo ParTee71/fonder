@@ -75,12 +75,15 @@ fun FacitContent(
     onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val error = state.error
     if (state.isEmpty) {
         EmptyState(
             title = stringResource(R.string.facit_empty_title),
             body = stringResource(R.string.facit_empty_body),
             modifier = modifier
         )
+    } else if (error != null) {
+        EmptyState(error = error, modifier = modifier)
     } else {
         // Summeringskortet ligger som `item {}` i samma lista som raderna, inte i en fast
         // Column ovanför — annars äter det permanent skärmhöjd och kan klippa bort förslag på
