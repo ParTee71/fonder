@@ -36,9 +36,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
-import se.partee71.fonder.data.auth.SignInException
 import se.partee71.fonder.data.datastore.ThemeMode
-import se.partee71.fonder.data.repository.BackupFormatException
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
@@ -325,9 +323,9 @@ fun SettingsContent(
             )
             // Ett avbrutet kontoval är inget fel och når aldrig hit — se
             // SettingsViewModel.signIn. Kvitteras bort som övriga engångshändelser (#78).
-            state.signInError?.let { reason ->
+            state.signInError?.let { error ->
                 Text(
-                    signInErrorText(reason),
+                    stringResource(error.message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(bottom = Spacing.xs)
@@ -573,8 +571,6 @@ private fun lastBackupText(record: BackupRecord?): String {
 private fun backupMessageText(message: BackupMessage): String = when (message) {
     BackupMessage.Exported -> stringResource(R.string.backup_export_success)
 
-    BackupMessage.ExportFailed -> stringResource(R.string.backup_export_failed)
-
     is BackupMessage.Restored -> stringResource(
         R.string.format_backup_restore_success,
         message.summary.funds,
@@ -583,33 +579,12 @@ private fun backupMessageText(message: BackupMessage): String = when (message) {
         message.summary.switchWatches
     )
 
-    is BackupMessage.RestoreFailed -> when (message.reason) {
-        BackupFormatException.Reason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_restore_failed_version)
-        BackupFormatException.Reason.UNREADABLE -> stringResource(R.string.backup_restore_failed_unreadable)
-    }
-
     BackupMessage.DriveSaved -> stringResource(R.string.drive_backup_success)
 
     BackupMessage.DriveEmpty -> stringResource(R.string.drive_backup_empty)
 
-    is BackupMessage.DriveFailed ->
-        if (message.signedOut) {
-            stringResource(R.string.drive_backup_signed_out)
-        } else {
-            stringResource(R.string.drive_backup_failed)
-        }
-}
-
-@Composable
-private fun signInErrorText(reason: SignInException.Reason): String = when (reason) {
-    SignInException.Reason.NO_CREDENTIAL -> stringResource(R.string.sign_in_failed_no_credential)
-
-    SignInException.Reason.FAILED -> stringResource(R.string.sign_in_failed)
-
-    // Kommer aldrig hit: ett avbrutet val filtreras bort i SettingsViewModel.signIn. Grenen
-    // finns för att `when` ska vara uttömmande utan `else`, så en ny orsak fäller kompileringen
-    // i stället för att tyst visa fel text.
-    SignInException.Reason.CANCELLED -> stringResource(R.string.sign_in_failed)
+    // Texten ur den enda felmappningen (DataError.toMessage(), NFR-6).
+    is BackupMessage.Failed -> stringResource(message.error.message)
 }
 
 @Composable

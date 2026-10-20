@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,8 +46,13 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.ui.common.catchAsDetailError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.valueOrNull
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.DetailUiState
+import se.partee71.ui.common.UiError
 
 /** Ett innehav flaggat gul eller röd i analysen (HEM-4), med det underliggande resultatet för visning av triggade signaler. */
 data class FlaggedHolding(val fund: Fund, val analysis: FundAnalysisCalc.Analysis)
@@ -76,9 +82,12 @@ data class AnalysisSummary(
     val flagged: ImmutableList<FlaggedHolding> = persistentListOf()
 )
 
+/**
+ * Det Hem läser och räknar ur innehaven, kurserna och inställningarna (HEM-1–HEM-10) — innehållet
+ * i [HemUiState.portfolio]. Allt i ett läsfel saknas, aldrig nollor som ser ut som en tom portfölj (NFR-6).
+ */
 @Immutable
-data class HemUiState(
-    val loading: Boolean = true,
+data class HemPortfolio(
     val hasHoldings: Boolean = false,
     val totalInvested: Double = 0.0,
     val totalValue: Double = 0.0,
@@ -105,7 +114,13 @@ data class HemUiState(
     /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
     /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
-    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf(),
+    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf()
+)
+
+@Immutable
+data class HemUiState(
+    /** Portföljen — laddning, läsfel (NFR-6) eller innehåll. */
+    val portfolio: DetailUiState<HemPortfolio> = DetailUiState.Loading,
     /**
      * Det som väntar på ett beslut (HEM-13) — samma källa som fliken Beslut och flikradens märke
      * läser ([PendingDecisionsSource]), så "Att besluta" aldrig kan visa ett annat antal.
@@ -120,7 +135,18 @@ data class HemUiState(
     /** Påminnelsen om att säkerhetskopiera (HEM-12), null när innehållet redan finns i en kopia. */
     val backupReminder: BackupReminder? = null
 ) {
-    val isEmpty: Boolean get() = !loading && !hasHoldings
+    val loading: Boolean get() = portfolio is DetailUiState.Loading
+
+    /** Läsfelet som visas i stället för portföljen (NFR-6). */
+    val error: UiError? get() = portfolio.errorOrNull()
+
+    /**
+     * Det korten visar: portföljen, eller nollor under den första laddningen — då snurrar varje
+     * kort (se nedan), så nollorna aldrig ser ut som svar. Vid ett läsfel visas felet i stället.
+     */
+    val content: HemPortfolio get() = portfolio.valueOrNull() ?: HemPortfolio()
+
+    val isEmpty: Boolean get() = portfolio.valueOrNull()?.hasHoldings == false
 
     // Per kort, inte ett gemensamt "något kör" (NAV-6): korten visar olika data, och en snurra
     // på avkastningskortet medan bytesplanen skannas hade sagt att kurvan är osäker när den
@@ -276,8 +302,7 @@ class HemViewModel @Inject constructor(
                 requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
-                HemUiState(
-                    loading = false,
+                HemPortfolio(
                     hasHoldings = enriched.isNotEmpty(),
                     totalInvested = PortfolioCalc.totalInvested(enriched),
                     totalValue = PortfolioCalc.totalValue(enriched),
@@ -310,33 +335,38 @@ class HemViewModel @Inject constructor(
                     }.orEmpty().toImmutableList()
                 )
             }
-        }.combine(pendingDecisionsSource.observe()) { state, decisions ->
-            // Egen gren av samma skäl som körstatusen nedan: förslag och bevakningar har ingenting
-            // med innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
-            state.copy(decisions = decisions)
-        }.combine(backupStatusRepository.reminder.onStart { emit(null) }) { state, reminder ->
-            // Egen gren: påminnelsen (HEM-12) räknas ur backup-kontraktet, inte ur innehav och
-            // kurser, och ska inte kunna räkna om portföljen. `onStart` så Hem inte väntar in
-            // påminnelsens debounce innan något alls visas.
-            state.copy(backupReminder = reminder)
-        }.combine(
-            combine(fundPriceRefreshScheduler.observeRunningWork(), metadataLoading) { running, metadataPending ->
-                running to metadataPending
+        }.map { HemUiState(portfolio = DetailUiState.Content(it)) }
+            .combine(pendingDecisionsSource.observe()) { state, decisions ->
+                // Egen gren av samma skäl som körstatusen nedan: förslag och bevakningar har ingenting
+                // med innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
+                state.copy(decisions = decisions)
+            }.combine(backupStatusRepository.reminder.onStart { emit(null) }) { state, reminder ->
+                // Egen gren: påminnelsen (HEM-12) räknas ur backup-kontraktet, inte ur innehav och
+                // kurser, och ska inte kunna räkna om portföljen. `onStart` så Hem inte väntar in
+                // påminnelsens debounce innan något alls visas.
+                state.copy(backupReminder = reminder)
+            }.combine(
+                combine(fundPriceRefreshScheduler.observeRunningWork(), metadataLoading) { running, metadataPending ->
+                    running to metadataPending
+                }
+            ) { state, (running, metadataPending) ->
+                // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
+                // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
+                // den ska inte kunna räkna om portföljen bara för att ett jobb startade.
+                state.copy(
+                    pricesWorking = BackgroundWork.PRICE_REFRESH in running,
+                    benchmarkWorking = BackgroundWork.BENCHMARK_SCAN in running,
+                    metadataWorking = metadataPending
+                )
             }
-        ) { state, (running, metadataPending) ->
-            // Eget flöde, inte en femte gren i combinen ovan: körstatusen kommer från
-            // WorkManager och har ingenting med innehav, kurser eller inställningar att göra —
-            // den ska inte kunna räkna om portföljen bara för att ett jobb startade.
-            state.copy(
-                pricesWorking = BackgroundWork.PRICE_REFRESH in running,
-                benchmarkWorking = BackgroundWork.BENCHMARK_SCAN in running,
-                metadataWorking = metadataPending
+            // Sist i kedjan: ett läsfel i vilken källa som helst (innehav, kurser, förslag,
+            // påminnelsen) visas som fel i stället för att krascha Hem (NFR-6).
+            .catchAsDetailError { HemUiState(portfolio = it) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = HemUiState()
             )
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = HemUiState()
-        )
 
     /**
      * Analyserar varje innehav och summerar statusarna (HEM-4). Kurshistoriken kommer från den

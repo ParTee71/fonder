@@ -21,9 +21,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.DetailUiState
 
 /**
  * Instrumenterat test av bevakningsskärmens tillståndsdrivna innehåll (ANA-12, issue #114).
@@ -72,18 +74,24 @@ class SwitchWatchScreenTest {
         candidateSeries: List<Pair<String, List<Pair<Long, Double>>>> = emptyList(),
         sellSeries: List<Pair<Long, Double>> = emptyList()
     ) = SwitchWatchUiState(
-        loading = false,
-        sellFundName = "Såld fond",
-        soldAtEpochDay = soldAt,
-        proceedsKr = 10_000.0,
-        daysWaiting = 3,
-        expired = expired,
-        closed = closed,
-        boughtFundName = boughtFundName,
-        rows = rows.toImmutableList(),
-        sellSeries = sellSeries.toImmutableList(),
-        candidateSeries = candidateSeries.map { (name, points) -> name to points.toImmutableList() }.toImmutableList()
+        watch = DetailUiState.Content(
+            SwitchWatchDetail(
+                sellFundName = "Såld fond",
+                soldAtEpochDay = soldAt,
+                proceedsKr = 10_000.0,
+                daysWaiting = 3,
+                expired = expired,
+                closed = closed,
+                boughtFundName = boughtFundName,
+                rows = rows.toImmutableList(),
+                sellSeries = sellSeries.toImmutableList(),
+                candidateSeries = candidateSeries.map { (name, points) -> name to points.toImmutableList() }.toImmutableList()
+            )
+        )
     )
+
+    /** Samma tillstånd med en ändring i bevakningens innehåll. */
+    private fun SwitchWatchUiState.withDetail(change: SwitchWatchDetail.() -> SwitchWatchDetail) = copy(watch = DetailUiState.Content(content.change()))
 
     @Test
     fun visar_saljfond_belopp_och_dag_i_vantan() {
@@ -221,7 +229,7 @@ class SwitchWatchScreenTest {
     fun utan_kand_malniva_sags_orsaken_och_inget_forsok_igen() {
         composeRule.setContent {
             FonderTheme {
-                SwitchWatchContent(state = state(rows = emptyList()).copy(emptyReason = SwitchWatchEmptyReason.NO_TARGET_LEVEL))
+                SwitchWatchContent(state = state(rows = emptyList()).withDetail { copy(emptyReason = SwitchWatchEmptyReason.NO_TARGET_LEVEL) })
             }
         }
 
@@ -234,7 +242,7 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state(rows = emptyList()).copy(targetLevel = 5, emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE)
+                    state = state(rows = emptyList()).withDetail { copy(targetLevel = 5, emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE) }
                 )
             }
         }
@@ -249,7 +257,7 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state(rows = emptyList()).copy(emptyReason = SwitchWatchEmptyReason.LOOKUP_FAILED),
+                    state = state(rows = emptyList()).withDetail { copy(emptyReason = SwitchWatchEmptyReason.LOOKUP_FAILED) },
                     onRetryAutoFill = { retries++ }
                 )
             }
@@ -263,7 +271,7 @@ class SwitchWatchScreenTest {
     @Test
     fun en_bevakning_som_inte_finns_visas_som_saknad() {
         composeRule.setContent {
-            FonderTheme { SwitchWatchContent(state = SwitchWatchUiState(loading = false, missing = true)) }
+            FonderTheme { SwitchWatchContent(state = SwitchWatchUiState(watch = DetailUiState.Error(AppErrors.notFound()))) }
         }
 
         composeRule.onNodeWithText("Bevakningen finns inte").assertIsDisplayed()
@@ -288,7 +296,7 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state().copy(targetLevel = 4, sellLevel = 6),
+                    state = state().withDetail { copy(targetLevel = 4, sellLevel = 6) },
                     onSelectTargetLevel = { chosen = it }
                 )
             }
@@ -309,7 +317,7 @@ class SwitchWatchScreenTest {
     fun forklaringen_foljer_riskprofilen_och_rubriken_namner_niva_och_filter() {
         // Issue #150: profilens nivå med gapet, och ramen på säljfondens nivå. Neutral text (granskningen):
         // skärmen vet inte om nivån förvaldes av profilen eller valdes av användaren.
-        val profile = mutableStateOf(state().copy(targetLevel = 4, sellLevel = 6, profileSuggestedLevel = 4, profileGapPp = 9))
+        val profile = mutableStateOf(state().withDetail { copy(targetLevel = 4, sellLevel = 6, profileSuggestedLevel = 4, profileGapPp = 9) })
         composeRule.setContent {
             FonderTheme { SwitchWatchContent(state = profile.value) }
         }
@@ -320,7 +328,7 @@ class SwitchWatchScreenTest {
         composeRule.onNodeWithText("Sedan säljdagen · nivå 4").assertExists()
 
         // Användaren har valt en annan nivå, med filtret på.
-        profile.value = profile.value.copy(targetLevel = 2, indexOnly = true)
+        profile.value = profile.value.withDetail { copy(targetLevel = 2, indexOnly = true) }
         composeRule.onNodeWithText("Vald nivå 2. Riskprofilen saknar mest på nivå 4.").assertIsDisplayed()
         composeRule.onNodeWithText("Sedan säljdagen · nivå 2 · indexfonder").assertExists()
     }
@@ -331,7 +339,7 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state().copy(targetLevel = 4, indexOnly = true),
+                    state = state().withDetail { copy(targetLevel = 4, indexOnly = true) },
                     onIndexOnlyChanged = { indexOnly = it }
                 )
             }
@@ -347,11 +355,13 @@ class SwitchWatchScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SwitchWatchContent(
-                    state = state(rows = emptyList()).copy(
-                        targetLevel = 2,
-                        indexOnly = true,
-                        emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE
-                    )
+                    state = state(rows = emptyList()).withDetail {
+                        copy(
+                            targetLevel = 2,
+                            indexOnly = true,
+                            emptyReason = SwitchWatchEmptyReason.NONE_AVAILABLE
+                        )
+                    }
                 )
             }
         }
@@ -364,7 +374,7 @@ class SwitchWatchScreenTest {
     @Test
     fun en_stangd_bevakning_visar_ingen_nivavaljare() {
         composeRule.setContent {
-            FonderTheme { SwitchWatchContent(state = state(closed = true).copy(targetLevel = 4)) }
+            FonderTheme { SwitchWatchContent(state = state(closed = true).withDetail { copy(targetLevel = 4) }) }
         }
 
         composeRule.onNodeWithText("Köp på risknivå").assertDoesNotExist()

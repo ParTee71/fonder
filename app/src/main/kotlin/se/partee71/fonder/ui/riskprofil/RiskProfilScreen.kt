@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
+import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.ui.theme.Spacing
 
 @Composable
@@ -79,6 +80,12 @@ fun RiskProfilContent(
     onSave: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // Den sparade profilen gick inte att läsa: en tom enkät hade sett ut som att ingen profil
+    // fanns, och en sparning hade skrivit över den (NFR-6).
+    state.loadError?.let { error ->
+        EmptyState(error = error, modifier = modifier)
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -154,10 +161,10 @@ fun RiskProfilContent(
             Text(
                 stringResource(R.string.format_riskprofile_allocation_sum, state.allocationSumPercent),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (state.canSave) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                color = if (state.valid) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = Spacing.s)
             )
-            if (!state.canSave) {
+            if (!state.valid) {
                 Text(
                     stringResource(R.string.riskprofile_allocation_sum_error),
                     style = MaterialTheme.typography.bodySmall,
@@ -173,6 +180,14 @@ fun RiskProfilContent(
             enabled = state.canSave,
             modifier = Modifier.padding(top = Spacing.xl)
         )
+        state.failure?.let { failure ->
+            Text(
+                stringResource(failure.message),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = Spacing.xs)
+            )
+        }
     }
 }
 

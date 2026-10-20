@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,6 +29,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.BenchmarkComponentRef
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupPayload
@@ -123,8 +125,8 @@ class HemViewModelTest {
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
 
-    private fun viewModel() = HemViewModel(
-        fakeTransactionRepo,
+    private fun viewModel(transactionRepo: TransactionRepository = fakeTransactionRepo) = HemViewModel(
+        transactionRepo,
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
@@ -174,6 +176,22 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `ett lasfel i databasen visas som fel i stallet for nollor (NFR-6)`() = runTest(dispatcher) {
+        val failingRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactions(): Flow<List<Transaction>> = flow { throw DataError.Database }
+        }
+        val vm = viewModel(failingRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
+            assertFalse(state.content.hasHoldings)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `visar total varde vinst och dag vecka manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
@@ -196,17 +214,17 @@ class HemViewModelTest {
             while (state.loading) state = awaitItem()
             assertFalse(state.isEmpty) // innehavet finns, bara kursen saknas ännu (samma fallback som POR-3)
             // ingen kand kurs an -> ingen periodberakning möjlig för portföljen
-            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.day)
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.day)
 
             latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
 
             val updated = awaitItem()
             assertFalse(updated.isEmpty)
-            assertEquals(1200.0, updated.totalValue, 1e-9)
-            assertEquals(200.0, updated.totalGainLoss, 1e-9)
-            val day = updated.performance.day as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
-            val week = updated.performance.week as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
-            val month = updated.performance.month as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            assertEquals(1200.0, updated.content.totalValue, 1e-9)
+            assertEquals(200.0, updated.content.totalGainLoss, 1e-9)
+            val day = updated.content.performance.day as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            val week = updated.content.performance.week as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            val month = updated.content.performance.month as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
             assertEquals(100.0, day.amount, 1e-9)
             assertEquals(200.0, week.amount, 1e-9)
             assertEquals(400.0, month.amount, 1e-9)
@@ -230,7 +248,7 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(today.minusDays(1).toEpochDay(), state.navEpochDay)
+            assertEquals(today.minusDays(1).toEpochDay(), state.content.navEpochDay)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -253,8 +271,8 @@ class HemViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.week)
-            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.performance.month)
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.week)
+            assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.month)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -277,8 +295,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(1, state.analysisSummary.gronCount)
-            assertTrue(state.analysisSummary.flagged.isEmpty())
+            assertEquals(1, state.content.analysisSummary.gronCount)
+            assertTrue(state.content.analysisSummary.flagged.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -304,8 +322,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(1, state.analysisSummary.flagged.size)
-            assertEquals(fond.fundId, state.analysisSummary.flagged.first().fund.fundId)
+            assertEquals(1, state.content.analysisSummary.flagged.size)
+            assertEquals(fond.fundId, state.content.analysisSummary.flagged.first().fund.fundId)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -333,10 +351,10 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             // Metadata hämtas i ett eget flöde (issue #75) — vänta in dess emission.
-            while (state.loading || state.feeSummary.comparableCount == 0) state = awaitItem()
+            while (state.loading || state.content.feeSummary.comparableCount == 0) state = awaitItem()
             // 10 andelar × 120 kr = 1200 kr innehavsvärde; 0,73 % av 1200 = 8,76 kr/år.
-            assertEquals(8.76, state.feeSummary.totalAnnualFeeKr, 0.01)
-            assertEquals(0, state.feeSummary.unknownFeeCount)
+            assertEquals(8.76, state.content.feeSummary.totalAnnualFeeKr, 0.01)
+            assertEquals(0, state.content.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(listOf("SE0001466368"), metadataForCall)
@@ -356,8 +374,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(0.0, state.feeSummary.totalAnnualFeeKr, 1e-9)
-            assertEquals(1, state.feeSummary.unknownFeeCount)
+            assertEquals(0.0, state.content.feeSummary.totalAnnualFeeKr, 1e-9)
+            assertEquals(1, state.content.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
         }
         // Inget ISIN att slå upp — uppslaget görs inte **alls** (null), inte med en tom lista.
@@ -381,8 +399,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(0.0, state.feeSummary.totalAnnualFeeKr, 1e-9)
-            assertEquals(1, state.feeSummary.unknownFeeCount)
+            assertEquals(0.0, state.content.feeSummary.totalAnnualFeeKr, 1e-9)
+            assertEquals(1, state.content.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -411,11 +429,11 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.feeSummary.comparedCount == 0) state = awaitItem()
+            while (state.loading || state.content.feeSummary.comparedCount == 0) state = awaitItem()
             // 1200 kr innehavsvärde × (0,73−0,21)% = 6,24 kr/år.
-            assertEquals(6.24, state.feeSummary.totalAnnualSavingsKr, 0.01)
-            assertEquals(1, state.feeSummary.comparedCount)
-            assertEquals(1, state.feeSummary.comparableCount)
+            assertEquals(6.24, state.content.feeSummary.totalAnnualSavingsKr, 0.01)
+            assertEquals(1, state.content.feeSummary.comparedCount)
+            assertEquals(1, state.content.feeSummary.comparableCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -436,8 +454,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertNull(state.riskProfile)
-            assertNull(state.portfolioRisk.weightedAverageRisk)
+            assertNull(state.content.riskProfile)
+            assertNull(state.content.portfolioRisk.weightedAverageRisk)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -463,11 +481,11 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.riskProfile == null || state.portfolioRisk.weightedAverageRisk == null) state = awaitItem()
-            assertEquals(5, state.riskProfile?.targetRiskLevel)
+            while (state.loading || state.content.riskProfile == null || state.content.portfolioRisk.weightedAverageRisk == null) state = awaitItem()
+            assertEquals(5, state.content.riskProfile?.targetRiskLevel)
             // Ett enda innehav -> det värdeviktade snittet är exakt fondens egen risknivå.
-            assertEquals(4.0, state.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
-            assertEquals(0, state.portfolioRisk.excludedCount)
+            assertEquals(4.0, state.content.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
+            assertEquals(0, state.content.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -487,9 +505,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.riskProfile == null) state = awaitItem()
-            assertNull(state.portfolioRisk.weightedAverageRisk)
-            assertEquals(1, state.portfolioRisk.excludedCount)
+            while (state.loading || state.content.riskProfile == null) state = awaitItem()
+            assertNull(state.content.portfolioRisk.weightedAverageRisk)
+            assertEquals(1, state.content.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -517,8 +535,8 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             // Vänta tills metadatan landat — den faktiska fördelningen är tom innan dess.
-            while (state.loading || state.riskLevelDeviations.none { it.actualFraction > 0.0 }) state = awaitItem()
-            val byLevel = state.riskLevelDeviations.associateBy { it.level }
+            while (state.loading || state.content.riskLevelDeviations.none { it.actualFraction > 0.0 }) state = awaitItem()
+            val byLevel = state.content.riskLevelDeviations.associateBy { it.level }
             assertEquals(0.5, byLevel.getValue(3).targetFraction, 1e-9)
             assertEquals(0.0, byLevel.getValue(3).actualFraction, 1e-9)
             assertEquals(0.5, byLevel.getValue(4).targetFraction, 1e-9)
@@ -541,7 +559,7 @@ class HemViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertTrue(state.riskLevelDeviations.isEmpty())
+            assertTrue(state.content.riskLevelDeviations.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -711,14 +729,14 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
-            assertEquals(3, state.returnSeries.points.size)
-            assertEquals(0.0, state.returnSeries.points.first().second, 1e-9)
+            assertEquals(3, state.content.returnSeries.points.size)
+            assertEquals(0.0, state.content.returnSeries.points.first().second, 1e-9)
             // 100 → 110 → 120: 1,10 × (120/110) − 1 = +20 %.
-            assertEquals(0.10, state.returnSeries.points[1].second, 1e-9)
-            assertEquals(0.20, state.returnSeries.points.last().second, 1e-9)
-            assertFalse(state.returnSeries.partial)
+            assertEquals(0.10, state.content.returnSeries.points[1].second, 1e-9)
+            assertEquals(0.20, state.content.returnSeries.points.last().second, 1e-9)
+            assertFalse(state.content.returnSeries.partial)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -731,9 +749,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.purchaseEpochDays.isEmpty()) state = awaitItem()
+            while (state.loading || state.content.purchaseEpochDays.isEmpty()) state = awaitItem()
 
-            assertEquals(listOf(today.minusDays(30).toEpochDay()), state.purchaseEpochDays)
+            assertEquals(listOf(today.minusDays(30).toEpochDay()), state.content.purchaseEpochDays)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -759,10 +777,10 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
-            assertTrue(state.returnSeries.partial)
-            assertEquals(0.20, state.returnSeries.points.last().second, 1e-9)
+            assertTrue(state.content.returnSeries.partial)
+            assertEquals(0.20, state.content.returnSeries.points.last().second, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -784,9 +802,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
 
-            val benchmark = state.benchmarkSeries!!
+            val benchmark = state.content.benchmarkSeries!!
             assertEquals("Global Index", benchmark.fundName)
             assertEquals(0.0, benchmark.points.first().second, 1e-9)
             assertEquals(0.10, benchmark.points.last().second, 1e-9)
@@ -801,9 +819,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
-            assertNull(state.benchmarkSeries)
+            assertNull(state.content.benchmarkSeries)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -823,9 +841,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
-            assertNull(state.benchmarkSeries)
+            assertNull(state.content.benchmarkSeries)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -841,7 +859,7 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
             priceHistoryCalls.clear()
             latestPrices.value = mapOf(
@@ -864,7 +882,7 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
             assertEquals(1, fakeScheduler.benchmarkScans)
 
             // Ny emission (kursändring) ska inte ge en till skanning.
@@ -886,7 +904,7 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.returnSeries.isEmpty) state = awaitItem()
+            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
 
             assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
@@ -937,9 +955,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
 
-            val benchmark = state.benchmarkSeries!!
+            val benchmark = state.content.benchmarkSeries!!
             assertTrue(benchmark.fundName.contains("Global Index"))
             assertTrue(benchmark.fundName.contains("Räntefond X"))
             // 70 % av insättningen i en fond som steg 10 %, 30 % i en som stod still.
@@ -966,9 +984,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
 
-            assertEquals("Global Index", state.benchmarkSeries!!.fundName)
+            assertEquals("Global Index", state.content.benchmarkSeries!!.fundName)
             assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
         }
@@ -1002,9 +1020,9 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.loading || state.benchmarkSeries == null) state = awaitItem()
+            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
 
-            val benchmark = state.benchmarkSeries!!
+            val benchmark = state.content.benchmarkSeries!!
             assertEquals("Mitt val", benchmark.fundName)
             assertEquals(0.30, benchmark.points.last().second, 1e-9)
             cancelAndIgnoreRemainingEvents()

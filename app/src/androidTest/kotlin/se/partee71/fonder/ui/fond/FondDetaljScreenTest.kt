@@ -21,6 +21,7 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MovingAverageCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.DetailUiState
 
 /**
  * Instrumenterat test av Fonddetaljs tillståndsdrivna innehåll (issue #16) — bygger
@@ -66,7 +67,7 @@ class FondDetaljScreenTest {
     fun visar_ingen_analys_sektion_utan_beraknat_resultat() {
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))))
             }
         }
 
@@ -86,7 +87,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -106,7 +107,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -127,7 +128,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -147,7 +148,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -164,12 +165,15 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false,
-                        fundName = "Fond A",
-                        prices = prices.toImmutableList(),
-                        firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
-                        netInvested = 500.0,
-                        analysis = null
+                        fund = DetailUiState.Content(
+                            FundDetail(
+                                fundName = "Fond A",
+                                prices = prices.toImmutableList(),
+                                firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay(),
+                                netInvested = 500.0,
+                                analysis = null
+                            )
+                        )
                     )
                 )
             }
@@ -186,11 +190,14 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false,
-                        fundName = "Fond A",
-                        prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
-                        movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
-                        analysis = null
+                        fund = DetailUiState.Content(
+                            FundDetail(
+                                fundName = "Fond A",
+                                prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
+                                movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
+                                analysis = null
+                            )
+                        )
                     )
                 )
             }
@@ -203,7 +210,7 @@ class FondDetaljScreenTest {
     fun visar_ingen_forsta_kop_rad_utan_kvarvarande_innehav() {
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))))
             }
         }
 
@@ -225,7 +232,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -244,7 +251,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -267,7 +274,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -293,7 +300,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -315,7 +322,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -340,7 +347,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -362,7 +369,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
             }
         }
 
@@ -390,7 +397,7 @@ class FondDetaljScreenTest {
     fun visar_inget_kort_utan_feeComparison() {
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = null))
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList())), feeComparison = null))
             }
         }
 
@@ -402,7 +409,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Loading)
+                    state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList())), feeComparison = FeeComparisonUiState.Loading)
                 )
             }
         }
@@ -416,7 +423,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList(), feeComparison = FeeComparisonUiState.Unavailable)
+                    state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList())), feeComparison = FeeComparisonUiState.Unavailable)
                 )
             }
         }
@@ -430,9 +437,12 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false,
-                        fundName = "Fond A",
-                        prices = prices.toImmutableList(),
+                        fund = DetailUiState.Content(
+                            FundDetail(
+                                fundName = "Fond A",
+                                prices = prices.toImmutableList()
+                            )
+                        ),
                         feeComparison = FeeComparisonUiState.NoCheaperAlternative
                     )
                 )
@@ -448,9 +458,12 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false,
-                        fundName = "Fond A",
-                        prices = prices.toImmutableList(),
+                        fund = DetailUiState.Content(
+                            FundDetail(
+                                fundName = "Fond A",
+                                prices = prices.toImmutableList()
+                            )
+                        ),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
                     )
                 )
@@ -467,9 +480,12 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = FondDetaljUiState(
-                        loading = false,
-                        fundName = "Fond A",
-                        prices = prices.toImmutableList(),
+                        fund = DetailUiState.Content(
+                            FundDetail(
+                                fundName = "Fond A",
+                                prices = prices.toImmutableList()
+                            )
+                        ),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
                     )
                 )
@@ -505,11 +521,14 @@ class FondDetaljScreenTest {
         comparisons: Map<String, ComparisonUiState> = emptyMap(),
         recordedFeeSwitches: Map<String, RecordedFeeSwitch> = emptyMap()
     ) = FondDetaljUiState(
-        loading = false,
-        fundName = "Fond A",
-        isin = "SE0004297927",
-        prices = prices.toImmutableList(),
-        analysis = analysis,
+        fund = DetailUiState.Content(
+            FundDetail(
+                fundName = "Fond A",
+                isin = "SE0004297927",
+                prices = prices.toImmutableList(),
+                analysis = analysis
+            )
+        ),
         riskLevel = riskLevel,
         switchPlan = switchPlan.toImmutableList(),
         feeComparison = feeComparison,
@@ -696,7 +715,7 @@ class FondDetaljScreenTest {
     @Test
     fun sager_att_bytesforslag_bara_ges_for_agda_fonder() {
         composeRule.setContent {
-            FonderTheme { FondDetaljContent(state = FondDetaljUiState(loading = false, fundName = "Fond A", prices = prices.toImmutableList())) }
+            FonderTheme { FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList())))) }
         }
 
         composeRule.onNodeWithText("bara för fonder du äger", substring = true).assertExists()

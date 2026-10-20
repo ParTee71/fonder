@@ -21,10 +21,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
@@ -38,7 +40,12 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.domain.usecase.TargetLevelPreselection
+import se.partee71.fonder.ui.common.catchAsDetailError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.valueOrNull
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.DetailUiState
+import se.partee71.ui.common.UiError
 
 /** Kurshistoriken för en bevakad kandidat — samma tre lägen som ANA-11:s jämförelse. */
 sealed interface CandidateHistory {
@@ -100,11 +107,12 @@ enum class SwitchWatchEmptyReason {
     LOOKUP_FAILED
 }
 
+/**
+ * Det Pågående byte läser och räknar ur bevakningen (ANA-12/ANA-13) — innehållet i
+ * [SwitchWatchUiState.watch]. Vid ett läsfel, eller när bevakningen inte finns, finns inget av det.
+ */
 @Immutable
-data class SwitchWatchUiState(
-    val loading: Boolean = true,
-    /** Bevakningen finns inte (raderad, eller en gammal länk) — skärmen säger det i stället för att visa tomt. */
-    val missing: Boolean = false,
+data class SwitchWatchDetail(
     val sellFundName: String = "",
     val soldAtEpochDay: Long = 0,
     val proceedsKr: Double? = null,
@@ -119,8 +127,6 @@ data class SwitchWatchUiState(
     val sellSeries: ImmutableList<Pair<Long, Double>> = persistentListOf(),
     /** Kandidatkurvor i samma ordning som [rows], bara de som gick att hämta. */
     val candidateSeries: ImmutableList<Pair<String, ImmutableList<Pair<Long, Double>>>> = persistentListOf(),
-    /** Sant medan appens egna kandidatförslag hämtas (ANA-13) — en källfråga mot nivån. */
-    val fillingCandidates: Boolean = false,
     /**
      * Målnivån förslagen hämtas för — den valda i nivåväljaren (ANA-13, issue #150), och texten för
      * [SwitchWatchEmptyReason.NONE_AVAILABLE] nämner den. Ändras med [SwitchWatchViewModel.onSelectTargetLevel].
@@ -143,10 +149,8 @@ data class SwitchWatchUiState(
     /** Hur mycket profilen saknar på [profileSuggestedLevel], i hela procentenheter (avrundat). Null när den är null. */
     val profileGapPp: Int? = null,
     /** Varför listan är tom, bara när den är det och bevakningen är öppen — se [SwitchWatchEmptyReason]. */
-    val emptyReason: SwitchWatchEmptyReason? = null,
-    val message: SwitchWatchMessage? = null
+    val emptyReason: SwitchWatchEmptyReason? = null
 ) {
-    val canAddCandidate: Boolean get() = !closed && rows.size < SwitchWatchCalc.MAX_CANDIDATES
     val hasChart: Boolean get() = sellSeries.isNotEmpty() || candidateSeries.isNotEmpty()
 
     /**
@@ -154,9 +158,31 @@ data class SwitchWatchUiState(
      * **indexfonder** på nivån är ett annat besked än inga köpbara fonder alls (issue #150).
      */
     val emptyBecauseOfIndexFilter: Boolean get() = emptyReason == SwitchWatchEmptyReason.NONE_AVAILABLE && indexOnly
+}
+
+@Immutable
+data class SwitchWatchUiState(
+    /**
+     * Bevakningen — laddning, läsfel (NFR-6), "finns inte" (raderad, eller en gammal länk:
+     * `DataError.NotFound`, skärmen säger det i stället för att visa tomt) eller innehåll.
+     */
+    val watch: DetailUiState<SwitchWatchDetail> = DetailUiState.Loading,
+    /** Sant medan appens egna kandidatförslag hämtas (ANA-13) — en källfråga mot nivån. */
+    val fillingCandidates: Boolean = false,
+    val message: SwitchWatchMessage? = null
+) {
+    val loading: Boolean get() = watch is DetailUiState.Loading
+
+    /** Läsfelet eller "finns inte" som visas i stället för bevakningen (NFR-6). */
+    val error: UiError? get() = watch.errorOrNull()
+
+    /** Det skärmen visar: bevakningen, eller tomt under den första laddningen (rubrikkortet snurrar då). */
+    val content: SwitchWatchDetail get() = watch.valueOrNull() ?: SwitchWatchDetail()
+
+    val canAddCandidate: Boolean get() = !content.closed && content.rows.size < SwitchWatchCalc.MAX_CANDIDATES
 
     /** Nivå och filter går bara att ändra medan bytet pågår — en stängd bevakning bär vad som hände. */
-    val canChangeSelection: Boolean get() = !loading && !missing && !closed
+    val canChangeSelection: Boolean get() = watch.valueOrNull()?.closed == false
 
     /** Rubrikkortets väntesnurra (NAV-6) — bevakningen läses och alternativen fylls på. */
     val headerWorking: Boolean get() = loading || fillingCandidates
@@ -165,7 +191,7 @@ data class SwitchWatchUiState(
      * Diagrammets väntesnurra: en kurva som ännu saknar en av kandidaterna är inte fel, men den
      * är inte heller hela jämförelsen — och skillnaden syns inte i bilden.
      */
-    val chartWorking: Boolean get() = loading || fillingCandidates || rows.any { it.historyLoading }
+    val chartWorking: Boolean get() = loading || fillingCandidates || content.rows.any { it.historyLoading }
 }
 
 /**
@@ -242,7 +268,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
         sellSeries,
         combine(fillingCandidates, emptyReason, message, profileSuggestion, ::Transient)
     ) { watch, metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg, suggestion) ->
-        if (watch == null) return@combine SwitchWatchUiState(loading = false, missing = true)
+        if (watch == null) return@combine SwitchWatchUiState(watch = DetailUiState.Error(AppErrors.notFound()))
 
         val today = LocalDate.now()
         val rows = SwitchWatchCalc.ranked(
@@ -274,8 +300,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
             )
         }
 
-        SwitchWatchUiState(
-            loading = false,
+        val detail = SwitchWatchDetail(
             sellFundName = watch.sellFundName,
             soldAtEpochDay = watch.soldAtEpochDay,
             proceedsKr = watch.proceedsKr,
@@ -293,7 +318,6 @@ class SwitchWatchViewModel @AssistedInject constructor(
             candidateSeries = rows.mapNotNull { row ->
                 (historyByIsin[row.isin] as? CandidateHistory.Ready)?.let { row.name to it.points.toImmutableList() }
             }.toImmutableList(),
-            fillingCandidates = filling,
             targetLevel = watch.targetLevel,
             sellLevel = metadataByIsin[watch.sellIsin]?.risk,
             indexOnly = watch.indexOnly,
@@ -301,18 +325,22 @@ class SwitchWatchViewModel @AssistedInject constructor(
             profileGapPp = suggestion?.gapPp?.roundToInt(),
             // Bara när listan faktiskt är tom: en handplockad kandidat efter ett misslyckat
             // förslag gör orsaken inaktuell, och en stängd bevakning föreslår inget alls.
-            emptyReason = reason.takeIf { rows.isEmpty() && watch.isOpen && !filling },
-            message = msg
+            emptyReason = reason.takeIf { rows.isEmpty() && watch.isOpen && !filling }
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SwitchWatchUiState()
-    )
+        SwitchWatchUiState(watch = DetailUiState.Content(detail), fillingCandidates = filling, message = msg)
+    }
+        // Ett läsfel i bevakningen visas som fel i stället för att krascha skärmen (NFR-6).
+        .catchAsDetailError { SwitchWatchUiState(watch = it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = SwitchWatchUiState()
+        )
 
     init {
         viewModelScope.launch {
-            watch.collect { current ->
+            // Ett läsfel visas av uiState (NFR-6) — här finns då inget att hämta, och ingen krasch.
+            watch.catch { }.collect { current ->
                 if (current == null) return@collect
                 if (current.isOpen) profileSuggestionAsync(current)
                 ensureAutoCandidates(current)

@@ -34,6 +34,7 @@ import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.DetailUiState
 
 /**
  * Instrumenterat test av Hem-skärmens tillståndsdrivna innehåll (issue #14) — bygger
@@ -61,7 +62,7 @@ class HemScreenTest {
     @Test
     fun tomt_tillstand_visas_utan_innehav() {
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = false)) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = false)))) }
         }
 
         composeRule.onNodeWithText("Ingen portfölj ännu").assertExists()
@@ -73,8 +74,11 @@ class HemScreenTest {
     fun paminnelsen_visar_antal_och_leder_till_installningar() {
         var opened = 0
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true
+                )
+            ),
             backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L)
         )
 
@@ -90,7 +94,7 @@ class HemScreenTest {
 
     @Test
     fun paminnelsen_utan_kopia_sager_det() {
-        val state = HemUiState(loading = false, hasHoldings = true, backupReminder = BackupReminder(0, null))
+        val state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)), backupReminder = BackupReminder(0, null))
 
         composeRule.setContent { FonderTheme { HemContent(state = state) } }
 
@@ -100,7 +104,7 @@ class HemScreenTest {
     @Test
     fun ingen_paminnelse_nar_innehallet_finns_i_en_kopia() {
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true)) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)))) }
         }
 
         composeRule.onNodeWithText("Ändringar sedan senaste säkerhetskopian").assertDoesNotExist()
@@ -110,7 +114,7 @@ class HemScreenTest {
     fun kurskorten_visar_vantesnurra_medan_kurserna_hamtas() {
         // NAV-6: chromets indikator säger bara att *något* kör. Snurran på kortet säger vilket
         // korts siffror som håller på att bli till.
-        val state = HemUiState(loading = false, hasHoldings = true, pricesWorking = true)
+        val state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)), pricesWorking = true)
 
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
@@ -123,7 +127,7 @@ class HemScreenTest {
 
     @Test
     fun kurskorten_star_stilla_i_vila() {
-        val state = HemUiState(loading = false, hasHoldings = true)
+        val state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)))
 
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
@@ -139,7 +143,7 @@ class HemScreenTest {
         // Referensfonden (HEM-10) rör bara avkastningskurvan. Snurrar totalkortet med, slutar
         // snurran betyda något — den skulle då bara säga "appen jobbar", vilket chromet redan
         // säger (NAV-6).
-        val state = HemUiState(loading = false, hasHoldings = true, benchmarkWorking = true)
+        val state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)), benchmarkWorking = true)
 
         composeRule.setContent {
             FonderTheme { HemContent(state = state) }
@@ -155,17 +159,20 @@ class HemScreenTest {
         // Undviker tresiffriga belopp — tusentalsavgränsaren kan vara vanligt eller hårt
         // blanksteg beroende på JVM/lokal (samma försiktighet som MoneyFormatTest).
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            totalValue = 500.0,
-            totalGainLoss = 100.0,
-            totalGainLossFraction = 0.2,
-            performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 50.0, fraction = 0.05, partial = false),
-                week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
-            ),
-            navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay() // POR-7, issue #27
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    totalValue = 500.0,
+                    totalGainLoss = 100.0,
+                    totalGainLossFraction = 0.2,
+                    performance = PortfolioPerformanceCalc.PortfolioPerformance(
+                        day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 50.0, fraction = 0.05, partial = false),
+                        week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
+                        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+                    ),
+                    navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay() // POR-7, issue #27
+                )
+            )
         )
 
         composeRule.setContent {
@@ -183,15 +190,18 @@ class HemScreenTest {
     fun otillracklig_historik_visar_otillracklig_data_ist_for_falsk_noll() {
         // Räcker inte historiken för en period markeras den "Otillräcklig data" — aldrig ett gissat 0.
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            totalValue = 500.0,
-            totalGainLoss = 100.0,
-            totalGainLossFraction = 0.2,
-            performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-                week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    totalValue = 500.0,
+                    totalGainLoss = 100.0,
+                    totalGainLossFraction = 0.2,
+                    performance = PortfolioPerformanceCalc.PortfolioPerformance(
+                        day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                        week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+                    )
+                )
             )
         )
 
@@ -205,15 +215,18 @@ class HemScreenTest {
     @Test
     fun delvis_osaker_markering_visas_for_en_period() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            totalValue = 1000.0,
-            totalGainLoss = 0.0,
-            totalGainLossFraction = 0.0,
-            performance = PortfolioPerformanceCalc.PortfolioPerformance(
-                day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 10.0, fraction = 0.01, partial = true),
-                week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
-                month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    totalValue = 1000.0,
+                    totalGainLoss = 0.0,
+                    totalGainLossFraction = 0.0,
+                    performance = PortfolioPerformanceCalc.PortfolioPerformance(
+                        day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 10.0, fraction = 0.01, partial = true),
+                        week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
+                        month = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory
+                    )
+                )
             )
         )
 
@@ -227,7 +240,7 @@ class HemScreenTest {
     @Test
     fun analys_summeringskort_visar_tomt_tillstand_utan_flaggade_fonder() {
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true)) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)))) }
         }
 
         composeRule.onNodeWithText("Inga fonder flaggade").assertExists()
@@ -243,9 +256,12 @@ class HemScreenTest {
             FonderTheme {
                 HemContent(
                     state = HemUiState(
-                        loading = false,
-                        hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = 1, flagged = persistentListOf(FlaggedHolding(fund, analysis)))
+                        portfolio = DetailUiState.Content(
+                            HemPortfolio(
+                                hasHoldings = true,
+                                analysisSummary = AnalysisSummary(gulCount = 1, flagged = persistentListOf(FlaggedHolding(fund, analysis)))
+                            )
+                        )
                     ),
                     onFundClick = { clickedFundId = it }
                 )
@@ -269,9 +285,12 @@ class HemScreenTest {
     fun fondavgiftskort_visar_totalen_och_forklaringstexten() {
         // Under 1000 kr — tusentalsavgränsaren kan vara vanligt eller hårt blanksteg (se MoneyFormatTest).
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -286,9 +305,12 @@ class HemScreenTest {
     @Test
     fun fondavgiftskort_visar_antal_fonder_utan_kand_avgift() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 2)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 2)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -301,9 +323,12 @@ class HemScreenTest {
     @Test
     fun fondavgiftskort_visar_ingen_okand_avgift_text_nar_alla_kanda() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 500.0, byHolding = emptyList(), unknownFeeCount = 0)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -319,17 +344,20 @@ class HemScreenTest {
         val billig = Fund(fundId = "BIL", name = "Billig Fond")
         var clickedFundId: String? = null
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(
-                totalAnnualFeeKr = 900.0,
-                // Redan sorterat störst avgift först av PortfolioFeeCalc.compute — kortet
-                // ska bara rendera i den ordningen, inte sortera om.
-                byHolding = listOf(
-                    PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0),
-                    PortfolioFeeCalc.HoldingFee(billig, annualFeeKr = 200.0)
-                ),
-                unknownFeeCount = 0
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(
+                        totalAnnualFeeKr = 900.0,
+                        // Redan sorterat störst avgift först av PortfolioFeeCalc.compute — kortet
+                        // ska bara rendera i den ordningen, inte sortera om.
+                        byHolding = listOf(
+                            PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0),
+                            PortfolioFeeCalc.HoldingFee(billig, annualFeeKr = 200.0)
+                        ),
+                        unknownFeeCount = 0
+                    )
+                )
             )
         )
 
@@ -352,15 +380,18 @@ class HemScreenTest {
     @Test
     fun fondavgiftskort_visar_samlad_besparing_och_antal_genomsokta() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(
-                totalAnnualFeeKr = 900.0,
-                byHolding = emptyList(),
-                unknownFeeCount = 0,
-                totalAnnualSavingsKr = 300.0,
-                comparedCount = 2,
-                comparableCount = 3
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(
+                        totalAnnualFeeKr = 900.0,
+                        byHolding = emptyList(),
+                        unknownFeeCount = 0,
+                        totalAnnualSavingsKr = 300.0,
+                        comparedCount = 2,
+                        comparableCount = 3
+                    )
+                )
             )
         )
 
@@ -375,9 +406,12 @@ class HemScreenTest {
     @Test
     fun fondavgiftskort_visar_ingen_besparingstext_utan_jamforbara_innehav() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -391,15 +425,18 @@ class HemScreenTest {
     fun avgiftsrad_visar_besparing_nar_ett_farskt_billigare_alternativ_finns() {
         val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(
-                totalAnnualFeeKr = 700.0,
-                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = 350.0)),
-                unknownFeeCount = 0,
-                totalAnnualSavingsKr = 350.0,
-                comparedCount = 1,
-                comparableCount = 1
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(
+                        totalAnnualFeeKr = 700.0,
+                        byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = 350.0)),
+                        unknownFeeCount = 0,
+                        totalAnnualSavingsKr = 350.0,
+                        comparedCount = 1,
+                        comparableCount = 1
+                    )
+                )
             )
         )
 
@@ -414,13 +451,16 @@ class HemScreenTest {
     fun avgiftsrad_visar_ingen_text_alls_for_ett_aldrig_sokt_innehav() {
         val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(
-                totalAnnualFeeKr = 700.0,
-                // wasCompared=false (standard) — aldrig sökt, eller ett utgånget resultat.
-                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null)),
-                unknownFeeCount = 0
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(
+                        totalAnnualFeeKr = 700.0,
+                        // wasCompared=false (standard) — aldrig sökt, eller ett utgånget resultat.
+                        byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null)),
+                        unknownFeeCount = 0
+                    )
+                )
             )
         )
 
@@ -438,14 +478,17 @@ class HemScreenTest {
         // (regel 4), så det inte ser ut som att innehavet aldrig genomsökts.
         val dyr = Fund(fundId = "DYR", name = "Dyr Fond")
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            feeSummary = PortfolioFeeCalc.Result(
-                totalAnnualFeeKr = 700.0,
-                byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null, wasCompared = true)),
-                unknownFeeCount = 0,
-                comparedCount = 1,
-                comparableCount = 1
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    feeSummary = PortfolioFeeCalc.Result(
+                        totalAnnualFeeKr = 700.0,
+                        byHolding = listOf(PortfolioFeeCalc.HoldingFee(dyr, annualFeeKr = 700.0, annualSavingsKr = null, wasCompared = true)),
+                        unknownFeeCount = 0,
+                        comparedCount = 1,
+                        comparableCount = 1
+                    )
+                )
             )
         )
 
@@ -472,9 +515,12 @@ class HemScreenTest {
             FonderTheme {
                 HemContent(
                     state = HemUiState(
-                        loading = false,
-                        hasHoldings = true,
-                        analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged.toImmutableList())
+                        portfolio = DetailUiState.Content(
+                            HemPortfolio(
+                                hasHoldings = true,
+                                analysisSummary = AnalysisSummary(gulCount = flagged.size, flagged = flagged.toImmutableList())
+                            )
+                        )
                     )
                 )
             }
@@ -508,7 +554,7 @@ class HemScreenTest {
     @Test
     fun riskkortet_uteblir_helt_utan_sparad_profil() {
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true, riskProfile = null)) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true, riskProfile = null)))) }
         }
 
         composeRule.onNodeWithText("Riskprofil").assertDoesNotExist()
@@ -517,10 +563,13 @@ class HemScreenTest {
     @Test
     fun riskkortet_visar_malniva_och_faktisk_niva() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetRiskLevel = 5),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    riskProfile = RiskProfile(targetRiskLevel = 5),
+                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -541,11 +590,14 @@ class HemScreenTest {
         val target = mapOf(3 to 0.31, 4 to 0.46, 5 to 0.23)
         val actual = mapOf(3 to 0.12, 4 to 0.53, 5 to 0.35)
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = target),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
-            riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList()
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    riskProfile = RiskProfile(targetAllocation = target),
+                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
+                    riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList()
+                )
+            )
         )
 
         composeRule.setContent {
@@ -571,10 +623,13 @@ class HemScreenTest {
         // Sedan 0.61.0 visas bytesplanen på Beslut (NAV-9); riskkortet visar bara fördelningen,
         // och Översikten säger bara hur många förslag som väntar (HEM-13).
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0),
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0)
+                )
+            ),
             decisions = PendingDecisions(switchPlan = listOf(planSuggestion)).withSwitches(emptyList(), LocalDate.now())
         )
 
@@ -592,10 +647,13 @@ class HemScreenTest {
     @Test
     fun riskkortet_visar_otillrackligt_data_nar_ingen_faktisk_niva_kunde_beraknas() {
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
-            riskProfile = RiskProfile(targetRiskLevel = 4),
-            portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1)
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true,
+                    riskProfile = RiskProfile(targetRiskLevel = 4),
+                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1)
+                )
+            )
         )
 
         composeRule.setContent {
@@ -617,14 +675,17 @@ class HemScreenTest {
         partial: Boolean = false,
         benchmark: BenchmarkSeries? = null
     ) = HemUiState(
-        loading = false,
-        hasHoldings = true,
-        totalValue = 1200.0,
-        totalGainLoss = 200.0,
-        totalGainLossFraction = 0.2,
-        returnSeries = PortfolioReturnSeriesCalc.Result(points = points, partial = partial),
-        benchmarkSeries = benchmark,
-        purchaseEpochDays = persistentListOf(20_000L)
+        portfolio = DetailUiState.Content(
+            HemPortfolio(
+                hasHoldings = true,
+                totalValue = 1200.0,
+                totalGainLoss = 200.0,
+                totalGainLossFraction = 0.2,
+                returnSeries = PortfolioReturnSeriesCalc.Result(points = points, partial = partial),
+                benchmarkSeries = benchmark,
+                purchaseEpochDays = persistentListOf(20_000L)
+            )
+        )
     )
 
     @Test
@@ -779,8 +840,11 @@ class HemScreenTest {
     fun att_besluta_visar_antalet_och_leder_till_beslut() {
         var opened = 0
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true
+                )
+            ),
             decisions = PendingDecisions(
                 switchPlan = listOf(planSuggestion, planSuggestion.copy(recordId = 2, planIndex = 1)),
                 cheaperAlternatives = listOf(
@@ -810,8 +874,11 @@ class HemScreenTest {
     fun att_besluta_uteblir_nar_inget_vantar() {
         // Ett kvitterat förslag är redan beslutat — raden ska då inte stå kvar med en nolla.
         val state = HemUiState(
-            loading = false,
-            hasHoldings = true,
+            portfolio = DetailUiState.Content(
+                HemPortfolio(
+                    hasHoldings = true
+                )
+            ),
             decisions = PendingDecisions(switchPlan = listOf(planSuggestion.copy(followed = true))).withSwitches(emptyList(), LocalDate.now())
         )
 
