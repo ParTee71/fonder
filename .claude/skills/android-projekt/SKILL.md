@@ -255,11 +255,11 @@ Stegen står i pluginen; det här är Fonders delar.
   `UiConsistencyTest`); Room, migrering, rundtur och Compose i `app/src/androidTest`.
 - **Agenter:** huvudsessionen orkestrerar och granskar; agenten `byggare` tar skärmar,
   komponenter, use cases, nätverkskällor, workers och CI-filer, agenten `arkitekt` Room-schema,
-  migreringar, backup-kedjan, DataStore och arkitekturval, `testskrivare` tester på tre eller
-  fler nivåer, `granskare` diffen (steg 8) och `ci-doktor` rött CI. Går ett steg fel två gånger i
+  migreringar, backup-kedjan, DataStore och arkitekturval, pluginens `android:testskrivare` tester på
+  tre eller fler nivåer, `android:granskare` diffen (steg 8) och `android:ci-doktor` rött CI. Går ett steg fel två gånger i
   rad flyttas det upp en nivå (`byggare` → `arkitekt`, Sonnet → Opus). Saknar issuet
   **Agent · modell · effort** kompletteras det (avsnittet Issues nedan).
-- **`/code-review` krävs** (efter `granskare`) när ändringen rör `domain/usecase/`, datalagret,
+- **`/code-review` krävs** (efter `android:granskare`) när ändringen rör `domain/usecase/`, datalagret,
   Room-schemat, backup-kedjan, en nätverkskälla eller en delad komponent (`ui/components`,
   `ui/diagram`), eller när diffen är större än ett par filer.
 - **Commit-områden** efter flik, funktion eller lager, t.ex. `hem`, `portfolj`, `fond`,
@@ -281,6 +281,34 @@ Stegen står i pluginen; det här är Fonders delar.
   (`release-debug.yml`, https://github.com/ParTee71/fonder/releases/tag/debug-snapshot), en
   signerad release eller en artifact – avslutas svaret med länken, commit och `versionName`
   (CLAUDE.md → Bygg & test). "Bygget är grönt" utan länk när en APK byggts är ett anti-mönster.
+
+## Granskning (agenten android:granskare)
+
+Pluginens granskare har de generella kontrollpunkterna; de här gäller Fonder i tillägg.
+
+**Läs efter diffen:** persisterad data och backup → `data-safety-backup`; Room-schema →
+`room-migrations`; tester → `testing-strategy`; UI, komponenter, diagram → `shared-ui-components`
+och `diagram`; CI, beroenden → `ci-budget`; version och PR-innehåll → avsnitten Arbetsflöde och
+Release här; GUI → avsnittet Mockup här och `ui-style`.
+
+- **Regel 1:** ändrad `@Entity` eller kolumn utan höjd databasversion, `Migration(X, Y)` och
+  `MigrationXYTest`? Ändrad gammal migrering eller `fallbackToDestructiveMigration`? Nytt
+  persisterat fält eller DataStore-nyckel som saknas i `BackupPayload`/`BackupSerializer` eller i
+  `BackupRoundTripTest`? Serializer som inte tål äldre payload eller okända fält?
+- **Regel 2:** nivåerna är JUnit/MockK/Turbine i `test/`, Room och Compose-UI i `androidTest/`
+  och migreringstest.
+- **Version:** beteende är `app/src/main/**`, `app/build.gradle.kts` utöver versionen,
+  `gradle/libs.versions.toml` och andra byggfiler. Versionen står i `app/build.gradle.kts`
+  (strängen efter `versionNameOverride ?:`, aldrig override-logiken), plus versionsraden överst
+  i README och raden i "Versionshistorik".
+- **Regel 4:** avvikelse från nordisk blå/koppar, Space Grotesk eller tabulära siffror för
+  belopp; en egen listrad i stället för `ItemRow`; en tredje kopia av en känd dubblett
+  (`TotalCard`, `ComparisonChart`, importens laddningsdialoger) i stället för att slå ihop den;
+  baslinjerna (`ui-allowlist.txt` ur `tools/regel4-baseline.mjs`, `config/cpd-baseline.txt`) får
+  bara krympa.
+- **Regel 5:** emulatorn i fler jobb än `instrumented-tests`.
+- **Integritet:** innehav, belopp, transaktioner eller tokens i loggar. Fonder har ingen
+  Firestore, så `android:firebase-security-rules-auditor` gäller inte.
 
 ## Issues (android:refine-issue)
 
@@ -324,9 +352,9 @@ Stegen står i pluginen; det här är Fonders delar.
   |---|---|---|
   | `byggare` | skärmar, komponenter, use cases, nätverkskällor, workers, CI-filer | Opus · medium |
   | `arkitekt` | Room-schema, migreringar, backup-kedjan, DataStore, arkitekturval | Opus · high (Fable vid väldigt komplexa issues) |
-  | `testskrivare` | tester när tre eller fler nivåer berörs | Sonnet · medium |
-  | `granskare` | granskningen i steg 8, alltid med | sessionens modell · medium |
-  | `ci-doktor` | rött CI – startas vid behov, anges inte i förväg | Sonnet · medium |
+  | `android:testskrivare` | tester när tre eller fler nivåer berörs | Sonnet · medium |
+  | `android:granskare` | granskningen i steg 8, alltid med | sessionens modell · medium |
+  | `android:ci-doktor` | rött CI – startas vid behov, anges inte i förväg | Sonnet · medium |
 
   Room-schema, migreringar och backup-kedjan minst `arkitekt` · Opus · high. Exempel: `arkitekt` ·
   Opus · high – migrering och backup-kedjan; `byggare` · Opus · medium – skärmen.

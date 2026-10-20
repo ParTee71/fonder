@@ -3,13 +3,12 @@ name: testing-strategy
 description: 'Fonders testregel (regel 2, NFR-2) — ingen beteendeändring utan tester på rätt nivå(er), och flaky tester är buggar. Ladda denna ALLTID när du lägger till, ändrar eller fixar funktionalitet, en ViewModel, ett use case, ett repository, en DAO, en migrering, en parser, en worker, en composable eller en bugg. Trigger-ord: test, tester, testa, JUnit, MockK, Turbine, fake, ViewModelTest, instrument, androidTest, Compose UI-test, createComposeRule, StandardTestDispatcher, MigrationXYTest, BackupRoundTripTest, fältvakt, Robolectric, Roborazzi, skärmdump, Konsist, kontraktstest, emulator, regression, flaky, instabil, täckning, TDD.'
 ---
 
-# Teststrategi: tester på alla nivåer
+# Teststrategi i Fonder
 
-**Regel:** en ändring av beteende är inte klar förrän tester lagts till eller uppdaterats
-på varje berörd nivå. Befintliga tester **uppdateras** så att de speglar det nya
-beteendet – de tas aldrig bort, `@Ignore`:as eller försvagas för att bli gröna.
-**Ett test som ibland faller är en bugg** – hitta grundorsaken (klocka, dispatcher, delat
-tillstånd, ett klick som inte landar) och gör det deterministiskt. Kör aldrig bara om.
+**Det generella står i skill `android:testing-strategy`** (pluginen): tester på varje berörd
+nivå, befintliga tester uppdateras och tas aldrig bort, flaky är en bugg, mönstren,
+skärmdumpsreglerna, fallgroparna och anti-mönstren. Här står det som är Fonders: nivåerna och
+var de körs, hjälparna, kommandona och den flakiness som redan bitit här.
 
 Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 
@@ -68,12 +67,10 @@ metod på ett interface måste **alla** fakes uppdateras, annars bryts testbygge
 
 ## Projektmönster
 
-- **Fake framför mock för datalagret.** `object : Interface { … }` i testfilen eller en delad
-  `Fake*`. MockK för det som inte rimligen går att fejka (t.ex. ett Android-`Context`).
+Fake framför mock: `object : Interface { … }` i testfilen eller en delad `Fake*`.
+
 - **Separera skärm från tillstånd.** Varje skärm har en `*Content`-funktion utan
   ViewModel/Hilt (`SettingsContent`, #27); testerna renderar den.
-- **Injicera dispatcher**; kalla aldrig `Dispatchers.IO` direkt i testbar kod.
-- **Turbine** för `StateFlow`/`Flow`, inte manuell `collect`.
 - **Händelser är fält i tillståndet** (`saved`, `startedSwitchWatchId`): ViewModel-testet väntar i
   `uiState.test { … }` tills fältet är satt, kvitterar (`onSavedHandled()`) och visar att det är
   borta och inte kommer tillbaka (`expectNoEvents()`). Skärmens kvittering testas med Robolectric mot
@@ -161,23 +158,19 @@ installera den – det är alltid ok att installera Android SDK och liknande ver
 emulatortesterna (`instrumented-tests`) **bara i PR** som rör `app/src/main`,
 `app/src/androidTest` eller byggfilerna – en ren push ger ingen instrumenttäckning (skill
 `ci-budget`). Vid rött CI – låt
-agenten `ci-doktor` diagnostisera.
+agenten `android:ci-doktor` diagnostisera.
 
-## Fallgropar
+## För testskrivaren
 
-- **Första Gradle-körningen i en ny session** hämtar Gradle och beroendena (flera minuter).
-  Kör den i bakgrunden och fortsätt med annat.
-- **Plattformspaketet heter `android-37.0`**, inte `android-37`, från API 37.
-- **Maven Central svarar 429** när många beroenden hämtas samtidigt – kör om med
-  `--no-parallel --max-workers=2`, inte i en slinga.
-- **Två Gradle-körningar samtidigt** låser varandra eller ger förvirrande cachefel – vänta in
-  den första.
+Agenten `android:testskrivare` (pluginen) läser det här utöver tabellerna ovan:
 
-## Anti-mönster
-
-- Ta bort, `@Ignore`:a eller försvaga ett rött test för att bli klar.
-- Köra om ett test tills det blir grönt.
-- Testa implementation (interna anrop) i stället för beteende.
-- Ett test som går mot nätet eller mot riktig Drive.
-- Ny funktion utan test "för att den är liten".
-- Låta `main` kompilera medan en fake i test slutat matcha sitt interface.
+- **Läs också** `data-safety-backup` och `room-migrations` vid data, `diagram` vid diagrammatematik.
+- **Nivåer:** ren logik (`domain/usecase`, parsers i `data/network` och `data/imports`,
+  ViewModels, workers) → JUnit/MockK/Turbine i `app/src/test/`; Room-DAO:er, Compose-UI och
+  WorkManager-schemaläggning → `app/src/androidTest/`; schemaändring → `MigrationXYTest` som
+  bygger det gamla schemat för hand; persisterat fält → `BackupRoundTripTest` och
+  `BackupSerializerTest`.
+- **Parsers** testas mot sparade svar från Avanza, Handelsbanken och Riksbanken – aldrig mot nätet.
+- **Testdata** är syntetisk – aldrig utdrag ur en riktig backup eller avräkningsnota.
+- **Kör** `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin`; instrumenttester
+  bekräftas i CI.

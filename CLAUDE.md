@@ -106,7 +106,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 - [ ] **CI-budget:** inga nya dyra steg i PR-flödet; byggtidseffekt angiven vid nya beroenden. (regel 5)
 - [ ] **Arkitektur:** följer projektets etablerade mönster (skill `android:android-dev` och `android-projekt`).
 - [ ] **GUI:** mockup godkänd; skärmdumpar (ljust + mörkt) i PR:en.
-- [ ] **Granskning:** agenten `granskare` och `/code-review` har körts på diffen – och igen på rättningarna efter dem.
+- [ ] **Granskning:** agenten `android:granskare` och `/code-review` har körts på diffen – och igen på rättningarna efter dem.
 
 ---
 
@@ -168,7 +168,7 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   **android:release**), frågar inte om versionen och kräver då ingen ny PR.
 - **Prenumerera automatiskt** på PR-aktivitet (`subscribe_pr_activity`) så fort en PR
   skapas, utan att fråga. Bevaka tills den är mergad eller stängd: fixa CI-fel, hantera
-  granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `ci-doktor`
+  granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `android:ci-doktor`
   diagnostisera. Avsluta prenumerationen när PR:en är klar.
 - **Delegera på rätt nivå:** huvudsessionen orkestrerar och granskar; agenten `byggare` tar
   skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `arkitekt`
@@ -193,8 +193,9 @@ Detaljer i [README.md](README.md).
 
 ## Agenter, modellval och skills
 
-Agenterna (`byggare`, `arkitekt`, `granskare`, `ci-doktor`, `testskrivare`), modellvalet och
-alla skills, med när de används, står i [.claude/README.md](.claude/README.md). Agenterna
+Agenterna (`byggare`, `arkitekt` och pluginens `android:granskare`, `android:ci-doktor`,
+`android:testskrivare`), modellvalet och alla skills, med när de används, står i
+[.claude/README.md](.claude/README.md). Agenterna
 svarar med kortrapporten i sin fil. Vid komprimering av en lång session: behåll ändrade filer,
 issue- och PR-nummer, körda testkommandon med resultat och öppna ❌ från granskningen.
 

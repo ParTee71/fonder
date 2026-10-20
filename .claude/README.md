@@ -10,9 +10,14 @@ varje uppgift – hålls kort.
 |---|---|
 | `byggare` | Skärmar, komponenter, use cases, nätverkskällor, workers och CI-filer enligt en klar plan (Opus · medium). |
 | `arkitekt` | Room-entiteter, migreringar, backup-kedjan, DataStore och arkitekturval (Opus · high). |
-| `granskare` | Före varje PR: granskar diffen mot de fem reglerna och mockup-regeln, rapporterar i en tabell (sessionens modell · medium). |
-| `ci-doktor` | Vid rött CI: läser loggar och testrapporter, föreslår fix (Sonnet · medium). |
-| `testskrivare` | Skriver/utökar tester och fixturer – när tre eller fler testnivåer berörs (Sonnet · medium). |
+
+Från pluginen (generella, läser Fonders delar ur repot):
+
+| Agent | När |
+|---|---|
+| `android:granskare` | Före varje PR: granskar diffen mot de fem reglerna och mockup-regeln, rapporterar i en tabell (sessionens modell · medium). Fonders kontrollpunkter: `android-projekt` → Granskning. |
+| `android:ci-doktor` | Vid rött CI: läser loggar och testrapporter, föreslår fix (Sonnet · medium). Fonders felklasser: `ci-budget` → Felklasser. |
+| `android:testskrivare` | Skriver/utökar tester och fixturer – när tre eller fler testnivåer berörs (Sonnet · medium). Fonders regler: `testing-strategy` → För testskrivaren. |
 
 Modell och effort står i varje agents frontmatter (`model`, `effort`) och gäller när
 agenten startas utan annat besked.
@@ -51,21 +56,22 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 | `android-projekt` | Fonders delar av pluginens `android:`-skills (se nedan) – ladda alltid tillsammans med dem; mockupens data, länk och skärmdumpar; avsnitten Arbetsflöde, Issues och Release till `android:implement-issue`, `android:refine-issue` och `android:release`. |
 | `android-data-layer` | Repository/Room/DAO/offline-först. |
 | `data-safety-backup` | Regel 1 — persisterad data, backup-kontraktet, rundturen. |
-| `testing-strategy` | Regel 2 — nivåer, fakes, och den flakiness som redan bitit. |
+| `testing-strategy` | Regel 2 i Fonder — nivåer, fakes, kommandon och den flakiness som redan bitit. Det generella: `android:testing-strategy`. |
 | `requirements-kravlista` | Regel 3 — ID-serier, hur en kravrad skrivs här, historiken. |
 | `shared-ui-components` | Regel 4 — katalogen i `ui/components/` och `ui/diagram/`. |
 | `room-migrations` | Schemaändringar, defaultvärden och migreringstesterna. |
-| `ci-budget` | Regel 5 — vad som körs när i CI (enda tabellen), kända problem och målet efter CI-etappen. |
+| `ci-budget` | Regel 5 i Fonder — vad som körs när i CI (enda tabellen), felklasser och kända problem. Det generella: `android:ci-budget`. |
 | `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
 | `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
 
-Tretton generella skills kommer från pluginen `android@claude-android` och heter `android:<namn>`
+Femton generella skills och tre agenter kommer från pluginen `android@claude-android` och heter `android:<namn>`
 i sessionen: `android-dev` (baslinje, ladda alltid), `compose-expert`, `kotlin-coroutines`,
 `kotlin-flows`, `navigation-3`, `accessibility-compose`, `android-gradle-logic`, `firebase-auth`,
 `mockup` (mockup före ny GUI), `refine-issue` (förfina en idé eller bugg till ett planerat
 issue), `implement-issue` (genomföra ett issue hela vägen till PR, med merge-kontroll först),
-`release` (endast vid uttrycklig release; versionshöjningen i funktions-PR:en) samt Googles `android-intent-security` (manifest, `PendingIntent`,
+`release` (endast vid uttrycklig release; versionshöjningen i funktions-PR:en), `testing-strategy` och
+`ci-budget` (det generella i regel 2 och 5) samt Googles `android-intent-security` (manifest, `PendingIntent`,
 Intents). Pluginens `firebase-security-rules-auditor` gäller inte – Fonder har ingen Firestore.
 Pluginen är generell; Fonders delar och nuvarande avvikelser står i `android-projekt`, och där
 de krockar gäller projektets regler.
