@@ -30,10 +30,11 @@ enum class Screen(val key: TabKey, val icon: ImageVector, val labelRes: Int) {
 
 /**
  * Rubrik för en skärm djupare i stacken (flikarnas rubriker bor i [Screen.labelRes]). Null för en
- * flik — den har sin stora rubrik i stället för en topprad.
+ * flik — den har sin stora rubrik i stället för en topprad — och för en ramskärm ([FrameKey]), som
+ * ritar sin rubrik själv.
  */
 fun titleResFor(key: AppKey): Int? = when (key) {
-    is TabKey -> null
+    is TabKey, is FrameKey -> null
 
     SettingsKey -> R.string.nav_settings
 

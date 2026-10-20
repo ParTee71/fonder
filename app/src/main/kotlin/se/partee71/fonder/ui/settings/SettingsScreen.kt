@@ -70,6 +70,7 @@ fun SettingsScreen(
     onOpenRiskProfile: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
     onOpenBenchmarkPicker: () -> Unit = {},
+    onOpenGallery: (() -> Unit)? = null,
     scrollToBackup: Boolean = false,
     onScrolledToBackup: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
@@ -118,6 +119,7 @@ fun SettingsScreen(
         onOpenRiskProfile = onOpenRiskProfile,
         onOpenFacit = onOpenFacit,
         onOpenBenchmarkPicker = onOpenBenchmarkPicker,
+        onOpenGallery = onOpenGallery,
         onClearBenchmark = viewModel::clearBenchmark,
         onAccountTypeSelected = viewModel::setAccountType,
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
@@ -136,7 +138,10 @@ fun SettingsScreen(
     )
 }
 
-/** Tillståndsdriven, testbar del av [SettingsScreen] — inget ViewModel/Hilt-beroende (issue #27). */
+/**
+ * Tillståndsdriven, testbar del av [SettingsScreen] — inget ViewModel/Hilt-beroende (issue #27).
+ * [onOpenGallery] öppnar komponentgalleriet; bara satt i debug-bygget, annars `null` och kortet syns inte.
+ */
 @OptIn(ExperimentalFoundationApi::class) // BringIntoViewRequester, för Hems påminnelse (HEM-12)
 @Composable
 fun SettingsContent(
@@ -147,6 +152,7 @@ fun SettingsContent(
     onOpenRiskProfile: () -> Unit = {},
     onOpenFacit: () -> Unit = {},
     onOpenBenchmarkPicker: () -> Unit = {},
+    onOpenGallery: (() -> Unit)? = null,
     onClearBenchmark: () -> Unit = {},
     onAccountTypeSelected: (AccountType) -> Unit = {},
     onExportBackup: () -> Unit = {},
@@ -467,6 +473,19 @@ fun SettingsContent(
                     modifier = Modifier.padding(start = Spacing.s),
                     variant = AppButtonVariant.Text
                 )
+            }
+        }
+
+        if (onOpenGallery != null) {
+            AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
+                Text(stringResource(R.string.component_gallery_title), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.settings_components_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
+                )
+                AppButton(text = stringResource(R.string.settings_components_button), onClick = onOpenGallery)
             }
         }
 

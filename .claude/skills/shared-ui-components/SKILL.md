@@ -58,7 +58,8 @@ från android-ui:s `Spacing` (`xs` 4 · `s` 8 · `m` 12 · `l` 16 · `xl` 24 · 
 | Kopparmärke med antal | `CountBadge` | Flikraden (Beslut, NAV-9) och `ReminderRow` med `count` (HEM-13). Rund i `secondary`, `CountBadgeSize.Small` 18 dp / `Large` 28 dp; dekorativt för skärmläsaren – antalet står alltid i omgivande text eller beskrivning. |
 | Flikrad | `AppFloatingToolbar` (+ `AppToolbarTab`) | `AppNavigation`. M3E `HorizontalFloatingToolbar`, yta med svag kontur och full rundning; vald flik = primärbehållare med ikon + namn, ovalda bara ikon; valfritt kopparmärke (`badgeCount`, ritat med `CountBadge`). `Role.Tab` + valt-läge, ≥ 48 dp (NAV-7, UI-14). |
 | Plusknapp med meny | `AppFabMenu` (+ `AppFabMenuItem`, `AppFabMenuDefaults`) | `AppNavigation`. M3E `FloatingActionButtonMenu` + `ToggleFloatingActionButton`, primär, "+" fyrkantigt rundad → "×" rund; val som pills i primärbehållaren; bakåt stänger (NAV-8, UI-14). |
-| Topprad / flikrubrik | `AppTopBar`, `AppTabHeading` | `AppNavigation`. `AppTopBar` = bakåtpil + rubrik på skärmar djupare i stacken (UI-8); `AppTabHeading` = flikens stora rubrik med åtgärder, läses som rubrik (NAV-7). |
+| Komponentgalleri (debug) | `ComponentGallery` | Inställningar → Komponenter, bara i debug-bygget (`BuildConfig.DEBUG` i `AppNavigation`). Varje komponent i `ui/components` och `ui/diagram` i sina lägen med påhittad data, plus android-ui-delarna appen använder (ramarnas `AppTopBar` med `LocalTopBarStatus`); diagrammet i en hopfälld sektion. En ramskärm (`FrameKey`). Ny delad komponent → lägg den här också. |
+| Topprad / flikrubrik | `AppTopBar`, `AppTabHeading` | `AppNavigation`. `AppTopBar` = bakåtpil + rubrik på skärmar djupare i stacken (UI-8); `AppTabHeading` = flikens stora rubrik med åtgärder, läses som rubrik (NAV-7). En ramskärm (nyckel som är `FrameKey`, t.ex. android-ui:s `EntityListScreen`/`EntityEditScreen`) får ingen av dem: skalet ritar ingen rubrik och ingen `imePadding` för den, och chromets `WorkerStatusIcon` når ramens topprad via `LocalTopBarStatus`. |
 
 ## Diagram (`ui/diagram/`)
 
@@ -95,7 +96,6 @@ bygger dem (med mockup, test och skärmdump ljust + mörkt).
 |---|---|
 | `EntityListScreen` | listskärmens ram: laddning, tomt, fel med "Försök igen", lista, lägg till |
 | `EntityEditScreen` + `EditorState` | redigering: Spara aktiv först när giltigt **och** ändrat, "Släng ändringar?" vid bakåt, sparfel som snackbar. Logiken (`EditorState`, `EditorLoader`) från android-ui:s `ui-common` används av Riskprofilen (läsfel, sparfel, `saveUnchanged`). Transaktionsformuläret har inget sparat värde att läsa och ett tredje utfall (sparat men kopplingen misslyckades), och Inställningar sparar varje reglage direkt utan utkast – de har kvar sina egna tillstånd. Själva skärmramen `EntityEditScreen` finns inte |
-| `ComponentGallery` | debug-skärm med alla komponenter i alla tillstånd |
 
 ## Kod: delade byggstenar i andra lager
 

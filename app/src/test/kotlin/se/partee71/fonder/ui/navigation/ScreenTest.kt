@@ -34,6 +34,12 @@ class ScreenTest {
     }
 
     @Test
+    fun `en ramskarm ritar sin egen rubrik - skalet har ingen for den`() {
+        assertNull(Screen.forKey(ComponentGalleryKey))
+        assertNull(titleResFor(ComponentGalleryKey))
+    }
+
+    @Test
     fun `facit ar en skarm i stacken under Beslut med egen rubrik`() {
         // Sedan 0.61.0 (NAV-9): Beslut är en egen flik och Facit en djupare skärm med bakåtpil.
         assertNull(Screen.forKey(FacitKey))

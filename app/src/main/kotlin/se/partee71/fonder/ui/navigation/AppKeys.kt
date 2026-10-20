@@ -13,6 +13,16 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 @Serializable
 sealed interface AppKey : NavKey
 
+/**
+ * En skärm byggd på en av android-ui:s skärmramar (`EntityListScreen`, `EntityEditScreen`,
+ * `EntityDetailScreen`) eller annars med egen `Scaffold` och bibliotekets `AppTopBar`. Skalet
+ * ([AppNavigationShell]) ritar då ingen egen rubrik ([titleResFor] är `null`) och lägger ingen
+ * `imePadding` – ramen gör båda själv; chromets bakgrundsindikator (NAV-6) får ramens topprad via
+ * `LocalTopBarStatus`. Kan kombineras med [TabKey] när en flik går över till en ram.
+ */
+@Serializable
+sealed interface FrameKey : AppKey
+
 /** En flik i den flytande flikraden – roten i en egen bakåtstack ([Screen]). */
 @Serializable
 sealed interface TabKey : AppKey
@@ -120,3 +130,10 @@ data class SwitchWatchKey(val watchId: Long) : AppKey
  */
 @Serializable
 data class SwitchWatchPickerKey(val watchId: Long) : AppKey
+
+/**
+ * Komponentgalleriet – alla delade komponenter med påhittad data. Nås från Inställningar, men bara
+ * i debug-bygget (skill shared-ui-components); en ramskärm med egen topprad ([FrameKey]).
+ */
+@Serializable
+data object ComponentGalleryKey : FrameKey

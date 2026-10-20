@@ -2,6 +2,8 @@ package se.partee71.fonder.ui.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -11,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -30,6 +33,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import se.partee71.fonder.BuildConfig
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.beslut.BeslutScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
@@ -43,6 +47,7 @@ import se.partee71.fonder.ui.components.AppIconButtonVariant
 import se.partee71.fonder.ui.components.AppTabHeading
 import se.partee71.fonder.ui.components.AppToolbarTab
 import se.partee71.fonder.ui.components.AppTopBar
+import se.partee71.fonder.ui.components.ComponentGallery
 import se.partee71.fonder.ui.components.WorkerStatusIcon
 import se.partee71.fonder.ui.facit.FacitScreen
 import se.partee71.fonder.ui.fond.FondDetaljScreen
@@ -56,6 +61,7 @@ import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.settings.SettingsViewModel
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
+import se.partee71.ui.components.LocalTopBarStatus
 import se.partee71.ui.theme.Spacing
 
 /**
@@ -94,6 +100,10 @@ fun AppNavigation() {
  * Varje fliks stack dekoreras för sig (sparat tillstånd och ViewModels per post), så en flik som
  * lämnas via flikraden behåller sina skärmar tills man kommer tillbaka; [AppBackStack] släpper dem
  * när fliken lämnas med bakåt.
+ *
+ * En ramskärm ([FrameKey]) har egen `Scaffold` och topprad: skalet ritar då ingen rubrik och ingen
+ * `imePadding` för den, och chromets indikator ([WorkerStatusIcon]) når ramens topprad via
+ * `LocalTopBarStatus`.
  */
 @Composable
 fun AppNavigationShell(
@@ -104,6 +114,10 @@ fun AppNavigationShell(
 ) {
     val currentKey = backStack.current
     val currentTab = Screen.forKey(currentKey)
+    val isFrame = currentKey is FrameKey
+    val topBarStatus: @Composable RowScope.() -> Unit = remember(isWorkerRunning) {
+        { WorkerStatusIcon(isRunning = isWorkerRunning) }
+    }
 
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
     // Menyn hör till flikarna: lämnas fliken (även via systemets bakåt) stängs den. Efter en
@@ -124,11 +138,14 @@ fun AppNavigationShell(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
-                if (currentTab != null) {
-                    TabHeading(currentTab, isWorkerRunning, backStack)
-                } else {
+                when {
+                    // Ramskärmen ritar sin egen topprad (ramens AppTopBar) – annars två rubriker.
+                    isFrame -> Unit
+
+                    currentTab != null -> TabHeading(currentTab, isWorkerRunning, backStack)
+
                     // Varje skärm djupare i stacken har rubrik och bakåtpil (UI-8, issue #78).
-                    titleResFor(currentKey)?.let { title ->
+                    else -> titleResFor(currentKey)?.let { title ->
                         AppTopBar(title = stringResource(title), onBack = { backStack.pop() }) {
                             WorkerStatusIcon(isRunning = isWorkerRunning)
                         }
@@ -167,19 +184,28 @@ fun AppNavigationShell(
                 }
             }
         ) { innerPadding ->
-            NavDisplay(
-                entries = shownEntries,
-                // imePadding på ett ställe i stället för per skärm (regel 4): appen kör
-                // enableEdgeToEdge, och Scaffolds standardinsets är bara systemBars — tangentbordet
-                // låg därför **över** transaktionsformulärets Spara-knapp, ISIN-fältet i Fonddetalj
-                // och sökfältet i Fondsök. `adjustResize` räcker inte edge-to-edge på API 30+, där
-                // IME är en inset appen själv måste konsumera (issue #78).
-                modifier = Modifier.padding(innerPadding).imePadding(),
-                transitionSpec = Transitions.forward,
-                popTransitionSpec = Transitions.back,
-                predictivePopTransitionSpec = Transitions.predictiveBack,
-                onBack = { backStack.pop() }
-            )
+            // imePadding på ett ställe i stället för per skärm (regel 4): appen kör
+            // enableEdgeToEdge, och Scaffolds standardinsets är bara systemBars — tangentbordet
+            // låg därför **över** transaktionsformulärets Spara-knapp, ISIN-fältet i Fonddetalj
+            // och sökfältet i Fondsök. `adjustResize` räcker inte edge-to-edge på API 30+, där
+            // IME är en inset appen själv måste konsumera (issue #78). En ramskärm har sin egen
+            // Scaffold med imePadding och systemfältens insets – skalets marginal räknas då som
+            // förbrukad, så att varken tangentbordet eller statusraden läggs på två gånger.
+            val contentModifier = if (isFrame) {
+                Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)
+            } else {
+                Modifier.padding(innerPadding).imePadding()
+            }
+            CompositionLocalProvider(LocalTopBarStatus provides topBarStatus) {
+                NavDisplay(
+                    entries = shownEntries,
+                    modifier = contentModifier,
+                    transitionSpec = Transitions.forward,
+                    popTransitionSpec = Transitions.back,
+                    predictivePopTransitionSpec = Transitions.predictiveBack,
+                    onBack = { backStack.pop() }
+                )
+            }
             // Bakåt stänger en öppen plusmeny i stället för att lämna fliken – menyns enda bakåthanterare
             // (AppFabMenu får handleBack = false). Den senast registrerade hanteraren tas först, och
             // NavDisplays registreras i Scaffolds subkomposition, alltså efter allt i skalets egen
@@ -278,9 +304,14 @@ fun fonderEntries(
             onOpenRiskProfile = { backStack.push(RiskProfileKey) },
             onOpenFacit = { backStack.push(FacitKey) },
             onOpenBenchmarkPicker = { backStack.push(BenchmarkPickerKey) },
+            onOpenGallery = if (BuildConfig.DEBUG) ({ backStack.push(ComponentGalleryKey) }) else null,
             scrollToBackup = scrollSettingsToBackup.value,
             onScrolledToBackup = { scrollSettingsToBackup.value = false }
         )
+    }
+    // Komponentgalleriet – bara nåbart i debug-bygget (Inställningar visar länken bara då).
+    entry<ComponentGalleryKey> { key ->
+        ComponentGallery(onBack = { backStack.popIfTop(key) })
     }
     entry<FondDetaljKey> { key ->
         FondDetaljScreen(
