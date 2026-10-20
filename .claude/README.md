@@ -104,7 +104,8 @@ de krockar gäller projektets regler.
   [tools/fondmatte/README.md](../tools/fondmatte/README.md); när de används står i skill `fondmatematik`.
 - **MCP-servern `avanza`** (`.mcp.json`, påslagen via `enabledMcpjsonServers` i `settings.json`):
   inofficiell, läsande åtkomst till Avanzas publika fond- och kursdata (avanza-mcp 2.1.0, startas med
-  `uvx`). För att slå upp en fond eller kontrollera parsrarna i `data/network` – aldrig med
+  `uvx`; `--exclude-newer` låser även de indirekta beroendena till versionerna som fanns det datumet,
+  så att en ny paketversion inte körs i sessionen utan en ändring i repot). För att slå upp en fond eller kontrollera parsrarna i `data/network` – aldrig med
   användarens innehav, och aldrig i BankID-läget. Saknas `uv` lokalt: `pip install uv`, eller låt bli.
 
 ## Gemensam plugin
