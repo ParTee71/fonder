@@ -66,6 +66,8 @@ data object FundSearchKey : AppKey
  * Fonden pekas ut med [fundId] när den är känd, annars med [fundIsin] — en kandidat i ett byte är
  * sällan en fond appen redan bevakar och slås då upp på ISIN; fondväljaren är reserven när
  * uppslaget inte ger något.
+ *
+ * En ramskärm på android-ui:s `EntityEditScreen` med egen topprad ([FrameKey], UI-15).
  */
 @Serializable
 data class TransactionFormKey(
@@ -75,7 +77,7 @@ data class TransactionFormKey(
     val suggestionRecordId: Long? = null,
     val watchId: Long? = null,
     val prefillAmountKr: Double? = null
-) : AppKey {
+) : FrameKey {
     /** Förifyllt från ett förslag eller en bevakning — formuläret registrerar då en redan gjord affär. */
     val prefilled: Boolean get() = type != null && (fundId != null || fundIsin != null)
 

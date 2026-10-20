@@ -28,13 +28,16 @@ import se.partee71.ui.common.UiError
  * @param icon valfri dekorativ ikon i en rundad primärbehållare ovanför rubriken (UI-12). Null
  *   (default) ritar bara rubrik och brödtext som tidigare. Ikonen är dekorativ – rubriken bär
  *   budskapet för skärmläsaren.
+ * @param action valfri väg ur det tomma läget under texten – en [AppButton] (t.ex. "Bevaka en fond" i
+ *   transaktionsformuläret, TRX-6). Null (default) ritar ingen knapp.
  */
 @Composable
 fun EmptyState(
     title: String,
     body: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    action: (@Composable () -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -72,6 +75,9 @@ fun EmptyState(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp)
         )
+        if (action != null) {
+            Box(Modifier.padding(top = 16.dp)) { action() }
+        }
     }
 }
 

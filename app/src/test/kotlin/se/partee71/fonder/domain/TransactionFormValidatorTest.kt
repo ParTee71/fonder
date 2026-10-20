@@ -55,4 +55,13 @@ class TransactionFormValidatorTest {
         assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = -1.0))
         assertFalse(TransactionFormValidator.isValid("SHB0000442", 1.0, 100.0, date, fee = null))
     }
+
+    @Test
+    fun `ett salj over innehavet ar oversalj men avrundningen av en forifylld andel ar det inte`() {
+        // TRX-5
+        assertFalse(TransactionFormValidator.exceedsHolding(10.0, 10.0))
+        assertFalse(TransactionFormValidator.exceedsHolding(38.4616, 38.46156))
+        assertTrue(TransactionFormValidator.exceedsHolding(10.001, 10.0))
+        assertTrue(TransactionFormValidator.exceedsHolding(1.0, 0.0))
+    }
 }

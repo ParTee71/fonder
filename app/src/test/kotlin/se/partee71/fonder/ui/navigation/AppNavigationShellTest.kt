@@ -154,7 +154,8 @@ class AppNavigationShellTest {
 
             assertOnScreen(route)
             assertTabChrome(visible = false)
-            composeRule.onNodeWithContentDescription("Tillbaka").performClick()
+            // Transaktionsformuläret är en ramskärm utan skalets topprad – systemets bakåt gäller alla.
+            pressBack()
             assertOnScreen("hem")
             assertTabChrome(visible = true)
         }

@@ -1,7 +1,10 @@
 package se.partee71.fonder.ui.components
 
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,6 +54,23 @@ class EmptyStateTest {
 
         composeRule.onNodeWithText("Importera innehav").assertExists()
         composeRule.onNodeWithText("Inga rader hittades i filen.").assertExists()
+    }
+
+    @Test
+    fun `en åtgärd visas som knapp under texten och anropas vid tryck`() {
+        var clicks = 0
+        composeRule.setContent {
+            FonderTheme {
+                EmptyState(
+                    title = "Inga bevakade fonder",
+                    body = "Bevaka en fond först.",
+                    action = { AppButton("Bevaka en fond", onClick = { clicks++ }) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Bevaka en fond").assertHasClickAction().performClick()
+        assertEquals(1, clicks)
     }
 
     @Test

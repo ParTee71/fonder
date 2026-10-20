@@ -118,7 +118,7 @@ ui/
 ├── facit/        FacitScreen + ViewModel (utfallet av inspelade förslag, skärm i stacken under Beslut, SET-5)
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel (fliken Händelser: filter Alla/Köp/Sälj, årets realiserade
-│                 resultat, sälj med realiserat resultat per rad, #10) · TransactionFormScreen + ViewModel (registrera köp/sälj, avgift)
+│                 resultat, sälj med realiserat resultat per rad, #10) · TransactionFormScreen (EntityEditScreen) + ViewModel (registrera köp/sälj, avgift, sälj alla, UI-15)
 ├── fond/         FondDetaljScreen + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
 │                 jämförelsediagram, ANA-10/ANA-11/#85 · kurshistorik i diagram sedan första köpet, #7, med 200-dagarssnitt, ANA-14 ·
 │                 hopfälld Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
@@ -175,13 +175,15 @@ Detaljskärmarna (Översikt, Fonddetalj, Pågående byte) har det lästa som ett
 `catchAsDetailError` sist i flödet gör ett fel i källan till `DetailUiState.Error`, och skärmen visar
 `EmptyState(error)` före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
 `content` är ett standardvärde bara för de grenar som aldrig nås vid fel. En bevakning som inte finns
-blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen går via `EditorState` +
+blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen och transaktionsformuläret går via `EditorState` +
 `EditorLoader` och visas i android-ui:s `EntityEditScreen` (läsfel med Försök igen, sparfel som snackbar, "Släng ändringar?", UI-15). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,
 `BackupFormatException.Reason`, `DriveResult`) översätts med `DataError.of` till egna `DataError` med
 oförändrade texter, och Inställningar visar `UiError.message`. `suspendRunCatching` gör ett `Result`
-av en suspend-åtgärd utan att svälja avbrott. Transaktionsformuläret och Inställningar använder inte
-`EditorState`: formuläret har inget sparat värde att läsa och ett tredje utfall (sparat men kopplingen
-misslyckades), och Inställningar sparar varje reglage direkt utan utkast eller Spara. `shownAfter`
+av en suspend-åtgärd utan att svälja avbrott. Transaktionsformuläret läser fonderna (och för en
+förifylld nyckel fond, kurs och andelar) med `EditorLoader`, sparas oförändrat förifyllt
+(`saveUnchanged`), och det tredje utfallet – sparat men kopplingen misslyckades – är ett valideringsfel
+som släcker Spara och visas som ramens `formError`. Inställningar använder inte `EditorState`: de sparar
+varje reglage direkt utan utkast eller Spara. `shownAfter`
 används inte – den skulle fördröja dagens laddningsindikatorer.
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga

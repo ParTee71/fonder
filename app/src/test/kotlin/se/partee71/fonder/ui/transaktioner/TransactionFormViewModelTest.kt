@@ -1,15 +1,17 @@
 package se.partee71.fonder.ui.transaktioner
 
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import java.time.LocalDate
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -25,6 +27,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.R
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
@@ -60,6 +63,10 @@ class TransactionFormViewModelTest {
 
     private val fund = Fund(fundId = "SHB0000442", name = "Handelsbanken Amerika Småbolag Tema")
     private val funds = MutableStateFlow(listOf(fund))
+    private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
+
+    /** Det som läsningen av fonderna kastar — se testet om läsfel med "Försök igen" (NFR-6). */
+    private var fundsFailure: Exception? = null
     private val addedTransactions = mutableListOf<Transaction>()
     private var latestPriceValue: FundPrice? = null
     private val pricesByFundId = mutableMapOf<String, FundPrice>()
@@ -79,8 +86,8 @@ class TransactionFormViewModelTest {
     private var slowFundId: String? = null
 
     private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
+        override fun observeFunds(): Flow<List<Fund>> = fundsFailure?.let { failure -> flow { throw failure } } ?: funds
+        override fun observeTransactions(): Flow<List<Transaction>> = transactions
         override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = MutableStateFlow(emptyList())
         override suspend fun upsertFund(fund: Fund) {
             upsertedFunds += fund
@@ -149,8 +156,13 @@ class TransactionFormViewModelTest {
         FollowedSuggestionLookup(suggestionRepo, metadataRepo)
     )
 
-    /** Formuläret är laddat: fonderna och bytesväljarens indata är lästa. */
-    private fun TransactionFormUiState.loaded() = funds.isNotEmpty() && switchField != null
+    /** Formuläret är laddat: fonderna, formulärets startvärde och bytesväljarens indata är lästa. */
+    private fun TransactionFormUiState.loaded() = !editor.loading && funds.isNotEmpty() && switchField != null
+
+    /** Ett köp av [shares] andelar i [owned] — innehavet ett sälj prövas mot (TRX-5). */
+    private fun own(owned: Fund, shares: Double, epochDay: Long = today.minusDays(30).toEpochDay()) {
+        transactions.value = transactions.value + Transaction(fundId = owned.fundId, type = TransactionType.KOP, epochDay = epochDay, shares = shares, pricePerShare = 100.0)
+    }
 
     @Test
     fun `formularet ar ogiltigt tills fond antal och kurs fyllts i`() = runTest(dispatcher) {
@@ -316,8 +328,8 @@ class TransactionFormViewModelTest {
             vm.save()
             while (!state.saved) state = awaitItem()
 
-            // Skärmen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
-            vm.onSavedHandled()
+            // Ramen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
+            vm.events.onDoneHandled()
             assertFalse(awaitItem().saved)
             expectNoEvents()
             assertEquals(1, addedTransactions.size)
@@ -427,6 +439,7 @@ class TransactionFormViewModelTest {
             )
         )
         pricesByFundId[held.fundId] = FundPrice(fundId = held.fundId, epochDay = today.toEpochDay(), nav = 325.0, currency = "SEK")
+        own(held, 100.0)
     }
 
     private suspend fun openWatch(candidates: List<String> = listOf("SE_CAND"), soldAt: LocalDate = today.minusDays(2), sellTransactionId: Long? = 9) = switchWatchRepo.start(
@@ -599,6 +612,7 @@ class TransactionFormViewModelTest {
     @Test
     fun `salj av en fond med en okopplad bevakning fran en annan dag fragar och ja kopplar saljet`() = runTest(dispatcher) {
         funds.value = listOf(held)
+        own(held, 50.0)
         val watchId = openWatch(soldAt = today.minusDays(3), sellTransactionId = null)
         val vm = viewModel()
 
@@ -631,6 +645,7 @@ class TransactionFormViewModelTest {
         // Bevakningen hann kopplas eller stängas av något annat: säljet är sparat, men utan
         // koppling — det ska synas, och Spara är släckt så säljet inte sparas en gång till.
         funds.value = listOf(held)
+        own(held, 50.0)
         val watchId = openWatch(soldAt = today.minusDays(3), sellTransactionId = null)
         switchWatchRepo.linkResult = false
         val vm = viewModel()
@@ -686,13 +701,14 @@ class TransactionFormViewModelTest {
         val vm = viewModel(TransactionFormKey(fundIsin = "SE_HELD", type = TransactionType.SALJ, suggestionRecordId = 42, prefillAmountKr = 12_500.0))
 
         vm.uiState.test {
-            var state = awaitUntil { it.loaded() }
+            // Medan nyckelns fond och kurs läses visar ramen laddning, och fonden är redan låst.
+            var state = awaitItem()
+            assertTrue(state.editor.loading)
             assertTrue(state.fundLocked)
             vm.onFundSelected(other)
-            state = awaitUntil { it.selectedFund != null && it.priceText.isNotEmpty() }
+            state = awaitUntil { it.loaded() && it.selectedFund != null && it.priceText.isNotEmpty() }
             assertEquals(held, state.selectedFund)
             assertEquals("325.0", state.priceText)
-            assertFalse(state.fundLoading)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -747,6 +763,8 @@ class TransactionFormViewModelTest {
             fillValidForm(vm)
             vm.save()
             awaitUntil { it.failure != null }
+            // Ramen har visat snackbaren och kvitterat.
+            vm.events.onFailureShown()
 
             addFailure = null
             vm.save()
@@ -759,20 +777,146 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `ett avbrott under sparningen visas inte som fel`() = runTest(dispatcher) {
-        addFailure = CancellationException("avbruten")
+        // Skärmen stängs (ViewModel:n rensas) medan transaktionen skrivs: avbrottet släpps igenom och
+        // blir inget sparfel.
+        addGate = CompletableDeferred()
         val vm = viewModel()
         vm.uiState.test {
             fillValidForm(vm)
-
             vm.save()
             advanceUntilIdle()
-            val state = expectMostRecentItem()
-            assertEquals(null, state.failure)
-            assertFalse(state.saved)
-            assertFalse(state.saving)
-            assertEquals("2", state.sharesText)
+            vm.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(null, vm.uiState.value.failure)
+            assertFalse(vm.uiState.value.saved)
+            assertEquals("2", vm.uiState.value.sharesText)
             cancelAndIgnoreRemainingEvents()
         }
         assertTrue(addedTransactions.isEmpty())
+    }
+
+    // --- Läsfel, tomt läge, Sälj alla andelar och översälj (NFR-6, TRX-5, TRX-6) ---
+
+    @Test
+    fun `ett lasfel visas och Forsok igen laser fonderna pa nytt`() = runTest(dispatcher) {
+        fundsFailure = IllegalStateException("trasig")
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitUntil { it.editor.loadError != null }
+            assertFalse(state.canSave)
+            assertFalse(state.noFunds)
+
+            fundsFailure = null
+            vm.retry()
+            state = awaitUntil { it.loaded() }
+            assertEquals(null, state.editor.loadError)
+            assertEquals(listOf(fund), state.funds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `utan bevakade fonder ar formularet ett tomt lage`() = runTest(dispatcher) {
+        funds.value = emptyList()
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitUntil { !it.editor.loading }
+            assertTrue(state.noFunds)
+
+            // En fond bevakas i fondsök – formuläret visas när man kommer tillbaka.
+            funds.value = listOf(fund)
+            assertFalse(awaitUntil { it.funds.isNotEmpty() }.noFunds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `salj alla andelar fyller i hela innehavet med alla decimaler`() = runTest(dispatcher) {
+        // Två köp och ett delsälj: 25,1234 + 15,4 − 3,0020 = 37,5214 andelar.
+        own(fund, 25.1234)
+        own(fund, 15.4)
+        transactions.value = transactions.value + Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = today.minusDays(10).toEpochDay(), shares = 3.002, pricePerShare = 120.0)
+        val vm = viewModel()
+        vm.uiState.test {
+            awaitUntil { it.loaded() }
+            vm.onFundSelected(fund)
+            vm.onTypeChange(TransactionType.SALJ)
+            var state = awaitUntil { it.ownedShares != null && it.selectedFund == fund }
+            assertEquals(37.5214, state.ownedShares!!, 1e-9)
+
+            vm.onSellAll()
+            vm.onPriceTextChange("152,40")
+            state = awaitUntil { it.sharesText.isNotEmpty() && it.priceText == "152,40" }
+            assertEquals("37,5214", state.sharesText)
+            assertTrue(state.valid)
+            assertEquals(null, state.editor.errorFor(TRANSACTION_SHARES))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `fler andelar an innehavet ar ett faltfel och sparas inte`() = runTest(dispatcher) {
+        own(fund, 10.0)
+        val vm = viewModel()
+        vm.uiState.test {
+            awaitUntil { it.loaded() }
+            vm.onFundSelected(fund)
+            vm.onTypeChange(TransactionType.SALJ)
+            vm.onSharesTextChange("10,5")
+            vm.onPriceTextChange("150")
+            val state = awaitUntil { it.sharesText == "10,5" && it.priceText == "150" && it.type == TransactionType.SALJ }
+            assertEquals(R.string.transaktionsform_error_oversell, state.editor.errorFor(TRANSACTION_SHARES))
+            assertFalse(state.valid)
+            assertFalse(state.canSave)
+
+            vm.save()
+            advanceUntilIdle()
+            assertTrue(addedTransactions.isEmpty())
+
+            // Hela innehavet går bra.
+            vm.onSharesTextChange("10")
+            assertTrue(awaitUntil { it.sharesText == "10" }.valid)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `vid kop visas inget innehav och salj alla gor ingenting`() = runTest(dispatcher) {
+        own(fund, 10.0)
+        val vm = viewModel()
+        vm.uiState.test {
+            awaitUntil { it.loaded() }
+            vm.onFundSelected(fund)
+            vm.onSharesTextChange("20")
+            val state = awaitUntil { it.selectedFund == fund && it.sharesText == "20" }
+            assertEquals(TransactionType.KOP, state.type)
+            assertEquals(null, state.ownedShares)
+            // Ett köp prövas aldrig mot innehavet.
+            assertEquals(null, state.editor.errorFor(TRANSACTION_SHARES))
+
+            vm.onSellAll()
+            advanceUntilIdle()
+            assertEquals("20", vm.uiState.value.sharesText)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett nytt formular gar inte att spara oforandrat men ett forifyllt gar`() = runTest(dispatcher) {
+        setUpPlan()
+        val fresh = viewModel()
+        val prefilled = viewModel(TransactionFormKey(fundIsin = "SE_HELD", type = TransactionType.SALJ, suggestionRecordId = 42, prefillAmountKr = 12_500.0))
+        prefilled.uiState.test {
+            val state = awaitUntil { it.loaded() && it.sharesText.isNotEmpty() && it.switchField?.option != null }
+            assertFalse(state.editor.isDirty)
+            assertTrue(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
+        fresh.uiState.test {
+            val state = awaitUntil { it.loaded() }
+            assertFalse(state.editor.isDirty)
+            assertFalse(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
