@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -139,6 +140,35 @@ class FundSearchViewModelTest {
             while (state.loading || state.error != null) state = awaitItem()
 
             assertNull(state.error)
+            assertTrue(state.results.isNotEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Forsok igen visar laddning i stallet for felet och hamtar om katalogen (NFR-6)`() = runTest(dispatcher) {
+        var fail = true
+        val flakyRepo = object : FakePriceRepo() {
+            override suspend fun fetchFundCatalog(): FundCatalog? = if (fail) null else catalog
+        }
+        val vm = FundSearchViewModel(flakyRepo, fakeTransactionRepo, fakeMetadataRepo)
+
+        vm.uiState.test {
+            var state = awaitItem()
+            // Första hämtningen är listans laddning, inte en dragning (UI-11).
+            assertFalse(state.refreshing)
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Network, state.error?.cause)
+
+            fail = false
+            vm.retry()
+            state = awaitItem()
+            assertTrue("felet ersätts av laddning medan katalogen hämtas", state.loading)
+            assertNull(state.error)
+            while (state.loading) {
+                assertFalse("Försök igen är ingen dragning", state.refreshing)
+                state = awaitItem()
+            }
             assertTrue(state.results.isNotEmpty())
             cancelAndIgnoreRemainingEvents()
         }

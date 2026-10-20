@@ -3,10 +3,15 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,8 +27,30 @@ import se.partee71.fonder.R
 import se.partee71.ui.common.UiError
 
 /**
- * Delad tom-tillstånds-komponent (regel 4 — återbruk). Använd på skärmar utan innehåll
- * i stället för att rita egna varianter.
+ * android-ui:s tomma läge eller läsfel (`EmptyState`, `LoadErrorState`) mitt på en yta som inte är en
+ * skärmram – flikarna Översikt, Innehav och Beslut, Facit och Fonddetalj (NFR-6). Ytan skrollar när
+ * budskapet och knapparna inte ryms (stor text, liten skärm, UI-5). En ramskärm (`EntityListScreen`)
+ * placerar sina lägen själv.
+ */
+@Composable
+fun CenteredState(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            content()
+        }
+    }
+}
+
+/**
+ * Fonders äldre tomma läge – kvar på importerna, transaktionsformuläret och Pågående byte tills de går
+ * över till android-ui:s `EmptyState` (skill shared-ui-components). Nya skärmar använder bibliotekets.
  *
  * @param icon valfri dekorativ ikon i en rundad primärbehållare ovanför rubriken (UI-12). Null
  *   (default) ritar bara rubrik och brödtext som tidigare. Ikonen är dekorativ – rubriken bär

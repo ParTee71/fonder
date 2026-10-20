@@ -36,11 +36,8 @@ fun titleResFor(key: AppKey): Int? = when (key) {
     is TabKey, is FrameKey -> null
     SettingsKey -> R.string.nav_settings
     is FondDetaljKey -> R.string.fond_title
-    FundSearchKey -> R.string.fondsok_title
     ImportHoldingsKey -> R.string.import_title
     ImportOrdersKey -> R.string.import_orders_title
     FacitKey -> R.string.facit_title
-    BenchmarkPickerKey -> R.string.settings_benchmark_section
     is SwitchWatchKey -> R.string.switch_watch_title
-    is SwitchWatchPickerKey -> R.string.switch_watch_add_candidate
 }

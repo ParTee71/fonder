@@ -16,9 +16,11 @@ import se.partee71.fonder.domain.usecase.FacitRad
 import se.partee71.fonder.domain.usecase.FacitSnapshot
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
 import se.partee71.fonder.ui.common.itemsOrEmpty
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.ui.common.ListUiState
@@ -73,10 +75,13 @@ class FacitViewModel @Inject constructor(
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
+
     val uiState: StateFlow<FacitUiState> =
         facitSummary.observe().map { snapshot ->
             FacitUiState().withFacit(snapshot)
-        }.catchAsListError { FacitUiState(list = it) }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+        }.catchAsListError { FacitUiState(list = it) }.restartOn(retrySignal).combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
             // Eget led, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
             // ska inte kunna räkna om facit bara för att ett jobb startade (samma gräns som
             // HemViewModel drar).
@@ -95,6 +100,11 @@ class FacitViewModel @Inject constructor(
      */
     fun refresh() {
         fundPriceRefreshScheduler.triggerSwitchPlanScan(force = true)
+    }
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om facit ur cachen från början. */
+    fun retry() {
+        retrySignal.retry()
     }
 
     /** Markerar ett förslag som genomfört eller ej (HEM-8/SET-5) — flödet ovan speglar ändringen. */

@@ -38,9 +38,11 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
 import se.partee71.fonder.ui.common.itemsOrEmpty
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.ui.common.ListUiState
@@ -120,6 +122,9 @@ class PortfoljViewModel @Inject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
+
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
 
     private val baseHoldings: Flow<Pair<List<Holding>, List<Transaction>>> =
         combine(transactionRepository.observeFunds(), transactionRepository.observeTransactions()) { funds, transactions ->
@@ -221,7 +226,7 @@ class PortfoljViewModel @Inject constructor(
                     }.toMap().toImmutableMap()
                 )
             }
-        }.catchAsListError { PortfoljUiState(list = it) }.combine(workState) { state, work ->
+        }.catchAsListError { PortfoljUiState(list = it) }.restartOn(retrySignal).combine(workState) { state, work ->
             // Eget flöde, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
             // från ViewModel:ens egna jobb — den ska inte kunna räkna om portföljen bara för att
             // ett jobb startade (samma gräns som HemViewModel drar).
@@ -273,6 +278,11 @@ class PortfoljViewModel @Inject constructor(
             ) ?: return@mapNotNull null
             holding.fund.fundId to analysis
         }.toMap()
+    }
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om innehaven och kurserna från början. */
+    fun retry() {
+        retrySignal.retry()
     }
 
     /**

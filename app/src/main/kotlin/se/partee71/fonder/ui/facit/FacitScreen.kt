@@ -38,10 +38,12 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
+import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -63,6 +65,7 @@ fun FacitScreen(
         state = state,
         onFollowedChange = viewModel::setFollowed,
         onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
         modifier = modifier
     )
 }
@@ -73,17 +76,20 @@ fun FacitContent(
     state: FacitUiState,
     onFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {}
 ) {
     val error = state.error
     if (state.isEmpty) {
-        EmptyState(
-            title = stringResource(R.string.facit_empty_title),
-            body = stringResource(R.string.facit_empty_body),
-            modifier = modifier
-        )
+        CenteredState(modifier) {
+            EmptyState(
+                icon = R.drawable.ic_chart,
+                title = stringResource(R.string.facit_empty_title),
+                message = stringResource(R.string.facit_empty_body)
+            )
+        }
     } else if (error != null) {
-        EmptyState(error = error, modifier = modifier)
+        CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
     } else {
         // Summeringskortet ligger som `item {}` i samma lista som raderna, inte i en fast
         // Column ovanför — annars äter det permanent skärmhöjd och kan klippa bort förslag på

@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -58,16 +59,19 @@ class FacitViewModelTest {
 
     private val fakeSuggestionRepo = object : SuggestionRecordRepository {
         override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = records
-        override fun observeHistory(): Flow<List<SuggestionRecord>> = if (historyFails) {
-            flow { throw DataError.Database }
-        } else {
-            records.map { all ->
-                all.sortedWith(
-                    compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
-                        .thenByDescending { it.batchEpochMillis }
-                        .thenBy { it.planIndex }
-                )
-            }
+
+        // Avgörs när flödet samlas, inte när det skapas – så att "Försök igen" kan lyckas (NFR-6).
+        override fun observeHistory(): Flow<List<SuggestionRecord>> = flow {
+            if (historyFails) throw DataError.Database
+            emitAll(
+                records.map { all ->
+                    all.sortedWith(
+                        compareByDescending<SuggestionRecord> { it.suggestedAtEpochDay }
+                            .thenByDescending { it.batchEpochMillis }
+                            .thenBy { it.planIndex }
+                    )
+                }
+            )
         }
         override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = false
         override suspend fun record(record: SuggestionRecord) {}
@@ -193,6 +197,23 @@ class FacitViewModelTest {
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertTrue(state.rows.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Försök igen läser om facit efter ett läsfel (NFR-6)`() = runTest(dispatcher) {
+        historyFails = true
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+
+            historyFails = false
+            vm.retry()
+            while (state.error != null || state.loading) state = awaitItem()
+            assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
     }

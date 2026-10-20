@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.74.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.75.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.75.0 | Listorna på android-ui 0.7.0 (#174): Händelser och Fondsök står på listramen – Händelser med stor rubrik som fälls ihop, filtret och resultatkortet kvar, Fondsök med fälten fasta och träffarna i ett kort. Läsfel på Händelser, Innehav, Beslut, Facit, Fondsök, Fonddetalj och Översikt har "Försök igen". Tomma Översikten, Innehav och Händelser har knappar till fondsöken, transaktionsformuläret, importerna och säkerhetskopian. Bakåtpilen följer temat. |
 | 0.74.0 | Transaktionsformuläret har Spara uppe i toppraden, aktiv först när något ändrats (ett förifyllt sälj från Följ direkt); bakåt med osparade ändringar frågar "Släng ändringar?", fel visas under fältet, ett sparfel som snackbar och ett läsfel med "Försök igen". Vid sälj står innehavet med "Sälj alla andelar", och fler andelar än innehavet går inte att spara. Utan bevakade fonder leder "Bevaka en fond" till fondsök. Påminnelsen om säkerhetskopia på Hem blinkar inte längre bort när en ändring kommer medan den räknas om (NAV-4, TRX-5, TRX-6, UI-15, NFR-6, HEM-12, #174). |
 | 0.73.0 | Riskprofilen har Spara uppe i toppraden, aktiv först när något ändrats och summan är 100 %; bakåt med osparade ändringar frågar "Släng ändringar?", ett sparfel visas som snackbar och ett läsfel har "Försök igen" (SET-3, UI-15, NFR-6, #174). |
 | 0.72.6 | Intern: komponentbiblioteket android-ui 0.6.0; skalet stöder skärmar byggda på bibliotekets ramar (ingen extra rubrik, bakgrundsindikatorn i ramens topprad, tangentbordet tas inte med två gånger), och debug-bygget har ett komponentgalleri under Inställningar. Ingen synlig ändring i release-bygget (#174). |

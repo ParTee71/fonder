@@ -37,7 +37,7 @@ import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppTextField
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.PeriodRow
@@ -48,6 +48,8 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -93,6 +95,7 @@ fun FondDetaljScreen(
         onFollow = { suggestion -> onOpenTransactionForm(TransactionFormKey.follow(suggestion)) },
         onFollowFee = { recordId -> onOpenTransactionForm(TransactionFormKey.follow(fundId, recordId)) },
         onStartSwitchWatch = viewModel::startSwitchWatch,
+        onRetry = viewModel::retry,
         modifier = modifier
     )
 }
@@ -107,19 +110,22 @@ fun FondDetaljContent(
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onFollowFee: (Long) -> Unit = {},
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {}
 ) {
     val error = state.error
     val content = state.content
     when {
-        // Ett läsfel visas i stället för fonden, aldrig en tom fond (NFR-6).
-        error != null -> EmptyState(error = error, modifier = modifier)
+        // Ett läsfel visas i stället för fonden, aldrig en tom fond – med "Försök igen" (NFR-6).
+        error != null -> CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
 
-        state.isEmpty -> EmptyState(
-            title = content.fundName ?: stringResource(R.string.fond_title),
-            body = stringResource(R.string.fond_history_empty_body),
-            modifier = modifier
-        )
+        state.isEmpty -> CenteredState(modifier) {
+            EmptyState(
+                icon = R.drawable.ic_chart,
+                title = content.fundName ?: stringResource(R.string.fond_title),
+                message = stringResource(R.string.fond_history_empty_body)
+            )
+        }
 
         // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här är en ren
         // omvändning + mappning — men utan remember kördes den vid varje recomposition, och

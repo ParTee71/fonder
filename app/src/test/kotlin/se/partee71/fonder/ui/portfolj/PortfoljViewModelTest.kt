@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -36,6 +37,8 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
@@ -137,6 +140,20 @@ class PortfoljViewModelTest {
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertTrue(state.holdings.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Försök igen läser om innehaven efter ett läsfel (NFR-6)`() = runTest(dispatcher) {
+        val source = FailingUntilRetry()
+        val flakyRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactions(): Flow<List<Transaction>> = source.guard { fakeTransactionRepo.observeTransactions() }
+        }
+        val vm = PortfoljViewModel(flakyRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        vm.uiState.test {
+            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
     }

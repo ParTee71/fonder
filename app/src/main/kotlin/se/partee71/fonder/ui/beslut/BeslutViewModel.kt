@@ -23,8 +23,10 @@ import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.domain.usecase.SwitchRows
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.ui.common.ListUiState
@@ -107,6 +109,9 @@ class BeslutViewModel @Inject constructor(
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler
 ) : ViewModel() {
 
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
+
     /** Se [BeslutUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
     private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
 
@@ -124,7 +129,7 @@ class BeslutViewModel @Inject constructor(
             followedExcessKr = facit.followedExcessKr,
             startedSwitchWatchId = startedId
         ).withDecisions(decisions)
-    }.catchAsListError { BeslutUiState(list = it) }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+    }.catchAsListError { BeslutUiState(list = it) }.restartOn(retrySignal).combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
         // Eget led: körstatusen kommer från WorkManager och ska inte kunna räkna om besluten.
         state.copy(
             backgroundWorkRunning = running.isNotEmpty(),
@@ -167,6 +172,11 @@ class BeslutViewModel @Inject constructor(
         viewModelScope.launch {
             recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
+    }
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om förslagen, profilen och facit från början. */
+    fun retry() {
+        retrySignal.retry()
     }
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */

@@ -132,8 +132,12 @@ class AppNavigationShellTest {
             composeRule.onNodeWithContentDescription(label).performClick()
             assertOnScreen(route)
             composeRule.onNodeWithContentDescription(label).assertIsSelected()
-            // Flikens rubrik i innehållet, ingen bakåtpil.
-            composeRule.onNodeWithText(label).assertIsDisplayed()
+            // Flikens rubrik i innehållet, ingen bakåtpil – Händelser är en ramskärm och ritar sin egen.
+            if (Screen.forKey(backStack.current)?.key is FrameKey) {
+                composeRule.onAllNodesWithText(label).assertCountEquals(0)
+            } else {
+                composeRule.onNodeWithText(label).assertIsDisplayed()
+            }
             composeRule.onNodeWithContentDescription("Tillbaka").assertDoesNotExist()
             assertTabChrome(visible = true)
         }
@@ -333,7 +337,13 @@ class AppNavigationShellTest {
 
     /** Ersättare för en ramskärm: bibliotekets topprad, som läser chromets status ur `LocalTopBarStatus`. */
     private fun frameEntry(key: AppKey): NavEntry<AppKey> = if (key is FrameKey) {
-        NavEntry(key) { LibraryTopBar("ram:${name(key)}", size = TopBarSize.Small, onBack = { backStack.popIfTop(key) }) }
+        NavEntry(key) {
+            if (key is TabKey) {
+                LibraryTopBar("ram:${name(key)}")
+            } else {
+                LibraryTopBar("ram:${name(key)}", size = TopBarSize.Small, onBack = { backStack.popIfTop(key) })
+            }
+        }
     } else {
         stubEntryWithoutTaps(key)
     }
@@ -361,6 +371,25 @@ class AppNavigationShellTest {
         composeRule.onNodeWithContentDescription("Tillbaka").performClick()
         composeRule.mainClock.advanceTimeBy(TRANSITION_MS)
         composeRule.onNodeWithText("Inställningar").assertIsDisplayed()
+    }
+
+    @Test
+    fun `Händelser är en ramskärm på en flik med egen rubrik och skalets flikrad och plusmeny`() {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            FonderTheme { AppNavigationShell(isWorkerRunning = true, backStack = backStack, entryProvider = ::frameEntry) }
+        }
+        composeRule.runOnUiThread { backStack.select(Screen.Handelser) }
+        composeRule.mainClock.advanceTimeBy(TRANSITION_MS)
+
+        // Ramens rubrik och chromets indikator i den, en gång – ingen flikrubrik från skalet.
+        composeRule.onNodeWithText("ram:transaktioner").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Händelser").assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription(WORKER_RUNNING).assertCountEquals(1)
+        composeRule.onAllNodesWithContentDescription("Tillbaka").assertCountEquals(0)
+        // Flikraden och plusmenyn står kvar (NAV-7, NAV-8).
+        composeRule.onNodeWithContentDescription("Händelser").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Lägg till").assertIsDisplayed()
     }
 
     @Test

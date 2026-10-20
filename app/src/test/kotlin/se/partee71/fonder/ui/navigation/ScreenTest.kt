@@ -51,7 +51,15 @@ class ScreenTest {
     fun `skarmar med argument har rubrik oavsett argument`() {
         assertEquals(R.string.fond_title, titleResFor(FondDetaljKey("SHB0000442")))
         assertEquals(R.string.switch_watch_title, titleResFor(SwitchWatchKey(7)))
-        assertEquals(R.string.switch_watch_add_candidate, titleResFor(SwitchWatchPickerKey(7)))
+    }
+
+    @Test
+    fun `fondsokens tre lagen och Handelser ar ramskarmar som ritar sin rubrik sjalva`() {
+        // NAV-3, HEM-10, ANA-13: rubriken står i listramens topprad; Händelser har ramens stora rubrik (NAV-5).
+        assertEquals(null, titleResFor(FundSearchKey))
+        assertEquals(null, titleResFor(BenchmarkPickerKey))
+        assertEquals(null, titleResFor(SwitchWatchPickerKey(7)))
+        assertEquals(null, titleResFor(HandelserKey))
     }
 
     @Test

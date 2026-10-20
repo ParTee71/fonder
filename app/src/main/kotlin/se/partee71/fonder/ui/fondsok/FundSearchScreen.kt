@@ -1,17 +1,11 @@
 package se.partee71.fonder.ui.fondsok
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -24,17 +18,23 @@ import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppTextField
-import se.partee71.fonder.ui.components.EmptyState
-import se.partee71.fonder.ui.components.ItemRow
-import se.partee71.fonder.ui.components.ProgressBar
-import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
-import se.partee71.ui.common.ListUiState
+import se.partee71.ui.components.EmptyContent
+import se.partee71.ui.components.EntityListScreen
+import se.partee71.ui.components.ItemRow
+import se.partee71.ui.components.TopBarSize
 import se.partee71.ui.theme.Spacing
 
+/**
+ * Fondsök (NAV-3) på android-ui:s listram `EntityListScreen` – med [title] och [onBack] i ramens lilla
+ * topprad, eftersom samma skärm är bevakningens "Bevaka ny fond", jämförelsefondens väljare (HEM-10) och
+ * Pågående bytes eget alternativ (ANA-13).
+ */
 @Composable
 fun FundSearchScreen(
+    title: String,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onPickFund: ((Fund) -> Unit)? = null,
     viewModel: FundSearchViewModel = hiltViewModel()
@@ -42,23 +42,30 @@ fun FundSearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     FundSearchContent(
         state = state,
+        title = title,
+        onBack = onBack,
         onQueryChange = viewModel::onQueryChange,
         onCompanySelected = viewModel::onCompanySelected,
         onAddFund = viewModel::addFund,
         onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
         onPickFund = onPickFund,
         modifier = modifier
     )
 }
 
 /**
- * Tillståndsdriven, testbar del av [FundSearchScreen] — inget ViewModel/Hilt-beroende, samma
- * mönster som [se.partee71.fonder.ui.portfolj.PortfoljContent]/[se.partee71.fonder.ui.fond.FondDetaljContent]
- * (utbruten i issue #85 för att kunna instrumenttesta risknivån på träffraden, UI-10).
+ * Tillståndsdriven, testbar del av [FundSearchScreen] — inget ViewModel/Hilt-beroende. Fondbolag och
+ * sökfält står fast under toppraden i alla lägen (ramens `filter`); träffarna står som rader i ett kort
+ * med risknivån under namnet (UI-10). Laddning, "Inga fonder hittades" och fel med "Försök igen"
+ * ([onRetry]) är ramens lägen (NFR-6), och dra ned hämtar om katalogen (UI-11, [onRefresh]). Ingen lägg
+ * till-knapp – varje träff har sin egen.
  */
 @Composable
 fun FundSearchContent(
     state: FundSearchUiState,
+    title: String = stringResource(R.string.fondsok_title),
+    onBack: () -> Unit = {},
     onQueryChange: (String) -> Unit = {},
     onCompanySelected: (FundCompany?) -> Unit = {},
     onAddFund: (Fund) -> Unit = {},
@@ -70,11 +77,44 @@ fun FundSearchContent(
      */
     onPickFund: ((Fund) -> Unit)? = null,
     onRefresh: () -> Unit = {},
+    onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val allaFondbolag = stringResource(R.string.fondsok_company_all)
+    EntityListScreen(
+        title = title,
+        state = state.list,
+        empty = EmptyContent(
+            icon = R.drawable.ic_search,
+            title = stringResource(R.string.fondsok_empty_title),
+            message = stringResource(R.string.fondsok_empty_body)
+        ),
+        add = null,
+        key = { it.fundId },
+        modifier = modifier,
+        onRetry = onRetry,
+        onBack = onBack,
+        filter = { SearchFields(state, onCompanySelected, onQueryChange) },
+        topBarSize = TopBarSize.Small,
+        refreshing = state.refreshing,
+        onRefresh = onRefresh,
+        // Nätverksfel och "inga träffar" är skilda lägen (issue #78) – felet säger att det är listan som inte kom.
+        errorTitle = stringResource(R.string.fondsok_load_failed_title)
+    ) { fund ->
+        FundResultRow(
+            fund = fund,
+            added = onPickFund == null && fund.fundId in state.addedFundIds,
+            riskLevel = state.riskLevels[fund.fundId],
+            actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
+            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) }
+        )
+    }
+}
 
-    Column(modifier = modifier.fillMaxSize().padding(Spacing.l)) {
+/** Fondbolag och sökord – ramens `filter`, fast i alla lägen. */
+@Composable
+private fun SearchFields(state: FundSearchUiState, onCompanySelected: (FundCompany?) -> Unit, onQueryChange: (String) -> Unit) {
+    val allaFondbolag = stringResource(R.string.fondsok_company_all)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         SelectField(
             label = stringResource(R.string.fondsok_company_label),
             options = state.companies,
@@ -84,58 +124,20 @@ fun FundSearchContent(
             placeholder = allaFondbolag,
             clearOptionLabel = allaFondbolag
         )
-
         AppTextField(
             value = state.query,
             onValueChange = onQueryChange,
             label = stringResource(R.string.fondsok_label),
-            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
+            modifier = Modifier.fillMaxWidth()
         )
-
-        // Dra ned hämtar om katalogen (UI-11). Gesten omsluter även fel- och tomlägena, och
-        // inte bara träfflistan: ett nätverksfel är den vanligaste anledningen att vilja dra,
-        // och det läget har ingen lista att dra i. `verticalScroll` ger dem något att gripa tag
-        // i — utan en skrollbar yta har svepet inget att koppla sig till.
-        PullToRefreshContainer(
-            refreshing = state.refreshing,
-            onRefresh = onRefresh
-        ) {
-            when (val list = state.list) {
-                ListUiState.Loading -> ProgressBar(modifier = Modifier.padding(top = Spacing.l))
-
-                // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
-                // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78, NFR-6).
-                is ListUiState.Error -> PullableMessage {
-                    EmptyState(error = list.error, title = stringResource(R.string.fondsok_load_failed_title))
-                }
-
-                ListUiState.Empty -> PullableMessage {
-                    EmptyState(
-                        title = stringResource(R.string.fondsok_empty_title),
-                        body = stringResource(R.string.fondsok_empty_body)
-                    )
-                }
-
-                is ListUiState.Content -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(list.items, key = { it.fundId }) { fund ->
-                        FundResultRow(
-                            fund = fund,
-                            added = onPickFund == null && fund.fundId in state.addedFundIds,
-                            riskLevel = state.riskLevels[fund.fundId],
-                            actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
-                            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) }
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
 /**
  * En träffrad i fondsök — namn, risknivå (UI-10, issue #85) och lägg till-knapp. Risknivån är
  * en delad [RiskBadge] (regel 4) och skrivs ut som okänd när metadatacachen inte känner fonden;
- * en rad helt utan märkning hade sett ut som en fond där risken inte gällde.
+ * en rad helt utan märkning hade sett ut som en fond där risken inte gällde. Knappen läses med
+ * fondens namn ("Lägg till Globalfond A"), så att TalkBack skiljer raderna åt (UI-3).
  */
 @Composable
 private fun FundResultRow(
@@ -145,27 +147,21 @@ private fun FundResultRow(
     actionLabelRes: Int,
     onAction: () -> Unit
 ) {
+    val actionLabel = stringResource(actionLabelRes)
     ItemRow(
-        headline = fund.name,
-        supporting = { RiskBadge(level = riskLevel) },
+        title = fund.name,
+        below = { RiskBadge(level = riskLevel) },
         trailing = {
             if (added) {
                 Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.fondsok_added))
             } else {
-                AppButton(text = stringResource(actionLabelRes), onClick = onAction, variant = AppButtonVariant.Text)
+                AppButton(
+                    text = actionLabel,
+                    onClick = onAction,
+                    variant = AppButtonVariant.Text,
+                    contentDescription = stringResource(R.string.format_fondsok_action, actionLabel, fund.name)
+                )
             }
         }
     )
-}
-
-/**
- * Gör ett tomt-/feltillstånd svepbart (UI-11): `PullToRefreshBox` kopplar sig via nested scroll
- * och behöver därför en skrollbar yta. Utan den skulle gesten fungera överallt **utom** i just
- * det läge där man mest vill använda den — efter ett nätverksfel.
- */
-@Composable
-private fun PullableMessage(content: @Composable () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        content()
-    }
 }

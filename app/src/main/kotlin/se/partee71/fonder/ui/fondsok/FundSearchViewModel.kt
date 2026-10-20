@@ -181,10 +181,23 @@ class FundSearchViewModel @Inject constructor(
      * En pågående hämtning återanvänds i stället för att avbrytas — katalogen är ~125 kB, och
      * två parallella hämtningar vore två svar på samma fråga.
      */
-    fun refresh() {
+    fun refresh() = loadCatalog(pulled = true)
+
+    /**
+     * "Försök igen" efter ett fel (NFR-6): samma hämtning som [refresh], men listan visar laddning i
+     * stället för felet medan katalogen hämtas – knappen står i felvyn, inte ovanpå en lista.
+     */
+    fun retry() {
+        if (catalogJob?.isActive == true) return
+        catalogState.update { it.copy(loading = true, error = null) }
+        loadCatalog(pulled = false)
+    }
+
+    /** Hämtningen bakom [refresh] och [retry]; [pulled] = användaren drog ned (UI-11), som får dragindikatorn. */
+    private fun loadCatalog(pulled: Boolean) {
         if (catalogJob?.isActive == true) return
         catalogJob = viewModelScope.launch {
-            catalogState.update { it.copy(refreshing = true) }
+            if (pulled) catalogState.update { it.copy(refreshing = true) }
             try {
                 // Null = hämtningen misslyckades; vyn visar tomt sökresultat i stället för att
                 // krascha (samma degraderingsprincip som onCompanySelected nedan).
@@ -211,7 +224,8 @@ class FundSearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { riskByNameKey.value = fundMetadataRepository.cachedRiskByFundName() }
-        refresh()
+        // Första hämtningen visar listans laddning, inte dragindikatorn – den hör till en dragning (UI-11).
+        loadCatalog(pulled = false)
     }
 
     fun onQueryChange(newQuery: String) {
