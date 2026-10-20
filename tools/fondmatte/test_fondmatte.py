@@ -162,6 +162,16 @@ class IskTest(unittest.TestCase):
         self.assertEqual(fm.isk_tax(2026, [200_000] * 4, 50_000), 0.0)
 
 
+class TotalGainTest(unittest.TestCase):
+    def test_total_gain_counts_realized_loss_app_card_does_not(self):
+        # Köp 100 × 100 + 10 kr, sälj 50 × 80 − 10 kr: insatt netto 10 010 − 3 990 = 6 020 kr.
+        # Kvar 50 andelar à 120 = 6 000 kr: totalt −20 kr, men appens kort (FIFO-kvar 5 000 kr)
+        # visar +1 000 kr eftersom förlusten på säljet inte syns.
+        trades = [tx("2025-01-02", "BUY", 100, 100.0, 10.0), tx("2025-03-03", "SELL", 50, 80.0, 10.0)]
+        self.assertAlmostEqual(fm.net_deposits(trades), 6020.0)
+        self.assertAlmostEqual(fm.fifo_remaining_cost(trades), 5000.0)
+
+
 class ExampleFixtureTest(unittest.TestCase):
     def test_example_runs_and_methods_differ(self):
         with open(Path(__file__).with_name("exempel.json"), encoding="utf-8") as f:
@@ -170,6 +180,8 @@ class ExampleFixtureTest(unittest.TestCase):
         self.assertFalse(result["portfolio"]["twr_partial"])
         average, fifo = result["realized_average_cost"][1], result["realized_fifo_as_app"][1]
         self.assertNotAlmostEqual(average["gain"], fifo["gain"], places=0)
+        portfolio = result["portfolio"]
+        self.assertLess(portfolio["total_gain"], portfolio["unrealized_fifo_as_app"])
 
 
 FI_XML = """<?xml version="1.0" encoding="utf-8"?>

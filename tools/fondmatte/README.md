@@ -24,7 +24,7 @@ beloppet är alltid andelar × kurs, som i appens `Transaction`.
 
 | Del | Innehåll | Oberoende källa |
 |---|---|---|
-| `portfolio` | marknadsvärde, kedjad TWR (total, årstakt och `twr_annualized_act365`), XIRR (ACT/365F) med och utan avgifter, beteendegapet (`xirr_excluding_fees` − `twr_annualized_act365`), och `*_partial` när ett innehav saknat kurs | pyxirr för XIRR; TWR skriven efter `PortfolioReturnSeriesCalc` |
+| `portfolio` | marknadsvärde, kedjad TWR (total, årstakt och `twr_annualized_act365`), XIRR (ACT/365F) med och utan avgifter, beteendegapet (`xirr_excluding_fees` − `twr_annualized_act365`), totalresultatet (`net_deposits`, `total_gain`) och appens totalkort (`unrealized_fifo_as_app`), och `*_partial` när ett innehav saknat kurs | pyxirr för XIRR; TWR skriven efter `PortfolioReturnSeriesCalc` |
 | `funds` | total avkastning, seriens CAGR, max drawdown, och volatilitet, Sharpe och Sortino från 60 dagsavkastningar (volatilitet 0 ger Sharpe `null`) | empyrical-reloaded |
 | `realized_average_cost` | realiserat resultat per sälj med genomsnittsmetoden, köpavgiften i anskaffningsvärdet | Skatteverkets regel |
 | `realized_fifo_as_app` | samma med appens nuvarande regel: FIFO, köpavgiften utanför | `RealizedGainCalculator` |

@@ -33,7 +33,8 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 |---|---|---|---|
 | **Tidsviktad (TWR)** | Kedja av dagsfaktorer där gårdagens andelar värderas till gårdagens och dagens NAV; in- och utflöden faller ur | "Hur gick fonderna?" Jämförbart med faktablad och index | `PortfolioReturnSeriesCalc.compute` (HEM-9) |
 | **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | **Saknas** |
-| Avkastning på insatt kapital | `(värde − nettoinvesterat) / nettoinvesterat` | Totalkortet | `PortfolioCalc.totalGainLossFraction` |
+| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande FIFO-lotter | Totalkortet i dag – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
+| Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" | **Saknas** (golden: `total_gain`) |
 | Periodförändring | NAV på referensdagen mot NAV `n` dagar före, ingen kassaflödesjustering | Dag/vecka/månad | `PortfolioPerformanceCalc` |
 | Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
 

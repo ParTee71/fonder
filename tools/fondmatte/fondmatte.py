@@ -279,6 +279,15 @@ def average_cost_sales(transactions: list[Transaction]) -> list[Sale]:
 def fifo_sales(transactions: list[Transaction]) -> list[Sale]:
     """FIFO som appens RealizedGainCalculator i dag: äldsta lott säljs först, lottens kostnad är
     andelar × kurs (köpavgiften räknas inte in), säljavgiften dras från resultatet."""
+    return _fifo(transactions)[0]
+
+
+def fifo_remaining_cost(transactions: list[Transaction]) -> float:
+    """Kvarvarande lotters anskaffningsvärde med FIFO, som appens Holding.netInvested."""
+    return sum(units * price for queue in _fifo(transactions)[1].values() for units, price in queue)
+
+
+def _fifo(transactions: list[Transaction]) -> tuple[list[Sale], dict[str, list[list[float]]]]:
     lots: dict[str, list[list[float]]] = {}
     sales = []
     for t in transactions:
@@ -295,7 +304,12 @@ def fifo_sales(transactions: list[Transaction]) -> list[Sale]:
             if queue[0][0] <= EPSILON:
                 queue.pop(0)
         sales.append(Sale(t.day, t.fund, t.units, t.amount, t.fee, sold_cost, max(remaining, 0.0)))
-    return sales
+    return sales, lots
+
+
+def net_deposits(transactions: list[Transaction]) -> float:
+    """Insatt netto: köp med avgift minus sälj efter avgift."""
+    return sum(t.amount + t.fee if t.kind == "BUY" else -(t.amount - t.fee) for t in transactions)
 
 
 # --- Skatt ----------------------------------------------------------------------------------
@@ -355,6 +369,8 @@ def golden(fixture: dict) -> dict:
     # samma årslängd som XIRR (ACT/365F). Då blir det noll när det inte finns något att tajma.
     mwr_ex_fees, _ = money_weighted_return(transactions, prices, end, include_fees=False)
     twr_365 = annualized(twr, days, XIRR_DAYS_PER_YEAR)
+    deposited = net_deposits(transactions)
+    remaining_cost = fifo_remaining_cost(transactions)
     comparable = mwr_ex_fees is not None and twr_365 is not None and not (mwr_partial or twr_partial)
 
     def sale_rows(sales: list[Sale]) -> list[dict]:
@@ -388,6 +404,14 @@ def golden(fixture: dict) -> dict:
                 # behaviour_gap = xirr_excluding_fees − twr_annualized_act365. Ett partiellt mått
                 # jämförs inte: gapet blir None hellre än en skenbar siffra.
                 "behaviour_gap": (mwr_ex_fees - twr_365) if comparable else None,
+                # Totalresultat: allt som kommit tillbaka plus värdet, minus allt som satts in –
+                # realiserat, orealiserat och avgifter. None när ett innehav saknat kurs.
+                "net_deposits": deposited,
+                "total_gain": None if value_partial else value - deposited,
+                "total_gain_fraction": None if value_partial or deposited <= 0 else (value - deposited) / deposited,
+                # Appens totalkort i dag: orealiserat mot kvarvarande FIFO-lotter, utan realiserat.
+                "unrealized_fifo_as_app": None if value_partial else value - remaining_cost,
+                "unrealized_fifo_as_app_fraction": None if value_partial or remaining_cost <= 0 else (value - remaining_cost) / remaining_cost,
             },
             "funds": {fund: risk_figures(series) for fund, series in prices.series.items()},
             "realized_average_cost": sale_rows(average_cost_sales(transactions)),
