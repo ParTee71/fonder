@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # android-ui från GitHub Packages
 
 jobs:
   instrumented:
@@ -19,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-android
+        with:
+          gpr-token: ${{ secrets.GPR_TOKEN || github.token }} # android-ui (ARKITEKTUR.md → Byggkonfiguration)
 
       - name: Enable KVM
         run: |

@@ -133,6 +133,12 @@ Versioner och SDK-nivåer: KRAVLISTA TP-1 (minSdk 30, targetSdk 36, compileSdk 3
 `gradle/libs.versions.toml` (AGP 9.4.1, Kotlin 2.4.21, Gradle 9.8.1). En höjning som ändrar
 SDK-nivåer uppdaterar TP-1 i samma PR.
 
+- **android-ui** (`se.partee71.ui` 0.5.0) från GitHub Packages: `implementation` av `ui-components`
+  (drar in `ui-theme` och `ui-common`) och `testImplementation` av `ui-testing`. Repot står i
+  `settings.gradle.kts` med `includeGroup("se.partee71.ui")`; inloggningen kommer från
+  `GPR_USER`/`GPR_TOKEN` (session-start-hooken säger om token saknas). I CI sätter
+  `.github/actions/setup-android` dem från `secrets.GPR_TOKEN || github.token` och stoppar direkt om
+  token inte når paketen. Detaljer i ARKITEKTUR.md → Byggkonfiguration och pluginens skill.
 - En modul (`:app`), ingen `build-logic` och inga convention plugins – rotens `build.gradle.kts`
   har bara `apply false`-deklarationerna, Spotless och `cpdCheck`.
 - Plugins i `:app`: `android.application` (AGP 9, inbyggd Kotlin), `kotlin.compose`, `ksp`,

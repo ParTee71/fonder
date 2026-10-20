@@ -2,9 +2,15 @@ name: Förbered Android-bygge
 description: >-
   JDK 21 och Gradle med cache. Enda stället för dessa steg i alla arbetsflöden (skill ci-budget).
   JDK 21 för att Robolectric kräver det för SDK 36; koden byggs fortfarande för Java 17.
-  Kräver att repot redan är utcheckat.
+  Kräver att repot redan är utcheckat. Provar först att token når android-ui på GitHub Packages
+  och lägger GPR_USER/GPR_TOKEN i jobbets miljö, så att settings.gradle.kts kan logga in.
 
 inputs:
+  gpr-token:
+    description: >-
+      secrets.GPR_TOKEN (classic token, read:packages) eller github.token när paketen gett
+      fonder läsåtkomst (Manage Actions access) och jobbet har packages: read.
+    required: true
   cache-read-only:
     description: Gradles cache skrivs bara från master och läses annars.
     default: ${{ github.ref != 'refs/heads/master' }}
@@ -12,6 +18,20 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Token når android-ui
+      shell: bash
+      env:
+        GPR_TOKEN: ${{ inputs.gpr-token }}
+      run: |
+        code=$(curl -s -o /dev/null -w '%{http_code}' -u "x:$GPR_TOKEN" \
+          "https://maven.pkg.github.com/ParTee71/android-ui/se/partee71/ui/ui-theme/maven-metadata.xml")
+        case "$code" in
+          200|302) ;;
+          *) echo "::error::Token når inte android-ui (HTTP $code) – lägg in secreten GPR_TOKEN (classic token, read:packages) eller ge fonder läsåtkomst till paketen"; exit 1 ;;
+        esac
+        echo "GPR_USER=${{ github.actor }}" >> "$GITHUB_ENV"
+        echo "GPR_TOKEN=$GPR_TOKEN" >> "$GITHUB_ENV"
+
     - name: JDK 21
       uses: actions/setup-java@v4
       with:

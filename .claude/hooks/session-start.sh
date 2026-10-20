@@ -24,6 +24,14 @@ else
   echo "Android SDK: saknas – installera vid behov med .claude/hooks/install-android-sdk.sh"
 fi
 
+# android-ui från GitHub Packages kräver inloggning även för läsning (ARKITEKTUR.md → Byggkonfiguration).
+# Visa bara om token finns, aldrig dess innehåll.
+if [ -n "${GPR_TOKEN:-}" ]; then
+  echo "GPR_TOKEN: satt (android-ui kan hämtas)"
+else
+  echo "GPR_TOKEN: saknas – lägg GPR_USER och GPR_TOKEN (read:packages) i Claude-miljöns inställningar, annars går Gradle inte att köra"
+fi
+
 # Maven Central via Googles spegel (429 från repo.maven.apache.org i sessionen).
 mkdir -p "$HOME/.gradle/init.d"
 cp .claude/hooks/maven-central-mirror.init.gradle.kts "$HOME/.gradle/init.d/"
