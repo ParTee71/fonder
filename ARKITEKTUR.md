@@ -126,7 +126,7 @@ ui/
 ├── imports/      ImportHoldingsScreen + ViewModel (Excel-innehav, #8) · ImportOrdersScreen + ViewModel
 │                 (PDF-avräkningsnotor, #8-uppföljning)
 ├── settings/     SettingsScreen + ViewModel (tema, kursuppdatering, riskprofil-ingång SET-3/#68 …)
-├── riskprofil/   RiskProfilScreen + ViewModel (enkät + målrisknivå, SET-3, #68)
+├── riskprofil/   RiskProfilScreen (EntityEditScreen) + ViewModel (enkät + målfördelning, SET-3, UI-15)
 ├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
 │                 sälj och köp, ANA-12/ANA-13, #114)
 ├── common/       DataErrorMessage (DataError.toMessage(), felens svenska texter) · ListStates (ListUiState-hjälpare:
@@ -176,7 +176,7 @@ Detaljskärmarna (Översikt, Fonddetalj, Pågående byte) har det lästa som ett
 `EmptyState(error)` före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
 `content` är ett standardvärde bara för de grenar som aldrig nås vid fel. En bevakning som inte finns
 blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen går via `EditorState` +
-`EditorLoader` (läsfel, sparfel; `saveUnchanged`, eftersom Spara aldrig krävt en ändring där, SET-3). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,
+`EditorLoader` och visas i android-ui:s `EntityEditScreen` (läsfel med Försök igen, sparfel som snackbar, "Släng ändringar?", UI-15). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,
 `BackupFormatException.Reason`, `DriveResult`) översätts med `DataError.of` till egna `DataError` med
 oförändrade texter, och Inställningar visar `UiError.message`. `suspendRunCatching` gör ett `Result`
 av en suspend-åtgärd utan att svälja avbrott. Transaktionsformuläret och Inställningar använder inte

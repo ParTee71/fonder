@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.riskprofil
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -10,22 +11,25 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.collections.immutable.toImmutableMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import se.partee71.fonder.domain.usecase.RiskProfileCalc
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.domain.model.DownturnReaction
+import se.partee71.fonder.domain.model.PrimaryGoal
+import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.EditorEvents
+import se.partee71.ui.common.EditorState
 
 /**
- * Instrumenterat test av Riskprofilens tillståndsdrivna innehåll (SET-3, issue #68 →
- * målfördelning i issue #71) — bygger [RiskProfilUiState] direkt i stället för att gå via ett
- * riktigt [RiskProfilViewModel]/Hilt.
+ * Instrumenterat test av Riskprofilens tillståndsdrivna innehåll (SET-3, UI-15) — bygger
+ * [RiskProfilUiState] ur ett [EditorState] med Riskprofilens validering i stället för att gå via ett
+ * riktigt [RiskProfilViewModel]/Hilt. Spara sitter i ramens topprad (`EntityEditScreen`).
  */
 @RunWith(AndroidJUnit4::class)
 class RiskProfilScreenTest {
@@ -35,12 +39,26 @@ class RiskProfilScreenTest {
 
     private val fullScale = (1..6).toList()
 
+    /** Tillståndet efter att användaren ändrat formuläret till [form] (ändrat = Spara kan aktiveras). */
+    private fun formState(levels: List<Int> = fullScale, form: RiskProfileForm = RiskProfileForm()): RiskProfilUiState {
+        val editor = EditorState(RiskProfileForm(), riskProfileValidator { levels }, AppErrors)
+        editor.update { form }
+        return RiskProfilUiState(levels.toImmutableList(), editor.state.value)
+    }
+
+    @Composable
+    private fun Content(
+        state: RiskProfilUiState,
+        onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
+        onSave: () -> Unit = {}
+    ) = RiskProfilContent(state, EditorEvents.None, onClose = {}, onAllocationPercentChanged = onAllocationPercentChanged, onSave = onSave)
+
     @Test
     fun visar_forslag_nar_ingen_egen_andring_har_gjorts() {
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), suggestedAllocation = RiskProfileCalc.Profile.BALANSERAD.allocation.toImmutableMap())
+        val state = formState(form = RiskProfileForm(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Enkätens förslag har fyllts i nedan.", substring = true).assertExists()
@@ -48,14 +66,10 @@ class RiskProfilScreenTest {
 
     @Test
     fun forslagstext_visas_inte_efter_en_egen_andring() {
-        val state = RiskProfilUiState(
-            availableLevels = fullScale.toImmutableList(),
-            suggestedAllocation = RiskProfileCalc.Profile.BALANSERAD.allocation.toImmutableMap(),
-            manualAllocationText = persistentMapOf(3 to "100")
-        )
+        val state = formState(form = RiskProfileForm(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD, persistentMapOf(3 to "100")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Enkätens förslag", substring = true).assertDoesNotExist()
@@ -64,10 +78,10 @@ class RiskProfilScreenTest {
     @Test
     fun andring_av_ett_procentfalt_anropar_onAllocationPercentChanged() {
         var changed: Pair<Int, String>? = null
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList())
+        val state = formState()
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state, onAllocationPercentChanged = { level, text -> changed = level to text }) }
+            FonderTheme { Content(state, onAllocationPercentChanged = { level, text -> changed = level to text }) }
         }
 
         composeRule.onNodeWithTag(allocationFieldTestTag(4)).performTextReplacement("100")
@@ -77,10 +91,10 @@ class RiskProfilScreenTest {
 
     @Test
     fun sparaknappen_ar_inaktiv_nar_summan_inte_ar_100() {
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "50"))
+        val state = formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "50")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Spara").assertIsNotEnabled()
@@ -88,10 +102,10 @@ class RiskProfilScreenTest {
 
     @Test
     fun sparaknappen_ar_aktiv_nar_summan_ar_100() {
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "100"))
+        val state = formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "100")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Spara").assertIsEnabled()
@@ -100,26 +114,24 @@ class RiskProfilScreenTest {
     @Test
     fun sparaknappen_anropar_onSave() {
         var saved = false
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "100"))
+        val state = formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "100")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state, onSave = { saved = true }) }
+            FonderTheme { Content(state, onSave = { saved = true }) }
         }
 
-        // Sex procentfält (en per nivå i fullScale) trycker ner Spara-knappen under den
-        // initiala viewporten — performClick() dispatchar en riktig touch och kräver att
-        // noden faktiskt är synlig, till skillnad från assertIsEnabled() (jfr skarmen_ar_skrollbar).
-        composeRule.onNodeWithText("Spara").performScrollTo().performClick()
+        // Spara sitter i ramens topprad och syns alltid, hur många procentfält skalan än har.
+        composeRule.onNodeWithText("Spara").assertIsDisplayed().performClick()
 
         assertTrue(saved)
     }
 
     @Test
     fun visar_summan_och_felmeddelande_vid_fel_summa() {
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "50"))
+        val state = formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "50")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Summa: 50 %").assertExists()
@@ -128,10 +140,10 @@ class RiskProfilScreenTest {
 
     @Test
     fun ingen_felmeddelande_nar_summan_ar_100() {
-        val state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "100"))
+        val state = formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "100")))
 
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = state) }
+            FonderTheme { Content(state) }
         }
 
         composeRule.onNodeWithText("Summa: 100 %").assertExists()
@@ -141,7 +153,7 @@ class RiskProfilScreenTest {
     @Test
     fun visar_utgangspunkt_inte_optima_disclaimer() {
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = fullScale.toImmutableList())) }
+            FonderTheme { Content(formState()) }
         }
 
         composeRule.onNodeWithText("utgångspunkter, inte optima", substring = true).assertExists()
@@ -150,7 +162,7 @@ class RiskProfilScreenTest {
     @Test
     fun visar_hint_text_nar_skalan_ar_tom() {
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = persistentListOf())) }
+            FonderTheme { Content(formState(levels = emptyList())) }
         }
 
         composeRule.onNodeWithText("Kan inte föreslå en skala än", substring = true).assertExists()
@@ -159,7 +171,7 @@ class RiskProfilScreenTest {
     @Test
     fun visar_alla_tre_fragorna() {
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = fullScale.toImmutableList())) }
+            FonderTheme { Content(formState()) }
         }
 
         composeRule.onNodeWithText("Tidshorisont").assertExists()
@@ -169,12 +181,12 @@ class RiskProfilScreenTest {
 
     @Test
     fun skarmen_ar_skrollbar() {
-        // Fast Column + verticalScroll (inte en lazy items()-lista, jfr #66) — en enkel
+        // Ramens Column + verticalScroll (inte en lazy items()-lista, jfr #66) — en enkel
         // performScrollTo().assertIsDisplayed() på det sista elementet räcker (UI-5).
         composeRule.setContent {
-            FonderTheme { RiskProfilContent(state = RiskProfilUiState(availableLevels = fullScale.toImmutableList(), manualAllocationText = persistentMapOf(3 to "100"))) }
+            FonderTheme { Content(formState(form = RiskProfileForm(manualAllocationText = persistentMapOf(3 to "100")))) }
         }
 
-        composeRule.onNodeWithText("Spara").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Summa: 100 %").performScrollTo().assertIsDisplayed()
     }
 }

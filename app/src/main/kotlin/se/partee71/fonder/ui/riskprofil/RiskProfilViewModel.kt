@@ -31,9 +31,11 @@ import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.EditorEvents
 import se.partee71.ui.common.EditorLoader
 import se.partee71.ui.common.EditorState
-import se.partee71.ui.common.UiError
+import se.partee71.ui.common.EditorUiState
+import se.partee71.ui.common.Validator
 
 /** Andelen (0.0..1.0) uttryckt som ett rundat heltalsprocent för visning/redigering i inmatningsfälten. */
 private fun percentTextOf(fraction: Double): String = (fraction * 100).roundToInt().toString()
@@ -75,35 +77,43 @@ private fun effectiveAllocationOf(allocationText: Map<Int, String>): Map<Int, Do
     return if (RiskProfileCalc.isCompleteAllocation(fractions)) fractions else emptyMap()
 }
 
+/**
+ * Valideringen av [RiskProfileForm]: fördelningen måste summera till exakt 100 % på skalan [levels]
+ * (läses vid varje validering – skalan kommer efter formuläret). En gång för ViewModel:n och testerna.
+ */
+internal fun riskProfileValidator(levels: () -> List<Int>) = Validator<RiskProfileForm> { form ->
+    val scale = levels()
+    val text = allocationTextFor(scale, suggestionFor(form, scale), form.manualAllocationText)
+    if (effectiveAllocationOf(text).isEmpty()) mapOf(RISK_PROFILE_ALLOCATION to R.string.riskprofile_allocation_sum_error) else emptyMap()
+}
+
+/** Fältnamnen i [EditorState] – andelarna är ett fält, varje fråga ett. */
+internal const val RISK_PROFILE_HORIZON = "horizon"
+internal const val RISK_PROFILE_REACTION = "reaction"
+internal const val RISK_PROFILE_GOAL = "goal"
+internal const val RISK_PROFILE_ALLOCATION = "allocation"
+
+/**
+ * Det Riskprofilen visar: formulärets tillstånd ([editor], det `EntityEditScreen` läser – laddning,
+ * läsfel, sparning, sparfel, ändrat och giltigt) och skalan [availableLevels]. Resten räknas ur dem.
+ */
 @Immutable
 data class RiskProfilUiState(
     val availableLevels: ImmutableList<Int> = persistentListOf(),
-    val horizon: TimeHorizon? = null,
-    val reaction: DownturnReaction? = null,
-    val goal: PrimaryGoal? = null,
-    /** Enkätens förslag ur [RiskProfileCalc.suggest] — null om inte alla tre frågor är besvarade eller skalan är tom. */
-    val suggestedAllocation: ImmutableMap<Int, Double>? = null,
-    /** Icke-null så fort användaren rör en enskild andel — vinner då alltid över [suggestedAllocation] i sin helhet. */
-    val manualAllocationText: ImmutableMap<Int, String>? = null,
-    /**
-     * Profilen är sparad ([EditorState]s `done`) — en händelse till skärmen, som går tillbaka och
-     * kvitterar med [RiskProfilViewModel.onSavedHandled], så att navigeringen sker exakt en gång (även vid rotation).
-     */
-    val saved: Boolean = false,
-    /** Den sparade profilen läses ([EditorLoader]) — Spara är släckt så länge, så förifyllningen aldrig skrivs över. */
-    val loading: Boolean = false,
-    /** Profilen sparas just nu — Spara är släckt, så ett dubbeltryck inte sparar två gånger. */
-    val saving: Boolean = false,
-    /** Den sparade profilen gick inte att läsa — felet visas i stället för formuläret (NFR-6). */
-    val loadError: UiError? = null,
-    /** Sparningen misslyckades — sägs under Spara, och formuläret står kvar (NFR-6). */
-    val failure: UiError? = null
+    val editor: EditorUiState<RiskProfileForm> = EditorUiState(RiskProfileForm(), loading = true)
 ) {
+    val horizon: TimeHorizon? get() = editor.value.horizon
+    val reaction: DownturnReaction? get() = editor.value.reaction
+    val goal: PrimaryGoal? get() = editor.value.goal
+
+    /** Enkätens förslag ur [RiskProfileCalc.suggest] — null om inte alla tre frågor är besvarade eller skalan är tom. */
+    val suggestedAllocation: Map<Int, Double>? get() = suggestionFor(editor.value, availableLevels)
+
     /** Text att visa per tillgänglig nivås inmatningsfält — se [allocationTextFor]. */
-    val allocationText: Map<Int, String> get() = allocationTextFor(availableLevels, suggestedAllocation, manualAllocationText)
+    val allocationText: Map<Int, String> get() = allocationTextFor(availableLevels, suggestedAllocation, editor.value.manualAllocationText)
 
     /** Sant efter det första egna ändrade fältet — styr om förslagstexten fortfarande visas. */
-    val hasManualEdit: Boolean get() = manualAllocationText != null
+    val hasManualEdit: Boolean get() = editor.value.manualAllocationText != null
 
     val allocationSumPercent: Int get() = allocationText.values.sumOf { it.toIntOrNull() ?: 0 }
 
@@ -112,8 +122,6 @@ data class RiskProfilUiState(
 
     /** Fördelningen summerar till 100 % — summaraden och dess förklaring följer den, inte sparningens läge. */
     val valid: Boolean get() = effectiveAllocation.isNotEmpty()
-
-    val canSave: Boolean get() = valid && !loading && !saving && loadError == null
 }
 
 /**
@@ -122,9 +130,10 @@ data class RiskProfilUiState(
  * navigeringsmönster som import-skärmarna). Enkäten *föreslår*, användaren äger och sparar den
  * slutgiltiga fördelningen (se [RiskProfileCalc]/[RiskProfile]).
  *
- * Formuläret är android-ui:s [EditorState] med [EditorLoader] (NFR-6): den sparade profilen läses
- * en gång, ett läsfel visas i stället för en tom enkät, och sparningen är spärrad mot dubbeltryck.
- * Profilen får sparas oförändrad (`saveUnchanged`) — Spara har aldrig krävt en ändring här.
+ * Formuläret är android-ui:s [EditorState] med [EditorLoader], och skärmen dess `EntityEditScreen`
+ * (NFR-6, UI-15): den sparade profilen läses en gång, ett läsfel visas med "Försök igen" ([retry]) i
+ * stället för en tom enkät, Spara är aktiv först när något ändrats och fördelningen går ihop, och
+ * sparningen är spärrad mot dubbeltryck. Ramen kvitterar sparat och sparfel via [events].
  */
 @HiltViewModel
 class RiskProfilViewModel @Inject constructor(
@@ -137,20 +146,17 @@ class RiskProfilViewModel @Inject constructor(
 
     private val editor = EditorState(
         initial = RiskProfileForm(),
-        validator = { form ->
-            val levels = availableLevels.value
-            val text = allocationTextFor(levels, suggestionFor(form, levels), form.manualAllocationText)
-            if (effectiveAllocationOf(text).isEmpty()) mapOf(ALLOCATION to R.string.riskprofile_allocation_sum_error) else emptyMap()
-        },
+        validator = riskProfileValidator { availableLevels.value },
         errors = AppErrors,
-        loading = true,
-        saveUnchanged = true
+        loading = true
     )
+
+    /** Ramens kvittering av sparat och sparfel ([EditorUiState.done], [EditorUiState.failure]). */
+    val events: EditorEvents get() = editor
 
     // Förifyller enkäten och fördelningen med en redan sparad profil så en återbesökt riskprofil
     // visar vad man svarade/valde förra gången, inte en tom enkät — svaren och fördelningen hålls
     // medvetet isär i persistensen (SET-3). Ingen sparad profil är en tom enkät, inget fel.
-    @Suppress("unused")
     private val loader = EditorLoader(editor, viewModelScope, read = { suspendRunCatching { preferences.riskProfile.first()?.toForm() ?: RiskProfileForm() } })
 
     init {
@@ -163,32 +169,20 @@ class RiskProfilViewModel @Inject constructor(
 
     val uiState: StateFlow<RiskProfilUiState> =
         combine(editor.state, availableLevels) { form, levels ->
-            RiskProfilUiState(
-                availableLevels = levels.toImmutableList(),
-                horizon = form.value.horizon,
-                reaction = form.value.reaction,
-                goal = form.value.goal,
-                suggestedAllocation = suggestionFor(form.value, levels)?.toImmutableMap(),
-                manualAllocationText = form.value.manualAllocationText,
-                saved = form.done,
-                loading = form.loading,
-                saving = form.saving,
-                loadError = form.loadError,
-                failure = form.failure
-            )
+            RiskProfilUiState(availableLevels = levels.toImmutableList(), editor = form)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = RiskProfilUiState(loading = true)
+            initialValue = RiskProfilUiState()
         )
 
-    fun onHorizonSelected(horizon: TimeHorizon) = editor.update(HORIZON) { it.copy(horizon = horizon) }
-    fun onReactionSelected(reaction: DownturnReaction) = editor.update(REACTION) { it.copy(reaction = reaction) }
-    fun onGoalSelected(goal: PrimaryGoal) = editor.update(GOAL) { it.copy(goal = goal) }
+    fun onHorizonSelected(horizon: TimeHorizon) = editor.update(RISK_PROFILE_HORIZON) { it.copy(horizon = horizon) }
+    fun onReactionSelected(reaction: DownturnReaction) = editor.update(RISK_PROFILE_REACTION) { it.copy(reaction = reaction) }
+    fun onGoalSelected(goal: PrimaryGoal) = editor.update(RISK_PROFILE_GOAL) { it.copy(goal = goal) }
 
     fun onAllocationPercentChanged(level: Int, percentText: String) {
         val levels = availableLevels.value
-        editor.update(ALLOCATION) { form ->
+        editor.update(RISK_PROFILE_ALLOCATION) { form ->
             val base = allocationTextFor(levels, suggestionFor(form, levels), form.manualAllocationText)
             form.copy(manualAllocationText = (base + (level to percentText)).toImmutableMap())
         }
@@ -196,8 +190,6 @@ class RiskProfilViewModel @Inject constructor(
 
     fun save() {
         viewModelScope.launch {
-            // Ett nytt försök — felet från det förra gäller inte längre.
-            editor.onFailureShown()
             // Inställningarna är lokala: ett skrivfel är aldrig "kunde inte nå källan".
             editor.save { form -> suspendRunCatching({ DataError.Unknown }) { write(form) } }
         }
@@ -223,15 +215,8 @@ class RiskProfilViewModel @Inject constructor(
         if (allocation != previousAllocation) fundPriceRefreshScheduler.triggerSwitchPlanScan()
     }
 
-    /** Kvitterar [RiskProfilUiState.saved] när skärmen gått tillbaka, så att det inte upprepas. */
-    fun onSavedHandled() = editor.onDoneHandled()
-
-    private companion object {
-        const val HORIZON = "horizon"
-        const val REACTION = "reaction"
-        const val GOAL = "goal"
-        const val ALLOCATION = "allocation"
-    }
+    /** "Försök igen" efter ett läsfel: läser den sparade profilen på nytt. */
+    fun retry() = loader.retry()
 }
 
 /** Den sparade profilen som formulärvärde — svaren och fördelningen (heltalsprocent per nivå). */

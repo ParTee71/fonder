@@ -52,8 +52,6 @@ fun titleResFor(key: AppKey): Int? = when (key) {
 
     ImportOrdersKey -> R.string.import_orders_title
 
-    RiskProfileKey -> R.string.riskprofil_title
-
     FacitKey -> R.string.facit_title
 
     BenchmarkPickerKey -> R.string.settings_benchmark_section
