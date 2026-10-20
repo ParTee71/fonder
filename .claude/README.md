@@ -64,6 +64,7 @@ hand. Läs skillen, inte Dagbokens motsvarighet.
 | `ui-style` | Designspråket — nordisk blå, koppar, M3 Expressive, vinst/förlust, Space Grotesk, tabulära siffror, former. |
 | `diagram` | `FundLineChart` i `ui/diagram/` och diagrammatematiken i `domain/usecase/` (Vico 3.3.1). |
 | `data-privacy-security` | Ekonomisk persondata, loggning, nätverkskällor, Drive `appDataFolder`, hemligheter, minify. |
+| `fondmatematik` | Definitionerna bakom varje siffra (TWR, XIRR, årstakt, risk, genomsnittsmetoden, ISK/depå, SRI, avgifter, facit) och golden-värden ur `tools/fondmatte`. |
 
 Femton generella skills och tre agenter kommer från pluginen `android@claude-android` och heter `android:<namn>`
 i sessionen: `android-dev` (baslinje, ladda alltid), `compose-expert`, `kotlin-coroutines`,
@@ -94,6 +95,17 @@ de krockar gäller projektets regler.
   GitHub- och sessionsverktygen utan fråga och hindrar läsverktyget från att öppna
   signeringsnycklar (`*.jks`, `keystore.properties`), service accounts och `.env`.
   `app/google-services.json` och `app/debug.keystore` är incheckade och ingen hemlighet.
+
+## Verktyg för fondlogiken
+
+- **`tools/fondmatte/`** (Python, bara i sessionen): `fondmatte.py golden` räknar förväntade värden
+  till JUnit-testerna med pyxirr och empyrical-reloaded, `fi_innehav.py` läser Finansinspektionens
+  fondinnehav för överlapp och genomlysning. Installation och kommandon i
+  [tools/fondmatte/README.md](../tools/fondmatte/README.md); när de används står i skill `fondmatematik`.
+- **MCP-servern `avanza`** (`.mcp.json`, påslagen via `enabledMcpjsonServers` i `settings.json`):
+  inofficiell, läsande åtkomst till Avanzas publika fond- och kursdata (avanza-mcp 2.1.0, startas med
+  `uvx`). För att slå upp en fond eller kontrollera parsrarna i `data/network` – aldrig med
+  användarens innehav, och aldrig i BankID-läget. Saknas `uv` lokalt: `pip install uv`, eller låt bli.
 
 ## Gemensam plugin
 

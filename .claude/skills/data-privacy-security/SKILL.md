@@ -30,6 +30,10 @@ behöver för att svara: ISIN, källans fond-id, fondnamn vid sökning, datumint
 **Aldrig** belopp, andelar, transaktioner, användarens e-post, Google-token eller annan
 identifierare. Ingen ny källa med inloggning eller användarkonto utan uttryckligt beslut.
 
+Samma gäller utvecklingsverktygen: MCP-servern `avanza` (`.mcp.json`) och `tools/fondmatte`
+får bara fondkatalogens data, enstaka ISIN och påhittade fixturer – aldrig användarens innehav,
+belopp eller transaktioner, och MCP-serverns BankID-läge används inte (skill `fondmatematik`).
+
 ### 3. Backup och Drive
 - Lokal backup (`BackupRepository`) skrivs bara på uttrycklig användarhandling till en fil
   användaren väljer (`fonder-backup-<datum>.json`, dokumentväljaren).
