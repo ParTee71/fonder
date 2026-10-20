@@ -186,7 +186,7 @@ fun AppNavigationShell(
         ) { innerPadding ->
             // imePadding på ett ställe i stället för per skärm (regel 4): appen kör
             // enableEdgeToEdge, och Scaffolds standardinsets är bara systemBars — tangentbordet
-            // låg därför **över** transaktionsformulärets Spara-knapp, ISIN-fältet i Fonddetalj
+            // låg därför **över** ISIN-fältet i Fonddetalj
             // och sökfältet i Fondsök. `adjustResize` räcker inte edge-to-edge på API 30+, där
             // IME är en inset appen själv måste konsumera (issue #78). En ramskärm har sin egen
             // Scaffold med imePadding och systemfältens insets – skalets marginal räknas då som
@@ -324,7 +324,7 @@ fun fonderEntries(
         FundSearchScreen()
     }
     entry<TransactionFormKey> { key ->
-        TransactionFormScreen(formKey = key, onSaved = { backStack.popIfTop(key) })
+        TransactionFormScreen(formKey = key, onClose = { backStack.popIfTop(key) }, onWatchFund = { backStack.push(FundSearchKey) })
     }
     entry<ImportHoldingsKey> { key ->
         ImportHoldingsScreen(onDone = { backStack.popIfTop(key) })

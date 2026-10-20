@@ -58,4 +58,14 @@ class SwedishNumberFormatTest {
         assertNull(TransactionPrefill.sharesForAmount(12_500.0, null))
         assertNull(TransactionPrefill.sharesForAmount(12_500.0, 0.0))
     }
+
+    @Test
+    fun `andelar visas med alla decimaler utan nollor pa slutet och utan flyttalsbrus`() {
+        // TRX-5: "Sälj alla andelar" fyller i hela innehavet.
+        assertEquals("37,5214", SwedishNumberFormat.formatShares(37.5214))
+        assertEquals("7,1233", SwedishNumberFormat.formatShares(10.1234 - 3.0001))
+        assertEquals("12,123456", SwedishNumberFormat.formatShares(12.123456))
+        assertEquals("100", SwedishNumberFormat.formatShares(100.0))
+        assertEquals(37.5214, SwedishNumberFormat.parse(SwedishNumberFormat.formatShares(37.5214))!!, 1e-12)
+    }
 }

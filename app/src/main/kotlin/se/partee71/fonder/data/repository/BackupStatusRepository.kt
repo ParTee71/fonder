@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
+import se.partee71.fonder.data.common.suspendRunCatching
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
@@ -38,13 +39,15 @@ class BackupStatusRepository @Inject constructor(
      * Påminnelsen, null när ingen behövs. Räknas om först när kontraktets tabeller eller
      * inställningar signalerat en ändring och det blivit stilla en stund ([DEBOUNCE_MILLIS]) —
      * en import med hundra rader ger en omräkning, inte hundra. Går läsningen inte att göra
-     * visas ingen påminnelse hellre än en felaktig.
+     * visas ingen påminnelse hellre än en felaktig. En läsning som `mapLatest` avbryter för att
+     * en ny signal kommit är inget fel: avbrottet släpps igenom, annars blinkar påminnelsen till
+     * null innan nästa läsning svarat.
      */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val reminder: Flow<BackupReminder?> =
         backupRepository.observeChanges()
             .debounce(DEBOUNCE_MILLIS)
-            .mapLatest { runCatching { contentState(backupRepository.snapshot()) }.getOrNull() }
+            .mapLatest { suspendRunCatching { contentState(backupRepository.snapshot()) }.getOrNull() }
             .combine(preferences.lastBackup) { current, last ->
                 current?.let { BackupReminderCalc.reminder(it, last) }
             }

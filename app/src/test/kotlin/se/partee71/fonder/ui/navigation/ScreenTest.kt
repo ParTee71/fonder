@@ -55,10 +55,9 @@ class ScreenTest {
     }
 
     @Test
-    fun `transaktionsformularet har rubrik efter laget`() {
-        // NAV-4/BYT-2: tomt formulär, "Registrera säljet" från Följ, "Registrera köpet" från "Köpte den här".
-        assertEquals(R.string.transaktionsform_title, titleResFor(TransactionFormKey()))
-        assertEquals(R.string.transaktionsform_title_sale, titleResFor(TransactionFormKey(fundIsin = "SE_A", type = se.partee71.fonder.domain.model.TransactionType.SALJ)))
-        assertEquals(R.string.transaktionsform_title_buy, titleResFor(TransactionFormKey.bought(7, "SE_A")))
+    fun `transaktionsformularet ar en ramskarm som ritar sin rubrik sjalv`() {
+        // NAV-4, UI-15: rubriken ("Ny transaktion", "Registrera säljet", "Registrera köpet") står i ramens topprad.
+        assertEquals(null, titleResFor(TransactionFormKey()))
+        assertEquals(null, titleResFor(TransactionFormKey.bought(7, "SE_A")))
     }
 }
