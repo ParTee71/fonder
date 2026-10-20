@@ -9,10 +9,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -30,6 +33,8 @@ import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.components.APP_FLOATING_TOOLBAR_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.components.AppTopBar as LibraryTopBar
+import se.partee71.ui.components.TopBarSize
 
 /**
  * Navigeringsskalet (NAV-7, NAV-8, UI-8) i JVM med Robolectric – riktiga flikrad, plusmeny,
@@ -37,7 +42,8 @@ import se.partee71.fonder.ui.theme.FonderTheme
  * fyra flikar med Översikt som start, plusmenyn på varje flik som öppnar sina skärmar, Inställningar
  * bakom ikonen på Översikt, ingen länk till Sålda fonder på Händelser (SLD-1), flikraden och
  * plusmenyn borta på en djupare skärm, bakåt från en annan flik till Översikt, att en flik behåller
- * sitt tillstånd och sin ViewModel vid flikbyte, och att stacken återställs efter rotation.
+ * sitt tillstånd och sin ViewModel vid flikbyte, att stacken återställs efter rotation, och att en
+ * ramskärm ([FrameKey]) ritar sin egen topprad med chromets indikator via `LocalTopBarStatus`.
  */
 @RunWith(RobolectricTestRunner::class)
 class AppNavigationShellTest {
@@ -324,6 +330,38 @@ class AppNavigationShellTest {
         assertOnScreen("hem")
     }
 
+    /** Ersättare för en ramskärm: bibliotekets topprad, som läser chromets status ur `LocalTopBarStatus`. */
+    private fun frameEntry(key: AppKey): NavEntry<AppKey> = if (key is FrameKey) {
+        NavEntry(key) { LibraryTopBar("ram:${name(key)}", size = TopBarSize.Small, onBack = { backStack.popIfTop(key) }) }
+    } else {
+        stubEntryWithoutTaps(key)
+    }
+
+    @Test
+    fun `en ramskärm har ingen skalrubrik men chromets indikator i sin egen topprad`() {
+        // Indikatorn snurrar oändligt – klockan stegas för hand i stället för att vänta på vila.
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            FonderTheme { AppNavigationShell(isWorkerRunning = true, backStack = backStack, entryProvider = ::frameEntry) }
+        }
+        composeRule.runOnUiThread { backStack.push(SettingsKey) }
+        composeRule.mainClock.advanceTimeBy(TRANSITION_MS)
+        // En vanlig skärm djupare i stacken: skalets topprad med rubrik och indikator, en gång.
+        composeRule.onNodeWithText("Inställningar").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription(WORKER_RUNNING).assertCountEquals(1)
+
+        composeRule.runOnUiThread { backStack.push(ComponentGalleryKey) }
+        composeRule.mainClock.advanceTimeBy(TRANSITION_MS)
+
+        composeRule.onNodeWithText("ram:${name(ComponentGalleryKey)}").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Inställningar").assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription("Tillbaka").assertCountEquals(1)
+        composeRule.onAllNodesWithContentDescription(WORKER_RUNNING).assertCountEquals(1)
+        composeRule.onNodeWithContentDescription("Tillbaka").performClick()
+        composeRule.mainClock.advanceTimeBy(TRANSITION_MS)
+        composeRule.onNodeWithText("Inställningar").assertIsDisplayed()
+    }
+
     @Test
     fun `skärmdump av skalet på Översikt`() {
         composeRule.captureLightAndDark("AppNavigation_oversikt") {
@@ -345,5 +383,9 @@ class AppNavigationShellTest {
 
     private companion object {
         const val FUND_ID = "SHB0000442"
+        const val WORKER_RUNNING = "Uppdaterar kurser i bakgrunden"
+
+        /** Längre än skärmbytets övergång (Transitions), så att bara målskärmen står kvar. */
+        const val TRANSITION_MS = 2_000L
     }
 }

@@ -60,7 +60,8 @@ Testernas paketstruktur **speglar** `main`: en ViewModel i `ui/settings/` testas
 | `testPreferencesRepository` | `app/src/test/…/testing/TestPreferences.kt` | egen DataStore-uppställning per test (på testets dispatcher) |
 | `FakeFundPriceRefreshScheduler` | `app/src/test/…/worker/` | egen schemaläggare i ViewModel-tester |
 | `captureLightAndDark` (extension på compose-regeln; `animated` för oändliga animationer, `screen` för dialoger, `ready = { isDrawn() }` för diagram) | `app/src/test/…/testing/Screenshots.kt` | egna Roborazzi-anrop och egen temaväxling. Anropa aldrig `captureRoboImage(path) { … }` bredvid en `createComposeRule` – det startar ett andra fönster och bilden blir tom |
-| `MainDispatcherRule`, delade skärmkontrakt (`runListScreenContract`/`runEditScreenContract`) *(planerade)* | `app/src/test/…/testing/` | `Dispatchers.setMain` i varje test; tomt/fel/laddar och spara-aktivering per skärm |
+| `contracts` (`ContractEnvironment(AppErrors, DataError.Network) { FonderTheme(content = it) }`) för android-ui `ui-testing`:s `runListScreenContract`/`runEditScreenContract`/`runDetailScreenContract` | `app/src/test/…/testing/Contracts.kt` | eget tema, egen felöversättning eller eget "försök igen"-fel per skärmtest; varje skärm på en ram kör kontraktet med `contracts` |
+| `MainDispatcherRule` *(planerad)* | `app/src/test/…/testing/` | `Dispatchers.setMain` i varje test |
 
 Behövs samma uppställning på två ställen → gör en hjälpare innan det tredje. Lägger du en
 metod på ett interface måste **alla** fakes uppdateras, annars bryts testbygget.

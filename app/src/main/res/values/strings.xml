@@ -374,6 +374,19 @@
     <string name="settings_facit_section">Facit</string>
     <string name="settings_facit_body">Se hur bytesförslagen på Beslut gick jämfört med att ha behållit innehavet.</string>
     <string name="settings_facit_button">Öppna facit</string>
+    <!-- Komponentgalleriet (bara i debug-bygget, skill shared-ui-components) -->
+    <string name="component_gallery_title">Komponenter</string>
+    <string name="settings_components_body">Alla delade komponenter i alla lägen, med påhittad data. Finns bara i debug-bygget.</string>
+    <string name="settings_components_button">Visa komponenter</string>
+    <string name="gallery_section_buttons">Knappar</string>
+    <string name="gallery_section_cards">Kort, rader och märken</string>
+    <string name="gallery_section_fields">Fält och val</string>
+    <string name="gallery_section_values">Belopp och andelar</string>
+    <string name="gallery_section_status">Status, laddning och tomt</string>
+    <string name="gallery_section_navigation">Navigering</string>
+    <string name="gallery_section_dialogs">Dialoger</string>
+    <string name="gallery_section_chart">Diagram</string>
+    <string name="gallery_section_library">Från android-ui</string>
     <string name="facit_empty_title">Inget facit än</string>
     <string name="facit_empty_body">Här visas utfallet av bytesförslagen på Beslut. Inga förslag har spelats in ännu — de skapas av bakgrundsuppdateringen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
     <string name="facit_summary_title">Meravkastning mot att ha behållit</string>
