@@ -31,7 +31,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -59,6 +58,7 @@ import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.theme.Spacing
 
 /** Gör Besluts lista adresserbar för `performScrollToIndex` i tester (UI-5, samma mönster som Hem och Facit). */
 const val BESLUT_LIST_TEST_TAG = "beslut_list"
@@ -156,7 +156,7 @@ fun BeslutContent(
         // medan något jobb kör, samma signal som chromets indikator (NAV-6).
         if (state.canRecomputeSwitchPlan) {
             item(contentType = "recompute") {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = Spacing.l)) {
                     AppButton(
                         text = stringResource(
                             if (state.backgroundWorkRunning) R.string.switch_plan_recompute_running else R.string.switch_plan_recompute
@@ -204,7 +204,7 @@ private fun ProfileHeader(riskProfile: RiskProfile?, accountType: AccountType?, 
         accountType?.let { add(stringResource(it.labelRes())) }
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.s),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -229,7 +229,7 @@ private fun SectionHeading(title: String, working: Boolean = false) {
         working = working,
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+            .padding(start = Spacing.l, end = Spacing.l, top = Spacing.l, bottom = Spacing.xs)
             .semantics { heading() }
     )
 }
@@ -240,7 +240,7 @@ private fun CaptionText(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)
     )
 }
 
@@ -248,7 +248,7 @@ private fun CaptionText(text: String) {
 @Composable
 private fun SwitchesHeading(waiting: Int, working: Boolean) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.l, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CardTitleRow(
@@ -325,8 +325,8 @@ private fun SwitchRowCard(
     onDismiss: (SwitchPlanResolver.Suggestion) -> Unit
 ) {
     AppCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        contentPadding = PaddingValues(bottom = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.xs),
+        contentPadding = PaddingValues(bottom = Spacing.s)
     ) {
         when (row) {
             is SwitchRow.Suggested -> SuggestedRow(row, onFollow, onStartSwitchWatch, onDismiss)
@@ -346,13 +346,13 @@ private fun SwitchRowText(row: SwitchRow, origin: String, title: String, details
         headline = title,
         headlineStyle = MaterialTheme.typography.titleSmall,
         overline = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                 SwitchRowChip(row)
                 Text(origin, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         supporting = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 if (details.isNotEmpty()) {
                     Text(
                         details.joinToString(" · "),
@@ -370,8 +370,8 @@ private fun SwitchRowText(row: SwitchRow, origin: String, title: String, details
 @Composable
 private fun SwitchRowActions(content: @Composable () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s, Alignment.End),
         verticalAlignment = Alignment.CenterVertically
     ) { content() }
 }
@@ -512,7 +512,7 @@ private fun SoldLeader(watch: OpenSwitchWatch) {
 private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
     ExpandableSection(
         title = stringResource(R.string.format_beslut_closed_title, rows.size),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s, bottom = Spacing.s)
     ) {
         Column {
             Text(
@@ -521,7 +521,7 @@ private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Sug
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             rows.forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s))
                 ClosedRow(row, onUndo)
             }
         }
@@ -574,7 +574,7 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
 private fun FacitRow(followedCount: Int, followedExcessKr: Double?, onOpen: () -> Unit) {
     AppCard(
         onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.xs, bottom = Spacing.l)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -587,7 +587,7 @@ private fun FacitRow(followedCount: Int, followedExcessKr: Double?, onOpen: () -
                     MoneyFormat.krSigned(followedExcessKr),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
                     color = ReturnColors.forAmount(followedExcessKr),
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.padding(start = Spacing.s)
                 )
             }
             Icon(

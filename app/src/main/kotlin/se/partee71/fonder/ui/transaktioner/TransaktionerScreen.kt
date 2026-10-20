@@ -45,6 +45,7 @@ import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -106,7 +107,7 @@ fun TransaktionerContent(
         val rows = state.rows
         LazyColumn(
             modifier = modifier.fillMaxSize().testTag(HANDELSER_LIST_TEST_TAG),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            contentPadding = PaddingValues(bottom = Spacing.l)
         ) {
             item(contentType = "filter") {
                 ChoiceChipRow(
@@ -114,7 +115,7 @@ fun TransaktionerContent(
                     selected = state.filter,
                     optionLabel = { stringResource(it.labelRes()) },
                     onSelect = onFilterSelected,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = Spacing.l)
                 )
             }
             if (state.showRealizedCard) {
@@ -129,7 +130,7 @@ fun TransaktionerContent(
                     AppCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = if (index == 0) 10.dp else 0.dp),
+                            .padding(start = Spacing.l, end = Spacing.l, top = if (index == 0) 10.dp else 0.dp),
                         contentPadding = PaddingValues(0.dp),
                         groupPosition = AppCardGroupPosition.of(index, rows.size)
                     ) {
@@ -188,8 +189,8 @@ private fun FilterEmptyState(filter: HandelseFilter) {
 @Composable
 private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modifier) {
     val showTotal = state.filter == HandelseFilter.SALJ
-    AppCard(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppCard(modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.l)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             PeriodRow(
                 label = stringResource(R.string.handelser_realized_year),
                 amount = state.yearRealized.realizedGain,
@@ -295,8 +296,8 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
     val tx = row.transaction
     val sale = row.sale
     Column(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.m),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
     ) {
         Text(
             stringResource(R.string.format_transaktion_rad, tx.shares.toString(), MoneyFormat.kr(tx.pricePerShare)),

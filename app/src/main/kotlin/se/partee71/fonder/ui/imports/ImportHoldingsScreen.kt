@@ -43,6 +43,7 @@ import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.theme.Spacing
 
 // Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
 // (se HoldingsImportParser) — filväljaren behöver därför acceptera båda mime-typerna,
@@ -75,7 +76,7 @@ fun ImportHoldingsScreen(
         state.imported -> Unit
 
         !state.fileSelected -> Column(
-            modifier = modifier.fillMaxSize().padding(24.dp),
+            modifier = modifier.fillMaxSize().padding(Spacing.xl),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -83,7 +84,7 @@ fun ImportHoldingsScreen(
             AppButton(
                 text = stringResource(R.string.import_pick_file),
                 onClick = { filePicker.launch(IMPORT_MIME_TYPES) },
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(top = Spacing.l)
             )
         }
 
@@ -115,7 +116,7 @@ fun ImportHoldingsScreen(
                 text = stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }),
                 onClick = viewModel::import,
                 enabled = state.canImport,
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(Spacing.l)
             )
         }
     }
@@ -143,7 +144,7 @@ private fun ImportRowCard(
     onRemoveOccasion: (Int) -> Unit
 ) {
     val row = rowState.row
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp)) {
         CheckRow(
             checked = rowState.included,
             onCheckedChange = onIncludedChange,
@@ -154,7 +155,7 @@ private fun ImportRowCard(
         Text(
             stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
             style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
 
         SelectField(
@@ -164,7 +165,7 @@ private fun ImportRowCard(
             optionLabel = { it.name },
             onSelect = onFundOverride,
             placeholder = stringResource(R.string.import_match_none),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
             Text(
@@ -184,12 +185,12 @@ private fun ImportRowCard(
         Text(
             stringResource(R.string.import_occasions_label),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.padding(top = Spacing.m)
         )
         rowState.occasions.forEachIndexed { index, occasion ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     ChoiceChipRow(
@@ -202,14 +203,14 @@ private fun ImportRowCard(
                         label = stringResource(R.string.import_date_label),
                         date = occasion.date,
                         onDateChange = { date -> onOccasionDateChange(index, date) },
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = Spacing.s)
                     )
                     AppTextField(
                         value = occasion.sharesText,
                         onValueChange = { text -> onOccasionSharesChange(index, text) },
                         label = stringResource(R.string.import_occasion_shares_label),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs)
                     )
                     if (!occasion.dateConfident) {
                         Text(
@@ -231,7 +232,7 @@ private fun ImportRowCard(
         AppButton(
             text = stringResource(R.string.import_add_occasion),
             onClick = onAddOccasion,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = Spacing.xs),
             variant = AppButtonVariant.Text
         )
         if (rowState.sharesMismatch) {

@@ -18,9 +18,10 @@ Grep i app/src/main/kotlin/se/partee71/fonder/ui/components/ och ui/diagram/ fö
 ```
 
 Utseendet följer Fonders designspråk – nordisk blå, kopparaccent, M3 Expressive, Space Grotesk, tabulära
-siffror, fast palett (UI-1). Färger, former och typografi kommer från `ui/theme`
-(`FonderLightColorScheme`/`FonderDarkColorScheme`, `ReturnColors`, `StatusColors`,
-`ChartSeriesColors`, `FonderShapes`, `FonderTypography`, `MonoAmountStyle`).
+siffror, fast palett (UI-1). Temat är android-ui:s `AppTheme` via `FonderTheme`; färger, former och
+typografi kommer från `ui/theme` (`FonderLightColorScheme`/`FonderDarkColorScheme`, `ReturnColors`,
+`StatusColors`, `ChartSeriesColors`, `FonderShapes`, `FonderTypography`, `MonoAmountStyle`) och avstånden
+från android-ui:s `Spacing` (`xs` 4 · `s` 8 · `m` 12 · `l` 16 · `xl` 24 · `xxl` 32 dp; skill `ui-style`).
 
 ## Utseende: elementtyp → enda tillåtna komponent (`ui/components/`)
 
@@ -129,7 +130,9 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
   progressindikatorer, `Badge`, `Checkbox`, `Switch`, `NavigationBar`, flytande verktygsrad, `FloatingActionButton`,
   `TopAppBar`). Kvar: `Scaffold` i `AppNavigation` och `HorizontalDivider`;
   hårdkodade `Color(…)`, `RoundedCornerShape(…)`, `fontSize`/`lineHeight`/`letterSpacing`,
-  `TextStyle(…)`, `.shadow(…)` eller literal dp för höjd. Befintliga träffar är skuld, inte förebild.
+  `TextStyle(…)`, `.shadow(…)`, literal dp för höjd och literala avstånds-dp i `padding(…)`,
+  `PaddingValues(…)` och `spacedBy(…)` (använd `Spacing`). Befintliga träffar är skuld, inte förebild –
+  avstånden utan token (2, 6, 10, 0 dp) står i baslinjen tills deras skärm ses över.
 - **All kod utom `ui/diagram/`:** Vico.
 - **All kod utom `ui/components/`:** Material3:s `PullToRefreshBox`, `ExposedDropdownMenuBox`.
 - **All kod utom `di/`:** `Dispatchers.IO`/`Default`/`Main`/`Unconfined`. Klassen tar en

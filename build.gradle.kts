@@ -18,7 +18,7 @@ val ktlintRules = mapOf(
     "max_line_length" to "off",
     "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
     "compose_allowed_composition_locals" to
-        "LocalDarkTheme",
+        "LocalFonderColors",
     // Befintliga avvikelser som kräver API-ändringar i komponenter – rättas i egna PR:er
     // (skill android-projekt → Nuvarande läge). Ta bort raden när regeln är rättad.
     "ktlint_compose_parameter-naming" to "disabled",

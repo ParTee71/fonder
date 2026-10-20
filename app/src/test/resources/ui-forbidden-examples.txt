@@ -43,7 +43,11 @@ color = MaterialTheme.colorScheme.onSurfaceVariant
 color = ReturnColors.gain
 shape = MaterialTheme.shapes.medium
 Icon(Icons.Default.Refresh, contentDescription = null)
-Modifier.padding(16.dp)
+Modifier.padding(Spacing.l)
+Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)
+contentPadding = PaddingValues(bottom = Spacing.l)
+verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+Modifier.size(24.dp)
 Spacer(Modifier.width(8.dp))
 LazyColumn(modifier = Modifier.testTag("hem")) { }
 AppCard(modifier = Modifier.fillMaxWidth()) { }
@@ -78,6 +82,10 @@ withContext(Dispatchers.Main) { }
 val c = Color(0xFF167C6E)
 tint = Color.Red
 shape = RoundedCornerShape(12.dp)
+Modifier.padding(16.dp)
+Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp)
+contentPadding = PaddingValues(12.dp)
+horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
 shape = CutCornerShape(4.dp)
 style = TextStyle(fontFamily = SpaceGrotesk)
 Text("x", fontSize = 14.sp)
@@ -130,6 +138,7 @@ val p = com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProd
 
 [komponent-ok]
 Card(modifier = modifier) { content() }
+Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
 PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) { content() }
 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) { }
 shape = RoundedCornerShape(50)

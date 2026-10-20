@@ -134,7 +134,7 @@ ui/
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
 │                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
 ├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
-└── theme/        Nordisk blå-tema (M3 Expressive), Space Grotesk-typografi (inkl. StatusColors, #16)
+└── theme/        Fonders värden till android-ui:s AppTheme: palett, former, Space Grotesk-typskala, ReturnColors/StatusColors (#16, #172)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61 ·
                   kandidatkurser för pågående byten, HEM-11/#114)
 ```
@@ -228,7 +228,7 @@ versionen i tabellen.
 
 | Behov | API | Artefakt:version | Används i | Verifierad |
 |---|---|---|---|---|
-| Expressive-tema | `MaterialExpressiveTheme`, `MotionScheme.expressive()` | `material3:1.5.0-beta01` | `ui/theme/Theme.kt` | 2026-10-20 (kompilerad) |
+| Expressive-tema | `se.partee71.ui.theme.AppTheme` (android-ui, `MaterialExpressiveTheme` + `MotionScheme.expressive()`), inre `MaterialExpressiveTheme(shapes = FonderShapes)` | `material3:1.5.0-beta01`, `ui-theme:0.5.0` | `ui/theme/Theme.kt` | 2026-10-20 (kompilerad, skärmdumparna oförändrade utom ljust temas vinst- och förlustfärg) |
 | Laddningsindikator | `LoadingIndicator()` | `material3:1.5.0-beta01` | `ui/components` | 2026-10-20 (kompilerad) |
 | Vågig progress | `LinearWavyProgressIndicator` | `material3:1.5.0-beta01` | `ui/components/ProgressBar.kt` | 2026-10-20 (kompilerad) |
 | Flytande verktygsrad | `HorizontalFloatingToolbar` | `material3:1.5.0-beta01` | `ui/components/AppFloatingToolbar.kt` | 2026-10-20 (kompilerad) |
@@ -257,6 +257,6 @@ versionen i tabellen.
 | Compose | BOM 2026.09.00, `material3` 1.5.0-beta01 | se Verifierade API:er |
 | Kontroller | Konsist (`UiConsistencyTest`), PMD CPD (`cpdCheck`), Spotless/ktlint lokalt | skill `shared-ui-components`, `ci-budget` |
 | Moduler | `:app` | `:core` är #171 |
-| android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Används från #172 |
+| android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Temat (`AppTheme`, `Spacing`) sedan #172 |
 
 Övrig Gradle-uppsättning (plugins, KSP-inställningar, cache) står i skill `android-projekt` → Gradle.

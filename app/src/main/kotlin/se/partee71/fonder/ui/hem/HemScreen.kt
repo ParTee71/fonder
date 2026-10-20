@@ -45,6 +45,7 @@ import se.partee71.fonder.ui.diagram.ChartValueAxis
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.theme.Spacing
 
 @Composable
 fun HemScreen(
@@ -95,7 +96,7 @@ fun HemContent(
         // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
         // fortfarande transaktioner att förlora.
         state.isEmpty -> Column(modifier = modifier) {
-            state.backupReminder?.let { BackupReminderRow(it, onOpenBackup, Modifier.padding(16.dp)) }
+            state.backupReminder?.let { BackupReminderRow(it, onOpenBackup, Modifier.padding(Spacing.l)) }
             EmptyState(
                 title = stringResource(R.string.hem_empty_title),
                 body = stringResource(R.string.hem_empty_body)
@@ -118,7 +119,7 @@ fun HemContent(
                 }
                 item(contentType = "return-chart") { ReturnChartCard(state = state) }
                 state.backupReminder?.let { reminder ->
-                    item(contentType = "backup-reminder") { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) }
+                    item(contentType = "backup-reminder") { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) }
                 }
                 item(contentType = "performance") { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
                 item(contentType = "analysis") {
@@ -152,7 +153,7 @@ fun HemContent(
 
 @Composable
 private fun TotalCard(state: HemUiState) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.portfolj_total_value),
             working = state.totalWorking
@@ -188,11 +189,11 @@ private fun PerformanceCard(
     performance: PortfolioPerformanceCalc.PortfolioPerformance,
     working: Boolean
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.hem_performance_title),
             working = working,
-            modifier = Modifier.padding(bottom = 4.dp)
+            modifier = Modifier.padding(bottom = Spacing.xs)
         )
         val (dayAmount, dayFraction, dayPartial) = performance.day.toRowArgs()
         PeriodRow(
@@ -200,7 +201,7 @@ private fun PerformanceCard(
             amount = dayAmount,
             fraction = dayFraction,
             partial = dayPartial,
-            modifier = Modifier.padding(vertical = 4.dp)
+            modifier = Modifier.padding(vertical = Spacing.xs)
         )
         val (weekAmount, weekFraction, weekPartial) = performance.week.toRowArgs()
         PeriodRow(
@@ -208,7 +209,7 @@ private fun PerformanceCard(
             amount = weekAmount,
             fraction = weekFraction,
             partial = weekPartial,
-            modifier = Modifier.padding(vertical = 4.dp)
+            modifier = Modifier.padding(vertical = Spacing.xs)
         )
         val (monthAmount, monthFraction, monthPartial) = performance.month.toRowArgs()
         PeriodRow(
@@ -216,7 +217,7 @@ private fun PerformanceCard(
             amount = monthAmount,
             fraction = monthFraction,
             partial = monthPartial,
-            modifier = Modifier.padding(vertical = 4.dp)
+            modifier = Modifier.padding(vertical = Spacing.xs)
         )
     }
 }
@@ -244,7 +245,7 @@ private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
  */
 @Composable
 private fun ReturnChartCard(state: HemUiState) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.hem_return_chart_title),
             working = state.returnChartWorking
@@ -254,7 +255,7 @@ private fun ReturnChartCard(state: HemUiState) {
                 stringResource(R.string.hem_return_chart_insufficient),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
             return@AppCard
         }
@@ -265,13 +266,13 @@ private fun ReturnChartCard(state: HemUiState) {
             primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
             comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
             valueAxis = ChartValueAxis.PROCENT,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         Text(
             stringResource(R.string.hem_return_chart_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         Text(
             if (benchmark != null) {
@@ -281,7 +282,7 @@ private fun ReturnChartCard(state: HemUiState) {
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
         // Vikterna vilar bara på det värde som gick att klassificera som aktier eller
         // räntor. Är resten stor är blandningen en grov approximation, och det ska synas
@@ -294,7 +295,7 @@ private fun ReturnChartCard(state: HemUiState) {
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
         if (state.returnSeries.partial) {
@@ -302,7 +303,7 @@ private fun ReturnChartCard(state: HemUiState) {
                 stringResource(R.string.hem_return_chart_partial),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
     }
@@ -322,17 +323,17 @@ private fun PortfolioPerformanceCalc.PortfolioPeriodResult.toRowArgs(): PeriodRo
 /** Summeringskort över gul-/rödflaggade fonder (issue #16, HEM-4). */
 @Composable
 private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFundClick: (String) -> Unit) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(title = stringResource(R.string.hem_analysis_title), working = working)
         if (summary.flagged.isEmpty()) {
             Text(
                 stringResource(R.string.hem_analysis_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
         } else {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
+            Column(modifier = Modifier.padding(top = Spacing.s)) {
                 summary.flagged.forEach { flagged ->
                     FlaggedFundRow(flagged = flagged, onClick = { onFundClick(flagged.fund.fundId) })
                 }
@@ -353,7 +354,7 @@ private fun AnalysisSummaryCard(summary: AnalysisSummary, working: Boolean, onFu
  */
 @Composable
 private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundClick: (String) -> Unit) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         // Snurran sitter i en egen rubrikrad ovanför totalen, inte i `PeriodRow`n: där ligger
         // beloppet längst till höger, och en snurra i den änden hade trängt undan just det
         // talet kortet finns till för (UI-6).
@@ -368,14 +369,14 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundCl
             stringResource(R.string.hem_fee_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
         if (summary.unknownFeeCount > 0) {
             Text(
                 stringResource(R.string.format_hem_fee_unknown, summary.unknownFeeCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
         if (summary.comparableCount > 0) {
@@ -388,11 +389,11 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundCl
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
         if (summary.byHolding.isNotEmpty()) {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
+            Column(modifier = Modifier.padding(top = Spacing.s)) {
                 summary.byHolding.forEach { holdingFee ->
                     FeeHoldingRow(holdingFee = holdingFee, onClick = { onFundClick(holdingFee.fund.fundId) })
                 }
@@ -406,8 +407,8 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
     AppCard(
         onClick = onClick,
         variant = AppCardVariant.Filled,
-        contentPadding = PaddingValues(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        contentPadding = PaddingValues(Spacing.m),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)
     ) {
         PeriodRow(
             label = holdingFee.fund.name,
@@ -443,14 +444,14 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
     AppCard(
         onClick = onClick,
         variant = AppCardVariant.Filled,
-        contentPadding = PaddingValues(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        contentPadding = PaddingValues(Spacing.m),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatusDot(level = flagged.analysis.status!!, modifier = Modifier.padding(end = 12.dp))
+            StatusDot(level = flagged.analysis.status!!, modifier = Modifier.padding(end = Spacing.m))
             Column {
                 Text(flagged.fund.name, style = MaterialTheme.typography.bodyMedium)
                 Text(
@@ -483,47 +484,47 @@ private fun RiskCard(
     levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
     working: Boolean
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
         PeriodRow(
             label = stringResource(R.string.hem_risk_target_label),
             amount = null,
             fraction = null,
             valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         PeriodRow(
             label = stringResource(R.string.hem_risk_actual_label),
             amount = null,
             fraction = null,
             valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
         Text(
             stringResource(R.string.hem_risk_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
         if (portfolioRisk.excludedCount > 0) {
             Text(
                 stringResource(R.string.format_hem_risk_excluded, portfolioRisk.excludedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
         if (levelDeviations.isNotEmpty()) {
             Text(
                 stringResource(R.string.hem_risk_distribution_title),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(top = Spacing.l)
             )
             levelDeviations.sortedBy { it.level }.forEach { deviation ->
                 Text(
                     stringResource(R.string.format_hem_risk_level, deviation.level),
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = Spacing.s)
                 )
                 ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
                 ExposureBar(
@@ -591,6 +592,6 @@ private fun DecisionsRow(decisions: PendingDecisions, onOpen: () -> Unit) {
         count = decisions.count,
         tone = ReminderRowTone.Accent,
         chevron = true,
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(horizontal = Spacing.l)
     )
 }

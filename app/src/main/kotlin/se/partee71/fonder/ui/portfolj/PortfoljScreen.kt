@@ -38,6 +38,7 @@ import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -107,7 +108,7 @@ fun PortfoljContent(
 
 @Composable
 private fun TotalCard(state: PortfoljUiState) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.portfolj_total_value),
             working = state.totalWorking
@@ -142,7 +143,7 @@ private fun TotalCard(state: PortfoljUiState) {
  */
 @Composable
 private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolean) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(title = stringResource(R.string.portfolj_exposure_title), working = working)
 
         ExposureDimensionSection(
@@ -165,7 +166,7 @@ private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolea
         Text(
             stringResource(R.string.portfolj_exposure_index_title),
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.padding(top = Spacing.m)
         )
         ExposureBar(label = stringResource(R.string.portfolj_exposure_index_label), fraction = exposure.indexStatus.indexFraction)
         ExposureBar(label = stringResource(R.string.portfolj_exposure_active_label), fraction = exposure.indexStatus.activeFraction)
@@ -175,7 +176,7 @@ private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolea
                 stringResource(R.string.format_portfolj_exposure_excluded, exposure.excludedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
         }
     }
@@ -188,7 +189,7 @@ private fun ExposureDimensionSection(
     unknownLabel: String,
     explain: String? = null
 ) {
-    Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+    Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Spacing.m))
     if (explain != null) {
         Text(explain, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -211,7 +212,7 @@ private fun HoldingRow(
 ) {
     AppCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -221,23 +222,23 @@ private fun HoldingRow(
             )
             // Säljsignal-status (ANA-3) bredvid fondnamnet — samma StatusDot som Fonddetalj/
             // Hem (regel 4), utan att behöva öppna Fonddetalj för att se den (POR-8, issue #26).
-            analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
+            analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = Spacing.s)) }
             // Risknivån (UI-10, issue #85) bredvid signalen — samma delade RiskBadge som
             // Fonddetalj och fondsök (regel 4), så en fonds risk ser likadan ut överallt.
-            RiskBadge(level = riskLevel, modifier = Modifier.padding(start = 8.dp))
+            RiskBadge(level = riskLevel, modifier = Modifier.padding(start = Spacing.s))
             // Väntesnurra för just den här fonden (NAV-6): en nyss tillagd fond visar 0 kr
             // tills kursen landat, och utan snurran ser det ut som ett värde i stället för
             // som ett svar på väg.
             WorkingIndicator(
                 working = working,
                 contentDescription = stringResource(R.string.format_card_working, holding.fund.name),
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = Spacing.s)
             )
         }
         // Vinstsignalen (S4, ANA-8) är ingen risk och visas därför separat från StatusDot
         // ovan, inte som en del av samma rad/trafikljus (issue #26).
         analysis?.profitTake?.takeIf { it.triggered }?.let { profitTake ->
-            ProfitTakeBadge(gainFraction = profitTake.gainFraction, modifier = Modifier.padding(top = 4.dp))
+            ProfitTakeBadge(gainFraction = profitTake.gainFraction, modifier = Modifier.padding(top = Spacing.xs))
         }
         FirstPurchaseRow(holding = holding, modifier = Modifier.padding(top = 2.dp))
         val value = holding.currentValue
@@ -260,7 +261,7 @@ private fun HoldingRow(
                 label = stringResource(R.string.period_day),
                 amount = dayAmount,
                 fraction = dayFraction,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
             val (weekAmount, weekFraction) = performance?.week.toRowArgs()
             PeriodRow(

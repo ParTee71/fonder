@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
+import se.partee71.ui.theme.Spacing
 
 @Composable
 fun RiskProfilScreen(
@@ -82,14 +83,14 @@ fun RiskProfilContent(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(Spacing.l)
     ) {
         Text(stringResource(R.string.riskprofile_title), style = MaterialTheme.typography.titleLarge)
         Text(
             stringResource(R.string.riskprofile_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.l)
         )
 
         QuestionSection(stringResource(R.string.riskprofile_q_horizon)) {
@@ -121,20 +122,20 @@ fun RiskProfilContent(
             Text(
                 stringResource(R.string.riskprofile_suggestion_hint),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(top = Spacing.l)
             )
         }
 
         Text(
             stringResource(R.string.riskprofile_allocation_title),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            modifier = Modifier.padding(top = Spacing.l, bottom = Spacing.xs)
         )
         Text(
             stringResource(R.string.riskprofile_allocation_disclaimer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = Spacing.s)
         )
         if (state.availableLevels.isEmpty()) {
             Text(
@@ -154,14 +155,14 @@ fun RiskProfilContent(
                 stringResource(R.string.format_riskprofile_allocation_sum, state.allocationSumPercent),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (state.canSave) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
             if (!state.canSave) {
                 Text(
                     stringResource(R.string.riskprofile_allocation_sum_error),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = Spacing.xs)
                 )
             }
         }
@@ -170,14 +171,14 @@ fun RiskProfilContent(
             text = stringResource(R.string.riskprofile_save_button),
             onClick = onSave,
             enabled = state.canSave,
-            modifier = Modifier.padding(top = 24.dp)
+            modifier = Modifier.padding(top = Spacing.xl)
         )
     }
 }
 
 @Composable
 private fun QuestionSection(title: String, content: @Composable () -> Unit) {
-    Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = Spacing.l, bottom = Spacing.s))
     content()
 }
 
@@ -185,7 +186,7 @@ private fun QuestionSection(title: String, content: @Composable () -> Unit) {
 private fun AllocationRow(level: Int, percentText: String, onPercentChange: (String) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)
     ) {
         Text(
             stringResource(R.string.format_riskprofile_level_label, level),
