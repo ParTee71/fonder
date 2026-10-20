@@ -5,6 +5,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -57,6 +58,8 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.domain.usecase.SwitchRowState
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
@@ -183,6 +186,19 @@ class BeslutViewModelTest {
     }
 
     // --- Rubrikraden: riskprofil och kontotyp ---
+
+    @Test
+    fun `Försök igen läser om besluten efter ett läsfel (NFR-6)`() = runTest(dispatcher) {
+        val source = FailingUntilRetry()
+        val flakyRepo = object : TransactionRepository by transactionRepo {
+            override fun observeFunds(): Flow<List<Fund>> = source.guard { transactionRepo.observeFunds() }
+        }
+        val vm = viewModel(facitTransactions = flakyRepo)
+        vm.uiState.test {
+            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     @Test
     fun `rubrikraden speglar riskprofil och kontotyp`() = runTest(dispatcher) {

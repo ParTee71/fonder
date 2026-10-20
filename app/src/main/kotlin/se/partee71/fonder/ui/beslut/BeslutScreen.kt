@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +48,7 @@ import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.components.StateChip
@@ -58,6 +57,8 @@ import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
 
 /** Gör Besluts lista adresserbar för `performScrollToIndex` i tester (UI-5, samma mönster som Hem och Facit). */
@@ -94,6 +95,7 @@ fun BeslutScreen(
         onUndoDismissal = viewModel::undoDismissal,
         onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
         onOpenFacit = onOpenFacit,
+        onRetry = viewModel::retry,
         modifier = modifier
     )
 }
@@ -117,24 +119,25 @@ fun BeslutContent(
     onDismissSuggestion: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onUndoDismissal: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onRecomputeSwitchPlan: () -> Unit = {},
-    onOpenFacit: () -> Unit = {}
+    onOpenFacit: () -> Unit = {},
+    onRetry: () -> Unit = {}
 ) {
+    // Läsfel (NFR-6): bara felet med "Försök igen" – profilraden och Facit-raden hade annars visat
+    // standardvärden som om de vore data.
+    state.error?.let { error ->
+        CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
+        return
+    }
     val switches = state.switches
     LazyColumn(modifier = modifier.fillMaxSize().testTag(BESLUT_LIST_TEST_TAG)) {
-        // Läsfel (NFR-6): bara felet – profilraden och Facit-raden hade annars visat standardvärden som om de vore data.
-        val error = state.error
-        if (error != null) {
-            item(contentType = "error") { EmptyState(error = error) }
-            return@LazyColumn
-        }
         item(contentType = "profile-header") { ProfileHeader(state.riskProfile, state.accountType, onOpenRiskProfile) }
 
         if (state.isEmpty) {
             item(contentType = "empty") {
                 EmptyState(
+                    icon = R.drawable.ic_decisions,
                     title = stringResource(R.string.beslut_empty_title),
-                    body = stringResource(R.string.beslut_empty_body),
-                    icon = Icons.Outlined.TaskAlt
+                    message = stringResource(R.string.beslut_empty_body)
                 )
             }
         } else {

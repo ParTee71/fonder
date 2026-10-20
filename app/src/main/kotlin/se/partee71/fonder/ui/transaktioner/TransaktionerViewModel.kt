@@ -23,9 +23,11 @@ import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.domain.usecase.RealizedTotal
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
 import se.partee71.fonder.ui.common.itemsOrEmpty
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.ui.common.ListUiState
 import se.partee71.ui.common.UiError
 import se.partee71.ui.common.toListUiState
@@ -111,6 +113,9 @@ class TransaktionerViewModel internal constructor(
         recordTransaction: RecordTransaction
     ) : this(repository, switchWatchRepository, recordTransaction, LocalDate::now)
 
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
+
     private val filter = MutableStateFlow(HandelseFilter.ALLA)
 
     /** Se [TransaktionerUiState.startedSwitchWatchId] — engångshändelse, inte ett bestående tillstånd. */
@@ -146,11 +151,16 @@ class TransaktionerViewModel internal constructor(
                 totalRealized = RealizedGainCalculator.total(sales),
                 startedSwitchWatchId = startedId
             )
-        }.catchAsListError { TransaktionerUiState(list = it) }.stateIn(
+        }.catchAsListError { TransaktionerUiState(list = it) }.restartOn(retrySignal).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = TransaktionerUiState()
         )
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om transaktionerna från början. */
+    fun retry() {
+        retrySignal.retry()
+    }
 
     fun onFilterSelected(selected: HandelseFilter) {
         filter.value = selected

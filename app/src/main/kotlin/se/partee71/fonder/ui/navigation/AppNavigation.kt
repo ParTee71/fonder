@@ -252,6 +252,7 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, backStack: AppBack
                 variant = AppIconButtonVariant.Tonal
             )
 
+            // Händelser är en ramskärm med egen rubrik och kommer inte hit (FrameKey).
             Screen.Innehav, Screen.Beslut, Screen.Handelser -> Unit
         }
     }
@@ -267,18 +268,26 @@ fun fonderEntries(
     backStack: AppBackStack,
     scrollSettingsToBackup: MutableState<Boolean>
 ): (AppKey) -> NavEntry<AppKey> = entryProvider {
+    // Påminnelsen (HEM-12) och det tomma lägets "Återställ från säkerhetskopia" (HEM-15) går samma väg.
+    val openBackup = {
+        scrollSettingsToBackup.value = true
+        backStack.push(SettingsKey)
+    }
     entry<OversiktKey> {
         HemScreen(
             onFundClick = { fundId -> backStack.push(FondDetaljKey(fundId)) },
             onOpenBeslut = { backStack.select(Screen.Beslut) },
-            onOpenBackup = {
-                scrollSettingsToBackup.value = true
-                backStack.push(SettingsKey)
-            }
+            onOpenBackup = openBackup,
+            onWatchFund = { backStack.push(FundSearchKey) },
+            onImportHoldings = { backStack.push(ImportHoldingsKey) }
         )
     }
     entry<InnehavKey> {
-        PortfoljScreen(onFundClick = { fundId -> backStack.push(FondDetaljKey(fundId)) })
+        PortfoljScreen(
+            onFundClick = { fundId -> backStack.push(FondDetaljKey(fundId)) },
+            onNewTransaction = { backStack.push(TransactionFormKey()) },
+            onImportOrders = { backStack.push(ImportOrdersKey) }
+        )
     }
     entry<BeslutKey> {
         BeslutScreen(
@@ -294,7 +303,9 @@ fun fonderEntries(
     }
     entry<HandelserKey> {
         TransaktionerScreen(
-            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) }
+            onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
+            onNewTransaction = { backStack.push(TransactionFormKey()) },
+            onImportOrders = { backStack.push(ImportOrdersKey) }
         )
     }
     entry<SettingsKey> {
@@ -320,8 +331,8 @@ fun fonderEntries(
             onOpenTransactionForm = { formKey -> backStack.push(formKey) }
         )
     }
-    entry<FundSearchKey> {
-        FundSearchScreen()
+    entry<FundSearchKey> { key ->
+        FundSearchScreen(title = stringResource(R.string.fondsok_title), onBack = { backStack.popIfTop(key) })
     }
     entry<TransactionFormKey> { key ->
         TransactionFormScreen(formKey = key, onClose = { backStack.popIfTop(key) }, onWatchFund = { backStack.push(FundSearchKey) })
@@ -341,6 +352,8 @@ fun fonderEntries(
     entry<BenchmarkPickerKey> { key ->
         val settingsViewModel: SettingsViewModel = hiltViewModel()
         FundSearchScreen(
+            title = stringResource(R.string.settings_benchmark_section),
+            onBack = { backStack.popIfTop(key) },
             onPickFund = { fund ->
                 settingsViewModel.chooseBenchmark(fund)
                 backStack.popIfTop(key)
@@ -363,6 +376,8 @@ fun fonderEntries(
             it.create(key.watchId)
         }
         FundSearchScreen(
+            title = stringResource(R.string.switch_watch_add_candidate),
+            onBack = { backStack.popIfTop(key) },
             onPickFund = { fund ->
                 switchWatchViewModel.onAddCandidate(fund)
                 backStack.popIfTop(key)

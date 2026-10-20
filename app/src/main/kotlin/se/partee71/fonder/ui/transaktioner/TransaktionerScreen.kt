@@ -5,12 +5,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,11 +17,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -37,29 +31,36 @@ import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppCardGroupPosition
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.ConfirmDialog
-import se.partee71.fonder.ui.components.EmptyState
-import se.partee71.fonder.ui.components.ItemRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.toListUiState
+import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.EmptyAction
+import se.partee71.ui.components.EmptyContent
+import se.partee71.ui.components.EntityListScreen
+import se.partee71.ui.components.ItemRow
+import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-/** Gör Händelsers lista adresserbar för `performScrollToNode` i tester (UI-5, samma mönster som Beslut). */
-const val HANDELSER_LIST_TEST_TAG = "handelser_list"
-
 /**
- * Fliken Händelser (NAV-1): filtret Alla/Köp/Sälj (TRX-3), årets realiserade resultat (TRX-4) och
- * alla transaktioner i en lista där sälj visar sitt realiserade resultat (SLD-1…SLD-5).
+ * Fliken Händelser (NAV-1, NAV-5) på android-ui:s listram `EntityListScreen`: stor rubrik som fälls
+ * ihop, filtret Alla/Köp/Sälj (TRX-3) fast under rubriken i alla lägen, årets realiserade resultat
+ * (TRX-4) överst i listan och alla transaktioner där sälj visar sitt realiserade resultat
+ * (SLD-1…SLD-5). Laddning, tomt läge med "Ny transaktion" och "Importera avräkningsnota" och läsfel
+ * med "Försök igen" enligt NFR-6. Ingen lägg till-knapp i ramen – plusmenyn står i skalet (NAV-8).
  */
 @Composable
 fun TransaktionerScreen(
     onOpenSwitchWatch: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    onNewTransaction: () -> Unit = {},
+    onImportOrders: () -> Unit = {},
     viewModel: TransaktionerViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,6 +80,9 @@ fun TransaktionerScreen(
         onFilterSelected = viewModel::onFilterSelected,
         onDeleteTransaction = viewModel::deleteTransaction,
         onStartSwitchWatch = viewModel::startSwitchWatch,
+        onRetry = viewModel::retry,
+        onNewTransaction = onNewTransaction,
+        onImportOrders = onImportOrders,
         modifier = modifier
     )
 }
@@ -90,62 +94,43 @@ fun TransaktionerContent(
     modifier: Modifier = Modifier,
     onFilterSelected: (HandelseFilter) -> Unit = {},
     onDeleteTransaction: (Long) -> Unit = {},
-    onStartSwitchWatch: (TransaktionRad) -> Unit = {}
+    onStartSwitchWatch: (TransaktionRad) -> Unit = {},
+    onRetry: () -> Unit = {},
+    onNewTransaction: () -> Unit = {},
+    onImportOrders: () -> Unit = {}
 ) {
     // Id:t, inte hela raden: rememberSaveable kräver ett sparbart värde, och raden slås ändå
     // upp ur tillståndet. Utan det försvann bekräftelsedialogen tyst vid rotation (issue #78).
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     val pendingDelete = pendingDeleteId?.let { id -> state.allRows.firstOrNull { it.transaction.id == id } }
 
-    val error = state.error
-    if (state.isEmpty) {
-        EmptyState(
-            title = stringResource(R.string.transaktioner_empty_title),
-            body = stringResource(R.string.transaktioner_empty_body),
-            modifier = modifier
-        )
-    } else if (error != null) {
-        EmptyState(error = error, modifier = modifier)
-    } else {
-        val rows = state.rows
-        LazyColumn(
-            modifier = modifier.fillMaxSize().testTag(HANDELSER_LIST_TEST_TAG),
-            contentPadding = PaddingValues(bottom = Spacing.l)
-        ) {
-            item(contentType = "filter") {
-                ChoiceChipRow(
-                    options = HandelseFilter.entries,
-                    selected = state.filter,
-                    optionLabel = { stringResource(it.labelRes()) },
-                    onSelect = onFilterSelected,
-                    modifier = Modifier.padding(horizontal = Spacing.l)
-                )
-            }
-            if (state.showRealizedCard) {
-                item(contentType = "realized") { RealizedCard(state, modifier = Modifier.padding(top = 10.dp)) }
-            }
-            if (rows.isEmpty()) {
-                item(contentType = "empty") { FilterEmptyState(state.filter) }
-            } else {
-                // Varje transaktion är ett eget item, så att hundratals rader (månadssparande) inte
-                // komponeras i förväg; tillsammans ser de ut som ett kort, som i mockupen.
-                itemsIndexed(rows, key = { _, row -> row.transaction.id }, contentType = { _, _ -> "transaction" }) { index, row ->
-                    AppCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = Spacing.l, end = Spacing.l, top = if (index == 0) 10.dp else 0.dp),
-                        contentPadding = PaddingValues(0.dp),
-                        groupPosition = AppCardGroupPosition.of(index, rows.size)
-                    ) {
-                        HandelseRow(
-                            row = row,
-                            onLongPress = { pendingDeleteId = row.transaction.id },
-                            onStartSwitchWatch = onStartSwitchWatch
-                        )
-                    }
-                }
-            }
+    EntityListScreen(
+        title = stringResource(R.string.nav_handelser),
+        state = state.shownList(),
+        empty = emptyContent(state, onNewTransaction, onImportOrders),
+        add = null,
+        key = { it.transaction.id },
+        modifier = modifier,
+        onRetry = onRetry,
+        filter = {
+            ChoiceChipRow(
+                options = HandelseFilter.entries,
+                selected = state.filter,
+                optionLabel = { stringResource(it.labelRes()) },
+                onSelect = onFilterSelected
+            )
+        },
+        header = if (state.showRealizedCard) {
+            { RealizedCard(state) }
+        } else {
+            null
         }
+    ) { row ->
+        HandelseRow(
+            row = row,
+            onLongPress = { pendingDeleteId = row.transaction.id },
+            onStartSwitchWatch = onStartSwitchWatch
+        )
     }
 
     pendingDelete?.let { row ->
@@ -163,26 +148,55 @@ fun TransaktionerContent(
     }
 }
 
+/**
+ * Listan ramen visar: laddning och fel som de är, annars raderna i det valda filtret (TRX-3) – ett
+ * filter utan träffar blir ramens tomma läge, med filtret kvar ovanför.
+ */
+private fun TransaktionerUiState.shownList(): ListUiState<TransaktionRad> = when (list) {
+    is ListUiState.Content -> rows.toListUiState()
+    else -> list
+}
+
+/**
+ * Det tomma läget: inga transaktioner alls ger vägarna framåt, samma som plusmenyns (F1, TRX-7) – ett
+ * tomt filter (inga köp, inga sälj, SLD-1) bara sitt budskap.
+ */
+@Composable
+private fun emptyContent(state: TransaktionerUiState, onNewTransaction: () -> Unit, onImportOrders: () -> Unit): EmptyContent = when {
+    state.isEmpty -> EmptyContent(
+        icon = R.drawable.ic_receipt,
+        title = stringResource(R.string.transaktioner_empty_title),
+        message = stringResource(R.string.transaktioner_empty_body),
+        actions = firstTransactionActions(onNewTransaction, onImportOrders)
+    )
+
+    state.filter == HandelseFilter.SALJ -> EmptyContent(
+        icon = R.drawable.ic_receipt,
+        title = stringResource(R.string.sold_funds_empty_title),
+        message = stringResource(R.string.sold_funds_empty_body)
+    )
+
+    else -> EmptyContent(
+        icon = R.drawable.ic_receipt,
+        title = stringResource(R.string.handelser_buy_empty_title),
+        message = stringResource(R.string.handelser_buy_empty_body)
+    )
+}
+
+/**
+ * Vägarna till den första transaktionen i ett tomt läge (F1): "Ny transaktion" och "Importera
+ * avräkningsnota", samma val och texter som plusmenyn (NAV-8) – Händelser och Innehav (TRX-7, POR-10).
+ */
+@Composable
+fun firstTransactionActions(onNewTransaction: () -> Unit, onImportOrders: () -> Unit): List<EmptyAction> = listOf(
+    EmptyAction(stringResource(R.string.transaktioner_add), onNewTransaction, UiR.drawable.ic_add),
+    EmptyAction(stringResource(R.string.fab_import_orders), onImportOrders, R.drawable.ic_upload, ButtonVariant.Secondary)
+)
+
 private fun HandelseFilter.labelRes(): Int = when (this) {
     HandelseFilter.ALLA -> R.string.handelser_filter_all
     HandelseFilter.KOP -> R.string.transaktion_kop
     HandelseFilter.SALJ -> R.string.transaktion_salj
-}
-
-/** Tomt filter: inga köp, eller inga sälj (SLD-1) — med samma tomma tillstånd som den gamla säljvyn. */
-@Composable
-private fun FilterEmptyState(filter: HandelseFilter) {
-    if (filter == HandelseFilter.SALJ) {
-        EmptyState(
-            title = stringResource(R.string.sold_funds_empty_title),
-            body = stringResource(R.string.sold_funds_empty_body)
-        )
-    } else {
-        EmptyState(
-            title = stringResource(R.string.handelser_buy_empty_title),
-            body = stringResource(R.string.handelser_buy_empty_body)
-        )
-    }
 }
 
 /**
@@ -192,7 +206,7 @@ private fun FilterEmptyState(filter: HandelseFilter) {
 @Composable
 private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modifier) {
     val showTotal = state.filter == HandelseFilter.SALJ
-    AppCard(modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.l)) {
+    AppCard(modifier = modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             PeriodRow(
                 label = stringResource(R.string.handelser_realized_year),
@@ -218,9 +232,9 @@ private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modif
 }
 
 /**
- * En transaktion (TRX-1): datum, fondnamn, typ och belopp med tecken — in (sälj) eller ut (köp).
- * Ett sälj visar sitt realiserade resultat i undertexten, osäkert markerat i text (SLD-2). Tryck
- * fäller ut detaljerna (SLD-4), långtryck frågar om radering (TRX-2).
+ * En transaktion (TRX-1): datum, fondnamn, typ och belopp med tecken — in (sälj) eller ut (köp) — i
+ * listramens rad. Ett sälj visar sitt realiserade resultat i undertexten, osäkert markerat i text
+ * (SLD-2). Tryck fäller ut detaljerna (SLD-4), långtryck frågar om radering (TRX-2).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -230,13 +244,12 @@ private fun HandelseRow(
     onStartSwitchWatch: (TransaktionRad) -> Unit
 ) {
     val tx = row.transaction
-    val sale = row.sale
     var expanded by rememberSaveable { mutableStateOf(false) }
     val stateText = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
     Column {
         ItemRow(
-            headline = row.fundName,
-            headlineStyle = MaterialTheme.typography.titleSmall,
+            title = row.fundName,
+            subtitle = subtitle(tx.type, row.sale),
             modifier = Modifier
                 .combinedClickable(
                     onClickLabel = stringResource(if (expanded) R.string.sold_fund_collapse else R.string.sold_fund_expand),
@@ -250,13 +263,6 @@ private fun HandelseRow(
                 Text(
                     LocalDate.ofEpochDay(tx.epochDay).format(dateFormatter),
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            supporting = {
-                Text(
-                    subtitle(tx.type, sale),
-                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
@@ -299,7 +305,7 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
     val tx = row.transaction
     val sale = row.sale
     Column(
-        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.m),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.m, end = Spacing.m, bottom = Spacing.m),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
     ) {
         Text(

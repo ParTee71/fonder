@@ -46,8 +46,10 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
 import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.fonder.ui.common.valueOrNull
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
@@ -270,6 +272,9 @@ class HemViewModel @Inject constructor(
         }
     }
 
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
+
     val uiState: StateFlow<HemUiState> =
         baseHoldings.flatMapLatest { (funds, holdings, transactions) ->
             val fundIds = holdings.map { it.fund.fundId }
@@ -362,6 +367,7 @@ class HemViewModel @Inject constructor(
             // Sist i kedjan: ett läsfel i vilken källa som helst (innehav, kurser, förslag,
             // påminnelsen) visas som fel i stället för att krascha Hem (NFR-6).
             .catchAsDetailError { HemUiState(portfolio = it) }
+            .restartOn(retrySignal)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -474,6 +480,11 @@ class HemViewModel @Inject constructor(
             refs.zip(labels).joinToString(" / ") { (ref, name) -> "${MoneyFormat.percent(ref.weight)} $name" }
         }
         return BenchmarkSeries(fundName = label, points = series.points.toImmutableList(), unclassifiedFraction = unclassifiedFraction)
+    }
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om portföljen, förslagen och påminnelsen från början. */
+    fun retry() {
+        retrySignal.retry()
     }
 
     /**

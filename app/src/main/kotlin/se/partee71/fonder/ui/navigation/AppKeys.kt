@@ -39,9 +39,12 @@ data object InnehavKey : TabKey
 @Serializable
 data object BeslutKey : TabKey
 
-/** Händelser (NAV-1, NAV-5). */
+/**
+ * Händelser (NAV-1, NAV-5) – en flik på android-ui:s listram med egen stor rubrik ([FrameKey]); skalet
+ * ritar flikraden och plusmenyn men ingen flikrubrik.
+ */
 @Serializable
-data object HandelserKey : TabKey
+data object HandelserKey : TabKey, FrameKey
 
 /** Inställningar — en skärm bakom ikonen på Översikt, inte en flik (NAV-7). */
 @Serializable
@@ -51,9 +54,9 @@ data object SettingsKey : AppKey
 @Serializable
 data class FondDetaljKey(val fundId: String) : AppKey
 
-/** Sök och lägg till en Handelsbanken-fond i bevakningen. */
+/** Sök och lägg till en Handelsbanken-fond i bevakningen – en ramskärm på android-ui:s listram ([FrameKey]). */
 @Serializable
-data object FundSearchKey : AppKey
+data object FundSearchKey : FrameKey
 
 /**
  * Registrera en ny fondtransaktion (köp/sälj, NAV-4). Utan argument det tomma formuläret från
@@ -113,9 +116,9 @@ data object ImportOrdersKey : AppKey
 @Serializable
 data object RiskProfileKey : FrameKey
 
-/** Fondsök i valläge för jämförelsefonden (HEM-10). */
+/** Fondsök i valläge för jämförelsefonden (HEM-10) – samma ramskärm som [FundSearchKey]. */
 @Serializable
-data object BenchmarkPickerKey : AppKey
+data object BenchmarkPickerKey : FrameKey
 
 /**
  * Facit — utfallet av bytesplanens inspelade förslag (SET-5); en skärm i stacken från Beslut och
@@ -134,7 +137,7 @@ data class SwitchWatchKey(val watchId: Long) : AppKey
  * rätt bevakning även om skärmen återskapas.
  */
 @Serializable
-data class SwitchWatchPickerKey(val watchId: Long) : AppKey
+data class SwitchWatchPickerKey(val watchId: Long) : FrameKey
 
 /**
  * Komponentgalleriet – alla delade komponenter med påhittad data. Nås från Inställningar, men bara

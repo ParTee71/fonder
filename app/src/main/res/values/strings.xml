@@ -57,6 +57,7 @@
     </plurals>
     <string name="hem_empty_title">Ingen portfölj ännu</string>
     <string name="hem_empty_body">Lägg till din första fondtransaktion för att se en översikt här.</string>
+    <string name="hem_empty_restore">Återställ från säkerhetskopia</string>
 
     <!-- Hem — avkastningsdiagram med indexjämförelse (HEM-9/HEM-10, issue #96) -->
     <string name="hem_return_chart_title">Avkastning över tid</string>
@@ -330,6 +331,8 @@
     <string name="fondsok_empty_title">Inga fonder hittades</string>
     <string name="fondsok_empty_body">Sök på namn, t.ex. \"Handelsbanken Global Index\".</string>
     <string name="fondsok_pick">Välj</string>
+    <!-- Träffradens knapp med fondens namn för TalkBack: "Lägg till Globalfond A", "Välj Globalfond A" (UI-3). -->
+    <string name="format_fondsok_action">%1$s %2$s</string>
     <string name="fondsok_added">Tillagd</string>
     <string name="fondsok_company_label">Fondbolag</string>
     <string name="fondsok_company_all">Alla fondbolag</string>

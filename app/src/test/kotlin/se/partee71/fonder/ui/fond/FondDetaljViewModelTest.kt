@@ -11,6 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -56,6 +57,8 @@ import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
@@ -231,6 +234,20 @@ class FondDetaljViewModelTest {
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertNull(state.content.fundName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Forsok igen laser om fonden efter ett lasfel (NFR-6)`() = runTest(dispatcher) {
+        val source = FailingUntilRetry()
+        val flakyRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = source.guard { fakeTransactionRepo.observeTransactionsForFund(fundId) }
+        }
+        val vm = viewModel(flakyRepo)
+        vm.uiState.test {
+            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            assertEquals("Fond A", state.content.fundName)
             cancelAndIgnoreRemainingEvents()
         }
     }

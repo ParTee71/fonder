@@ -12,7 +12,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import se.partee71.ui.components.AppButtonStyle
+import se.partee71.ui.components.IconButtonVariant
 import se.partee71.ui.components.LocalAppButtonStyle
+import se.partee71.ui.components.LocalTopBarBackStyle
+import se.partee71.ui.components.TopBarBackStyle
 import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Tone
 
@@ -35,6 +38,8 @@ private val LocalFonderColors = staticCompositionLocalOf { FonderLightColors }
  *
  * [FonderButtonStyle] ges till bibliotekets knappar ([LocalAppButtonStyle]) här, en gång, så att
  * ramarnas och dialogernas knappar (t.ex. `EntityEditScreen`) ser ut som Fonders egna `AppButton`.
+ * [FonderBackStyle] ger ramarnas topprad ([LocalTopBarBackStyle]) Fonders genomskinliga tillbakapil,
+ * samma som Fonders egen `AppTopBar` (UI-8).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -51,7 +56,8 @@ fun FonderTheme(
     ) {
         CompositionLocalProvider(
             LocalFonderColors provides if (darkTheme) FonderDarkColors else FonderLightColors,
-            LocalAppButtonStyle provides FonderButtonStyle
+            LocalAppButtonStyle provides FonderButtonStyle,
+            LocalTopBarBackStyle provides FonderBackStyle
         ) {
             MaterialExpressiveTheme(shapes = FonderShapes, content = content)
         }
@@ -63,6 +69,9 @@ fun FonderTheme(
  * knappen i primärbehållaren (ljusblå) – samma som Fonders egna `AppButton` (UI-13).
  */
 private val FonderButtonStyle = AppButtonStyle(minHeight = 40.dp, morph = true, secondaryTone = Tone.Primary)
+
+/** Fonders tillbakapil i ramarnas topprad: genomskinlig ikonknapp, inte bibliotekets tonade platta (UI-8). */
+private val FonderBackStyle = TopBarBackStyle(variant = IconButtonVariant.Plain)
 
 /** Semantiska avkastningsfärger. Får aldrig bäras av enbart färg — para med tecken/pil. */
 object ReturnColors {

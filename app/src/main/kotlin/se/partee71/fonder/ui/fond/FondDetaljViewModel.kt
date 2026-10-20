@@ -58,8 +58,10 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
 import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.restartOn
 import se.partee71.fonder.ui.common.valueOrNull
 import se.partee71.ui.common.DetailUiState
 import se.partee71.ui.common.UiError
@@ -366,6 +368,9 @@ class FondDetaljViewModel @AssistedInject constructor(
         startedSwitchWatchId
     ) { sellIsins, inProgress, startedId -> SwitchWatchState(sellIsins, inProgress, startedId) }
 
+    /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
+    private val retrySignal = RetrySignal()
+
     val uiState: StateFlow<FondDetaljUiState> = combine(
         baseUiState,
         feeComparisonState,
@@ -415,6 +420,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         // Sist i kedjan: ett läsfel i vilken källa som helst (fonden, kurserna, planen,
         // bevakningarna) visas som fel i stället för att krascha fondkortet (NFR-6).
         .catchAsDetailError { FondDetaljUiState(fund = it) }
+        .restartOn(retrySignal)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -531,6 +537,11 @@ class FondDetaljViewModel @AssistedInject constructor(
     // tidigare gaten "bara om cachen är helt tom" är utbytt mot den delade staleness-regeln
     // (isPriceStale, TP-17, regel 4) — en fond med inaktuell men befintlig kurs uppdateras nu
     // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
+
+    /** "Försök igen" efter ett läsfel (NFR-6): läser om fonden, kurserna och planen från början. */
+    fun retry() {
+        retrySignal.retry()
+    }
 
     /** Pågående kurshämtning — se [refresh]. */
     private var priceRefreshJob: Job? = null

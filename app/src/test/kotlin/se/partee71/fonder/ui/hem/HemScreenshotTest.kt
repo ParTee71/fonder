@@ -1,12 +1,16 @@
 package se.partee71.fonder.ui.hem
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import java.time.LocalDate
 import kotlin.math.sin
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,7 +32,8 @@ import se.partee71.ui.common.DetailUiState
 /**
  * Skärmdumpar ljust + mörkt av Översikten enligt mockupen (HEM-13): värdekortet, "Att besluta",
  * jämförelsen mot index och påminnelsen om säkerhetskopia överst. Påhittade belopp. Här ligger också
- * "Att besluta"-radens undertext, som skärmdumpen visar.
+ * "Att besluta"-radens undertext, som skärmdumpen visar, läsfelets "Försök igen" (NFR-6) och det tomma
+ * lägets tre val (HEM-15) med en skärmdump.
  */
 @RunWith(RobolectricTestRunner::class)
 class HemScreenshotTest {
@@ -62,6 +67,8 @@ class HemScreenshotTest {
         openWatches = listOf(OpenSwitchWatch(watchId = 1, sellFundName = "Sverige Småbolag", daysWaiting = 2, candidateCount = 3))
     ).withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
 
+    private val emptyPortfolio = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = false)))
+
     @Test
     fun `lasfel visar felet i stallet for nollor (NFR-6)`() {
         composeRule.setContent {
@@ -71,6 +78,41 @@ class HemScreenshotTest {
         composeRule.onNodeWithText("Appens data gick inte att läsa. Lämna skärmen och försök igen.").assertExists()
         composeRule.onNodeWithText("Ingen portfölj ännu").assertDoesNotExist()
         composeRule.onNodeWithText("0,00 kr", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `lasfelets Forsok igen laser om oversikten (NFR-6)`() {
+        var retries = 0
+        composeRule.setContent {
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Error(AppErrors.map(DataError.Database))), onRetry = { retries++ }) }
+        }
+        composeRule.onNodeWithText("Försök igen").performClick()
+        assertEquals(1, retries)
+    }
+
+    @Test
+    fun `tomt lage har tre vagar framat och aterstall gar till sakerhetskopian (HEM-15)`() {
+        var opened = ""
+        composeRule.setContent {
+            FonderTheme {
+                HemContent(
+                    state = emptyPortfolio,
+                    onWatchFund = { opened += "bevaka;" },
+                    onImportHoldings = { opened += "import;" },
+                    onOpenBackup = { opened += "backup;" }
+                )
+            }
+        }
+        composeRule.onNodeWithText("Ingen portfölj ännu").assertIsDisplayed()
+        composeRule.onNodeWithText("Bevaka en fond").performScrollTo().performClick()
+        composeRule.onNodeWithText("Importera innehav").performScrollTo().performClick()
+        composeRule.onNodeWithText("Återställ från säkerhetskopia").performScrollTo().performClick()
+        assertEquals("bevaka;import;backup;", opened)
+    }
+
+    @Test
+    fun `skarmdump av Oversikten utan innehav`() = composeRule.captureLightAndDark("HemScreen_tom") {
+        HemContent(state = emptyPortfolio)
     }
 
     @Test

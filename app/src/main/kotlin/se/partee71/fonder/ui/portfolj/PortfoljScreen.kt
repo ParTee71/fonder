@@ -27,7 +27,7 @@ import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.ProfitTakeBadge
@@ -38,6 +38,9 @@ import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.fonder.ui.transaktioner.firstTransactionActions
+import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -49,6 +52,8 @@ const val PORTFOLJ_LIST_TEST_TAG = "portfolj_list"
 fun PortfoljScreen(
     onFundClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onNewTransaction: () -> Unit = {},
+    onImportOrders: () -> Unit = {},
     viewModel: PortfoljViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,27 +61,40 @@ fun PortfoljScreen(
         state = state,
         onFundClick = onFundClick,
         onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
+        onNewTransaction = onNewTransaction,
+        onImportOrders = onImportOrders,
         modifier = modifier
     )
 }
 
-/** Tillståndsdriven, testbar del av [PortfoljScreen] — inget ViewModel/Hilt-beroende (issue #14). */
+/**
+ * Tillståndsdriven, testbar del av [PortfoljScreen] — inget ViewModel/Hilt-beroende (issue #14). Utan
+ * innehav visar det tomma läget vägarna framåt, "Ny transaktion" och "Importera avräkningsnota" (POR-10);
+ * ett läsfel har "Försök igen" ([onRetry], NFR-6).
+ */
 @Composable
 fun PortfoljContent(
     state: PortfoljUiState,
     onFundClick: (String) -> Unit,
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {},
+    onNewTransaction: () -> Unit = {},
+    onImportOrders: () -> Unit = {}
 ) {
     val error = state.error
     when {
-        state.isEmpty -> EmptyState(
-            title = stringResource(R.string.portfolj_empty_title),
-            body = stringResource(R.string.portfolj_empty_body),
-            modifier = modifier
-        )
+        state.isEmpty -> CenteredState(modifier) {
+            EmptyState(
+                icon = R.drawable.ic_holdings,
+                title = stringResource(R.string.portfolj_empty_title),
+                message = stringResource(R.string.portfolj_empty_body),
+                actions = firstTransactionActions(onNewTransaction, onImportOrders)
+            )
+        }
 
-        error != null -> EmptyState(error = error, modifier = modifier)
+        error != null -> CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
 
         // Både totalkortet och exponeringskortet ligger som `item {}` i samma `LazyColumn` som
         // innehavsraderna (inte i en fast `Column` ovanför) — annars äter de permanent

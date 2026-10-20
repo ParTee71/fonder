@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -63,6 +64,8 @@ import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
@@ -187,6 +190,20 @@ class HemViewModelTest {
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertFalse(state.content.hasHoldings)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Forsok igen laser om portfoljen efter ett lasfel (NFR-6)`() = runTest(dispatcher) {
+        val source = FailingUntilRetry()
+        val flakyRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactions(): Flow<List<Transaction>> = source.guard { fakeTransactionRepo.observeTransactions() }
+        }
+        val vm = viewModel(flakyRepo)
+        vm.uiState.test {
+            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
     }

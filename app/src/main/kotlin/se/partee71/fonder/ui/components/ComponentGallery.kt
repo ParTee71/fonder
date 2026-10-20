@@ -48,7 +48,12 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.ui.components.AppTopBar as LibraryTopBar
+import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.EmptyAction
+import se.partee71.ui.components.EmptyState as LibraryEmptyState
+import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.components.LocalTopBarStatus
+import se.partee71.ui.components.R as UiR
 import se.partee71.ui.components.TopBarSize
 import se.partee71.ui.theme.Spacing
 
@@ -280,9 +285,20 @@ private fun Status() {
     PullToRefreshContainer(refreshing = true, onRefresh = {}, modifier = Modifier.height(120.dp)) {
         PeriodRow(label = "Sedan köp", amount = 18_420.0, fraction = 0.091)
     }
-    Label("EmptyState")
+    Label("EmptyState (Fonders, kvar på importerna, formuläret och Pågående byte)")
     EmptyState(title = "Inga fonder hittades", body = "Prova ett annat namn eller fondbolag.", icon = Icons.Outlined.PieChart)
     EmptyState(error = AppErrors.map(DataError.Network))
+    Label("android-ui EmptyState med knappar · LoadErrorState (CenteredState på flikarna)")
+    LibraryEmptyState(
+        icon = R.drawable.ic_holdings,
+        title = "Inga innehav ännu",
+        message = "Lägg till din första fondtransaktion för att se värde och utveckling.",
+        actions = listOf(
+            EmptyAction("Ny transaktion", {}, UiR.drawable.ic_add),
+            EmptyAction("Importera avräkningsnota", {}, R.drawable.ic_upload, ButtonVariant.Secondary)
+        )
+    )
+    LoadErrorState(title = "Kunde inte visa innehållet", error = AppErrors.map(DataError.Database), onRetry = {})
 }
 
 @Composable

@@ -5,10 +5,10 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -22,13 +22,17 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 import se.partee71.fonder.testing.captureLightAndDark
+import se.partee71.fonder.testing.contracts
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.ListUiState
 import se.partee71.ui.common.toListUiState
+import se.partee71.ui.testing.runListScreenContract
 
 /**
- * Fliken Händelser i JVM med Robolectric: filterraden (TRX-3), kortet med årets realiserade resultat
- * (TRX-4), säljraden med vinst, förlust och osäkert resultat (SLD-1/SLD-2), och skärmdumpar ljust +
- * mörkt i "Alla" och "Sälj" enligt mockupen. Radernas utfällning, bevakning och radering testas
+ * Fliken Händelser i JVM med Robolectric: listramens kontrakt (laddning, tomt med "Ny transaktion" och
+ * "Importera avräkningsnota", fel med "Försök igen", NFR-6, TRX-7), filterraden (TRX-3), kortet med årets
+ * realiserade resultat (TRX-4), säljraden med vinst, förlust och osäkert resultat (SLD-1/SLD-2), och
+ * skärmdumpar ljust + mörkt i "Alla", "Sälj" och utan transaktioner enligt mockupen. Radernas utfällning, bevakning och radering testas
  * instrumenterat i `androidTest/…/ui/transaktioner/TransaktionerScreenTest`.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -62,6 +66,50 @@ class TransaktionerScreenTest {
             yearRealized = RealizedGainCalculator.totalForYear(sales, 2026),
             totalRealized = RealizedGainCalculator.total(sales)
         )
+    }
+
+    @Test
+    fun `Händelser följer listramens kontrakt utan lägg till men med vägarna till första transaktionen`() {
+        val row = TransaktionRad(transaction = transactions.first(), fundName = "Sverige Småbolag")
+        composeRule.runListScreenContract(
+            environment = contracts,
+            item = row,
+            itemText = "Sverige Småbolag",
+            emptyTitle = "Inga transaktioner",
+            addLabel = null,
+            emptyActions = listOf("Ny transaktion", "Importera avräkningsnota")
+        ) { state, _, onRetry ->
+            TransaktionerContent(state = TransaktionerUiState(list = state), onRetry = onRetry)
+        }
+    }
+
+    @Test
+    fun `det tomma lägets knappar öppnar formuläret och avräkningsnotan och filtret står kvar`() {
+        var opened = ""
+        composeRule.setContent {
+            FonderTheme {
+                TransaktionerContent(
+                    state = TransaktionerUiState(list = ListUiState.Empty),
+                    onNewTransaction = { opened += "ny;" },
+                    onImportOrders = { opened += "import;" }
+                )
+            }
+        }
+        composeRule.onNode(hasText("Alla") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertIsDisplayed()
+        composeRule.onNodeWithText("Ny transaktion").performClick()
+        composeRule.onNodeWithText("Importera avräkningsnota").performClick()
+        assertEquals("ny;import;", opened)
+    }
+
+    @Test
+    fun `ett filter utan träffar visar sitt eget tomma läge utan knappar`() {
+        val onlyBuys = transactions.filter { it.type == TransactionType.KOP }
+            .map { TransaktionRad(transaction = it, fundName = names.getValue(it.fundId)) }
+        composeRule.setContent {
+            FonderTheme { TransaktionerContent(state = TransaktionerUiState(list = onlyBuys.toListUiState(), filter = HandelseFilter.SALJ)) }
+        }
+        composeRule.onNodeWithText("Inga sälj ännu").assertIsDisplayed()
+        composeRule.onNodeWithText("Ny transaktion").assertDoesNotExist()
     }
 
     @Test
@@ -133,7 +181,7 @@ class TransaktionerScreenTest {
         composeRule.onNodeWithText("Fond nr 1").assertIsDisplayed()
         composeRule.onNodeWithText("Fond nr 200").assertDoesNotExist()
 
-        composeRule.onNodeWithTag(HANDELSER_LIST_TEST_TAG).performScrollToNode(hasText("Fond nr 200"))
+        composeRule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Fond nr 200"))
         composeRule.onNodeWithText("Fond nr 200").assertIsDisplayed()
         composeRule.onNodeWithText("Fond nr 1").assertDoesNotExist()
     }
@@ -146,5 +194,10 @@ class TransaktionerScreenTest {
     @Test
     fun `skärmdump av Händelser i Sälj`() = composeRule.captureLightAndDark("HandelserScreen_salj") {
         TransaktionerContent(state = state(HandelseFilter.SALJ))
+    }
+
+    @Test
+    fun `skärmdump av Händelser utan transaktioner`() = composeRule.captureLightAndDark("HandelserScreen_tomt") {
+        TransaktionerContent(state = TransaktionerUiState(list = ListUiState.Empty))
     }
 }

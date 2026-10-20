@@ -31,7 +31,7 @@ import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
-import se.partee71.fonder.ui.components.EmptyState
+import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExposureBar
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
@@ -45,6 +45,11 @@ import se.partee71.fonder.ui.diagram.ChartValueAxis
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.EmptyAction
+import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.LoadErrorState
+import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
 
 @Composable
@@ -53,6 +58,8 @@ fun HemScreen(
     onOpenBeslut: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenBackup: () -> Unit = {},
+    onWatchFund: () -> Unit = {},
+    onImportHoldings: () -> Unit = {},
     viewModel: HemViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,6 +70,9 @@ fun HemScreen(
         onFundClick = onFundClick,
         onOpenBeslut = onOpenBeslut,
         onOpenBackup = onOpenBackup,
+        onRetry = viewModel::retry,
+        onWatchFund = onWatchFund,
+        onImportHoldings = onImportHoldings,
         modifier = modifier
     )
 }
@@ -90,22 +100,35 @@ fun HemContent(
     onFundClick: (String) -> Unit = {},
     onOpenBeslut: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {},
+    onWatchFund: () -> Unit = {},
+    onImportHoldings: () -> Unit = {}
 ) {
     val error = state.error
     val portfolio = state.content
     when {
-        // Ett läsfel visas i stället för portföljen, aldrig nollor som ser ut som svar (NFR-6).
-        error != null -> EmptyState(error = error, modifier = modifier)
+        // Ett läsfel visas i stället för portföljen, aldrig nollor som ser ut som svar – med
+        // "Försök igen" (NFR-6).
+        error != null -> CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
 
         // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
-        // fortfarande transaktioner att förlora.
-        state.isEmpty -> Column(modifier = modifier) {
+        // fortfarande transaktioner att förlora. Det tomma läget har vägarna framåt (HEM-15):
+        // bevaka en fond, importera innehav eller återställa en säkerhetskopia (samma väg som påminnelsen).
+        state.isEmpty -> Column(modifier = modifier.fillMaxSize()) {
             state.backupReminder?.let { BackupReminderRow(it, onOpenBackup, Modifier.padding(Spacing.l)) }
-            EmptyState(
-                title = stringResource(R.string.hem_empty_title),
-                body = stringResource(R.string.hem_empty_body)
-            )
+            CenteredState(Modifier.weight(1f)) {
+                EmptyState(
+                    icon = R.drawable.ic_overview,
+                    title = stringResource(R.string.hem_empty_title),
+                    message = stringResource(R.string.hem_empty_body),
+                    actions = listOf(
+                        EmptyAction(stringResource(R.string.transaktionsform_watch_fund), onWatchFund, UiR.drawable.ic_add),
+                        EmptyAction(stringResource(R.string.fab_import_holdings), onImportHoldings, R.drawable.ic_upload, ButtonVariant.Secondary),
+                        EmptyAction(stringResource(R.string.hem_empty_restore), onOpenBackup, R.drawable.ic_restore, ButtonVariant.Text)
+                    )
+                )
+            }
         }
 
         // Dra ned uppdaterar (UI-11) — bara här, inte i tomt-tillståndet ovan: utan innehav

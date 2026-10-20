@@ -131,7 +131,8 @@ ui/
 │                 sälj och köp, ANA-12/ANA-13, #114)
 ├── common/       DataErrorMessage (DataError.toMessage(), felens svenska texter) · ListStates (ListUiState-hjälpare:
 │                 itemsOrEmpty, errorOrNull, catchAsListError – NFR-6/#173) · DetailStates (DetailUiState-
-│                 hjälpare: valueOrNull, errorOrNull, catchAsDetailError)
+│                 hjälpare: valueOrNull, errorOrNull, catchAsDetailError) · Retry (RetrySignal + restartOn:
+│                 "Försök igen" efter ett läsfel, NFR-6/#174)
 ├── navigation/   AppNavigation (Navigation 3: NavDisplay, en dekorerad stack per flik) · AppBackStack (stack per
 │                 flik, sparas över rotation och processdöd) · AppKeys (@Serializable NavKey per skärm) · Screen ·
 │                 Transitions · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
@@ -167,13 +168,15 @@ fångas med `catchAsListError` och blir `ListUiState.Error` i stället för en k
 finns på ett ställe: `DataError.of` översätter Room/SQLite till `Database`, ett I/O-fel från en källa
 till `Network` och resten till `Unknown`; importerna sätter sina egna (`ImportUnreadable`,
 `ImportEmpty`, `ImportNoTransactions`). `AppErrors` gör ett `UiError` av det med texten ur
-`DataError.toMessage()`, och skärmen visar det med `EmptyState(error)`. Fondsök sätter
+`DataError.toMessage()`, och skärmen visar det med android-ui:s `LoadErrorState` ("Försök igen" läser om källan:
+ViewModelns `RetrySignal` och `restartOn` efter felfångsten, #174) – Händelser och Fondsök via listramen
+`EntityListScreen` (nycklar som är `FrameKey`; Händelser även `TabKey`). Fondsök sätter
 `DataError.Network` när katalogen inte kom (källan svarar `null`) med sin egen text.
 
 Detaljskärmarna (Översikt, Fonddetalj, Pågående byte) har det lästa som ett `DetailUiState<T>`-fält
 (`HemPortfolio`, `FundDetail`, `SwitchWatchDetail`) bredvid körstatus, förslag och engångshändelser;
 `catchAsDetailError` sist i flödet gör ett fel i källan till `DetailUiState.Error`, och skärmen visar
-`EmptyState(error)` före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
+felet (`LoadErrorState` med Försök igen på Översikt och Fonddetalj) före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
 `content` är ett standardvärde bara för de grenar som aldrig nås vid fel. En bevakning som inte finns
 blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen och transaktionsformuläret går via `EditorState` +
 `EditorLoader` och visas i android-ui:s `EntityEditScreen` (läsfel med Försök igen, sparfel som snackbar, "Släng ändringar?", UI-15). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,
