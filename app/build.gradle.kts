@@ -211,6 +211,8 @@ dependencies {
 
     // Diagram (kurshistorik i Fonddetalj, se issue #7)
     implementation(libs.vico.compose.m3)
+    // android-ui: tema, tillstånd och komponenter delade med ReseApoteket och Dagboken (#172–#174)
+    implementation(libs.android.ui.components)
 
     // Google-inloggning (TP-6) — Firebase Auth växlar Googles ID-token mot en session,
     // Credential Manager äger kontoväljaren (ersätter utfasade GoogleSignIn).
@@ -235,6 +237,7 @@ dependencies {
 
     // Unit tests
     testImplementation(libs.junit)
+    testImplementation(libs.android.ui.testing)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)

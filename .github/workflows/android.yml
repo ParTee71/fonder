@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # android-ui från GitHub Packages
   pull-requests: read # dorny/paths-filter läser PR:ens ändrade filer
 
 # En ny push till samma PR avbryter den förra körningen; master avbryts aldrig.
@@ -134,6 +135,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-android
+        with:
+          gpr-token: ${{ secrets.GPR_TOKEN || github.token }} # android-ui (ARKITEKTUR.md → Byggkonfiguration)
 
       # Robolectric hämtar sin SDK-jar (android-all-instrumented) till ~/.m2 utanför Gradles cache.
       - name: Cache för Robolectrics SDK-jar
@@ -190,6 +193,7 @@ jobs:
     needs: [changes, build-and-test]
     if: needs.changes.outputs.run_instrumented == 'true'
     uses: ./.github/workflows/instrumented.yml
+    secrets: inherit # GPR_TOKEN för android-ui
 
   ci-ok:
     name: ci-ok

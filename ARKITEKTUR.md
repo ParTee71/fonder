@@ -256,6 +256,7 @@ versionen i tabellen.
 | Java | källa och mål 17, JDK 21 kör bygget | Robolectric kräver 21 för SDK 36 (`.github/actions/setup-android`) |
 | Compose | BOM 2026.09.00, `material3` 1.5.0-beta01 | se Verifierade API:er |
 | Kontroller | Konsist (`UiConsistencyTest`), PMD CPD (`cpdCheck`), Spotless/ktlint lokalt | skill `shared-ui-components`, `ci-budget` |
-| Moduler | `:app` | `:core` är #171; android-ui-biblioteket kopplas in i #178 |
+| Moduler | `:app` | `:core` är #171 |
+| android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Används från #172 |
 
 Övrig Gradle-uppsättning (plugins, KSP-inställningar, cache) står i skill `android-projekt` → Gradle.

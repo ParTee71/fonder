@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: read # android-ui från GitHub Packages
 
 jobs:
   quality:
@@ -47,6 +48,7 @@ jobs:
         uses: ./.github/actions/setup-android
         with:
           cache-read-only: true
+          gpr-token: ${{ secrets.GPR_TOKEN || github.token }} # android-ui (ARKITEKTUR.md → Byggkonfiguration)
 
       - name: Grant execute permission for gradlew
         if: steps.fresh.outputs.skip != 'true'
