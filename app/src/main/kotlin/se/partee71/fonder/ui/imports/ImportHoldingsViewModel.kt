@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.imports.HoldingsImportParser
 import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -34,6 +36,7 @@ import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
+import se.partee71.ui.common.UiError
 
 private const val SHARES_MATCH_TOLERANCE = 1e-6
 
@@ -86,8 +89,6 @@ data class ImportRowUiState(
     val readyToImport: Boolean get() = included && matchedFund != null && occasionsValid
 }
 
-enum class ImportError { PARSE_FAILED, EMPTY_FILE }
-
 @Immutable
 data class ImportHoldingsUiState(
     val loading: Boolean = false,
@@ -95,7 +96,8 @@ data class ImportHoldingsUiState(
     val rows: ImmutableList<ImportRowUiState> = persistentListOf(),
     val catalogFunds: ImmutableList<Fund> = persistentListOf(),
     val imported: Boolean = false,
-    val error: ImportError? = null,
+    /** Filen gick inte att läsa eller var tom – [DataError.ImportUnreadable] eller [DataError.ImportEmpty] via [AppErrors] (NFR-6). */
+    val error: UiError? = null,
     /** Importen pågår — knappen ska vara släckt, se [ImportHoldingsViewModel.import]. */
     val importing: Boolean = false
 ) {
@@ -138,11 +140,11 @@ class ImportHoldingsViewModel @Inject constructor(
             val parsedRows = runCatching {
                 HoldingsImportParser.parse(bytes.inputStream())
             }.getOrElse {
-                _uiState.update { s -> s.copy(loading = false, error = ImportError.PARSE_FAILED) }
+                _uiState.update { s -> s.copy(loading = false, error = AppErrors.map(DataError.ImportUnreadable)) }
                 return@launch
             }
             if (parsedRows.isEmpty()) {
-                _uiState.update { it.copy(loading = false, error = ImportError.EMPTY_FILE) }
+                _uiState.update { it.copy(loading = false, error = AppErrors.map(DataError.ImportEmpty)) }
                 return@launch
             }
 

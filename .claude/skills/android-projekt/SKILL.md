@@ -26,8 +26,11 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   bundna i `di/RepositoryModule`; repository → Room/DAO enligt skill `android-data-layer`.
 - Nätverk: OkHttp + Jsoup (ingen Retrofit) i `data/network/` – Avanza, Handelsbankens
   fondlista, Riksbankens SWEA (TP-20, TP-21). Vad som får skickas: skill `data-privacy-security`.
-- Fel mappas i repository-lagret till egna typer: `Result<T>` med `SignInException.Reason`,
-  `BackupFormatException.Reason` och `DriveResult`; UI:t översätter orsaken till en svensk sträng.
+- Fel mappas en gång i datalagret: `DataError` (Room, källorna, importerna) med `DataError.of` och
+  `AppErrors` (android-ui:s `ErrorMapper`) i `data/common/`, texten i `ui/common/DataErrorMessage.kt`
+  (NFR-6, skill `shared-ui-components`). Inloggningen och backupen har kvar sina egna typer –
+  `Result<T>` med `SignInException.Reason`, `BackupFormatException.Reason` och `DriveResult` – som
+  Inställningar översätter till en svensk sträng.
 - Backup: manuell, aldrig automatisk (HEM-12) – `BackupRepository` (fil via SAF, `BackupPayload`
   + `BackupSerializer`) och `DriveBackupRepository` (Drive `appDataFolder`), komponerade av
   anroparen; `BackupStatusRepository` driver påminnelsen på Översikt. Ingen backup-worker
@@ -73,8 +76,8 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   `onSwitchWatchOpened()` på Beslut, Händelser och Fonddetalj). Skärmen agerar i en `LaunchedEffect`
   nyckelad på värdet och kvitterar efteråt, så att inget upprepas vid rotation eller tappas när
   skärmen inte visas. Ingen `Channel` eller `receiveAsFlow` i `ui/` – scopet `[events]` i
-  `ui-forbidden.txt` kontrollerar det; inget `SharedFlow` heller. Fonder har inget delat
-  formulärmönster (`EditorState`). `SwitchWatchUiState.closed` är ett bestående tillstånd, ingen
+  `ui-forbidden.txt` kontrollerar det; inget `SharedFlow` heller. Formulärmönstret
+  (`EditorState`, `EditorLoader` i android-ui:s `ui-common`) används inte än. `SwitchWatchUiState.closed` är ett bestående tillstånd, ingen
   händelse: skärmen lämnas med `popIfTop`, som inte gör något om skärmen redan lämnats.
 - **Nuvarande läge, avviker från pluginen:** Drive-auktoriseringens `PendingIntent` lämnas via en
   callback-parameter (`backupToDrive(onNeedsAuthorization)`), inte via state – medvetet, så att den
@@ -90,7 +93,8 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   `FonderLight/DarkExtendedColors`, ingen dynamisk färg), `FonderTypography`, `FonderAppShapes` +
   `FonderShapes`, `MonoAmountStyle` (tnum) och de semantiska `ReturnColors`, `StatusColors`,
   `ChartSeriesColors`. Avstånd i skärmkod med `Spacing` (skill `ui-style`).
-- Fonder har inga delade list- eller redigeringsramar; skärmen är `XScreen(viewModel = hiltViewModel())`
+- Fonder använder inte android-ui:s ramar (`EntityListScreen`, `EntityEditScreen`) än, men listskärmarnas
+  tillstånd är `ListUiState` från `ui-common` (NFR-6); skärmen är `XScreen(viewModel = hiltViewModel())`
   som samlar state med `collectAsStateWithLifecycle()` och lämnar typat state och callbacks till
   en tillståndslös `XContent` (t.ex. `SettingsScreen` → `SettingsContent`).
 - Inga Material 3-komponenter, färger, former eller textstilar direkt i `ui/<feature>/` –

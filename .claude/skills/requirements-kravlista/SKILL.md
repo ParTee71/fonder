@@ -24,7 +24,7 @@ KRAVLISTA.md består av numrerade avsnitt med tabeller `| ID | Krav |`. Varje kr
 | `TRX` | Transaktioner (§4) |
 | `IMP` | Import (§4) |
 | `SET` | Inställningar, inklusive säkerhetskopiering (§4) |
-| `NFR` | Datasäkerhet och tester – NFR-1 rundtur, NFR-2 tester, NFR-3 migrering (§5) |
+| `NFR` | Datasäkerhet och tester – NFR-1 rundtur, NFR-2 tester, NFR-3 migrering, NFR-6 laddning/tomt/fel (§5) |
 | `SLD` | Sålda fonder – säljen i Händelser (§6) |
 | `HEM` | Hem (dashboard) (§7) |
 | `ANA` | Analys – nyckeltal och säljsignaler (§8) |
@@ -62,7 +62,8 @@ flytta motivet till PR-beskrivningen – men tappa inget beteende på vägen.
 
 Beteenden som delade komponenter ger alla skärmar – väntesnurran i kortets rubrik (NAV-6),
 dra för att uppdatera (UI-11), tryckytor och skärmläsartext (UI-3), utfällt läge som överlever
-rotation (UI-9), risknivåns märkning (UI-10), tom data som "kunde inte beräknas" (ANA-4) – står
+rotation (UI-9), risknivåns märkning (UI-10), tom data som "kunde inte beräknas" (ANA-4), listskärmarnas
+laddning, tomma tillstånd och läsfel (NFR-6) – står
 som **ett** krav. Funktionskraven refererar till dem (`Korten följer NAV-6 och UI-11.`) i
 stället för att upprepa texten – regel 4 gäller även kravlistan.
 

@@ -9,10 +9,8 @@ import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,13 +38,19 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.ui.common.catchAsListError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.itemsOrEmpty
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.UiError
+import se.partee71.ui.common.toListUiState
 
 @Immutable
 data class PortfoljUiState(
-    val loading: Boolean = true,
-    val holdings: ImmutableList<Holding> = persistentListOf(),
+    /** Innehaven — laddning, tomt (POR-2), fel eller innehav (NFR-6). */
+    val list: ListUiState<Holding> = ListUiState.Loading,
     val totalInvested: Double = 0.0,
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
@@ -76,7 +80,13 @@ data class PortfoljUiState(
      */
     val refreshingFundIds: ImmutableSet<String> = persistentSetOf()
 ) {
-    val isEmpty: Boolean get() = !loading && holdings.isEmpty()
+    val loading: Boolean get() = list is ListUiState.Loading
+    val holdings: ImmutableList<Holding> get() = list.itemsOrEmpty()
+
+    /** Läsfelet som visas i stället för portföljen (NFR-6). */
+    val error: UiError? get() = list.errorOrNull()
+
+    val isEmpty: Boolean get() = list is ListUiState.Empty
 
     // Per kort/rad, härlett här i stället för i skärmen så kopplingen är enhetstestbar utan
     // Compose (samma uppdelning som HemUiState). Den första laddningen räknas alltid som
@@ -196,8 +206,7 @@ class PortfoljViewModel @Inject constructor(
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 PortfoljUiState(
-                    loading = false,
-                    holdings = enriched.toImmutableList(),
+                    list = enriched.toListUiState(),
                     totalInvested = PortfolioCalc.totalInvested(enriched),
                     totalValue = PortfolioCalc.totalValue(enriched),
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
@@ -212,7 +221,7 @@ class PortfoljViewModel @Inject constructor(
                     }.toMap().toImmutableMap()
                 )
             }
-        }.combine(workState) { state, work ->
+        }.catchAsListError { PortfoljUiState(list = it) }.combine(workState) { state, work ->
             // Eget flöde, inte en gren i combinen ovan: körstatusen kommer från WorkManager och
             // från ViewModel:ens egna jobb — den ska inte kunna räkna om portföljen bara för att
             // ett jobb startade (samma gräns som HemViewModel drar).

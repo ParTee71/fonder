@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -18,6 +19,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -66,16 +68,16 @@ class TransaktionerViewModelTest {
     /** Fast "idag" så att årets resultat inte beror på när testet körs. */
     private val today = LocalDate.of(2026, 10, 11)
 
-    private fun viewModel() = TransaktionerViewModel(
-        fakeRepo,
+    private fun viewModel(repo: TransactionRepository = fakeRepo) = TransaktionerViewModel(
+        repo,
         fakeSwitchWatchRepo,
         RecordTransaction(
-            fakeRepo,
+            repo,
             fakeSwitchWatchRepo,
             FakeSuggestionRecordRepository(),
             fakeMetadataRepo,
             scheduler,
-            testTargetLevelPreselection(fakeRepo, fakeSwitchWatchRepo)
+            testTargetLevelPreselection(repo, fakeSwitchWatchRepo)
         )
     ) { today }
 
@@ -133,6 +135,22 @@ class TransaktionerViewModelTest {
         vm.deleteTransaction(42)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(42L in deletedIds)
+    }
+
+    @Test
+    fun `ett läsfel i databasen visas som fel i stället för en tom lista (NFR-6)`() = runTest(dispatcher) {
+        val failingRepo = object : TransactionRepository by fakeRepo {
+            override fun observeTransactions(): Flow<List<Transaction>> = flow { throw DataError.Database }
+        }
+        val vm = viewModel(failingRepo)
+
+        vm.uiState.test {
+            val state = awaitLoaded()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
+            assertTrue(state.allRows.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

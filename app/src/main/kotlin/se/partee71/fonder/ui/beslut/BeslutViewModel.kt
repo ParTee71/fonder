@@ -21,13 +21,20 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.domain.usecase.SwitchRows
+import se.partee71.fonder.ui.common.catchAsListError
+import se.partee71.fonder.ui.common.errorOrNull
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.UiError
+import se.partee71.ui.common.toListUiState
 
 @Immutable
 data class BeslutUiState(
-    val loading: Boolean = true,
+    /** Listan "Byten" (BYT-4) — laddning, tomt, fel eller raderna i [SwitchRows.active] (NFR-6). */
+    val list: ListUiState<SwitchRow> = ListUiState.Loading,
     /** Riskprofilen planen räknas mot (SET-3) — rubrikraden, null utan sparad profil. */
     val riskProfile: RiskProfile? = null,
     /** Kontotypen (SET-4) — rubrikraden och gaten för bytesplanen. */
@@ -53,8 +60,13 @@ data class BeslutUiState(
     /** Listan "Byten" (BYT-4) — samma [SwitchRows] som "Att besluta" (HEM-13) och flikmärket räknar på. */
     val switches: SwitchRows get() = decisions.switches
 
+    val loading: Boolean get() = list is ListUiState.Loading
+
     /** Inga byten väntar — listan är tom; rubrikraden, omräkningen, den hopfällda sektionen och Facit-raden står kvar. */
-    val isEmpty: Boolean get() = !loading && switches.isEmpty
+    val isEmpty: Boolean get() = list is ListUiState.Empty
+
+    /** Läsfelet som visas i stället för listan (NFR-6); rubrikraden och Facit-raden står kvar. */
+    val error: UiError? get() = list.errorOrNull()
 
     /**
      * Sant när en omräkning av bytesplanen (HEM-8, issue #88) över huvud taget kan ge något:
@@ -68,6 +80,9 @@ data class BeslutUiState(
      * bytesplanens skanning — en lista, en rubrik, en snurra för båda.
      */
     val switchesWorking: Boolean get() = loading || pricesWorking || switchPlanWorking
+
+    /** Tillståndet med [decisions] — listan och besluten ur samma rader, så de aldrig kan skilja sig. */
+    fun withDecisions(decisions: PendingDecisions): BeslutUiState = copy(list = decisions.switches.active.toListUiState(), decisions = decisions)
 }
 
 /**
@@ -103,15 +118,13 @@ class BeslutViewModel @Inject constructor(
         startedSwitchWatchId
     ) { decisions, riskProfile, accountType, facit, startedId ->
         BeslutUiState(
-            loading = false,
             riskProfile = riskProfile,
             accountType = accountType,
-            decisions = decisions,
             followedCount = facit.followedCount,
             followedExcessKr = facit.followedExcessKr,
             startedSwitchWatchId = startedId
-        )
-    }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
+        ).withDecisions(decisions)
+    }.catchAsListError { BeslutUiState(list = it) }.combine(fundPriceRefreshScheduler.observeRunningWork()) { state, running ->
         // Eget led: körstatusen kommer från WorkManager och ska inte kunna räkna om besluten.
         state.copy(
             backgroundWorkRunning = running.isNotEmpty(),

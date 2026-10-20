@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.toListUiState
 
 /**
  * Instrumenterat test av fondsökens träfflista (UI-10, issue #85) — bygger
@@ -32,8 +33,7 @@ class FundSearchScreenTest {
             FonderTheme {
                 FundSearchContent(
                     state = FundSearchUiState(
-                        loading = false,
-                        results = persistentListOf(fondA),
+                        list = persistentListOf(fondA).toListUiState(),
                         riskLevels = persistentMapOf(fondA.fundId to 6)
                     )
                 )
@@ -50,8 +50,7 @@ class FundSearchScreenTest {
             FonderTheme {
                 FundSearchContent(
                     state = FundSearchUiState(
-                        loading = false,
-                        results = persistentListOf(fondA, fondB),
+                        list = persistentListOf(fondA, fondB).toListUiState(),
                         riskLevels = persistentMapOf(fondA.fundId to 6)
                     )
                 )

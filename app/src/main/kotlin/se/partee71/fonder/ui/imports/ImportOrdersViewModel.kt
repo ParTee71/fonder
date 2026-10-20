@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.imports.AvrakningsnotaPdfParser
 import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.imports.PdfTextExtractor
@@ -41,6 +43,7 @@ import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.domain.usecase.SwitchQuestion
 import se.partee71.fonder.domain.usecase.SwitchQuestions
 import se.partee71.fonder.ui.transaktioner.SwitchFieldUi
+import se.partee71.ui.common.UiError
 
 /** En parsad transaktion + användarens (eventuellt korrigerade) matchning/fält. */
 @Immutable
@@ -72,8 +75,6 @@ data class ImportOrderRowUiState(
     internal val switchCandidate: Boolean get() = included && matchedFund != null
 }
 
-enum class ImportOrdersError { NONE_PARSED }
-
 @Immutable
 data class ImportOrdersUiState(
     val loading: Boolean = false,
@@ -81,7 +82,8 @@ data class ImportOrdersUiState(
     val rows: ImmutableList<ImportOrderRowUiState> = persistentListOf(),
     val catalogFunds: ImmutableList<Fund> = persistentListOf(),
     val unparsedFileNames: ImmutableList<String> = persistentListOf(),
-    val error: ImportOrdersError? = null,
+    /** Ingen av filerna gav en transaktion – [DataError.ImportNoTransactions] via [AppErrors] (NFR-6). */
+    val error: UiError? = null,
     val imported: Boolean = false,
     /**
      * Säljrader vars bevakning ([SwitchDecision.LinksWatch]) inte kunde kopplas — den hann kopplas
@@ -172,7 +174,7 @@ class ImportOrdersViewModel @Inject constructor(
             val transactions = parsedByFile.values.flatten()
 
             if (transactions.isEmpty()) {
-                _uiState.update { it.copy(loading = false, unparsedFileNames = unparsedFileNames.toImmutableList(), error = ImportOrdersError.NONE_PARSED) }
+                _uiState.update { it.copy(loading = false, unparsedFileNames = unparsedFileNames.toImmutableList(), error = AppErrors.map(DataError.ImportNoTransactions)) }
                 return@launch
             }
 

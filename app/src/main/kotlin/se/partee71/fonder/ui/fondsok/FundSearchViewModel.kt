@@ -24,20 +24,32 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import se.partee71.fonder.R
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.domain.usecase.FundNameKey
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.itemsOrEmpty
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.UiError
+import se.partee71.ui.common.toListUiState
 
 @Immutable
 data class FundSearchUiState(
-    val loading: Boolean = true,
+    /**
+     * Katalogens träffar efter bolag och sökord — laddning, tomt ("inga träffar"), fel eller fonder
+     * (NFR-6). Felet är skilt från "sökningen gav inga träffar" — annars ser ett nätverksfel ut som
+     * ett tomt sökresultat (issue #78).
+     */
+    val list: ListUiState<Fund> = ListUiState.Loading,
     val query: String = "",
     val companies: ImmutableList<FundCompany> = persistentListOf(),
     val selectedCompany: FundCompany? = null,
-    val results: ImmutableList<Fund> = persistentListOf(),
     /**
      * Fonder som redan bevakas — både de som lagts till i den här sessionen och de som redan
      * fanns i portföljen. Tidigare bara det förstnämnda, så en fond man redan ägde visades utan
@@ -45,13 +57,8 @@ data class FundSearchUiState(
      */
     val addedFundIds: ImmutableSet<String> = persistentSetOf(),
     /**
-     * Sant om fondkatalogen inte gick att hämta. Skilt från "sökningen gav inga träffar" —
-     * annars ser ett nätverksfel ut som ett tomt sökresultat (issue #78).
-     */
-    val loadFailed: Boolean = false,
-    /**
      * Sant medan en **användarstyrd** omhämtning av katalogen pågår (UI-11). Skild från
-     * [loading]: den första laddningen har inget innehåll att visa och får sin egen
+     * [ListUiState.Loading]: den första laddningen har inget innehåll att visa och får sin egen
      * förloppsindikator, medan en dragning sker ovanpå en lista som redan står där.
      */
     val refreshing: Boolean = false,
@@ -63,7 +70,13 @@ data class FundSearchUiState(
      * saknas i kartan och visas som okänd risk, aldrig gissad.
      */
     val riskLevels: ImmutableMap<String, Int> = persistentMapOf()
-)
+) {
+    val loading: Boolean get() = list is ListUiState.Loading
+    val results: ImmutableList<Fund> get() = list.itemsOrEmpty()
+
+    /** Katalogen gick inte att hämta (NFR-6). */
+    val error: UiError? get() = list.errorOrNull()
+}
 
 /**
  * Sök bland fonder — filtrerat per fondbolag (dropdown, se issue #3-uppföljning) — och lägg
@@ -97,7 +110,8 @@ class FundSearchViewModel @Inject constructor(
      */
     private data class CatalogState(
         val loading: Boolean = true,
-        val loadFailed: Boolean = false,
+        /** Katalogen gick inte att hämta — ett fel per misslyckad hämtning. */
+        val error: UiError? = null,
         /** Bara den användarstyrda omhämtningen (UI-11), inte första laddningen. */
         val refreshing: Boolean = false
     )
@@ -133,13 +147,15 @@ class FundSearchViewModel @Inject constructor(
                 funds.filter { it.name.contains(query, ignoreCase = true) }
             }
             FundSearchUiState(
-                loading = catalog.loading,
-                loadFailed = catalog.loadFailed,
+                list = when {
+                    catalog.loading -> ListUiState.Loading
+                    catalog.error != null -> ListUiState.Error(catalog.error)
+                    else -> filtered.toListUiState()
+                },
                 refreshing = catalog.refreshing,
                 query = query,
                 companies = companies.toImmutableList(),
-                selectedCompany = selected,
-                results = filtered.toImmutableList()
+                selectedCompany = selected
             )
         }.combine(riskByNameKey) { state, riskByName ->
             state.copy(
@@ -159,7 +175,7 @@ class FundSearchViewModel @Inject constructor(
     /**
      * Hämtar fondkatalogen. Körs en gång när skärmen öppnas och sedan **på begäran** när
      * användaren drar ned (UI-11) — samma kodväg, så en dragning ger exakt det skärmöppningen
-     * ger. Ett nätverksfel är den vanligaste anledningen att vilja dra: [FundSearchUiState.loadFailed] visas som
+     * ger. Ett nätverksfel är den vanligaste anledningen att vilja dra: [FundSearchUiState.error] visas som
      * ett eget tillstånd (issue #78) och dragningen är vägen ur det.
      *
      * En pågående hämtning återanvänds i stället för att avbrytas — katalogen är ~125 kB, och
@@ -178,7 +194,7 @@ class FundSearchViewModel @Inject constructor(
                 companies.value = catalog?.companies.orEmpty()
                 // Ett enda skriv: "klar" och "gick det bra" hör ihop och får aldrig observeras
                 // var för sig, se CatalogState.
-                catalogState.update { it.copy(loading = false, loadFailed = catalog == null) }
+                catalogState.update { it.copy(loading = false, error = if (catalog == null) catalogError() else null) }
                 catalog?.companies?.firstOrNull { it.id == FundCompany.HANDELSBANKEN_ID }
                     ?.let(::onCompanySelected)
             } finally {
@@ -186,6 +202,12 @@ class FundSearchViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Fondlistan kom inte (källan returnerar `null` vid nätverks- och tolkningsfel): ett
+     * [DataError.Network] via [AppErrors], med fondsökens egen text om att bevakade fonder inte påverkas.
+     */
+    private fun catalogError(): UiError = AppErrors.map(DataError.Network).withMessage(R.string.fondsok_load_failed_body)
 
     init {
         viewModelScope.launch { riskByNameKey.value = fundMetadataRepository.cachedRiskByFundName() }

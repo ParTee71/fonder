@@ -15,8 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import se.partee71.fonder.R
+import se.partee71.ui.common.UiError
 
 /**
  * Delad tom-tillstånds-komponent (regel 4 — återbruk). Använd på skärmar utan innehåll
@@ -70,4 +73,17 @@ fun EmptyState(
             modifier = Modifier.padding(top = 8.dp)
         )
     }
+}
+
+/**
+ * Ett läsfel i stället för innehållet (NFR-6): samma tomma tillstånd, med felets text
+ * ([UiError.message], från den enda felmappningen `AppErrors`) under [title].
+ */
+@Composable
+fun EmptyState(
+    error: UiError,
+    modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.error_load_title)
+) {
+    EmptyState(title = title, body = stringResource(error.message), modifier = modifier)
 }

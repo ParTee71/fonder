@@ -13,11 +13,12 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.R
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -130,13 +131,14 @@ class FundSearchViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertTrue(state.loadFailed)
+            assertEquals(DataError.Network, state.error?.cause)
 
             fail = false
             vm.refresh()
-            while (state.loadFailed) state = awaitItem()
+            // Listan är laddning tills både katalogen och förvalt bolag hämtats (NFR-6).
+            while (state.loading || state.error != null) state = awaitItem()
 
-            assertFalse(state.loadFailed)
+            assertNull(state.error)
             assertTrue(state.results.isNotEmpty())
             cancelAndIgnoreRemainingEvents()
         }
@@ -295,7 +297,11 @@ class FundSearchViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertTrue(state.loadFailed)
+            // Ett nätverksfel (NFR-6) med fondsökens egen text, skilt från "inga träffar".
+            val error = checkNotNull(state.error)
+            assertEquals(DataError.Network, error.cause)
+            assertEquals(R.string.fondsok_load_failed_body, error.message)
+            assertTrue(error.retryable)
             assertTrue(state.results.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
@@ -309,7 +315,7 @@ class FundSearchViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            assertFalse(state.loadFailed)
+            assertNull(state.error)
             cancelAndIgnoreRemainingEvents()
         }
     }

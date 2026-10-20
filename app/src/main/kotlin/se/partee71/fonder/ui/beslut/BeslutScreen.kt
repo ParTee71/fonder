@@ -121,6 +121,12 @@ fun BeslutContent(
 ) {
     val switches = state.switches
     LazyColumn(modifier = modifier.fillMaxSize().testTag(BESLUT_LIST_TEST_TAG)) {
+        // Läsfel (NFR-6): bara felet – profilraden och Facit-raden hade annars visat standardvärden som om de vore data.
+        val error = state.error
+        if (error != null) {
+            item(contentType = "error") { EmptyState(error = error) }
+            return@LazyColumn
+        }
         item(contentType = "profile-header") { ProfileHeader(state.riskProfile, state.accountType, onOpenRiskProfile) }
 
         if (state.isEmpty) {

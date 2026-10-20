@@ -72,6 +72,7 @@ fun ImportHoldingsScreen(
         ImportCompleteDialog(importedCount = state.rows.count { it.readyToImport }, onDismiss = onDone)
     }
 
+    val error = state.error
     when {
         state.imported -> Unit
 
@@ -88,11 +89,9 @@ fun ImportHoldingsScreen(
             )
         }
 
-        state.error != null -> EmptyState(
+        error != null -> EmptyState(
+            error = error,
             title = stringResource(R.string.import_title),
-            body = stringResource(
-                if (state.error == ImportError.EMPTY_FILE) R.string.import_error_empty else R.string.import_error_parse
-            ),
             modifier = modifier
         )
 

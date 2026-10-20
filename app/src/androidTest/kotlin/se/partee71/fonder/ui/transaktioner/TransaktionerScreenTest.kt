@@ -6,7 +6,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -16,6 +15,8 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
 import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.toListUiState
 
 /**
  * Instrumenterat test av Händelsers tillståndsdrivna innehåll — transaktionslistan (TRX-1/TRX-2) och
@@ -64,15 +65,14 @@ class TransaktionerScreenTest {
     )
 
     private fun state(vararg rows: TransaktionRad, filter: HandelseFilter = HandelseFilter.ALLA) = TransaktionerUiState(
-        loading = false,
-        allRows = rows.toList().toImmutableList(),
+        list = rows.toList().toListUiState(),
         filter = filter,
         totalRealized = RealizedGainCalculator.total(rows.mapNotNull { it.sale })
     )
 
     @Test
     fun tomt_tillstand_visas_utan_transaktioner() {
-        composeRule.setContent { FonderTheme { TransaktionerContent(state = TransaktionerUiState(loading = false)) } }
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = TransaktionerUiState(list = ListUiState.Empty)) } }
 
         composeRule.onNodeWithText("Inga transaktioner").assertExists()
     }

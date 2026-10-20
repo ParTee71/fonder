@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.72.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.72.3 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.72.3 | Intern: listskärmarnas tillstånd (Händelser, Beslut, Facit, Fondsök, Portfölj) och felen går via komponentbiblioteket android-ui (`ListUiState`, `UiError`), och datalagrets fel mappas på ett ställe till en svensk text per fel (NFR-6, #173). En lista som inte går att läsa ur databasen visar ett fel i stället för att appen kraschar. Ingen synlig ändring i övrigt. |
 | 0.72.2 | Intern: temat går via komponentbiblioteket android-ui (`AppTheme`) med Fonders palett, former och Space Grotesk-typskala; avstånden i skärmarna tas ur `Spacing`, och regel 4-kontrollen fäller nya literala avstånds-dp. Ingen synlig ändring. |
 | 0.72.1 | Intern: bara `di/` väljer coroutine-dispatcher (`DispatchersModule`), övrig kod får den injicerad och importens filläsning flyttad från skärmen till ViewModel; regel 4-kontrollen fäller nya `Dispatchers.` utanför `di/`; listor, kartor och mängder i skärmtillstånden är oföränderliga och tillstånden märkta `@Immutable`, och listorna har `contentType`; navigeringen efter sparat i riskprofilen och transaktionsformuläret kvitteras till ViewModel, så att den sker exakt en gång även vid rotation, och regel 4-kontrollen fäller `Channel(` och `.receiveAsFlow(` i `ui/`. Appen riktar sig mot Android 16 (targetSdk 36). Effekter anropar alltid den senaste callbacken. Ingen synlig ändring. |
 | 0.72.0 | **Handelsbankens fondlista fungerar igen** (TP-18, NAV-3, TP-13, ANA-13, #155): Handelsbankens fondlista släpper bara in webbläsare. Appen löser nu kontrollen själv i en osynlig webbläsare och använder nyckeln den får i flera dygn. Fondsök, importens fondmatchning och kollen av vilka fonder som går att köpa hos Handelsbanken fungerar då igen. |

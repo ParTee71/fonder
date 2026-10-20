@@ -7,13 +7,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.SwitchWatchRepository
@@ -26,6 +23,12 @@ import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.domain.usecase.RealizedTotal
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.ui.common.catchAsListError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.itemsOrEmpty
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.UiError
+import se.partee71.ui.common.toListUiState
 
 /** Händelsers filter (TRX-3): alla transaktioner, bara köp eller bara sälj. */
 enum class HandelseFilter { ALLA, KOP, SALJ }
@@ -51,9 +54,8 @@ data class TransaktionRad(
 
 @Immutable
 data class TransaktionerUiState(
-    val loading: Boolean = true,
-    /** Alla transaktioner, senaste först (DAO:ns ordning). */
-    val allRows: ImmutableList<TransaktionRad> = persistentListOf(),
+    /** Alla transaktioner, senaste först (DAO:ns ordning) — laddning, tomt, fel eller rader (NFR-6). */
+    val list: ListUiState<TransaktionRad> = ListUiState.Loading,
     val filter: HandelseFilter = HandelseFilter.ALLA,
     /** Realiserat resultat för sälj gjorda i år (TRX-4). */
     val yearRealized: RealizedTotal = EMPTY_TOTAL,
@@ -62,6 +64,14 @@ data class TransaktionerUiState(
     /** Sätts när en bevakning just startats (SLD-5), så skärmen kan navigera dit. Kvitteras med [TransaktionerViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null
 ) {
+    val loading: Boolean get() = list is ListUiState.Loading
+
+    /** Alla transaktioner, senaste först; inga medan listan laddas eller inte gick att läsa. */
+    val allRows: ImmutableList<TransaktionRad> get() = list.itemsOrEmpty()
+
+    /** Läsfelet som visas i stället för listan (NFR-6). */
+    val error: UiError? get() = list.errorOrNull()
+
     /** Raderna i det valda filtret (TRX-3). */
     val rows: List<TransaktionRad>
         get() = when (filter) {
@@ -71,7 +81,7 @@ data class TransaktionerUiState(
         }
 
     /** Inga transaktioner alls — då visas bara tomt tillstånd, inget filter. */
-    val isEmpty: Boolean get() = !loading && allRows.isEmpty()
+    val isEmpty: Boolean get() = list is ListUiState.Empty
 
     /** Kortet med realiserat resultat (TRX-4) visas när det finns något sälj och filtret inte är Köp. */
     val showRealizedCard: Boolean get() = totalRealized.saleCount > 0 && filter != HandelseFilter.KOP
@@ -130,14 +140,13 @@ class TransaktionerViewModel internal constructor(
                 )
             }
             TransaktionerUiState(
-                loading = false,
-                allRows = rows.toImmutableList(),
+                list = rows.toListUiState(),
                 filter = selectedFilter,
                 yearRealized = RealizedGainCalculator.totalForYear(sales, today().year),
                 totalRealized = RealizedGainCalculator.total(sales),
                 startedSwitchWatchId = startedId
             )
-        }.stateIn(
+        }.catchAsListError { TransaktionerUiState(list = it) }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = TransaktionerUiState()

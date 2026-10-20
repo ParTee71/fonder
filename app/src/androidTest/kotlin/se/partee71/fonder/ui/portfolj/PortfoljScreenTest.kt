@@ -12,7 +12,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toImmutableList
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +21,8 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.toListUiState
 
 /**
  * Instrumenterat test av Portföljens tillståndsdrivna innehåll, inklusive de nya
@@ -39,7 +40,7 @@ class PortfoljScreenTest {
     @Test
     fun tomt_tillstand_visas_utan_innehav() {
         composeRule.setContent {
-            FonderTheme { PortfoljContent(state = PortfoljUiState(loading = false), onFundClick = {}) }
+            FonderTheme { PortfoljContent(state = PortfoljUiState(list = ListUiState.Empty), onFundClick = {}) }
         }
 
         composeRule.onNodeWithText("Inga innehav ännu").assertExists()
@@ -52,11 +53,10 @@ class PortfoljScreenTest {
         // gäller just den fonden — resten av listan ska stå stilla.
         val annanFond = Fund(fundId = "SHB0000443", name = "Fond B")
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(
+            list = persistentListOf(
                 Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0),
                 Holding(fund = annanFond, netShares = 5.0, netInvested = 500.0, currentValue = 520.0)
-            ),
+            ).toListUiState(),
             refreshingFundIds = persistentSetOf(fond.fundId)
         )
 
@@ -72,8 +72,7 @@ class PortfoljScreenTest {
     @Test
     fun alla_innehavsrader_snurrar_under_en_kursuppdatering() {
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)),
+            list = persistentListOf(Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)).toListUiState(),
             pricesWorking = true
         )
 
@@ -89,8 +88,7 @@ class PortfoljScreenTest {
     fun innehavsrad_visar_period_badge_per_fond() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             performance = persistentMapOf(
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
                     day = PortfolioPerformanceCalc.PeriodResult.Available(amount = 30.0, fraction = 0.03),
@@ -116,7 +114,7 @@ class PortfoljScreenTest {
     @Test
     fun innehav_utan_performance_visar_otillrackligt_data_for_alla_perioder() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), performance = persistentMapOf())
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState(), performance = persistentMapOf())
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -130,8 +128,7 @@ class PortfoljScreenTest {
         // En period utan tillräcklig historik ska aldrig se ut som "+0,0 % · 0,00 kr".
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             performance = persistentMapOf(
                 fond.fundId to PortfolioPerformanceCalc.HoldingPerformance(
                     day = PortfolioPerformanceCalc.PeriodResult.InsufficientHistory,
@@ -159,7 +156,7 @@ class PortfoljScreenTest {
             currentValue = 1100.0,
             firstPurchaseEpochDay = java.time.LocalDate.of(2024, 3, 15).toEpochDay()
         )
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), performance = persistentMapOf())
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState(), performance = persistentMapOf())
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -180,8 +177,7 @@ class PortfoljScreenTest {
             navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay()
         )
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             totalValue = 1100.0,
             totalGainLossFraction = 0.1,
             navEpochDay = java.time.LocalDate.of(2026, 7, 10).toEpochDay()
@@ -218,8 +214,7 @@ class PortfoljScreenTest {
             profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = true, gainFraction = 0.6)
         )
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             analysis = persistentMapOf(fond.fundId to analysis)
         )
 
@@ -242,8 +237,7 @@ class PortfoljScreenTest {
             profitTake = FundAnalysisCalc.ProfitTakeSignal(triggered = false, gainFraction = 0.1)
         )
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             analysis = persistentMapOf(fond.fundId to analysis)
         )
 
@@ -282,7 +276,7 @@ class PortfoljScreenTest {
             includedValueKr = 1000.0,
             excludedCount = 0
         )
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState(), exposure = exposure)
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -320,7 +314,7 @@ class PortfoljScreenTest {
             includedValueKr = 1000.0,
             excludedCount = 0
         )
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState(), exposure = exposure)
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -349,7 +343,7 @@ class PortfoljScreenTest {
             includedValueKr = 1000.0,
             excludedCount = 0
         )
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposure)
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState(), exposure = exposure)
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -370,7 +364,7 @@ class PortfoljScreenTest {
             includedValueKr = 1000.0,
             excludedCount = 0
         )
-        val stateUtan = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposureUtanExkludering)
+        val stateUtan = PortfoljUiState(list = persistentListOf(holding).toListUiState(), exposure = exposureUtanExkludering)
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = stateUtan, onFundClick = {}) }
@@ -389,7 +383,7 @@ class PortfoljScreenTest {
             includedValueKr = 1000.0,
             excludedCount = 2
         )
-        val stateMed = PortfoljUiState(loading = false, holdings = persistentListOf(holding), exposure = exposureMedExkludering)
+        val stateMed = PortfoljUiState(list = persistentListOf(holding).toListUiState(), exposure = exposureMedExkludering)
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = stateMed, onFundClick = {}) }
@@ -410,7 +404,7 @@ class PortfoljScreenTest {
         // semantikträdet) skulle aldrig hitta den. `performScrollToIndex` på den taggade listan
         // är rätt verktyg för en genuint virtualiserad lista.
         val funds = (1..10).map { i -> Holding(fund = Fund(fundId = "F$i", name = "Innehav $i"), netShares = 1.0, netInvested = 100.0, currentValue = 100.0) }
-        val state = PortfoljUiState(loading = false, holdings = funds.toImmutableList())
+        val state = PortfoljUiState(list = funds.toListUiState())
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
@@ -427,8 +421,7 @@ class PortfoljScreenTest {
     fun innehavsrad_visar_risknivan() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
         val state = PortfoljUiState(
-            loading = false,
-            holdings = persistentListOf(holding),
+            list = persistentListOf(holding).toListUiState(),
             riskLevels = persistentMapOf(fond.fundId to 5)
         )
 
@@ -442,7 +435,7 @@ class PortfoljScreenTest {
     @Test
     fun innehavsrad_utan_kand_risk_markeras_som_okand() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0)
-        val state = PortfoljUiState(loading = false, holdings = persistentListOf(holding))
+        val state = PortfoljUiState(list = persistentListOf(holding).toListUiState())
 
         composeRule.setContent {
             FonderTheme { PortfoljContent(state = state, onFundClick = {}) }
