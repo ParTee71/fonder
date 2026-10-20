@@ -1,5 +1,5 @@
 {
- "description": "Påhittad portfölj med två fonder, köp, delsälj och avgifter. Aldrig riktiga innehav.",
+ "description": "Påhittad portfölj med två fonder, köp, delsälj och avgifter; belopp = andelar × kurs som i appen. Aldrig riktiga innehav.",
  "end": "2025-11-28",
  "transactions": [
   {
@@ -7,7 +7,7 @@
    "fund": "Påhittad Global Index",
    "kind": "BUY",
    "units": 500.0,
-   "amount": 50000.0,
+   "price": 100.0,
    "fee": 0.0
   },
   {
@@ -15,7 +15,7 @@
    "fund": "Påhittad Sverige Aktiv",
    "kind": "BUY",
    "units": 120.0,
-   "amount": 30000.0,
+   "price": 250.0,
    "fee": 39.0
   },
   {
@@ -23,7 +23,7 @@
    "fund": "Påhittad Global Index",
    "kind": "BUY",
    "units": 189.1714,
-   "amount": 20000.0,
+   "price": 105.7242,
    "fee": 0.0
   },
   {
@@ -31,7 +31,7 @@
    "fund": "Påhittad Sverige Aktiv",
    "kind": "SELL",
    "units": 70.4461,
-   "amount": 15000.0,
+   "price": 212.9286,
    "fee": 39.0
   },
   {
@@ -39,7 +39,7 @@
    "fund": "Påhittad Sverige Aktiv",
    "kind": "BUY",
    "units": 45.0402,
-   "amount": 10000.0,
+   "price": 222.0237,
    "fee": 39.0
   },
   {
@@ -47,7 +47,7 @@
    "fund": "Påhittad Sverige Aktiv",
    "kind": "SELL",
    "units": 62.2464,
-   "amount": 12000.0,
+   "price": 192.7823,
    "fee": 39.0
   }
  ],

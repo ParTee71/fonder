@@ -20,6 +20,8 @@ i UI-texten. Kraven står i KRAVLISTA; vid skillnad gäller kravlistan, och skil
 | Minsta period för årstakt | 365 dagar – kortare visas som total avkastning (GIPS) | `FundAnalysisCalc.CAGR_MIN_DAYS` |
 | Standardavvikelse | urval, n − 1 | `FundAnalysisCalc.annualizedVolatility` |
 | Riskfri ränta | 0 % | `FundAnalysisCalc.RISK_FREE_RATE` |
+| Minsta underlag för volatilitet och Sharpe | 60 dagsavkastningar, annars `null`; volatilitet 0 → `0.0`, Sharpe och Sortino → `null` | `FundAnalysisCalc.MIN_RETURN_SAMPLES` |
+| Dagräkning för XIRR | ACT/365F (som Excel och pyxirr) | – (XIRR saknas än) |
 | Dagsavkastning | `nav_t / nav_{t−1} − 1` mellan på varandra följande kända kurser, NAV ≤ 0 hoppas över | `FundAnalysisCalc.dailyReturns` |
 | Okänt värde | `null` och en räknare för det som uteslöts – aldrig noll eller en gissning | t.ex. `PortfolioFeeCalc.Result.unknownFeeCount` |
 
@@ -31,9 +33,10 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 |---|---|---|---|
 | **Tidsviktad (TWR)** | Kedja av dagsfaktorer där gårdagens andelar värderas till gårdagens och dagens NAV; in- och utflöden faller ur | "Hur gick fonderna?" Jämförbart med faktablad och index | `PortfolioReturnSeriesCalc.compute` (HEM-9) |
 | **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | **Saknas** |
-| Avkastning på insatt kapital | `(värde − nettoinvesterat) / nettoinvesterat` | Totalkortet | `PortfolioCalc.totalGainLossFraction` |
+| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande FIFO-lotter | Totalkortet i dag – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
+| Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" | **Saknas** (golden: `total_gain`) |
 | Periodförändring | NAV på referensdagen mot NAV `n` dagar före, ingen kassaflödesjustering | Dag/vecka/månad | `PortfolioPerformanceCalc` |
-| Beteendegap | XIRR − TWR i årstakt (bara över ett år) | Kostade min tajming något? | **Saknas** |
+| Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
 
 - **Visa alltid vilket mått det är.** Avanzas procent är troligen TWR och kronorna orealiserat mot
   insatt; appens siffror kan skilja sig, och hjälptexten säger varför.
@@ -42,7 +45,7 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
   jämförelse görs på samma sätt (public market equivalent).
 - **XIRR:** lös med en inringande lösare (Brent), inte ren Newton – extrema kassaflöden kan ge
   flera eller inga lösningar (Sharesight). Biblioteket när det behövs: Apache Commons Math 3.6.1
-  (`BrentSolver`, Apache-2.0); ange byggtidseffekten i PR:en (regel 5). Inget fel → `null`.
+  (`BrentSolver`, Apache-2.0); ange byggtidseffekten i PR:en (regel 5). Ingen lösning → `null`.
 
 ## Anskaffningsvärde och skatt
 
@@ -50,10 +53,12 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
   per fond, omräknat vid varje köp; köpavgiften ingår; ett sälj ändrar inte snittet per andel;
   säljavgiften dras från försäljningspriset. Resultatet deklareras på K4. Schablonmetoden (20 %
   av priset) är tillåten för marknadsnoterade andelar.
-- **Avvikelse i dag:** `RealizedGainCalculator` och `Holding.netInvested` räknar **FIFO**. Vid fler
-  köp till olika kurs och delsälj blir realiserat resultat och kvarvarande anskaffningsvärde
-  då inte vad Skatteverket räknar med (`tools/fondmatte/exempel.json`, andra säljet: 465 kr
-  skillnad). Hur det ska rättas, och om FIFO ska finnas kvar någonstans, avgörs i ett issue.
+- **Avvikelse i dag, två delar:** `RealizedGainCalculator` och `Holding.netInvested` räknar
+  **FIFO**, och köpavgiften räknas **inte** in i anskaffningsvärdet (`Transaction.fee`: dras bara
+  från säljet). Vid fler köp till olika kurs och delsälj, eller köp med avgift, blir realiserat
+  resultat och kvarvarande anskaffningsvärde då inte vad Skatteverket räknar med
+  (`tools/fondmatte/exempel.json`: första säljet skiljer 23 kr på köpavgiften, andra 438 kr).
+  Hur det ska rättas, och om FIFO ska finnas kvar någonstans, avgörs i ett issue.
 - **ISK/KF** (`AccountType.ISK_KF`): ingen skatt vid sälj. Schablonskatt = kapitalunderlag ×
   max(1,25 %, statslåneräntan 30/11 året före + 1 pp) × 30 %. Kapitalunderlaget är de fyra
   kvartalens ingående värden plus årets insättningar delat med fyra, **minus den skattefria
@@ -88,8 +93,9 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 
 ## Fondbyte och facit
 
-- **Likviddagar är en egenskap per fond**, inte en konstant. Order före 15.00 en bankdag får dagens
-  NAV (forward pricing); dagen före helgdag tidigare.
+- **Likviddagar är en egenskap per fond**, inte en konstant. Fonder handlas till okänd kurs
+  (forward pricing): en order före fondens brytpunkt – ofta 15.00 en bankdag, tidigare för vissa
+  utländska fonder och före helgdag – får dagens NAV, annars nästa bankdags.
 - **Facit i dag** (`SwitchOutcomeCalc`, SET-5) är meravkastningen köpfond mot säljfond sedan
   förslagsdagen, två NAV-serier – medvetet inte användarens faktiska resultat.
   `SwitchWatchCalc` (ANA-12) nollställer på säljdagens NAV.
@@ -105,21 +111,24 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 - **Årlig avgift (OCF)** och **transaktionskostnader** är skilda rader i KID och hålls isär;
   jämförelser (`FeeComparisonCalc`, `PortfolioFeeCalc`) använder årlig avgift.
 - Avgift i kronor per år = avgift % × aktuellt värde (`FeeComparisonCalc.annualFeeKr`). Över en
-  horisont ränta-på-ränta: värde × ((1 + r − a₁)ⁿ − (1 + r − a₂)ⁿ), med antagen avkastning r
-  angiven i texten.
+  horisont ränta-på-ränta: skillnaden i slutvärde efter n år är värde × ((1 + r − a₁)ⁿ − (1 + r − a₂)ⁿ),
+  där a₁ är den lägre avgiften och den antagna avkastningen r står i texten.
 - Underlag för att lyfta billigare alternativ: dyrare fonder ger inte bättre avkastning
   (Pensionsmyndigheten 2022), och de flesta aktiva fonder slår inte sitt index (SPIVA Europe 2025).
 
 ## Golden-värden: så bevisas en formel
 
 1. Gör en fixtur i `tools/fondmatte/` (JSON som `exempel.json`) med **påhittad** data som träffar
-   fallet: flera köp till olika kurs, delsälj, avgifter, helger, en lucka i kurserna.
+   fallet: flera köp till olika kurs, delsälj, avgifter, helger, en lucka i kurserna. Transaktioner
+   har appens fält (`units`, `price`, `fee`; beloppet är andelar × kurs), så att samma indata går
+   att bygga i JUnit.
 2. Kör `python tools/fondmatte/fondmatte.py golden <fixtur>` (installation i
    [tools/fondmatte/README.md](../../../tools/fondmatte/README.md)). Saknas måttet: lägg till det i
    `fondmatte.py` med ett handräknat test i `test_fondmatte.py`, helst via referensbiblioteket
    (pyxirr, empyrical-reloaded).
 3. Skriv JUnit-testet för objektet i `domain/usecase/` med samma indata och de utskrivna
-   värdena, tolerans `1e-9`. Kommentera vilket kommando som gav dem.
+   värdena, tolerans `1e-9`. Kommentera vilket kommando som gav dem. `realized_fifo_as_app` är
+   appens nuvarande regel, `realized_average_cost` Skatteverkets.
 4. Ändras en konvention ovan: ändra tabellen, `fondmatte.py` och koden i samma PR.
 
 Python behövs bara i sessionen; CI kör bara JUnit-testerna (regel 5).
@@ -131,8 +140,8 @@ Python behövs bara i sessionen; CI kör bara JUnit-testerna (regel 5).
 | Avanzas fond-API, Handelsbankens fondlista (`data/network`) | NAV, metadata, avgift, risknivå | Inofficiella: tolerant parsning, rimlighetskontroll, reserv |
 | Riksbankens SWEA (`RiksbankFxClient`) | Valutakurser | Utan nyckel 5 anrop/min och 1 000/dag; gratis nyckel 200/min |
 | ECB, serien `EXR.D.SEK.EUR.SP00.A` | Reserv för valuta | Öppen, ingen nyckel |
-| FI:s fondinnehav per kvartal (`tools/fondmatte/fi_innehav.py`) | Överlapp och genomlysning | Bara svenskregistrerade fonder, ca 3,5 mån fördröjning |
-| MCP-servern `avanza` (`.mcp.json`) | Slå upp en fonds publika data i sessionen, kontrollera parsrarna | Inofficiell (avanza-mcp 2.1.0, MIT), utan inloggning |
+| FI:s fondinnehav per kvartal (`tools/fondmatte/fi_innehav.py`) | Överlapp och genomlysning | Bara svenskregistrerade fonder, ca 3,5 mån fördröjning; i 2026Q2 saknar 38 av 726 fonder ISIN och 49 redovisar inga innehav (t.ex. swapbaserade ETF:er) |
+| MCP-servern `avanza` (`.mcp.json`) | Slå upp en fonds publika data i sessionen, kontrollera parsrarna | Inofficiell (avanza-mcp 2.1.0, MIT), utan inloggning; beroendena låses med `--exclude-newer` – flytta datumet bara medvetet |
 | Portfolio Performance (github.com/portfolio-performance/portfolio) | Förlaga för IRR, TTWROR, drawdown, volatilitet | EPL-1.0: porta formler och testfall, kopiera inte filer |
 
 Integritet (skill `data-privacy-security`): ingen källa eller MCP-server får användarens innehav,
