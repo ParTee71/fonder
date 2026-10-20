@@ -10,8 +10,7 @@ import se.partee71.ui.theme.Tone
 
 /**
  * Varje färg som bär text klarar 4,5:1 mot sin bakgrund i båda temana (skill `ui-style`, UI-1).
- * Vinst och förlust bärs aldrig av enbart färg (UI-3, alltid tecken eller pil) och prövas mot
- * gränsen för grafik och stor text, 3:1.
+ * Det gäller också vinst och förlust (UI-3), som visas som beloppstext.
  */
 class ThemeContrastTest {
 
@@ -57,10 +56,10 @@ class ThemeContrastTest {
     fun `mörkt tema - text`() = check("mörkt", textPairs(FonderDarkColorScheme, FonderDarkExtendedColors), TEXT)
 
     @Test
-    fun `ljust tema - vinst och förlust`() = check("ljust", signalPairs(FonderLightColorScheme, FonderLightExtendedColors, FonderLightColors), SIGNAL)
+    fun `ljust tema - vinst och förlust`() = check("ljust", signalPairs(FonderLightColorScheme, FonderLightExtendedColors, FonderLightColors), TEXT)
 
     @Test
-    fun `mörkt tema - vinst och förlust`() = check("mörkt", signalPairs(FonderDarkColorScheme, FonderDarkExtendedColors, FonderDarkColors), SIGNAL)
+    fun `mörkt tema - vinst och förlust`() = check("mörkt", signalPairs(FonderDarkColorScheme, FonderDarkExtendedColors, FonderDarkColors), TEXT)
 
     @Test
     fun `appens toner har egna färger i båda temana`() {
@@ -82,6 +81,5 @@ class ThemeContrastTest {
 
     private companion object {
         const val TEXT = 4.5
-        const val SIGNAL = 3.0
     }
 }

@@ -228,7 +228,7 @@ versionen i tabellen.
 
 | Behov | API | Artefakt:version | Används i | Verifierad |
 |---|---|---|---|---|
-| Expressive-tema | `se.partee71.ui.theme.AppTheme` (android-ui, `MaterialExpressiveTheme` + `MotionScheme.expressive()`), inre `MaterialExpressiveTheme(shapes = FonderShapes)` | `material3:1.5.0-beta01`, `ui-theme:0.5.0` | `ui/theme/Theme.kt` | 2026-10-20 (kompilerad, skärmdumparna oförändrade) |
+| Expressive-tema | `se.partee71.ui.theme.AppTheme` (android-ui, `MaterialExpressiveTheme` + `MotionScheme.expressive()`), inre `MaterialExpressiveTheme(shapes = FonderShapes)` | `material3:1.5.0-beta01`, `ui-theme:0.5.0` | `ui/theme/Theme.kt` | 2026-10-20 (kompilerad, skärmdumparna oförändrade utom ljust temas vinst- och förlustfärg) |
 | Laddningsindikator | `LoadingIndicator()` | `material3:1.5.0-beta01` | `ui/components` | 2026-10-20 (kompilerad) |
 | Vågig progress | `LinearWavyProgressIndicator` | `material3:1.5.0-beta01` | `ui/components/ProgressBar.kt` | 2026-10-20 (kompilerad) |
 | Flytande verktygsrad | `HorizontalFloatingToolbar` | `material3:1.5.0-beta01` | `ui/components/AppFloatingToolbar.kt` | 2026-10-20 (kompilerad) |

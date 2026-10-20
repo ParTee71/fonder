@@ -28,7 +28,7 @@ komponent som används för vad → skill `shared-ui-components`. Koden är faci
   UI-4), inte systemets; `ReturnColors` läser dem därifrån, och övriga semantiska färger kommer ur
   `MaterialTheme.colorScheme` eller `AppTheme.tone(…)`. Aldrig `isSystemInDarkTheme()` direkt i en komponent.
 - **Kontrast:** `ThemeContrastTest` prövar varje textbärande par mot 4,5:1 i båda temana (toner, kort,
-  knappar, snackbar) och vinst/förlust mot 3:1 (bärs aldrig av enbart färg, UI-3). Ny färg eller ton → nytt par där.
+  knappar, snackbar, vinst/förlust – UI-3). Ny färg eller ton → nytt par där.
 
 ### android-ui-mappningen (`Color.kt`, `Shape.kt`)
 
@@ -52,8 +52,8 @@ komponent som används för vad → skill `shared-ui-components`. Koden är faci
 | primärbehållare | ljust `Blue100` `#D2E4FF` · mörkt `Blue600` `#2B5A87` | tonad yta under diagramkurvan, tomt tillstånds ikonruta, dra-för-att-uppdatera |
 | tertiär | ljust `Blue500` · mörkt `Blue400` | |
 | sekundär (koppar) | ljust `Copper` `#B4552F` · mörkt `CopperBright` `#FFB59A`; behållare `#FFDBCE` / `#713518` | sparsam accent, köpmarkörer, gul status |
-| vinst | `GainLight` `#2FA36B` · `GainDark` `#5FD39B` | via `ReturnColors.gain` |
-| förlust | `LossLight` `#C0574E` · `LossDark` `#E58C82` | via `ReturnColors.loss`; mörkt temas `error` = `LossDark` |
+| vinst | `GainLight` `#21724B` · `GainDark` `#5FD39B` | via `ReturnColors.gain` |
+| förlust | `LossLight` `#A9453C` · `LossDark` `#E58C82` | via `ReturnColors.loss`; mörkt temas `error` = `LossDark` |
 | bakgrund / yta | ljust `#F7F9FC` / `#FDFDFF` · mörkt `#101418` / `#151A1F` | ytbehållarna (`surfaceContainer*`) är satta i samma blågrå ton |
 | ytvariant | ljust `#DEE3EB` · mörkt `#42474E` | knappgruppens ovalda knappar, märken, påminnelseraden |
 | text / dämpad | ljust `#181C20` / `#42474E` · mörkt `#E0E2E8` / `#C2C7CF` | `onSurface` / `onSurfaceVariant` |

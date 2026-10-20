@@ -59,7 +59,7 @@
 |----|------|
 | UI-1 | Visuell identitet **Nordisk blå** (primär #1F4E79 ljust / #9CC4F0 mörkt) med **kopparaccent** (#B4552F ljust / #FFB59A mörkt), fast palett (ej dynamisk färg), ljust + mörkt tema. Vinst- och förlustfärgerna är egna och följer inte paletten. |
 | UI-2 | Rubriker/UI i **Space Grotesk**; belopp och sifferkolumner med **tabulära siffror**. |
-| UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. |
+| UI-3 | Avkastning (vinst/förlust) visas med **semantisk färg + tecken/pil**, aldrig färg ensam. Vinst- och förlustfärgen klarar kontrasten 4,5:1 mot kort och bakgrund i båda temana (ljust tema mörkare sedan 0.72.2). |
 | UI-4 | Tema kan väljas: **Ljust / Mörkt / Auto** (sparas i DataStore). |
 | UI-6 | Ingen text får tränga undan ett värde: i en rad med etikett och värde är **etiketten** det som kapas (`weight` + ellips), aldrig beloppet. Långa fondnamn är normalfallet, inte ett kantfall (issue #78). |
 | UI-7 | Tangentbordet får aldrig ligga över det fält som skrivs i eller knappen som sparar. Appen kör edge-to-edge, så IME-insetet konsumeras centralt i `AppNavigation` (`imePadding`) i stället för per skärm (issue #78). |

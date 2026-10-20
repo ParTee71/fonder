@@ -24,9 +24,9 @@ val Copper = Color(0xFFB4552F) // sekundär (ljust)
 val CopperBright = Color(0xFFFFB59A) // sekundär (mörkt)
 
 // ─── Semantiska avkastningsfärger (dämpade, tillgängliga) ─────────────────────
-val GainLight = Color(0xFF2FA36B)
+val GainLight = Color(0xFF21724B)
 val GainDark = Color(0xFF5FD39B)
-val LossLight = Color(0xFFC0574E)
+val LossLight = Color(0xFFA9453C)
 val LossDark = Color(0xFFE58C82)
 
 // Tonad vinstbehållare med text i samma kulör — StateChip "Köpt" (BYT-4); skiljer sig i ljushet från koppar och blått.
