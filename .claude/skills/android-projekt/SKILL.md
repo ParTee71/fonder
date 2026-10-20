@@ -85,10 +85,11 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Ordning: skill `shared-ui-components` (regel 4, katalogen i `ui/components/` och `ui/diagram/`)
   går före allt, sedan `ui-style` (nordisk blå, koppar, Space Grotesk, tabulära siffror), skill
   `diagram` för `FundLineChart` (Vico). Skärmdumpar och tester: `testing-strategy`.
-- Tema: `FonderTheme` = `MaterialExpressiveTheme` + `MotionScheme.expressive()`, fast palett
-  (`FonderLightColorScheme`/`FonderDarkColorScheme`, ingen dynamisk färg), `FonderTypography`,
+- Tema: `FonderTheme` = android-ui:s `AppTheme` (M3 Expressive, `MotionScheme.expressive()`) med Fonders
+  värden ur `ui/theme/`: fast palett (`FonderLightColorScheme`/`FonderDarkColorScheme` och
+  `FonderLight/DarkExtendedColors`, ingen dynamisk färg), `FonderTypography`, `FonderAppShapes` +
   `FonderShapes`, `MonoAmountStyle` (tnum) och de semantiska `ReturnColors`, `StatusColors`,
-  `ChartSeriesColors` – allt i `ui/theme/`.
+  `ChartSeriesColors`. Avstånd i skärmkod med `Spacing` (skill `ui-style`).
 - Fonder har inga delade list- eller redigeringsramar; skärmen är `XScreen(viewModel = hiltViewModel())`
   som samlar state med `collectAsStateWithLifecycle()` och lämnar typat state och callbacks till
   en tillståndslös `XContent` (t.ex. `SettingsScreen` → `SettingsContent`).

@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
@@ -31,6 +30,7 @@ import se.partee71.fonder.ui.components.ProgressBar
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.ui.theme.Spacing
 
 @Composable
 fun FundSearchScreen(
@@ -73,7 +73,7 @@ fun FundSearchContent(
 ) {
     val allaFondbolag = stringResource(R.string.fondsok_company_all)
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = modifier.fillMaxSize().padding(Spacing.l)) {
         SelectField(
             label = stringResource(R.string.fondsok_company_label),
             options = state.companies,
@@ -88,7 +88,7 @@ fun FundSearchContent(
             value = state.query,
             onValueChange = onQueryChange,
             label = stringResource(R.string.fondsok_label),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
 
         // Dra ned hämtar om katalogen (UI-11). Gesten omsluter även fel- och tomlägena, och
@@ -100,7 +100,7 @@ fun FundSearchContent(
             onRefresh = onRefresh
         ) {
             when {
-                state.loading -> ProgressBar(modifier = Modifier.padding(top = 16.dp))
+                state.loading -> ProgressBar(modifier = Modifier.padding(top = Spacing.l))
 
                 // Nätverksfel och "inga träffar" är skilda tillstånd — samma tomma vy för båda
                 // fick ett trasigt nät att se ut som att fonden inte fanns (issue #78).

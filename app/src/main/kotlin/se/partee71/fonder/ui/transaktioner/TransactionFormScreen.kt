@@ -18,7 +18,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -36,6 +35,7 @@ import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.theme.Spacing
 
 @Composable
 fun TransactionFormScreen(
@@ -102,11 +102,11 @@ fun TransactionFormContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(Spacing.l)
             .verticalScroll(rememberScrollState())
     ) {
         state.followIntro?.let { intro ->
-            AppCard(variant = AppCardVariant.Filled, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            AppCard(variant = AppCardVariant.Filled, modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s)) {
                 Text(followIntroText(intro), style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -131,17 +131,17 @@ fun TransactionFormContent(
             optionLabel = { type -> stringResource(type.labelRes()) },
             onSelect = onTypeChange,
             enabled = !state.typeLocked,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
 
         DateField(
             label = stringResource(R.string.transaktionsform_date_label),
             date = state.date,
             onDateChange = onDateChange,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m), modifier = Modifier.padding(top = Spacing.s)) {
             AppTextField(
                 value = state.sharesText,
                 onValueChange = onSharesTextChange,
@@ -162,7 +162,7 @@ fun TransactionFormContent(
                 stringResource(R.string.format_transaktionsform_prefill_note, MoneyFormat.kr(amount)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
 
@@ -171,7 +171,7 @@ fun TransactionFormContent(
             onValueChange = onFeeTextChange,
             label = stringResource(R.string.transaktionsform_fee_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
 
         state.switchField?.let { field ->
@@ -179,7 +179,7 @@ fun TransactionFormContent(
                 field = field,
                 fundName = state.selectedFund?.name,
                 onSelect = onSwitchSelected,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
         }
 
@@ -189,14 +189,14 @@ fun TransactionFormContent(
             ),
             onClick = onSave,
             enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)
         )
         if (state.blockedBySwitch) {
             Text(
                 stringResource(R.string.transaktionsform_save_blocked),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
         if (state.linkFailed) {
@@ -204,7 +204,7 @@ fun TransactionFormContent(
                 stringResource(R.string.transaktionsform_link_failed),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Spacing.xs)
             )
         }
     }

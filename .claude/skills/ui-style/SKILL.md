@@ -9,18 +9,39 @@ description: 'Fonders designspråk — nordisk blå med sparsam kopparaccent i M
 siffror radar upp sig i kolumner. Krav: UI-1 (identitet, fast palett, ljust + mörkt), UI-2
 (Space Grotesk, tabulära siffror), UI-3 (vinst/förlust aldrig enbart färg), UI-4 (Ljust/Mörkt/Auto), UI-12 (M3 Expressive: former, knappgrupper, laddningsindikator).
 
-**Var saker står (enda källor):** värdena i `ui/theme/` – `Color.kt` (paletten och
-färgscheman), `Theme.kt` (`FonderTheme`, `ReturnColors`, `StatusColors`, `ChartSeriesColors`),
-`Type.kt` (`FonderTypography`, `MonoAmountStyle`), `Shape.kt` (`FonderShapes`). Vilken komponent som
-används för vad → skill `shared-ui-components`. Koden är facit; tabellerna nedan speglar den.
+**Var saker står (enda källor):** temats API kommer från biblioteket android-ui (`se.partee71.ui.theme`:
+`AppTheme`, `ExtendedColors`/`Tone`, `AppShapes`, `AppTypography`, `Spacing`); Fonders egna värden står i
+`ui/theme/` – `Color.kt` (paletten, färgscheman, `FonderLight/DarkExtendedColors`, tonerna `Tone.Gain` och
+`Tone.Copper`, `FonderColors`), `Theme.kt` (`FonderTheme`, `ReturnColors`, `StatusColors`, `ChartSeriesColors`),
+`Type.kt` (`FonderTypography`, `MonoAmountStyle`), `Shape.kt` (`FonderShapes`, `FonderAppShapes`). Vilken
+komponent som används för vad → skill `shared-ui-components`. Koden är facit; tabellerna nedan speglar den.
 
 ## Tema
 
-- `FonderTheme` → `MaterialExpressiveTheme` (`MotionScheme.expressive()`) med
-  `FonderLightColorScheme`/`FonderDarkColorScheme`, `FonderTypography`, `FonderShapes`. **Ingen dynamisk färg** – identiteten ska vara konsekvent.
-- `LocalDarkTheme` bär det läge appen **faktiskt** valt (Inställningar, UI-4), inte systemets.
-  Semantiska färger utanför `MaterialTheme.colorScheme` läser alltid den – aldrig
-  `isSystemInDarkTheme()` direkt i en komponent.
+- `FonderTheme(darkTheme)` är en tunn omslutning av android-ui:s `AppTheme` (`MaterialExpressiveTheme` +
+  `MotionScheme.expressive()`) med `FonderLightColorScheme`/`FonderDarkColorScheme`,
+  `FonderLight/DarkExtendedColors`, `FonderAppShapes` och typskalan `FonderTypography`. **Ingen dynamisk färg** – identiteten ska vara konsekvent.
+- Bibliotekets tema tar inte Material 3:s `Shapes`, så en inre `MaterialExpressiveTheme(shapes = FonderShapes)`
+  lägger Fonders hörn på M3-komponenterna och ärver färger, typografi och rörelse. Ta inte bort den –
+  då får knappar, fält och dialoger M3:s standardhörn.
+- `FonderTheme` ger `FonderColors` (vinst/förlust) för det läge appen **faktiskt** valt (Inställningar,
+  UI-4), inte systemets; `ReturnColors` läser dem därifrån, och övriga semantiska färger kommer ur
+  `MaterialTheme.colorScheme` eller `AppTheme.tone(…)`. Aldrig `isSystemInDarkTheme()` direkt i en komponent.
+- **Kontrast:** `ThemeContrastTest` prövar varje textbärande par mot 4,5:1 i båda temana (toner, kort,
+  knappar, snackbar) och vinst/förlust mot 3:1 (bärs aldrig av enbart färg, UI-3). Ny färg eller ton → nytt par där.
+
+### android-ui-mappningen (`Color.kt`, `Shape.kt`)
+
+| Bibliotekets | Fonders värde |
+|---|---|
+| `ExtendedColors.card` / `toolbar` / `onToolbar` | `surface` / `surface` / `onSurface` |
+| `ExtendedColors.rowTint` | `surfaceVariant` |
+| `Tone.Primary` | `primaryContainer` + `onPrimaryContainer` |
+| `Tone.Copper` (Fonders) | `secondaryContainer` + `onSecondaryContainer` |
+| `Tone.Gain` (Fonders) | `GainContainer*` + `OnGainContainer*` (= `ReturnColors.gainContainer`/`onGainContainer`) |
+| `ExtendedColors.accents` | `primary`, `secondary` (diagramseriernas kulörer) |
+| `AppShapes` | kort och rad 18 dp, fält och meny 12 dp, `smallTile` 8 dp, `iconTile` 18 dp, sheet 28 dp upptill, pill rund |
+| `AppTypography` | `AppTypography.from(FonderTypography)` (bibliotekets standardindelning) |
 
 ### Palett (`Color.kt`)
 
@@ -47,12 +68,13 @@ används för vad → skill `shared-ui-components`. Koden är facit; tabellerna 
 
 | Objekt | Medlemmar | Regel |
 |---|---|---|
-| `ReturnColors` | `gain`, `loss`, `forAmount(amount)` (≥ 0 → vinst) | alltid tillsammans med tecken eller pil (UI-3); belopp med `MoneyFormat.percentSigned` ger äkta minustecken |
-| `StatusColors` | `gron`, `gul`, `rod` | säljsignaler (ANA-3); grön/röd återanvänder `ReturnColors`, gul är kopparen – ingen egen trafikljuspalett |
+| `ReturnColors` | `gain`, `loss` (ur `FonderColors`), `gainContainer`/`onGainContainer` (= `Tone.Gain`), `forAmount(amount)` (≥ 0 → vinst) | alltid tillsammans med tecken eller pil (UI-3); belopp med `MoneyFormat.percentSigned` ger äkta minustecken |
+| `StatusColors` | `gron`, `gul`, `rod` | säljsignaler (ANA-3); grön/röd återanvänder `ReturnColors`, gul är kopparen (`secondary`) – ingen egen trafikljuspalett |
 | `ChartSeriesColors` | `holding` (= `primary`, heldragen), `candidate` (= `secondary`, koppar, **streckad**) | serierna skiljs på kulör **och** form; köpmarkörerna är också koppar men lodräta |
 
-En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett nytt objekt i
-`Theme.kt`) med värden för båda temana – aldrig `Color(…)` i feature-kod.
+En ny semantisk färg läggs som en ny `Tone` (behållare + innehåll) i `FonderLight/DarkExtendedColors`
+när den är en tonad behållare, annars som ett fält i `FonderColors` och ett av objekten ovan – med värden för
+båda temana och ett par i `ThemeContrastTest`. Aldrig `Color(…)` i feature-kod.
 
 ## Typografi (`Type.kt`)
 
@@ -68,8 +90,10 @@ En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett
 
 ## Former (`Shape.kt`)
 
-`FonderShapes`: `extraSmall` 12 dp (textfält, menyer) · `small` 8 dp (chips, märken) · `medium` 18 dp
-(kort, påminnelserad, tomt tillstånds ikonruta) · `large` 26 dp · `extraLarge` 28 dp (dialoger). Hämtas via `MaterialTheme.shapes`, aldrig `RoundedCornerShape(…)` i feature-kod.
+`FonderShapes` (Material 3, läses av Fonders komponenter): `extraSmall` 12 dp (textfält, menyer) · `small` 8 dp (chips, märken) · `medium` 18 dp
+(kort, påminnelserad, tomt tillstånds ikonruta) · `large` 26 dp · `extraLarge` 28 dp (dialoger). `FonderAppShapes`
+(android-ui:s `AppTheme.shapes`) har samma radier, ur samma konstanter i `Shape.kt`. Hämtas via `MaterialTheme.shapes`
+eller `AppTheme.shapes`, aldrig `RoundedCornerShape(…)` i feature-kod.
 
 ## Layout
 
@@ -85,13 +109,16 @@ En ny semantisk färg läggs som ett nytt fält i ett av dessa objekt (eller ett
 - "Vet inte" sägs rakt ut ("Risk okänd", ANA-4) i stället för att ett värde döljs eller visas som 0.
 - Återkommande texter finns en gång i `strings.xml`.
 
-## Planerad tokenstruktur *(kommer)*
+## Avstånd (`Spacing`)
 
-Som i Dagboken: `AppColors`, `AppTypography`, `AppShapes` och `Spacing` i `ui/theme`, så att
-feature-koden aldrig behöver `MaterialTheme.colorScheme`/`.typography` direkt eller literala dp.
-I dag används `MaterialTheme.*`, objekten ovan och literala `dp` för avstånd. I `ui/` dominerar `4.dp`, `8.dp` och `16.dp` (därefter `12.dp`,
-`24.dp`, enstaka `2/3/6/10/14/18/20.dp`) – `Spacing` ska namnge de vanliga och avveckla de udda.
-Ny kod väljer bland 4/8/12/16/24 dp tills `Spacing` finns.
+Avstånd i skärmkod – `padding(…)`, `PaddingValues(…)`, `Arrangement.spacedBy(…)`, `Spacer`-avstånd – tas ur
+android-ui:s `Spacing`: `xs` 4 · `s` 8 · `m` 12 · `l` 16 · `xl` 24 · `xxl` 32 dp. Literala avstånds-dp i
+feature-kod i `padding(`, `PaddingValues(` och `spacedBy(` stoppas av `UiConsistencyTest` och hooken
+(`ui-forbidden.txt`). Kontrollen går rad för rad och stannar vid första `)`, så `Spacer`-bredder, dp efter en inre
+parentes och anrop över flera rader fångas inte – välj ändå en token. Storlekar (ikon, höjd, bredd,
+strokebredd, hörn) är inte avstånd. De udda avstånden som fanns före kontrollen (2, 6, 10 och 0 dp) står i
+baslinjen i `ui-allowlist.txt` och byts först när skärmen ses över, eftersom bytet syns; ny kod väljer en token.
+Delade komponenter i `ui/components/` och `ui/diagram/` får ha sina egna mått.
 
 ## Tillgänglighet
 

@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -40,6 +39,7 @@ import se.partee71.fonder.ui.components.SwitchRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -141,8 +141,8 @@ fun SwitchWatchContent(
                     // säljfond, belopp och dag — den informationen gäller även utan alternativ.
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+                        modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)
                     ) {
                         val text = when {
                             state.fillingCandidates -> stringResource(R.string.switch_watch_filling)
@@ -193,7 +193,7 @@ fun SwitchWatchContent(
                         AppButton(
                             text = stringResource(R.string.switch_watch_retry),
                             onClick = onRetryAutoFill,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.l),
                             variant = AppButtonVariant.Text
                         )
                     }
@@ -213,7 +213,7 @@ fun SwitchWatchContent(
                             state.targetLevel
                         ),
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+                        modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s, bottom = Spacing.xs)
                     )
                 }
             }
@@ -228,12 +228,12 @@ fun SwitchWatchContent(
             }
 
             item(contentType = "add-candidate") {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)) {
                     if (state.canAddCandidate) {
                         AppButton(
                             text = stringResource(R.string.switch_watch_add_candidate),
                             onClick = onAddCandidate,
-                            modifier = Modifier.padding(top = 4.dp),
+                            modifier = Modifier.padding(top = Spacing.xs),
                             variant = AppButtonVariant.Text
                         )
                     }
@@ -265,14 +265,14 @@ fun SwitchWatchContent(
                             stringResource(R.string.switch_watch_level_footer),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp)
+                            modifier = Modifier.padding(top = Spacing.s)
                         )
                     }
                     Text(
                         stringResource(R.string.switch_watch_disclaimer),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = Spacing.s)
                     )
                 }
             }
@@ -283,7 +283,7 @@ fun SwitchWatchContent(
 /** Vad som såldes, för hur mycket och hur länge sedan — sammanhanget varje rad under läses i. */
 @Composable
 private fun HeaderCard(state: SwitchWatchUiState) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(
                 R.string.format_switch_watch_sold,
@@ -318,7 +318,7 @@ private fun HeaderCard(state: SwitchWatchUiState) {
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
     }
 }
@@ -335,26 +335,26 @@ private fun TargetLevelCard(
     onSelectTargetLevel: (Int) -> Unit,
     onIndexOnlyChanged: (Boolean) -> Unit
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
         Text(stringResource(R.string.switch_watch_level_title), style = MaterialTheme.typography.titleSmall)
         RiskLevelPicker(
             selected = state.targetLevel,
             onSelect = onSelectTargetLevel,
             marked = state.sellLevel,
             markedDescription = stringResource(R.string.switch_watch_level_marked),
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.padding(top = Spacing.m)
         )
         Text(
             levelHint(state),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         SwitchRow(
             checked = state.indexOnly,
             onCheckedChange = onIndexOnlyChanged,
             label = stringResource(R.string.switch_watch_index_only),
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
         )
     }
 }
@@ -404,7 +404,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
             stringResource(R.string.switch_watch_chart_unavailable),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = Spacing.l)
         )
         return
     }
@@ -413,7 +413,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
         primaryLabel = state.sellFundName,
         comparisonSeries = state.candidateSeries.map { (label, points) -> ChartSeries(label = label, points = points) },
         working = state.chartWorking,
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(horizontal = Spacing.l)
     )
 }
 
@@ -429,14 +429,14 @@ private fun CandidateCard(
     onBought: (String) -> Unit,
     onRemoveCandidate: (Long) -> Unit
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.xs)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 row.name,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                modifier = Modifier.weight(1f).padding(end = Spacing.s)
             )
             RiskBadge(level = row.riskLevel)
             // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet
@@ -444,7 +444,7 @@ private fun CandidateCard(
             WorkingIndicator(
                 working = row.historyLoading,
                 contentDescription = stringResource(R.string.format_card_working, row.name),
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = Spacing.s)
             )
         }
         PeriodRow(
@@ -453,7 +453,7 @@ private fun CandidateCard(
             fraction = row.changeFraction,
             partial = row.partial,
             stackValue = true,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         row.feePercent?.let { fee ->
             Text(

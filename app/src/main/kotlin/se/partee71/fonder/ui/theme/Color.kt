@@ -1,8 +1,13 @@
 package se.partee71.fonder.ui.theme
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import se.partee71.ui.theme.ExtendedColors
+import se.partee71.ui.theme.Tone
+import se.partee71.ui.theme.ToneColors
 
 // ─── Nordisk blå-skala ────────────────────────────────────────────────────────
 val Blue900 = Color(0xFF001D36) // text på primärbehållare (ljust)
@@ -125,3 +130,45 @@ val FonderDarkColorScheme = darkColorScheme(
     surfaceContainerHigh = Color(0xFF222830),
     surfaceContainerHighest = Color(0xFF2D333B)
 )
+
+// ─── android-ui: ExtendedColors och toner ─────────────────────────────────────
+
+/** Vinstton – tonad behållare med text i vinstens kulör (StateChip "Köpt", BYT-4). */
+val Tone.Companion.Gain: Tone get() = Tone("gain")
+
+/** Kopparton – sekundärbehållaren (sparsam accent). Primärtonen är bibliotekets [Tone.Primary]. */
+val Tone.Companion.Copper: Tone get() = Tone("copper")
+
+/**
+ * Bibliotekets [ExtendedColors] ur Fonders färgschema: kort och flikrad på `surface`, tonad rad på
+ * `surfaceVariant`, primärtonen i primärbehållaren, och diagramseriernas kulörer som accenter.
+ */
+private fun extendedColors(
+    scheme: ColorScheme,
+    gainContainer: Color,
+    onGainContainer: Color
+) = ExtendedColors(
+    card = scheme.surface,
+    rowTint = scheme.surfaceVariant,
+    toolbar = scheme.surface,
+    onToolbar = scheme.onSurface,
+    tones = mapOf(
+        Tone.Primary to ToneColors(container = scheme.primaryContainer, content = scheme.onPrimaryContainer),
+        Tone.Copper to ToneColors(container = scheme.secondaryContainer, content = scheme.onSecondaryContainer),
+        Tone.Gain to ToneColors(container = gainContainer, content = onGainContainer)
+    ),
+    accents = listOf(scheme.primary, scheme.secondary)
+)
+
+val FonderLightExtendedColors = extendedColors(FonderLightColorScheme, GainContainerLight, OnGainContainerLight)
+val FonderDarkExtendedColors = extendedColors(FonderDarkColorScheme, GainContainerDark, OnGainContainerDark)
+
+/**
+ * Fonders egna färger utöver Material 3 och [ExtendedColors]: vinst- och förlustkulören för text,
+ * pilar och kurvor (UI-3). Ges av [FonderTheme] för det läge appen faktiskt valt.
+ */
+@Immutable
+data class FonderColors(val gain: Color, val loss: Color)
+
+val FonderLightColors = FonderColors(gain = GainLight, loss = LossLight)
+val FonderDarkColors = FonderColors(gain = GainDark, loss = LossDark)

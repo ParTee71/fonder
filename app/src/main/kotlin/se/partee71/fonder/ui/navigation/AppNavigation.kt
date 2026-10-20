@@ -56,6 +56,7 @@ import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.settings.SettingsViewModel
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
+import se.partee71.ui.theme.Spacing
 
 /**
  * Appens navigering: skalet ([AppNavigationShell]) med Fonders skärmar ([fonderEntries]). Körstatusen
@@ -143,7 +144,7 @@ fun AppNavigationShell(
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(
-                                start = 8.dp,
+                                start = Spacing.s,
                                 end = AppFabMenuDefaults.ReservedEndWidth,
                                 top = toolbarVertical,
                                 bottom = toolbarVertical

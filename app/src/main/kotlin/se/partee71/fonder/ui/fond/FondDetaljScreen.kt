@@ -48,6 +48,7 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -137,11 +138,11 @@ fun FondDetaljContent(
             ) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            FundHeader(state = state, modifier = Modifier.padding(top = 16.dp))
+                        Column(modifier = Modifier.padding(horizontal = Spacing.l)) {
+                            FundHeader(state = state, modifier = Modifier.padding(top = Spacing.l))
                             if (state.analysis != null) {
-                                AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = 12.dp))
-                                AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = 8.dp))
+                                AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = Spacing.m))
+                                AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = Spacing.s))
                             }
                             SwitchDecisionSection(
                                 state = state,
@@ -150,7 +151,7 @@ fun FondDetaljContent(
                                 onFollow = onFollow,
                                 onFollowFee = onFollowFee,
                                 onStartSwitchWatch = onStartSwitchWatch,
-                                modifier = Modifier.padding(vertical = 16.dp)
+                                modifier = Modifier.padding(vertical = Spacing.l)
                             )
                             HorizontalDivider()
                             FundLineChart(
@@ -158,21 +159,21 @@ fun FondDetaljContent(
                                 purchaseEpochDays = state.purchaseEpochDays,
                                 movingAverage = state.movingAverage,
                                 working = state.chartWorking,
-                                modifier = Modifier.padding(top = 16.dp)
+                                modifier = Modifier.padding(top = Spacing.l)
                             )
                             // Allt förklarande material ligger hopfällt (ANA-10): analysen och
                             // ordlistan är referens man slår upp, inte det man öppnar kortet för.
                             if (state.analysis != null) {
                                 ExpandableSection(
                                     title = stringResource(R.string.analys_section_title),
-                                    modifier = Modifier.padding(top = 8.dp)
+                                    modifier = Modifier.padding(top = Spacing.s)
                                 ) {
                                     AnalysisSection(analysis = state.analysis!!)
                                 }
                             }
                             ExpandableSection(
                                 title = stringResource(R.string.analys_glossary_title),
-                                modifier = Modifier.padding(top = 8.dp)
+                                modifier = Modifier.padding(top = Spacing.s)
                             ) {
                                 AnalysisGlossary()
                             }
@@ -180,7 +181,7 @@ fun FondDetaljContent(
                                 IsinInput(
                                     suggestedIsin = state.suggestedIsin,
                                     onConfirm = onIsinConfirmed,
-                                    modifier = Modifier.padding(vertical = 16.dp)
+                                    modifier = Modifier.padding(vertical = Spacing.l)
                                 )
                             }
                         }
@@ -204,14 +205,14 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = 8.dp)) }
-            RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = 8.dp))
+            state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = Spacing.s)) }
+            RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = Spacing.s))
             // Rubrikens väntesnurra (NAV-6): fondens kurs och historik hämtas när skärmen
             // öppnas, och nyckeltalen under rubriken räknas på det som hunnit landa.
             WorkingIndicator(
                 working = state.chartWorking,
                 contentDescription = stringResource(R.string.format_card_working, state.fundName ?: ""),
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = Spacing.s)
             )
         }
         val firstPurchaseEpochDay = state.firstPurchaseEpochDay
@@ -261,7 +262,7 @@ private fun SwitchDecisionSection(
             stringResource(R.string.switch_section_explain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
         )
 
         if (state.switchPlan.isNotEmpty()) {
@@ -289,7 +290,7 @@ private fun SwitchDecisionSection(
                 stringResource(R.string.fee_comparison_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = Spacing.xs)
             )
         }
         when (val feeComparison = state.feeComparison) {
@@ -344,7 +345,7 @@ private fun SwitchGroupLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = Spacing.s, bottom = Spacing.xs)
     )
 }
 
@@ -362,7 +363,7 @@ private fun SwitchWorkingMessage(text: String) {
         WorkingIndicator(
             working = true,
             contentDescription = text,
-            modifier = Modifier.padding(top = 8.dp, end = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s, end = Spacing.s)
         )
         SwitchMessage(text)
     }
@@ -374,7 +375,7 @@ private fun SwitchMessage(text: String) {
         text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 8.dp)
+        modifier = Modifier.padding(top = Spacing.s)
     )
 }
 
@@ -431,7 +432,7 @@ private fun SwitchPlanRow(
                 RiskBadge(
                     level = suggestion.fromLevel,
                     toLevel = suggestion.toLevel,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = Spacing.xs)
                 )
             }
         }
@@ -502,7 +503,7 @@ private fun FeeAlternativeRow(
                     amount = alternative.annualSavingsKr,
                     fraction = null
                 )
-                RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = 4.dp))
+                RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = Spacing.xs))
             }
         }
         // Utanför den utfällbara raden av samma skäl som i SwitchPlanRow: rubriken är en
@@ -544,7 +545,7 @@ private fun ComparisonChart(
         is ComparisonUiState.Ready -> FundLineChart(
             points = holdingPoints,
             comparisonSeries = listOf(ChartSeries(label = candidateName, points = comparison.points)),
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = Spacing.s)
         )
     }
 }
@@ -559,7 +560,7 @@ private fun ComparisonChart(
 private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
         SignalExplanations(analysis = analysis)
-        Column(modifier = Modifier.padding(top = 8.dp)) {
+        Column(modifier = Modifier.padding(top = Spacing.s)) {
             analysis.keyFigures.periodReturns.forEach { periodReturn ->
                 // "Sedan köp" krockar lätt med "min vinst" — den visar fondens kursutveckling
                 // sedan förstaköpsdagen, inte den egna avkastningen (som GAV-raden visar). Egen,
@@ -658,7 +659,7 @@ private fun SignalExplanations(analysis: FundAnalysisCalc.Analysis, modifier: Mo
 private fun SignalRow(level: FundAnalysisCalc.SignalLevel, label: String, explanation: String) {
     ExpandableInfoRow(explanation = explanation) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(level, modifier = Modifier.padding(end = 8.dp))
+            StatusDot(level, modifier = Modifier.padding(end = Spacing.s))
             Text(label, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -726,13 +727,13 @@ private fun IsinInput(
             value = text,
             onValueChange = { text = it },
             label = stringResource(R.string.fond_isin_label),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
         AppButton(
             text = stringResource(R.string.save),
             onClick = { onConfirm(text) },
             enabled = text.isNotBlank(),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
     }
 }

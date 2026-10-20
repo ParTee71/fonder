@@ -10,35 +10,42 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import se.partee71.ui.theme.AppTheme
+import se.partee71.ui.theme.Tone
 
 /**
- * Det mörka läge appen **faktiskt** applicerade, till skillnad från systemets
- * ([isSystemInDarkTheme]). De semantiska färgerna nedan ligger utanför `MaterialTheme`s
- * färgschema och måste läsa samma värde som [FonderTheme] fick — annars följde vinst/förlust
- * och statusprickarna telefonens läge medan alla ytor följde användarens val i Inställningar
+ * Fonders egna färger för det läge appen **faktiskt** applicerade, till skillnad från systemets
+ * ([isSystemInDarkTheme]). [ReturnColors] läser dem härifrån och inte ur systemläget – annars
+ * följde vinst/förlust telefonens läge medan alla ytor följde användarens val i Inställningar
  * (ljusa lågkontrastfärger på vit bakgrund, och tvärtom).
  */
-private val LocalDarkTheme = staticCompositionLocalOf { false }
+private val LocalFonderColors = staticCompositionLocalOf { FonderLightColors }
 
+/**
+ * Fonders tema: android-ui:s [AppTheme] (Material 3 Expressive, `MotionScheme.expressive()`, UI-12)
+ * med Fonders fasta palett, [FonderAppShapes] och [FonderTypography] – ingen dynamisk färg, identiteten
+ * nordisk blå och koppar ska vara konsekvent (skill `ui-style`).
+ *
+ * Bibliotekets tema tar inte Material 3:s `Shapes`; den inre [MaterialExpressiveTheme] lägger
+ * [FonderShapes] ovanpå och ärver färger, typografi och rörelse, så att M3-komponenterna behåller
+ * sina hörn.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FonderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    // Fast palett (ingen dynamisk färg) — identiteten nordisk blå och koppar ska vara konsekvent.
-    val colorScheme = if (darkTheme) FonderDarkColorScheme else FonderLightColorScheme
-
-    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
-        // M3 Expressive (UI-12): uttrycksfulla rörelser (fjädrande formmorf, knappgrupper,
-        // formskiftande laddningsindikator) ovanpå samma fasta färger, former och typografi.
-        MaterialExpressiveTheme(
-            colorScheme = colorScheme,
-            motionScheme = MotionScheme.expressive(),
-            typography = FonderTypography,
-            shapes = FonderShapes,
-            content = content
-        )
+    AppTheme(
+        colorScheme = if (darkTheme) FonderDarkColorScheme else FonderLightColorScheme,
+        extendedColors = if (darkTheme) FonderDarkExtendedColors else FonderLightExtendedColors,
+        shapes = FonderAppShapes,
+        typeScale = FonderTypography,
+        motionScheme = MotionScheme.expressive()
+    ) {
+        CompositionLocalProvider(LocalFonderColors provides if (darkTheme) FonderDarkColors else FonderLightColors) {
+            MaterialExpressiveTheme(shapes = FonderShapes, content = content)
+        }
     }
 }
 
@@ -46,21 +53,21 @@ fun FonderTheme(
 object ReturnColors {
     val gain: Color
         @Composable @ReadOnlyComposable
-        get() = if (LocalDarkTheme.current) GainDark else GainLight
+        get() = LocalFonderColors.current.gain
 
     val loss: Color
         @Composable @ReadOnlyComposable
-        get() = if (LocalDarkTheme.current) LossDark else LossLight
+        get() = LocalFonderColors.current.loss
 
     /** Tonad behållare i vinstens kulör (märken som "Köpt", BYT-4) — para med [onGainContainer]. */
     val gainContainer: Color
         @Composable @ReadOnlyComposable
-        get() = if (LocalDarkTheme.current) GainContainerDark else GainContainerLight
+        get() = AppTheme.tone(Tone.Gain).container
 
     /** Text på [gainContainer]. */
     val onGainContainer: Color
         @Composable @ReadOnlyComposable
-        get() = if (LocalDarkTheme.current) OnGainContainerDark else OnGainContainerLight
+        get() = AppTheme.tone(Tone.Gain).content
 
     /** Färg för ett värde: vinst om >= 0, annars förlust. */
     @Composable @ReadOnlyComposable
@@ -70,7 +77,7 @@ object ReturnColors {
 /**
  * Grön/gul/röd statusfärger för säljsignaler (issue #16, ANA-3) — samma fasta palett som
  * övriga appen (UI-1): grön/röd återanvänder [ReturnColors], gul återanvänder den befintliga
- * kopparaccenten i stället för en ny hårdkodad färg.
+ * kopparaccenten (`secondary`) i stället för en ny hårdkodad färg.
  */
 object StatusColors {
     val gron: Color
@@ -79,7 +86,7 @@ object StatusColors {
 
     val gul: Color
         @Composable @ReadOnlyComposable
-        get() = if (LocalDarkTheme.current) CopperBright else Copper
+        get() = MaterialTheme.colorScheme.secondary
 
     val rod: Color
         @Composable @ReadOnlyComposable

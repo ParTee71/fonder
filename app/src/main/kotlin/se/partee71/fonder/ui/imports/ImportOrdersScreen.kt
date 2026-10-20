@@ -38,6 +38,7 @@ import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.SwitchDecisionField
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.theme.Spacing
 
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
 @Composable
@@ -65,7 +66,7 @@ fun ImportOrdersScreen(
         state.imported -> Unit
 
         !state.filesSelected -> Column(
-            modifier = modifier.fillMaxSize().padding(24.dp),
+            modifier = modifier.fillMaxSize().padding(Spacing.xl),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -73,7 +74,7 @@ fun ImportOrdersScreen(
             AppButton(
                 text = stringResource(R.string.import_orders_pick_files_button),
                 onClick = { filePicker.launch(arrayOf("application/pdf")) },
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(top = Spacing.l)
             )
         }
 
@@ -132,7 +133,7 @@ fun ImportOrdersReview(
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(Spacing.l)
             )
         }
         if (state.hasSwitchQuestions) {
@@ -140,7 +141,7 @@ fun ImportOrdersReview(
                 stringResource(R.string.import_orders_switch_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)
             )
         }
         LazyColumn(modifier = Modifier.weight(1f)) {
@@ -165,7 +166,7 @@ fun ImportOrdersReview(
             text = stringResource(R.string.import_orders_commit_button, state.rows.count { it.readyToImport }),
             onClick = onImport,
             enabled = state.canImport,
-            modifier = Modifier.fillMaxWidth().padding(16.dp)
+            modifier = Modifier.fillMaxWidth().padding(Spacing.l)
         )
     }
 }
@@ -183,7 +184,7 @@ private fun ImportOrderRowCard(
     switchSaleRowSkipped: Boolean
 ) {
     val tx = rowState.transaction
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp)) {
         CheckRow(
             checked = rowState.included,
             onCheckedChange = onIncludedChange,
@@ -194,7 +195,7 @@ private fun ImportOrderRowCard(
         Text(
             stringResource(tx.type.labelRes()),
             style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
 
         SelectField(
@@ -204,7 +205,7 @@ private fun ImportOrderRowCard(
             optionLabel = { it.name },
             onSelect = onFundOverride,
             placeholder = stringResource(R.string.import_match_none),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
             Text(
@@ -225,21 +226,21 @@ private fun ImportOrderRowCard(
             label = stringResource(R.string.import_date_label),
             date = rowState.date,
             onDateChange = onDateChange,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = Spacing.s)
         )
         AppTextField(
             value = rowState.sharesText,
             onValueChange = onSharesTextChange,
             label = stringResource(R.string.import_order_shares_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
         AppTextField(
             value = rowState.priceText,
             onValueChange = onPriceTextChange,
             label = stringResource(R.string.import_order_price_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
         )
         // Bytesväljaren (BYT-2) — samma fält och texter som i transaktionsformuläret.
         rowState.switchField?.let { field ->
@@ -247,7 +248,7 @@ private fun ImportOrderRowCard(
                 field = field,
                 fundName = rowState.matchedFund?.name ?: tx.fundName,
                 onSelect = onSwitchSelected,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = Spacing.s)
             )
         }
         if (switchSaleRowSkipped) {

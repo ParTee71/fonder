@@ -9,8 +9,10 @@
 # [dispatchers]    = all Kotlin under app/src/main utom di/ (skill android:kotlin-coroutines)
 # [events]         = all Kotlin under ui/, även ui/components, ui/diagram och ui/theme (skill android:kotlin-flows)
 # Tillåtet i feature-kod: Text och Icon med MaterialTheme.typography/colorScheme, Column, Row, Box, Spacer,
-# padding och allt i ui/components, ui/diagram och ui/theme. Fonder har ingen Spacing-skala – padding
-# kontrolleras därför inte (skill shared-ui-components → Förbjudet).
+# padding, spacedBy och PaddingValues med Spacing (android-ui) och allt i ui/components, ui/diagram och ui/theme.
+# Avstånd är literala dp bara i en delad komponent; storlekar (ikon, bredd, strokebredd, hörn) är inte avstånd.
+# Avståndsmönstren stannar vid första ')' och går rad för rad: Spacer-bredder, dp efter en inre parentes och
+# anrop över flera rader fångas inte (skill ui-style → Avstånd).
 # Scaffold är fortfarande tillåten i AppNavigation (skalet runt NavDisplay); topprad, flikrad och plusknapp
 # har sina delade komponenter sedan M3 Expressive-steg 3a.
 # Importrader och kommentarer kontrolleras inte.
@@ -25,6 +27,9 @@
 \b(fontSize|lineHeight|letterSpacing)\s*=	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
 \.shadow\(	AppCard
 \.(height|requiredHeight|heightIn)\(\s*[0-9]+(\.[0-9]+)?\.dp	komponentens parametrar (ingen literal höjd i feature-kod)
+\bpadding\([^)]*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
+\bPaddingValues\([^)]*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
+\bspacedBy\(\s*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
 \bSurface\s*[({]	AppCard
 \b(Elevated|Outlined)?Card\s*[({]	AppCard (AppCardVariant)
 \bListItem\s*[({]	ItemRow
