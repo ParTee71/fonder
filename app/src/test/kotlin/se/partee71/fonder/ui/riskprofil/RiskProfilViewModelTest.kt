@@ -3,7 +3,9 @@ package se.partee71.fonder.ui.riskprofil
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import app.cash.turbine.test
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -11,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -25,6 +28,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.domain.model.DownturnReaction
@@ -78,14 +82,21 @@ class RiskProfilViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = RiskProfilViewModel(preferencesRepository, fakeFundMetadataRepo, fakeScheduler)
+    private fun viewModel(preferences: PreferencesRepository = preferencesRepository) = RiskProfilViewModel(preferences, fakeFundMetadataRepo, fakeScheduler)
+
+    /** En DataStore vars läsning eller skrivning går fel — som en trasig fil (NFR-6). */
+    private class FailingDataStore(private val failRead: Boolean) : DataStore<Preferences> {
+        override val data: Flow<Preferences> = if (failRead) flow { throw IllegalStateException("trasig") } else flowOf(emptyPreferences())
+
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences = throw IOException("full disk")
+    }
 
     @Test
     fun `initialt tillstand har ingen egen andring och en tom enkat`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
             assertNull(state.horizon)
             assertNull(state.suggestedAllocation)
             assertFalse(state.hasManualEdit)
@@ -100,7 +111,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
             vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
             state = awaitItem()
@@ -122,7 +133,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
             vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
             awaitItem()
@@ -148,7 +159,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
             vm.onAllocationPercentChanged(3, "100")
             state = awaitItem()
@@ -170,7 +181,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
             vm.onAllocationPercentChanged(3, "50")
             state = awaitItem()
@@ -187,7 +198,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
             vm.onAllocationPercentChanged(3, "50")
             awaitItem()
             cancelAndIgnoreRemainingEvents()
@@ -205,7 +216,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
             vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
             awaitItem()
             vm.onReactionSelected(DownturnReaction.GOR_INGET)
@@ -229,7 +240,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
             vm.onAllocationPercentChanged(3, "100")
             state = awaitItem()
             assertTrue(state.canSave)
@@ -258,7 +269,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.allocationSumPercent != 100) state = awaitItem()
+            while (state.loading || state.allocationSumPercent != 100) state = awaitItem()
             assertEquals(TimeHorizon.OVER_15_AR, state.horizon)
             assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), state.effectiveAllocation)
             cancelAndIgnoreRemainingEvents()
@@ -270,9 +281,11 @@ class RiskProfilViewModelTest {
         knownLevels = emptyList()
         val vm = viewModel()
         vm.uiState.test {
-            awaitItem() // initialValue innan enkäten besvarats
+            var state = awaitItem() // initialValue innan enkäten besvarats
+            // Den sparade profilen (ingen) är läst — sedan ändras tillståndet bara av svaren nedan.
+            while (state.loading) state = awaitItem()
             vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
-            var state = awaitItem()
+            state = awaitItem()
             assertTrue(state.availableLevels.isEmpty())
             vm.onReactionSelected(DownturnReaction.GOR_INGET)
             awaitItem()
@@ -291,7 +304,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty()) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
             vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
             awaitItem()
             vm.onReactionSelected(DownturnReaction.GOR_INGET)
@@ -316,7 +329,7 @@ class RiskProfilViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
-            while (state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
             assertTrue(state.canSave)
             cancelAndIgnoreRemainingEvents()
         }
@@ -325,5 +338,39 @@ class RiskProfilViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(0, fakeScheduler.switchPlanScans)
+    }
+
+    // --- Fel vid läsning och sparning (NFR-6) ---
+
+    @Test
+    fun `en sparad profil som inte gar att lasa visas som fel i stallet for en tom enkat`() = runTest(dispatcher) {
+        val vm = viewModel(PreferencesRepository(FailingDataStore(failRead = true)))
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Unknown, state.loadError?.cause)
+            assertFalse(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett sparfel sags och formularet star kvar`() = runTest(dispatcher) {
+        val vm = viewModel(PreferencesRepository(FailingDataStore(failRead = false)))
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            vm.onAllocationPercentChanged(3, "100")
+            state = awaitItem()
+            assertTrue(state.canSave)
+
+            vm.save()
+            while (state.failure == null) state = awaitItem()
+            assertEquals(DataError.Unknown, state.failure?.cause)
+            assertFalse(state.saved)
+            assertEquals("100", state.allocationText[3])
+            assertTrue(state.canSave)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

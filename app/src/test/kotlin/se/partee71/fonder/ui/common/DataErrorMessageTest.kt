@@ -18,6 +18,13 @@ class DataErrorMessageTest {
         DataError.ImportUnreadable,
         DataError.ImportEmpty,
         DataError.ImportNoTransactions,
+        DataError.SignInNoCredential,
+        DataError.SignInFailed,
+        DataError.BackupUnsupportedVersion,
+        DataError.BackupUnreadable,
+        DataError.BackupExportFailed,
+        DataError.DriveSignedOut,
+        DataError.DriveFailed,
         DataError.NotFound,
         DataError.Unknown
     )
@@ -40,5 +47,18 @@ class DataErrorMessageTest {
             "Kunde inte läsa någon transaktion ur de valda filerna. Kontrollera att det är Handelsbankens avräkningsnotor (PDF).",
             context.getString(DataError.ImportNoTransactions.toMessage())
         )
+    }
+
+    @Test
+    fun `inloggningen, sakerhetskopian och Drive behaller Installningars texter`() {
+        mapOf(
+            DataError.SignInNoCredential to se.partee71.fonder.R.string.sign_in_failed_no_credential,
+            DataError.SignInFailed to se.partee71.fonder.R.string.sign_in_failed,
+            DataError.BackupUnsupportedVersion to se.partee71.fonder.R.string.backup_restore_failed_version,
+            DataError.BackupUnreadable to se.partee71.fonder.R.string.backup_restore_failed_unreadable,
+            DataError.BackupExportFailed to se.partee71.fonder.R.string.backup_export_failed,
+            DataError.DriveSignedOut to se.partee71.fonder.R.string.drive_backup_signed_out,
+            DataError.DriveFailed to se.partee71.fonder.R.string.drive_backup_failed
+        ).forEach { (error, text) -> assertEquals(error.toString(), text, error.toMessage()) }
     }
 }

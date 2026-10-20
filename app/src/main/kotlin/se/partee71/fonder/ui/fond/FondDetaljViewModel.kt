@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.suspendRunCatching
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -57,10 +58,19 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.ui.common.catchAsDetailError
+import se.partee71.fonder.ui.common.errorOrNull
+import se.partee71.fonder.ui.common.valueOrNull
+import se.partee71.ui.common.DetailUiState
+import se.partee71.ui.common.UiError
 
+/**
+ * Det Fonddetalj läser ur Room för fonden: namn, ISIN, kurshistorik, innehavets utgångsläge och
+ * analysen — innehållet i [FondDetaljUiState.fund]. Vid ett läsfel finns inget av det, och skärmen
+ * visar felet i stället för en tom fond (NFR-6).
+ */
 @Immutable
-data class FondDetaljUiState(
-    val loading: Boolean = true,
+data class FundDetail(
     val fundName: String? = null,
     val isin: String? = null,
     val suggestedIsin: String? = null,
@@ -80,8 +90,14 @@ data class FondDetaljUiState(
     val purchaseEpochDays: ImmutableList<Long> = persistentListOf(),
     /** Nyckeltal och säljsignaler (issue #16) — null om fonden inte är ett kvarvarande innehav. */
     val analysis: FundAnalysisCalc.Analysis? = null,
-    /** Innehavets nuvarande värde (netShares × senaste NAV) — null om okänt/inte ett innehav. Underlag för [feeComparison]. */
-    val holdingValue: Double? = null,
+    /** Innehavets nuvarande värde (netShares × senaste NAV) — null om okänt/inte ett innehav. Underlag för [FondDetaljUiState.feeComparison]. */
+    val holdingValue: Double? = null
+)
+
+@Immutable
+data class FondDetaljUiState(
+    /** Fonden — laddning, läsfel (NFR-6) eller innehåll. */
+    val fund: DetailUiState<FundDetail> = DetailUiState.Loading,
     /** Billigare-alternativ-jämförelse (ANA-9, issue #59). Null = fonden är inte ett kvarvarande innehav, inget kort visas. */
     val feeComparison: FeeComparisonUiState? = null,
     /** Fondens egen risknivå på källans skala 1–7 (TP-21), null om okänd — visas ut som okänd, aldrig gissad (UI-10, issue #85). */
@@ -123,7 +139,15 @@ data class FondDetaljUiState(
      */
     val priceRefreshing: Boolean = false
 ) {
-    val isEmpty: Boolean get() = !loading && prices.isEmpty()
+    val loading: Boolean get() = fund is DetailUiState.Loading
+
+    /** Läsfelet som visas i stället för fonden (NFR-6). */
+    val error: UiError? get() = fund.errorOrNull()
+
+    /** Det skärmen visar: fonden, eller tomt under den första laddningen (rubrik och diagram snurrar då). */
+    val content: FundDetail get() = fund.valueOrNull() ?: FundDetail()
+
+    val isEmpty: Boolean get() = fund.valueOrNull()?.prices?.isEmpty() == true
 
     /** Avstådda förslag av båda sorterna för fonden. */
     val dismissedCount: Int get() = dismissedPlanCount + dismissedFeeCount
@@ -302,8 +326,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             val holdings = PortfolioCalc.computeHoldings(snapshot.funds, snapshot.transactions)
             val holding = holdings.firstOrNull { it.fund.fundId == fundId }
             val holdingValue = holding?.let { PortfolioCalc.withCurrentValue(listOf(it), latestPrices).first().currentValue }
-            FondDetaljUiState(
-                loading = false,
+            FundDetail(
                 fundName = fund?.name,
                 isin = fund?.isin,
                 suggestedIsin = snapshot.suggestedIsin,
@@ -316,6 +339,7 @@ class FondDetaljViewModel @AssistedInject constructor(
                 holdingValue = holdingValue
             )
         }
+        .map { FondDetaljUiState(fund = DetailUiState.Content(it)) }
 
     /** Bytesplanens råmaterial: kontotyp (SET-4-gaten), senast inspelade batch och metadatan de slås upp mot. */
     private val planInput: Flow<PlanInput> = combine(
@@ -352,7 +376,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         // Metadatan behövs för fondens egen risknivå **och** för att kunna slå upp planens
         // fondnamn/risknivåer — begärs här, där båda ISIN-mängderna är kända, och landar via
         // `metadata`-flödet ovan utan att blockera tillståndet.
-        refreshMetadata(listOfNotNull(state.isin) + plan.batch.flatMap { listOf(it.sellIsin, it.buyIsin) })
+        refreshMetadata(listOfNotNull(state.content.isin) + plan.batch.flatMap { listOf(it.sellIsin, it.buyIsin) })
         val today = LocalDate.now()
         val resolvedPlan = SwitchPlanResolver.resolve(plan.accountType, plan.batch, plan.metadataByIsin, today, plan.emptiedAtEpochMillis)
         // Ett avstått förslag (HEM-14) döljs här också, med samma regel som på Beslut — fondkortet
@@ -361,20 +385,20 @@ class FondDetaljViewModel @AssistedInject constructor(
         // planen vid nästa omräkning, och fondkortet ska ändå säga att det finns något att ångra.
         val (fundPlan, _) = SuggestionDismissals.partition(
             // Samma regel som Beslut för "sålt, väntar på köp" (BYT-1).
-            watchState.inProgress.mark(SwitchPlanResolver.forFund(resolvedPlan, state.isin)),
+            watchState.inProgress.mark(SwitchPlanResolver.forFund(resolvedPlan, state.content.isin)),
             plan.dismissals,
             today
         )
-        val dismissedPlan = SwitchPlanResolver.forFund(plan.dismissedPlan, state.isin)
-        val recordedFee = recordedFeeSwitches(plan.history, state.isin)
+        val dismissedPlan = SwitchPlanResolver.forFund(plan.dismissedPlan, state.content.isin)
+        val recordedFee = recordedFeeSwitches(plan.history, state.content.isin)
         val (visibleFeeComparison, dismissedFeeCount) = feeComparison.withoutDismissed(
-            isin = state.isin,
+            isin = state.content.isin,
             recorded = recordedFee,
             activeDismissals = SuggestionDismissals.activeKeys(plan.dismissals, today)
         )
         state.copy(
             feeComparison = visibleFeeComparison,
-            riskLevel = state.isin?.let { plan.metadataByIsin[it]?.risk },
+            riskLevel = state.content.isin?.let { plan.metadataByIsin[it]?.risk },
             switchPlan = fundPlan.toImmutableList(),
             dismissedPlanCount = dismissedPlan.size,
             dismissedFeeCount = dismissedFeeCount,
@@ -387,11 +411,15 @@ class FondDetaljViewModel @AssistedInject constructor(
         // Eget led i kedjan i stället för en sjätte gren i combinen ovan: `combine` tar som mest
         // fem flöden med olika typer, och körstatusen ska ändå inte kunna räkna om fondens data.
         state.copy(priceRefreshing = refreshing)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = FondDetaljUiState()
-    )
+    }
+        // Sist i kedjan: ett läsfel i vilken källa som helst (fonden, kurserna, planen,
+        // bevakningarna) visas som fel i stället för att krascha fondkortet (NFR-6).
+        .catchAsDetailError { FondDetaljUiState(fund = it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = FondDetaljUiState()
+        )
 
     /**
      * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12, issue
@@ -523,17 +551,21 @@ class FondDetaljViewModel @AssistedInject constructor(
             // annars bli stående med en snurra som aldrig slutar (NAV-6).
             priceRefreshing.value = true
             try {
-                val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
-                val since = earliestPurchase.first()
+                // Ett läsfel här visas redan av uiState (NFR-6) — hämtningen ger då upp i stället
+                // för att krascha skärmen, och den cachade historiken står kvar.
+                suspendRunCatching {
+                    val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
+                    val since = earliestPurchase.first()
 
-                if (fund?.isin != null && since != null) {
-                    fundPriceRepository.refreshSince(fundId, fund.isin, since)
-                } else if (fundPriceRepository.isPriceStale(fundId)) {
-                    fundPriceRepository.refresh(fundId, since)
-                }
+                    if (fund?.isin != null && since != null) {
+                        fundPriceRepository.refreshSince(fundId, fund.isin, since)
+                    } else if (fundPriceRepository.isPriceStale(fundId)) {
+                        fundPriceRepository.refresh(fundId, since)
+                    }
 
-                if (fund != null && fund.isin == null) {
-                    suggestedIsin.value = fundPriceRepository.suggestIsin(fund.name)
+                    if (fund != null && fund.isin == null) {
+                        suggestedIsin.value = fundPriceRepository.suggestIsin(fund.name)
+                    }
                 }
             } finally {
                 priceRefreshing.value = false
@@ -555,7 +587,8 @@ class FondDetaljViewModel @AssistedInject constructor(
             // icke-laddande emissionen, och jobbet gav upp för gott — kortet dök aldrig upp
             // trots att refreshSince i samma init fyllde cachen sekunder senare. Saknas
             // netInvested är fonden inget kvarvarande innehav, och då finns inget att jämföra.
-            val loaded = uiState.first { !it.loading && (it.analysis != null || it.netInvested == null) }
+            // Ett läsfel är också avgjort: då finns inget innehav att jämföra (NFR-6).
+            val loaded = uiState.first { it.error != null || (!it.loading && (it.content.analysis != null || it.content.netInvested == null)) }.content
             if (loaded.analysis == null) return@launch
 
             val isin = loaded.isin

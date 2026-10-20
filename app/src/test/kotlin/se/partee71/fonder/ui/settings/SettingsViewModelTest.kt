@@ -35,6 +35,7 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.AuthUser
 import se.partee71.fonder.data.auth.SignInException
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.BackupFingerprint
 import se.partee71.fonder.data.repository.BackupFormatException
@@ -316,7 +317,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals(BackupMessage.ExportFailed, state.backupMessage)
+            assertEquals(DataError.BackupExportFailed, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -349,7 +350,7 @@ class SettingsViewModelTest {
             while (state.backupMessage == null) state = awaitItem()
 
             assertEquals(null, fakeBackupRepo.restoredJson)
-            assertEquals(BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE), state.backupMessage)
+            assertEquals(DataError.BackupUnreadable, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -367,7 +368,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals(BackupMessage.RestoreFailed(BackupFormatException.Reason.UNSUPPORTED_VERSION), state.backupMessage)
+            assertEquals(DataError.BackupUnsupportedVersion, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -605,7 +606,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.signInError == null) state = awaitItem()
 
-            assertEquals(SignInException.Reason.NO_CREDENTIAL, state.signInError)
+            assertEquals(DataError.SignInNoCredential, state.signInError?.cause)
             assertNull(state.googleUser)
             cancelAndIgnoreRemainingEvents()
         }
@@ -624,7 +625,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.signInError == null) state = awaitItem()
 
-            assertEquals(SignInException.Reason.FAILED, state.signInError)
+            assertEquals(DataError.SignInFailed, state.signInError?.cause)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -734,7 +735,7 @@ class SettingsViewModelTest {
             while (state.backupMessage == null) state = awaitItem()
 
             assertNull(uploadedJson)
-            assertEquals(BackupMessage.ExportFailed, state.backupMessage)
+            assertEquals(DataError.BackupExportFailed, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -750,7 +751,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals(BackupMessage.DriveFailed(signedOut = true), state.backupMessage)
+            assertEquals(DataError.DriveSignedOut, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -839,10 +840,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            assertEquals(
-                BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE),
-                state.backupMessage
-            )
+            assertEquals(DataError.BackupUnreadable, state.backupMessage.failureCause())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -955,6 +953,7 @@ class SettingsViewModelTest {
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
+            assertEquals(DataError.DriveFailed, state.backupMessage.failureCause())
             assertNull(state.lastBackup)
             cancelAndIgnoreRemainingEvents()
         }
@@ -1034,4 +1033,7 @@ class SettingsViewModelTest {
         category = null, fundType = "Aktiefond", companyName = null, risk = 5, indexFund = true,
         startDateEpochDay = null, minimumBuy = null, tags = emptyList()
     )
+
+    /** Orsaken till ett misslyckat backup-meddelande (NFR-6), eller `null` för ett lyckat. */
+    private fun BackupMessage?.failureCause(): Throwable? = (this as? BackupMessage.Failed)?.error?.cause
 }

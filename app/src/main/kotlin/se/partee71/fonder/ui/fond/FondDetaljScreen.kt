@@ -109,9 +109,14 @@ fun FondDetaljContent(
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val error = state.error
+    val content = state.content
     when {
+        // Ett läsfel visas i stället för fonden, aldrig en tom fond (NFR-6).
+        error != null -> EmptyState(error = error, modifier = modifier)
+
         state.isEmpty -> EmptyState(
-            title = state.fundName ?: stringResource(R.string.fond_title),
+            title = content.fundName ?: stringResource(R.string.fond_title),
             body = stringResource(R.string.fond_history_empty_body),
             modifier = modifier
         )
@@ -122,8 +127,8 @@ fun FondDetaljContent(
         // LaunchedEffect, ny transaktion) på nytt vid varje kurstick. En backfillad fond har
         // flera tusen punkter (issue #78).
         else -> {
-            val chartPoints = remember(state.prices) {
-                state.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
+            val chartPoints = remember(content.prices) {
+                content.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
             }
             // Ett enda `item`, inte ett per sektion: utan kurstabellen finns inga lazy rader kvar
             // att vinna något på, och en icke-komponerad sektion hade gjort resten av kortet
@@ -140,9 +145,9 @@ fun FondDetaljContent(
                     item {
                         Column(modifier = Modifier.padding(horizontal = Spacing.l)) {
                             FundHeader(state = state, modifier = Modifier.padding(top = Spacing.l))
-                            if (state.analysis != null) {
-                                AnalysisStatusBanner(analysis = state.analysis, modifier = Modifier.padding(top = Spacing.m))
-                                AnalysisGuidanceCard(analysis = state.analysis!!, modifier = Modifier.padding(top = Spacing.s))
+                            if (content.analysis != null) {
+                                AnalysisStatusBanner(analysis = content.analysis, modifier = Modifier.padding(top = Spacing.m))
+                                AnalysisGuidanceCard(analysis = content.analysis, modifier = Modifier.padding(top = Spacing.s))
                             }
                             SwitchDecisionSection(
                                 state = state,
@@ -156,19 +161,19 @@ fun FondDetaljContent(
                             HorizontalDivider()
                             FundLineChart(
                                 points = chartPoints,
-                                purchaseEpochDays = state.purchaseEpochDays,
-                                movingAverage = state.movingAverage,
+                                purchaseEpochDays = content.purchaseEpochDays,
+                                movingAverage = content.movingAverage,
                                 working = state.chartWorking,
                                 modifier = Modifier.padding(top = Spacing.l)
                             )
                             // Allt förklarande material ligger hopfällt (ANA-10): analysen och
                             // ordlistan är referens man slår upp, inte det man öppnar kortet för.
-                            if (state.analysis != null) {
+                            if (content.analysis != null) {
                                 ExpandableSection(
                                     title = stringResource(R.string.analys_section_title),
                                     modifier = Modifier.padding(top = Spacing.s)
                                 ) {
-                                    AnalysisSection(analysis = state.analysis!!)
+                                    AnalysisSection(analysis = content.analysis)
                                 }
                             }
                             ExpandableSection(
@@ -177,9 +182,9 @@ fun FondDetaljContent(
                             ) {
                                 AnalysisGlossary()
                             }
-                            if (state.isin == null) {
+                            if (content.isin == null) {
                                 IsinInput(
-                                    suggestedIsin = state.suggestedIsin,
+                                    suggestedIsin = content.suggestedIsin,
                                     onConfirm = onIsinConfirmed,
                                     modifier = Modifier.padding(vertical = Spacing.l)
                                 )
@@ -195,28 +200,29 @@ fun FondDetaljContent(
 /** Fondens rubrikrad: namn, säljsignal-status (ANA-3), risknivå (UI-10) och innehavets utgångsläge (POR-6). */
 @Composable
 private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) {
+    val content = state.content
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // UI-6: fondnamnet är det som kapas, aldrig märkningarna till höger.
             Text(
-                state.fundName ?: "",
+                content.fundName ?: "",
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            state.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = Spacing.s)) }
+            content.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = Spacing.s)) }
             RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = Spacing.s))
             // Rubrikens väntesnurra (NAV-6): fondens kurs och historik hämtas när skärmen
             // öppnas, och nyckeltalen under rubriken räknas på det som hunnit landa.
             WorkingIndicator(
                 working = state.chartWorking,
-                contentDescription = stringResource(R.string.format_card_working, state.fundName ?: ""),
+                contentDescription = stringResource(R.string.format_card_working, content.fundName ?: ""),
                 modifier = Modifier.padding(start = Spacing.s)
             )
         }
-        val firstPurchaseEpochDay = state.firstPurchaseEpochDay
-        val netInvested = state.netInvested
+        val firstPurchaseEpochDay = content.firstPurchaseEpochDay
+        val netInvested = content.netInvested
         if (firstPurchaseEpochDay != null && netInvested != null) {
             Text(
                 stringResource(
@@ -256,6 +262,7 @@ private fun SwitchDecisionSection(
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val content = state.content
     Column(modifier = modifier) {
         Text(stringResource(R.string.switch_section_title), style = MaterialTheme.typography.titleMedium)
         Text(
@@ -270,9 +277,9 @@ private fun SwitchDecisionSection(
             state.switchPlan.forEach { suggestion ->
                 SwitchPlanRow(
                     suggestion = suggestion,
-                    fundIsin = state.isin,
+                    fundIsin = content.isin,
                     chartPoints = chartPoints,
-                    comparison = state.comparisons[suggestion.counterpartIsin(state.isin)],
+                    comparison = state.comparisons[suggestion.counterpartIsin(content.isin)],
                     onSuggestionExpanded = onSuggestionExpanded,
                     onFollow = onFollow,
                     watched = suggestion.sellIsin in state.watchedSellIsins,
@@ -319,7 +326,7 @@ private fun SwitchDecisionSection(
         // hade lästs som att appen inte gjort något (ANA-4-principen). Innan jämförelsen ens
         // hunnit starta sägs ingenting — då är frågan obesvarad, inte besvarad med "nej".
         when {
-            state.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
+            content.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
 
             state.switchPlan.isEmpty() && state.feeComparison == null -> Unit
 

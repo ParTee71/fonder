@@ -11,6 +11,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.CheaperAlternative
@@ -21,6 +23,7 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.common.DetailUiState
 
 /**
  * Skärmdumpar ljust + mörkt av Översikten enligt mockupen (HEM-13): värdekortet, "Att besluta",
@@ -60,10 +63,21 @@ class HemScreenshotTest {
     ).withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
 
     @Test
+    fun `lasfel visar felet i stallet for nollor (NFR-6)`() {
+        composeRule.setContent {
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Error(AppErrors.map(DataError.Database)), decisions = decisions)) }
+        }
+        composeRule.onNodeWithText("Kunde inte visa innehållet").assertExists()
+        composeRule.onNodeWithText("Appens data gick inte att läsa. Lämna skärmen och försök igen.").assertExists()
+        composeRule.onNodeWithText("Ingen portfölj ännu").assertDoesNotExist()
+        composeRule.onNodeWithText("0,00 kr", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `att besluta namner varje slag som vantar och utelamnar nollor`() {
         // HEM-13: föreslagna, sålda och billigare alternativ (ANA-9) var för sig, ur listan Byten (BYT-4).
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(loading = false, hasHoldings = true, decisions = decisions)) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true)), decisions = decisions)) }
         }
         composeRule.onNodeWithText("2 föreslagna · 1 sålt, väntar på köp · 1 billigare alternativ").assertExists()
     }
@@ -74,8 +88,11 @@ class HemScreenshotTest {
             FonderTheme {
                 HemContent(
                     state = HemUiState(
-                        loading = false,
-                        hasHoldings = true,
+                        portfolio = DetailUiState.Content(
+                            HemPortfolio(
+                                hasHoldings = true
+                            )
+                        ),
                         decisions = PendingDecisions(cheaperAlternatives = decisions.cheaperAlternatives)
                             .withSwitches(emptyList(), LocalDate.ofEpochDay(start + 59))
                     )
@@ -92,16 +109,19 @@ class HemScreenshotTest {
     ) {
         HemContent(
             state = HemUiState(
-                loading = false,
-                hasHoldings = true,
-                totalInvested = 374_646.0,
-                totalValue = 412_860.0,
-                totalGainLoss = 38_214.0,
-                totalGainLossFraction = 0.102,
-                navEpochDay = start + 59,
-                returnSeries = PortfolioReturnSeriesCalc.Result(points = curve(0.002), partial = false),
-                benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015).toImmutableList()),
-                purchaseEpochDays = persistentListOf(start + 20),
+                portfolio = DetailUiState.Content(
+                    HemPortfolio(
+                        hasHoldings = true,
+                        totalInvested = 374_646.0,
+                        totalValue = 412_860.0,
+                        totalGainLoss = 38_214.0,
+                        totalGainLossFraction = 0.102,
+                        navEpochDay = start + 59,
+                        returnSeries = PortfolioReturnSeriesCalc.Result(points = curve(0.002), partial = false),
+                        benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015).toImmutableList()),
+                        purchaseEpochDays = persistentListOf(start + 20)
+                    )
+                ),
                 decisions = decisions,
                 backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L)
             )

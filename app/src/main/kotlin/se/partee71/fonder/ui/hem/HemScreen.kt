@@ -92,7 +92,12 @@ fun HemContent(
     onOpenBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val error = state.error
+    val portfolio = state.content
     when {
+        // Ett läsfel visas i stället för portföljen, aldrig nollor som ser ut som svar (NFR-6).
+        error != null -> EmptyState(error = error, modifier = modifier)
+
         // Påminnelsen (HEM-12) även här: en portfölj där allt sålts har inga innehav men
         // fortfarande transaktioner att förlora.
         state.isEmpty -> Column(modifier = modifier) {
@@ -113,35 +118,35 @@ fun HemContent(
             // Ordningen enligt Översiktens mockup: värdet, det som väntar på beslut, jämförelsen
             // mot index och påminnelsen om säkerhetskopia; resten av Hems kort under dem.
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
-                item(contentType = "total") { TotalCard(state = state) }
+                item(contentType = "total") { TotalCard(portfolio = portfolio, working = state.totalWorking) }
                 if (state.decisions.count > 0) {
                     item(contentType = "decisions") { DecisionsRow(decisions = state.decisions, onOpen = onOpenBeslut) }
                 }
-                item(contentType = "return-chart") { ReturnChartCard(state = state) }
+                item(contentType = "return-chart") { ReturnChartCard(portfolio = portfolio, working = state.returnChartWorking) }
                 state.backupReminder?.let { reminder ->
                     item(contentType = "backup-reminder") { BackupReminderRow(reminder, onOpenBackup, Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) }
                 }
-                item(contentType = "performance") { PerformanceCard(performance = state.performance, working = state.performanceWorking) }
+                item(contentType = "performance") { PerformanceCard(performance = portfolio.performance, working = state.performanceWorking) }
                 item(contentType = "analysis") {
                     AnalysisSummaryCard(
-                        summary = state.analysisSummary,
+                        summary = portfolio.analysisSummary,
                         working = state.analysisWorking,
                         onFundClick = onFundClick
                     )
                 }
                 item(contentType = "fee") {
                     FeeCard(
-                        summary = state.feeSummary,
+                        summary = portfolio.feeSummary,
                         working = state.feeWorking,
                         onFundClick = onFundClick
                     )
                 }
-                state.riskProfile?.let { riskProfile ->
+                portfolio.riskProfile?.let { riskProfile ->
                     item(contentType = "risk") {
                         RiskCard(
                             riskProfile = riskProfile,
-                            portfolioRisk = state.portfolioRisk,
-                            levelDeviations = state.riskLevelDeviations,
+                            portfolioRisk = portfolio.portfolioRisk,
+                            levelDeviations = portfolio.riskLevelDeviations,
                             working = state.riskWorking
                         )
                     }
@@ -152,23 +157,23 @@ fun HemContent(
 }
 
 @Composable
-private fun TotalCard(state: HemUiState) {
+private fun TotalCard(portfolio: HemPortfolio, working: Boolean) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.portfolj_total_value),
-            working = state.totalWorking
+            working = working
         )
-        val fraction = state.totalGainLossFraction
+        val fraction = portfolio.totalGainLossFraction
         if (fraction != null) {
-            Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+            Text(MoneyFormat.kr(portfolio.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
             Text(
-                "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
+                "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(portfolio.totalGainLoss)}",
                 style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = ReturnColors.forAmount(state.totalGainLoss)
+                color = ReturnColors.forAmount(portfolio.totalGainLoss)
             )
-            ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
+            ValueAsOfRow(navEpochDay = portfolio.navEpochDay, modifier = Modifier.padding(top = 2.dp))
         } else {
-            Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
+            Text(MoneyFormat.kr(portfolio.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
             Text(
                 stringResource(R.string.portfolj_price_missing),
                 style = MaterialTheme.typography.bodySmall,
@@ -244,13 +249,13 @@ private const val UNCLASSIFIED_NOTICE_THRESHOLD = 0.10
  * och en kurva räknad utan något innehav en viss dag (HEM-2:s delvis osäker).
  */
 @Composable
-private fun ReturnChartCard(state: HemUiState) {
+private fun ReturnChartCard(portfolio: HemPortfolio, working: Boolean) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(R.string.hem_return_chart_title),
-            working = state.returnChartWorking
+            working = working
         )
-        if (state.returnSeries.isEmpty) {
+        if (portfolio.returnSeries.isEmpty) {
             Text(
                 stringResource(R.string.hem_return_chart_insufficient),
                 style = MaterialTheme.typography.bodySmall,
@@ -259,10 +264,10 @@ private fun ReturnChartCard(state: HemUiState) {
             )
             return@AppCard
         }
-        val benchmark = state.benchmarkSeries
+        val benchmark = portfolio.benchmarkSeries
         FundLineChart(
-            points = state.returnSeries.points,
-            purchaseEpochDays = state.purchaseEpochDays,
+            points = portfolio.returnSeries.points,
+            purchaseEpochDays = portfolio.purchaseEpochDays,
             primaryLabel = stringResource(R.string.hem_return_chart_series_portfolio),
             comparisonSeries = benchmark?.let { listOf(ChartSeries(it.fundName, it.points)) }.orEmpty(),
             valueAxis = ChartValueAxis.PROCENT,
@@ -298,7 +303,7 @@ private fun ReturnChartCard(state: HemUiState) {
                 modifier = Modifier.padding(top = Spacing.xs)
             )
         }
-        if (state.returnSeries.partial) {
+        if (portfolio.returnSeries.partial) {
             Text(
                 stringResource(R.string.hem_return_chart_partial),
                 style = MaterialTheme.typography.bodySmall,

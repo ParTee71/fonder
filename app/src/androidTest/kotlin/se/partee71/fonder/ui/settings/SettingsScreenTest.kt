@@ -14,8 +14,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.data.auth.AuthUser
-import se.partee71.fonder.data.auth.SignInException
-import se.partee71.fonder.data.repository.BackupFormatException
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.RestoreSummary
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
@@ -264,7 +264,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(
-                        backupMessage = BackupMessage.RestoreFailed(BackupFormatException.Reason.UNSUPPORTED_VERSION)
+                        backupMessage = BackupMessage.Failed(AppErrors.map(DataError.BackupUnsupportedVersion))
                     )
                 )
             }
@@ -403,7 +403,7 @@ class SettingsScreenTest {
         composeRule.setContent {
             FonderTheme {
                 SettingsContent(
-                    state = SettingsUiState(signInError = SignInException.Reason.NO_CREDENTIAL)
+                    state = SettingsUiState(signInError = AppErrors.map(DataError.SignInNoCredential))
                 )
             }
         }

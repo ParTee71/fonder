@@ -11,6 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -20,12 +21,14 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -182,9 +185,9 @@ class FondDetaljViewModelTest {
     private val fakeDismissalRepo = FakeSuggestionDismissalRepository()
     private val scheduler = FakeFundPriceRefreshScheduler()
 
-    private fun viewModel() = FondDetaljViewModel(
+    private fun viewModel(transactionRepo: TransactionRepository = fakeTransactionRepo) = FondDetaljViewModel(
         fund.fundId,
-        fakeTransactionRepo,
+        transactionRepo,
         fakePriceRepo,
         fakeFundMetadataRepo,
         preferencesRepository,
@@ -217,13 +220,29 @@ class FondDetaljViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun `ett lasfel i databasen visas som fel i stallet for en tom fond (NFR-6)`() = runTest(dispatcher) {
+        val failingRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flow { throw DataError.Database }
+        }
+        val vm = viewModel(failingRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.Database, state.error?.cause)
+            assertFalse(state.isEmpty)
+            assertNull(state.content.fundName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `tomt tillstand nar ingen kurshistorik finns`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertTrue(state.isEmpty)
-            assertEquals("Fond A", state.fundName)
+            assertEquals("Fond A", state.content.fundName)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -240,7 +259,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(listOf(200L, 100L), state.prices.map { it.epochDay })
+            assertEquals(listOf(200L, 100L), state.content.prices.map { it.epochDay })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -255,13 +274,13 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals((200L..250L).toList(), state.movingAverage.map { it.first })
+            assertEquals((200L..250L).toList(), state.content.movingAverage.map { it.first })
             // Dag 250: medel av dag 50 … 250 → NAV 150 … 350 = 250.
-            assertEquals(250.0, state.movingAverage.last().second, 1e-9)
+            assertEquals(250.0, state.content.movingAverage.last().second, 1e-9)
 
             history.value = history.value.filter { it.epochDay >= 100 }
-            do state = awaitItem() while (state.prices.size != 151)
-            assertEquals(emptyList<Pair<Long, Double>>(), state.movingAverage)
+            do state = awaitItem() while (state.content.prices.size != 151)
+            assertEquals(emptyList<Pair<Long, Double>>(), state.content.movingAverage)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -280,7 +299,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(listOf(100L, 200L), state.purchaseEpochDays.sorted())
+            assertEquals(listOf(100L, 200L), state.content.purchaseEpochDays.sorted())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -348,7 +367,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals("SE0004297927", state.suggestedIsin)
+            assertEquals("SE0004297927", state.content.suggestedIsin)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -399,7 +418,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(FundAnalysisCalc.SignalLevel.GRON, state.analysis?.status)
+            assertEquals(FundAnalysisCalc.SignalLevel.GRON, state.content.analysis?.status)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -418,10 +437,10 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertNull(state.analysis)
+            assertNull(state.content.analysis)
             // Helt avsåld fond är inget innehav längre — inget första köp/inköpsvärde att visa (POR-6).
-            assertNull(state.firstPurchaseEpochDay)
-            assertNull(state.netInvested)
+            assertNull(state.content.firstPurchaseEpochDay)
+            assertNull(state.content.netInvested)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -439,8 +458,8 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertEquals(today.minusYears(1).toEpochDay(), state.firstPurchaseEpochDay)
-            assertEquals(1000.0, state.netInvested)
+            assertEquals(today.minusYears(1).toEpochDay(), state.content.firstPurchaseEpochDay)
+            assertEquals(1000.0, state.content.netInvested)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -473,7 +492,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertNull("Utan kurser finns ingen analys ännu", state.analysis)
+            assertNull("Utan kurser finns ingen analys ännu", state.content.analysis)
             assertNull(state.feeComparison)
 
             // Kurserna landar (motsvarar att refreshSince fyllt cachen).
@@ -496,7 +515,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertNull(state.analysis)
+            assertNull(state.content.analysis)
             assertNull(state.feeComparison)
             cancelAndIgnoreRemainingEvents()
         }
@@ -512,7 +531,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
-            assertTrue(state.analysis != null)
+            assertTrue(state.content.analysis != null)
             while (state.feeComparison == null) state = awaitItem()
             assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
             cancelAndIgnoreRemainingEvents()

@@ -22,6 +22,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
@@ -140,9 +141,9 @@ class SwitchWatchViewModelTest {
         )
     )
 
-    private fun viewModel(watchId: Long) = SwitchWatchViewModel(
+    private fun viewModel(watchId: Long, watches: SwitchWatchRepository = switchWatchRepo) = SwitchWatchViewModel(
         watchId,
-        switchWatchRepo,
+        watches,
         fakePriceRepo,
         metadataRepo,
         fakeTransactionRepo,
@@ -215,7 +216,7 @@ class SwitchWatchViewModelTest {
         assertEquals(3, stored.targetLevel)
         assertEquals(listOf("SE_A"), stored.candidates.map { it.isin })
         assertEquals(listOf(3 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
-        assertNull(state.emptyReason)
+        assertNull(state.content.emptyReason)
     }
 
     @Test
@@ -232,7 +233,7 @@ class SwitchWatchViewModelTest {
 
         assertEquals(4, switchWatchRepo.watches.value.single().targetLevel)
         assertEquals(listOf(4 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
-        assertEquals(4, state.targetLevel)
+        assertEquals(4, state.content.targetLevel)
     }
 
     @Test
@@ -242,7 +243,7 @@ class SwitchWatchViewModelTest {
 
         val state = settledState(viewModel(watchId))
 
-        assertEquals(SwitchWatchEmptyReason.NO_TARGET_LEVEL, state.emptyReason)
+        assertEquals(SwitchWatchEmptyReason.NO_TARGET_LEVEL, state.content.emptyReason)
         assertNull(switchWatchRepo.watches.value.single().targetLevel)
         assertTrue(metadataRepo.switchCandidateCalls.isEmpty())
     }
@@ -253,8 +254,8 @@ class SwitchWatchViewModelTest {
 
         val state = settledState(viewModel(watchId))
 
-        assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, state.emptyReason)
-        assertEquals(5, state.targetLevel)
+        assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, state.content.emptyReason)
+        assertEquals(5, state.content.targetLevel)
     }
 
     @Test
@@ -266,7 +267,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, expectMostRecentItem().emptyReason)
+            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, expectMostRecentItem().content.emptyReason)
 
             metadataRepo.switchLookupFailed = false
             metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
@@ -274,8 +275,8 @@ class SwitchWatchViewModelTest {
             advanceUntilIdle()
 
             val state = expectMostRecentItem()
-            assertNull(state.emptyReason)
-            assertEquals(listOf("SE_A"), state.rows.map { it.isin })
+            assertNull(state.content.emptyReason)
+            assertEquals(listOf("SE_A"), state.content.rows.map { it.isin })
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(2, metadataRepo.switchCandidateCalls.size)
@@ -298,7 +299,7 @@ class SwitchWatchViewModelTest {
             vm.onRetryAutoFill()
             advanceUntilIdle()
 
-            assertEquals(listOf("SE_A"), expectMostRecentItem().rows.map { it.isin })
+            assertEquals(listOf("SE_A"), expectMostRecentItem().content.rows.map { it.isin })
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(2, metadataRepo.switchCandidateCalls.size)
@@ -316,8 +317,8 @@ class SwitchWatchViewModelTest {
             vm.onAddCandidate(Fund(fundId = "X", name = "Egen fond", isin = "SE_EGEN"))
             advanceUntilIdle()
             val state = expectMostRecentItem()
-            assertEquals(1, state.rows.size)
-            assertNull(state.emptyReason)
+            assertEquals(1, state.content.rows.size)
+            assertNull(state.content.emptyReason)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -342,7 +343,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            row = expectMostRecentItem().rows.single()
+            row = expectMostRecentItem().content.rows.single()
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -372,12 +373,12 @@ class SwitchWatchViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        val row = state!!.rows.single()
+        val row = state!!.content.rows.single()
         assertTrue(row.historyUnavailable)
         assertNull(row.changeFraction)
         // Raden försvinner aldrig — annars hade kandidaten sett ut som om den aldrig lagts till.
         assertEquals("SE_A", row.isin)
-        assertTrue(state!!.candidateSeries.isEmpty())
+        assertTrue(state!!.content.candidateSeries.isEmpty())
     }
 
     @Test
@@ -482,8 +483,27 @@ class SwitchWatchViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        assertTrue(state!!.missing)
+        assertEquals(DataError.NotFound, state!!.error?.cause)
         assertFalse(state!!.loading)
+    }
+
+    @Test
+    fun `ett lasfel i bevakningen visas som fel i stallet for en krasch (NFR-6)`() = runTest(dispatcher) {
+        val failing = object : SwitchWatchRepository by switchWatchRepo {
+            override fun observe(id: Long): Flow<SwitchWatch?> = flow { throw DataError.Database }
+        }
+        val vm = viewModel(watchId = 1, watches = failing)
+        var state: SwitchWatchUiState? = null
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            state = expectMostRecentItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(DataError.Database, state!!.error?.cause)
+        assertTrue(state!!.error!!.retryable)
+        assertFalse(state!!.canChangeSelection)
     }
 
     // --- Målnivå och indexfilter på skärmen (issue #150) ---
@@ -505,8 +525,8 @@ class SwitchWatchViewModelTest {
 
         assertEquals(4, switchWatchRepo.watches.value.single().targetLevel)
         assertEquals(listOf(4 to setOf("SE_SALJ")), metadataRepo.switchCandidateCalls)
-        assertEquals(4, state.targetLevel)
-        assertEquals(3, state.sellLevel)
+        assertEquals(4, state.content.targetLevel)
+        assertEquals(3, state.content.sellLevel)
         // Likviden räknas på målnivån (BYT-3) — en nivå som nyss blev känd ändrar planen.
         assertEquals(1, scheduler.switchPlanScans)
     }
@@ -520,23 +540,23 @@ class SwitchWatchViewModelTest {
 
         val state = settledState(viewModel(watchId))
 
-        assertEquals(5, state.targetLevel)
-        assertEquals(3, state.profileSuggestedLevel)
-        assertEquals(60, state.profileGapPp)
+        assertEquals(5, state.content.targetLevel)
+        assertEquals(3, state.content.profileSuggestedLevel)
+        assertEquals(60, state.content.profileGapPp)
     }
 
     @Test
     fun `utan riskprofil eller for en stangd bevakning finns ingen profilniva`() = runTest(dispatcher) {
         val withoutProfile = settledState(viewModel(startWatch(targetLevel = 5)))
-        assertNull(withoutProfile.profileSuggestedLevel)
-        assertNull(withoutProfile.profileGapPp)
+        assertNull(withoutProfile.content.profileSuggestedLevel)
+        assertNull(withoutProfile.content.profileGapPp)
 
         riskProfile = RiskProfile(targetAllocation = mapOf(3 to 0.6, 5 to 0.4))
         val closedId = startWatch(targetLevel = 5)
         switchWatchRepo.close(closedId, SwitchWatchCloseReason.AVBRUTEN, today)
         val closed = settledState(viewModel(closedId))
-        assertNull(closed.profileSuggestedLevel)
-        assertNull(closed.profileGapPp)
+        assertNull(closed.content.profileSuggestedLevel)
+        assertNull(closed.content.profileGapPp)
     }
 
     @Test
@@ -552,9 +572,9 @@ class SwitchWatchViewModelTest {
             vm.onSelectTargetLevel(3)
             advanceUntilIdle()
             val state = expectMostRecentItem()
-            assertEquals(3, state.targetLevel)
-            assertEquals(5, state.sellLevel)
-            assertNull(state.emptyReason)
+            assertEquals(3, state.content.targetLevel)
+            assertEquals(5, state.content.sellLevel)
+            assertNull(state.content.emptyReason)
 
             // Samma nivå igen: ingen ny sökning, inga förslag byts ut.
             vm.onSelectTargetLevel(3)
@@ -584,15 +604,15 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            assertEquals(listOf("SE_AKTIV"), expectMostRecentItem().rows.map { it.isin })
+            assertEquals(listOf("SE_AKTIV"), expectMostRecentItem().content.rows.map { it.isin })
 
             vm.onIndexOnlyChanged(true)
             advanceUntilIdle()
             val filtered = expectMostRecentItem()
-            assertTrue(filtered.indexOnly)
-            assertTrue(filtered.rows.isEmpty())
-            assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, filtered.emptyReason)
-            assertTrue(filtered.emptyBecauseOfIndexFilter)
+            assertTrue(filtered.content.indexOnly)
+            assertTrue(filtered.content.rows.isEmpty())
+            assertEquals(SwitchWatchEmptyReason.NONE_AVAILABLE, filtered.content.emptyReason)
+            assertTrue(filtered.content.emptyBecauseOfIndexFilter)
 
             // En indexfond på nivån: filtret av och på igen ger just den, en gång per val.
             metadataRepo.switchCandidates += SwitchPlanCalc.Candidate(metadata("SE_INDEX").copy(indexFund = true), 0.1)
@@ -601,8 +621,8 @@ class SwitchWatchViewModelTest {
             vm.onIndexOnlyChanged(true)
             advanceUntilIdle()
             val indexOnly = expectMostRecentItem()
-            assertEquals(listOf("SE_INDEX"), indexOnly.rows.map { it.isin })
-            assertFalse(indexOnly.emptyBecauseOfIndexFilter)
+            assertEquals(listOf("SE_INDEX"), indexOnly.content.rows.map { it.isin })
+            assertFalse(indexOnly.content.emptyBecauseOfIndexFilter)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -626,7 +646,7 @@ class SwitchWatchViewModelTest {
             runCurrent() // sökningen för nivå 3 väntar nu på källan
             vm.onSelectTargetLevel(4)
             advanceUntilIdle()
-            assertEquals(4, expectMostRecentItem().targetLevel)
+            assertEquals(4, expectMostRecentItem().content.targetLevel)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -673,9 +693,9 @@ class SwitchWatchViewModelTest {
             vm.onSelectTargetLevel(3)
             advanceUntilIdle()
             val state = expectMostRecentItem()
-            assertEquals(3, state.targetLevel)
+            assertEquals(3, state.content.targetLevel)
             assertFalse(state.fillingCandidates)
-            assertNull(state.emptyReason)
+            assertNull(state.content.emptyReason)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -742,18 +762,18 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             val failed = expectMostRecentItem()
-            assertNull(failed.profileSuggestedLevel)
-            assertNull(failed.profileGapPp)
-            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, failed.emptyReason)
+            assertNull(failed.content.profileSuggestedLevel)
+            assertNull(failed.content.profileGapPp)
+            assertEquals(SwitchWatchEmptyReason.LOOKUP_FAILED, failed.content.emptyReason)
             assertNull(switchWatchRepo.watches.value.single().targetLevel)
 
             offline = false
             vm.onRetryAutoFill()
             advanceUntilIdle()
             val retried = expectMostRecentItem()
-            assertEquals(3, retried.profileSuggestedLevel)
-            assertEquals(3, retried.targetLevel)
-            assertEquals(listOf("SE_B"), retried.rows.map { it.isin })
+            assertEquals(3, retried.content.profileSuggestedLevel)
+            assertEquals(3, retried.content.targetLevel)
+            assertEquals(listOf("SE_B"), retried.content.rows.map { it.isin })
             cancelAndIgnoreRemainingEvents()
         }
         assertTrue(metadataRepo.switchCandidateCalls.map { it.first } == listOf(3))
@@ -861,7 +881,7 @@ class SwitchWatchViewModelTest {
         val state = settledState(vm)
 
         assertEquals(1, loads.size)
-        assertEquals(3, state.profileSuggestedLevel)
+        assertEquals(3, state.content.profileSuggestedLevel)
         assertEquals(3, switchWatchRepo.watches.value.single().targetLevel)
     }
 

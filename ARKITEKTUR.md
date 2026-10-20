@@ -57,8 +57,8 @@ Paket under `app/src/main/kotlin/se/partee71/fonder/`:
 ```
 data/
 ├── auth/         AuthRepository + FirebaseAuthRepository (Google-inloggning via Credential Manager, TP-6/#106)
-├── common/       DataError + DataError.of (Room/SQLite, källorna, importerna) · AppErrors (android-ui:s ErrorMapper,
-│                 den enda felmappningen, NFR-6/#173)
+├── common/       DataError + DataError.of (Room/SQLite, källorna, importerna, inloggningen, backupen, Drive) ·
+│                 AppErrors (android-ui:s ErrorMapper, den enda felmappningen, NFR-6/#173) · suspendRunCatching
 ├── datastore/    PreferencesRepository (tema, riskprofil #68 m.m.)
 ├── network/      HandelsbankenFondlistaClient + HandelsbankenHtmlParser (kurskälla, #2/#3) ·
 │                 AvanzaClient + AvanzaJsonParser + AvanzaPriceSource (ISIN-baserad historik, #7-uppföljning) ·
@@ -130,7 +130,8 @@ ui/
 ├── bytesfonster/ SwitchWatchScreen + ViewModel (pågående byte: jämförelse av bevakade alternativ mellan
 │                 sälj och köp, ANA-12/ANA-13, #114)
 ├── common/       DataErrorMessage (DataError.toMessage(), felens svenska texter) · ListStates (ListUiState-hjälpare:
-│                 itemsOrEmpty, errorOrNull, catchAsListError – NFR-6/#173)
+│                 itemsOrEmpty, errorOrNull, catchAsListError – NFR-6/#173) · DetailStates (DetailUiState-
+│                 hjälpare: valueOrNull, errorOrNull, catchAsDetailError)
 ├── navigation/   AppNavigation (Navigation 3: NavDisplay, en dekorerad stack per flik) · AppBackStack (stack per
 │                 flik, sparas över rotation och processdöd) · AppKeys (@Serializable NavKey per skärm) · Screen ·
 │                 Transitions · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
@@ -156,7 +157,7 @@ använder `FakeFundPriceRefreshScheduler`.
 
 ```
 Compose → ViewModel (StateFlow<UiState>) → Repository → Room / DataStore
-                ↑ ListUiState, UiError (android-ui:s ui-common) ← AppErrors ← DataError (data/common)
+                ↑ ListUiState, DetailUiState, EditorState, UiError (android-ui:s ui-common) ← AppErrors ← DataError (data/common)
 ```
 
 **Tillstånd och fel (NFR-6, #173):** listskärmarnas tillstånd (Händelser, Beslut, Facit, Fondsök,
@@ -167,10 +168,21 @@ finns på ett ställe: `DataError.of` översätter Room/SQLite till `Database`, 
 till `Network` och resten till `Unknown`; importerna sätter sina egna (`ImportUnreadable`,
 `ImportEmpty`, `ImportNoTransactions`). `AppErrors` gör ett `UiError` av det med texten ur
 `DataError.toMessage()`, och skärmen visar det med `EmptyState(error)`. Fondsök sätter
-`DataError.Network` när katalogen inte kom (källan svarar `null`) med sin egen text. Inloggningens
-och backupens fel (`SignInException.Reason`, `BackupFormatException.Reason`, `DriveResult`) och
-Översikt, Fonddetalj, Pågående byte och formulären är inte flyttade än – `DetailUiState` och
-`EditorState`/`EditorLoader` från `ui-common` är målet för dem.
+`DataError.Network` när katalogen inte kom (källan svarar `null`) med sin egen text.
+
+Detaljskärmarna (Översikt, Fonddetalj, Pågående byte) har det lästa som ett `DetailUiState<T>`-fält
+(`HemPortfolio`, `FundDetail`, `SwitchWatchDetail`) bredvid körstatus, förslag och engångshändelser;
+`catchAsDetailError` sist i flödet gör ett fel i källan till `DetailUiState.Error`, och skärmen visar
+`EmptyState(error)` före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
+`content` är ett standardvärde bara för de grenar som aldrig nås vid fel. En bevakning som inte finns
+blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen går via `EditorState` +
+`EditorLoader` (läsfel, sparfel; `saveUnchanged`, eftersom Spara aldrig krävt en ändring där, SET-3). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,
+`BackupFormatException.Reason`, `DriveResult`) översätts med `DataError.of` till egna `DataError` med
+oförändrade texter, och Inställningar visar `UiError.message`. `suspendRunCatching` gör ett `Result`
+av en suspend-åtgärd utan att svälja avbrott. Transaktionsformuläret och Inställningar använder inte
+`EditorState`: formuläret har inget sparat värde att läsa och ett tredje utfall (sparat men kopplingen
+misslyckades), och Inställningar sparar varje reglage direkt utan utkast eller Spara. `shownAfter`
+används inte – den skulle fördröja dagens laddningsindikatorer.
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —

@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import se.partee71.fonder.R
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.components.AppButton
@@ -69,8 +70,9 @@ fun SwitchWatchScreen(
     // En stängd bevakning har ingen egen skärm att fylla — kvitteringen är avslutet, och att
     // ligga kvar på en död vy hade sett ut som att något mer skulle hända.
     val close by rememberUpdatedState(onClosed)
-    LaunchedEffect(state.closed) {
-        if (state.closed) close()
+    val closed = state.content.closed
+    LaunchedEffect(closed) {
+        if (closed) close()
     }
 
     SwitchWatchContent(
@@ -103,14 +105,21 @@ fun SwitchWatchContent(
     onIndexOnlyChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    if (state.missing) {
-        EmptyState(
-            title = stringResource(R.string.switch_watch_missing_title),
-            body = stringResource(R.string.switch_watch_missing_body),
-            modifier = modifier
-        )
+    state.error?.let { error ->
+        // Bevakningen finns inte (raderad, eller en gammal länk) — skärmen säger det i stället för
+        // att visa tomt; ett läsfel visas som fel (NFR-6).
+        if (error.cause == DataError.NotFound) {
+            EmptyState(
+                title = stringResource(R.string.switch_watch_missing_title),
+                body = stringResource(R.string.switch_watch_missing_body),
+                modifier = modifier
+            )
+        } else {
+            EmptyState(error = error, modifier = modifier)
+        }
         return
     }
+    val content = state.content
 
     // Dra ned hämtar om kandidaternas kurvor och säljfondens historik (UI-11). Kandidaterna
     // ligger inte i kurscachen (ANA-11), så det är den enda vägen till färskare tal än de som
@@ -135,7 +144,7 @@ fun SwitchWatchContent(
             }
             item(contentType = "chart") { ComparisonChart(state) }
 
-            if (state.rows.isEmpty()) {
+            if (content.rows.isEmpty()) {
                 item(contentType = "empty") {
                     // Ingen `EmptyState` här: den fyller skärmen och hade tryckt bort kortet med
                     // säljfond, belopp och dag — den informationen gäller även utan alternativ.
@@ -149,17 +158,17 @@ fun SwitchWatchContent(
 
                             // Med filtret är "inga köpbara indexfonder" ett annat besked än inga
                             // köpbara fonder alls — och det säger vad som går att ändra (issue #150).
-                            state.emptyBecauseOfIndexFilter && state.targetLevel != null ->
-                                stringResource(R.string.format_switch_watch_empty_index_body, state.targetLevel)
+                            content.emptyBecauseOfIndexFilter && content.targetLevel != null ->
+                                stringResource(R.string.format_switch_watch_empty_index_body, content.targetLevel)
 
                             // Tre orsaker som förr delade samma text (issue #149) — var och en
                             // säger vad användaren kan göra åt den.
-                            else -> when (state.emptyReason) {
+                            else -> when (content.emptyReason) {
                                 SwitchWatchEmptyReason.NO_TARGET_LEVEL ->
-                                    stringResource(R.string.format_switch_watch_empty_no_level, state.sellFundName)
+                                    stringResource(R.string.format_switch_watch_empty_no_level, content.sellFundName)
 
                                 SwitchWatchEmptyReason.NONE_AVAILABLE ->
-                                    state.targetLevel
+                                    content.targetLevel
                                         ?.let { stringResource(R.string.format_switch_watch_empty_none_available, it) }
                                         ?: stringResource(R.string.switch_watch_empty_body)
 
@@ -172,9 +181,9 @@ fun SwitchWatchContent(
                         // ännu" är ett färdigt svar, inte ett som är på väg.
                         WorkingIndicator(working = state.fillingCandidates, contentDescription = text)
                         Column {
-                            if (!state.fillingCandidates && state.emptyBecauseOfIndexFilter && state.targetLevel != null) {
+                            if (!state.fillingCandidates && content.emptyBecauseOfIndexFilter && content.targetLevel != null) {
                                 Text(
-                                    stringResource(R.string.format_switch_watch_empty_index_title, state.targetLevel),
+                                    stringResource(R.string.format_switch_watch_empty_index_title, content.targetLevel),
                                     style = MaterialTheme.typography.titleSmall
                                 )
                             }
@@ -188,7 +197,7 @@ fun SwitchWatchContent(
                 }
                 // Bara när kontrollen misslyckades: "inga köpbara" och "okänd nivå" blir inte
                 // annorlunda av ett nytt försök, ett misslyckat uppslag kan bli det.
-                if (state.emptyReason == SwitchWatchEmptyReason.LOOKUP_FAILED) {
+                if (content.emptyReason == SwitchWatchEmptyReason.LOOKUP_FAILED) {
                     item(contentType = "retry") {
                         AppButton(
                             text = stringResource(R.string.switch_watch_retry),
@@ -201,16 +210,16 @@ fun SwitchWatchContent(
             }
 
             // Rubriken över alternativen: vad talen mäter och vilken nivå (och filter) förslagen gäller.
-            if (state.rows.isNotEmpty() && state.targetLevel != null) {
+            if (content.rows.isNotEmpty() && content.targetLevel != null) {
                 item(contentType = "heading") {
                     Text(
                         stringResource(
-                            if (state.indexOnly) {
+                            if (content.indexOnly) {
                                 R.string.format_switch_watch_alternatives_heading_index
                             } else {
                                 R.string.format_switch_watch_alternatives_heading
                             },
-                            state.targetLevel
+                            content.targetLevel
                         ),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s, bottom = Spacing.xs)
@@ -218,10 +227,10 @@ fun SwitchWatchContent(
                 }
             }
 
-            items(state.rows, key = { it.candidateId }, contentType = { "candidate" }) { row ->
+            items(content.rows, key = { it.candidateId }, contentType = { "candidate" }) { row ->
                 CandidateCard(
                     row = row,
-                    closed = state.closed,
+                    closed = content.closed,
                     onBought = onBought,
                     onRemoveCandidate = onRemoveCandidate
                 )
@@ -253,7 +262,7 @@ fun SwitchWatchContent(
                         val messageShown by rememberUpdatedState(onMessageShown)
                         LaunchedEffect(message) { messageShown() }
                     }
-                    if (!state.closed) {
+                    if (!content.closed) {
                         AppButton(
                             text = stringResource(R.string.switch_watch_cancel),
                             onClick = onCancel,
@@ -283,17 +292,18 @@ fun SwitchWatchContent(
 /** Vad som såldes, för hur mycket och hur länge sedan — sammanhanget varje rad under läses i. */
 @Composable
 private fun HeaderCard(state: SwitchWatchUiState) {
+    val content = state.content
     AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(
             title = stringResource(
                 R.string.format_switch_watch_sold,
-                state.sellFundName,
-                LocalDate.ofEpochDay(state.soldAtEpochDay).format(dateFormatter)
+                content.sellFundName,
+                LocalDate.ofEpochDay(content.soldAtEpochDay).format(dateFormatter)
             ),
             working = state.headerWorking,
             style = MaterialTheme.typography.titleSmall
         )
-        state.proceedsKr?.let { amount ->
+        content.proceedsKr?.let { amount ->
             Text(
                 stringResource(R.string.format_switch_watch_amount, MoneyFormat.kr(amount)),
                 style = MaterialTheme.typography.bodySmall,
@@ -301,19 +311,19 @@ private fun HeaderCard(state: SwitchWatchUiState) {
             )
         }
         val status = when {
-            state.closed && state.boughtFundName != null ->
-                stringResource(R.string.format_switch_watch_bought, state.boughtFundName)
+            content.closed && content.boughtFundName != null ->
+                stringResource(R.string.format_switch_watch_bought, content.boughtFundName)
 
-            state.closed -> stringResource(R.string.switch_watch_closed)
+            content.closed -> stringResource(R.string.switch_watch_closed)
 
-            state.expired -> stringResource(R.string.format_switch_watch_expired, state.ttlDays)
+            content.expired -> stringResource(R.string.format_switch_watch_expired, content.ttlDays)
 
-            else -> stringResource(R.string.format_switch_watch_day, state.daysWaiting, state.ttlDays)
+            else -> stringResource(R.string.format_switch_watch_day, content.daysWaiting, content.ttlDays)
         }
         Text(
             status,
             style = MaterialTheme.typography.bodySmall,
-            color = if (state.expired && !state.closed) {
+            color = if (content.expired && !content.closed) {
                 MaterialTheme.colorScheme.error
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -335,12 +345,13 @@ private fun TargetLevelCard(
     onSelectTargetLevel: (Int) -> Unit,
     onIndexOnlyChanged: (Boolean) -> Unit
 ) {
+    val content = state.content
     AppCard(modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
         Text(stringResource(R.string.switch_watch_level_title), style = MaterialTheme.typography.titleSmall)
         RiskLevelPicker(
-            selected = state.targetLevel,
+            selected = content.targetLevel,
             onSelect = onSelectTargetLevel,
-            marked = state.sellLevel,
+            marked = content.sellLevel,
             markedDescription = stringResource(R.string.switch_watch_level_marked),
             modifier = Modifier.padding(top = Spacing.m)
         )
@@ -351,7 +362,7 @@ private fun TargetLevelCard(
             modifier = Modifier.padding(top = Spacing.s)
         )
         SwitchRow(
-            checked = state.indexOnly,
+            checked = content.indexOnly,
             onCheckedChange = onIndexOnlyChanged,
             label = stringResource(R.string.switch_watch_index_only),
             modifier = Modifier.padding(top = Spacing.xs)
@@ -368,10 +379,11 @@ private fun TargetLevelCard(
  */
 @Composable
 private fun levelHint(state: SwitchWatchUiState): String {
-    val target = state.targetLevel ?: return stringResource(R.string.switch_watch_level_hint_none)
-    val sell = state.sellLevel
-    val profileLevel = state.profileSuggestedLevel
-    val gap = state.profileGapPp
+    val content = state.content
+    val target = content.targetLevel ?: return stringResource(R.string.switch_watch_level_hint_none)
+    val sell = content.sellLevel
+    val profileLevel = content.profileSuggestedLevel
+    val gap = content.profileGapPp
     return when {
         profileLevel != null && gap != null && profileLevel == target -> {
             val reason = stringResource(R.string.format_switch_watch_level_hint_profile, target, gap)
@@ -399,7 +411,8 @@ private fun levelHint(state: SwitchWatchUiState): String {
  */
 @Composable
 private fun ComparisonChart(state: SwitchWatchUiState) {
-    if (!state.hasChart) {
+    val content = state.content
+    if (!content.hasChart) {
         Text(
             stringResource(R.string.switch_watch_chart_unavailable),
             style = MaterialTheme.typography.bodySmall,
@@ -409,9 +422,9 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
         return
     }
     FundLineChart(
-        points = state.sellSeries,
-        primaryLabel = state.sellFundName,
-        comparisonSeries = state.candidateSeries.map { (label, points) -> ChartSeries(label = label, points = points) },
+        points = content.sellSeries,
+        primaryLabel = content.sellFundName,
+        comparisonSeries = content.candidateSeries.map { (label, points) -> ChartSeries(label = label, points = points) },
         working = state.chartWorking,
         modifier = Modifier.padding(horizontal = Spacing.l)
     )

@@ -28,9 +28,9 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   fondlista, Riksbankens SWEA (TP-20, TP-21). Vad som får skickas: skill `data-privacy-security`.
 - Fel mappas en gång i datalagret: `DataError` (Room, källorna, importerna) med `DataError.of` och
   `AppErrors` (android-ui:s `ErrorMapper`) i `data/common/`, texten i `ui/common/DataErrorMessage.kt`
-  (NFR-6, skill `shared-ui-components`). Inloggningen och backupen har kvar sina egna typer –
-  `Result<T>` med `SignInException.Reason`, `BackupFormatException.Reason` och `DriveResult` – som
-  Inställningar översätter till en svensk sträng.
+  (NFR-6, skill `shared-ui-components`). Inloggningen och backupen behåller sina `Result<T>` med
+  `SignInException.Reason`, `BackupFormatException.Reason` och `DriveResult`, men `DataError.of` översätter dem
+  och Inställningar visar `UiError.message`.
 - Backup: manuell, aldrig automatisk (HEM-12) – `BackupRepository` (fil via SAF, `BackupPayload`
   + `BackupSerializer`) och `DriveBackupRepository` (Drive `appDataFolder`), komponerade av
   anroparen; `BackupStatusRepository` driver påminnelsen på Översikt. Ingen backup-worker

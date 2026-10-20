@@ -11,7 +11,6 @@ app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration78Test.kt | app
 app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration89Test.kt | app/src/androidTest/kotlin/se/partee71/fonder/data/room/Migration910Test.kt
 app/src/androidTest/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreenTest.kt
 app/src/androidTest/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreenTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fond/FondDetaljViewModelTest.kt
-app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt | app/src/main/kotlin/se/partee71/fonder/ui/portfolj/PortfoljScreen.kt
 app/src/main/kotlin/se/partee71/fonder/ui/hem/HemViewModel.kt | app/src/main/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModel.kt
 app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt | app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportOrdersScreen.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/FakeFundMetadataRepository.kt | app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt

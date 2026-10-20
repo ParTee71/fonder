@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.auth.AuthRepository
 import se.partee71.fonder.data.auth.AuthUser
 import se.partee71.fonder.data.auth.SignInException
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.repository.BackupFormatException
@@ -37,6 +39,7 @@ import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
+import se.partee71.ui.common.UiError
 
 /**
  * Utfallet av en export eller återställning (SET-6) — en **händelse** som kvitteras bort, aldrig
@@ -44,11 +47,7 @@ import se.partee71.fonder.worker.FundPriceRefreshScheduler
  */
 sealed interface BackupMessage {
     data object Exported : BackupMessage
-    data object ExportFailed : BackupMessage
     data class Restored(val summary: RestoreSummary) : BackupMessage
-
-    /** [reason] skiljer "filen är från en nyare app" från "filen är trasig" — olika åtgärd för användaren. */
-    data class RestoreFailed(val reason: BackupFormatException.Reason) : BackupMessage
 
     /** Molnbackupen lyckades (SET-7). */
     data object DriveSaved : BackupMessage
@@ -56,15 +55,20 @@ sealed interface BackupMessage {
     /** Ingen kopia fanns i Drive att återställa från. */
     data object DriveEmpty : BackupMessage
 
-    /** Drive svarade fel, eller ingen är inloggad. [signedOut] skiljer de två — olika åtgärd. */
-    data class DriveFailed(val signedOut: Boolean) : BackupMessage
+    /**
+     * Exporten, återställningen eller Drive misslyckades — orsaken (`DataError.BackupExportFailed`,
+     * `BackupUnsupportedVersion`/`BackupUnreadable` för "nyare app" respektive "trasig fil",
+     * `DriveSignedOut`/`DriveFailed`) och texten kommer ur den enda felmappningen (NFR-6), så
+     * olika åtgärder för användaren får olika besked.
+     */
+    data class Failed(val error: UiError) : BackupMessage
 }
 
 /** Kontodelen av tillståndet (TP-6) — se [SettingsViewModel.uiState] för varför den combine:as in separat. */
 private data class AccountState(
     val user: AuthUser? = null,
     val signInInProgress: Boolean = false,
-    val signInError: SignInException.Reason? = null
+    val signInError: UiError? = null
 )
 
 @Immutable
@@ -95,10 +99,11 @@ data class SettingsUiState(
     /** Sant medan kontoväljaren är uppe — knappen släcks, samma princip som [backupInProgress]. */
     val signInInProgress: Boolean = false,
     /**
-     * Varför senaste inloggningsförsök misslyckades, null när inget fel finns att visa.
-     * `CANCELLED` hamnar aldrig här: att stänga kontoväljaren är ett val, inte ett fel.
+     * Varför senaste inloggningsförsök misslyckades (`DataError.SignInNoCredential`/`SignInFailed`
+     * via den enda felmappningen, NFR-6), null när inget fel finns att visa. Ett avbrutet kontoval
+     * hamnar aldrig här: att stänga kontoväljaren är ett val, inte ett fel.
      */
-    val signInError: SignInException.Reason? = null,
+    val signInError: UiError? = null,
     /** Senaste lyckade säkerhetskopia eller återställning, till Drive eller fil — null om ingen gjorts (SET-7, HEM-12). */
     val lastBackup: BackupRecord? = null,
     /** Sant när Drive-scopet saknas — kortet erbjuder då knappen som löser det (SET-7). */
@@ -149,7 +154,7 @@ class SettingsViewModel @Inject constructor(
     private var backupJob: Job? = null
     private val benchmarkPickFailed = MutableStateFlow(false)
     private val signInInProgress = MutableStateFlow(false)
-    private val signInError = MutableStateFlow<SignInException.Reason?>(null)
+    private val signInError = MutableStateFlow<UiError?>(null)
     private var signInJob: Job? = null
 
     /** Egen gren av samma skäl som [benchmarkState]: `combine` tar högst fem flöden. */
@@ -311,7 +316,7 @@ class SettingsViewModel @Inject constructor(
             backupProgress.update {
                 it.copy(
                     inProgress = false,
-                    message = if (result.isSuccess) BackupMessage.Exported else BackupMessage.ExportFailed
+                    message = if (result.isSuccess) BackupMessage.Exported else exportFailed()
                 )
             }
         }
@@ -331,7 +336,7 @@ class SettingsViewModel @Inject constructor(
             backupProgress.update { it.copy(inProgress = true, message = null) }
             val json = runCatching { read() }.getOrNull()
             val message = if (json == null) {
-                BackupMessage.RestoreFailed(BackupFormatException.Reason.UNREADABLE)
+                BackupMessage.Failed(AppErrors.map(DataError.BackupUnreadable))
             } else {
                 restoreMessage(json, BackupTarget.FILE)
             }
@@ -350,9 +355,9 @@ class SettingsViewModel @Inject constructor(
             BackupMessage.Restored(it)
         },
         onFailure = { error ->
-            val reason = (error as? BackupFormatException)?.reason
-                ?: BackupFormatException.Reason.UNREADABLE
-            BackupMessage.RestoreFailed(reason)
+            // Bara formatfelen skiljer "nyare app" från "trasig fil"; allt annat är en fil som
+            // inte gick att läsa.
+            BackupMessage.Failed(AppErrors.map(if (error is BackupFormatException) error else DataError.BackupUnreadable))
         }
     )
 
@@ -390,8 +395,8 @@ class SettingsViewModel @Inject constructor(
             val result = authRepository.signInWithGoogle(activityContext)
             signInInProgress.value = false
             result.onFailure { error ->
-                val reason = (error as? SignInException)?.reason ?: SignInException.Reason.FAILED
-                signInError.value = reason.takeIf { it != SignInException.Reason.CANCELLED }
+                val cancelled = (error as? SignInException)?.reason == SignInException.Reason.CANCELLED
+                signInError.value = if (cancelled) null else AppErrors.map(error as? SignInException ?: DataError.SignInFailed)
             }
         }
     }
@@ -421,7 +426,7 @@ class SettingsViewModel @Inject constructor(
                     if (upload is DriveResult.Success) recordBackup(json, BackupTarget.DRIVE)
                     driveMessage(upload, onNeedsAuthorization)
                 },
-                onFailure = { BackupMessage.ExportFailed }
+                onFailure = { exportFailed() }
             )
             backupProgress.update { it.copy(inProgress = false, message = message) }
         }
@@ -458,9 +463,8 @@ class SettingsViewModel @Inject constructor(
 
         DriveResult.NoBackupFound -> BackupMessage.DriveEmpty
 
-        DriveResult.NoAccount -> BackupMessage.DriveFailed(signedOut = true)
-
-        is DriveResult.Error -> BackupMessage.DriveFailed(signedOut = false)
+        // Ingen inloggad och ett fel från Drive är olika åtgärder — orsaken skiljer dem (NFR-6).
+        DriveResult.NoAccount, is DriveResult.Error -> BackupMessage.Failed(AppErrors.map(DataError.of(result) ?: DataError.DriveFailed))
 
         is DriveResult.NeedsAuthorization -> {
             preferences.setDriveBackupNeedsAuth(true)
@@ -478,6 +482,9 @@ class SettingsViewModel @Inject constructor(
     fun onDriveAuthorizationResolved() {
         viewModelScope.launch { preferences.setDriveBackupNeedsAuth(false) }
     }
+
+    /** Exporten gick inte att skapa eller skriva — samma besked oavsett orsak (SET-6). */
+    private fun exportFailed(): BackupMessage = BackupMessage.Failed(AppErrors.map(DataError.BackupExportFailed))
 
     /** Kvitterar inloggningsfelet — en händelse, inte ett tillstånd (samma princip som [onBackupMessageDismissed]). */
     fun onSignInErrorDismissed() {
