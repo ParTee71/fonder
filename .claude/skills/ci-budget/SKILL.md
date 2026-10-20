@@ -3,7 +3,11 @@ name: ci-budget
 description: 'Fonders CI-regel (regel 5) — en PR ska kosta ca 8 Actions-minuter, plus instrumenttesterna bara när PR:en rör koden de testar; release-bygge (R8) och lint körs veckovis, på begäran och vid release. Enda källan för tabellen över vad som körs när. Ladda denna ALLTID när du rör .github/workflows, Gradle-inställningar, nya beroenden eller plugins, testnivåer eller när CI är långsam. Trigger-ord: CI, GitHub Actions, workflow, android.yml, quality.yml, pipeline, byggtid, Actions-minuter, cache, paths-filter, concurrency, emulator, instrumenttester, lint, release-bygge, R8, assembleRelease, nytt beroende, långsam, budget.'
 ---
 
-# CI-budget
+# CI-budget i Fonder
+
+**Det generella står i skill `android:ci-budget`** (pluginen): formen på `android.yml`
+(`changes`, `ci-ok`), teknikerna som håller tiden nere och anti-mönstren. Här står Fonders
+tabell, mätta siffror, kända problem och felklasser.
 
 **Regel:** en PR ska kosta ca **8 Actions-minuter** på varm cache, plus instrumenttesterna på
 emulator **bara** när PR:en rör koden de testar. Release-bygge (R8) och lint hör inte till
@@ -78,16 +82,6 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 8. ~~`release.yml` kör varken lint eller instrumenttester~~ *(löst: grinden `gate`, `instrumented.yml` och `lintDebug` i `release`, Mats beslut 2026-10-18)*.
 9. Inget kontrollskript håller tabellen ovan i synk med workflowfilerna.
 
-## Tekniker som håller tiden nere
-
-- `gradle/actions/setup-gradle`: cachen skrivs från `master`, läses i PR.
-- `org.gradle.caching=true` och en Gradle-körning per jobb (`--continue`).
-- `concurrency` per ref, `cancel-in-progress` bara för PR.
-- Ett snabbt `changes`-jobb (`dorny/paths-filter`) avgör vilka jobb som körs; `ci-ok`
-  (`if: always()`) är det enda obligatoriska statuskravet, eftersom hoppade jobb inte är ett
-  pålitligt statuskrav.
-- Varje jobb debiteras uppåt till hel minut – slå ihop korta steg hellre än att lägga till jobb.
-
 ## När du lägger till något
 
 - **Nytt beroende eller plugin:** ange uppmätt byggtidseffekt i PR-beskrivningen. Ny R8-känslig
@@ -103,14 +97,19 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
   diffbilderna bara vid fel). `testDebugUnitTest` behöver inte stå med i anropet – det är redan
   med; ett separat anrop utan verifiering skulle däremot köra testerna en gång till. Referenserna spelas in lokalt (skill `testing-strategy`) och
   checkas in; en inspelningsworkflow behövs inte så länge sessionen har Android SDK.
-- **Över budget:** eget issue med mätning och förslag – aldrig en tyst höjning av timeouten.
-- **Lokalt före push** (skill `testing-strategy`): kör de tasks ändringen berör. Lokala körningar
-  kostar inga Actions-minuter; en röd CI-runda gör det.
 
-## Anti-mönster
+## Felklasser (agenten android:ci-doktor)
 
-- `paths-ignore` på workflow-nivå (dokumentkontroller skulle aldrig köras).
-- Göra ett villkorat jobb till obligatoriskt statuskrav (ett hoppat jobb blockerar PR:en).
-- Starta emulatorn "bara den här gången" i en PR som inte rör instrumenttesternas kod.
-- Kopiera setup-steg mellan workflows i stället för en composite action.
-- Höja `timeout-minutes` i stället för att hitta orsaken.
+Workflowen: `android.yml` (`changes`, `build-and-test`, `instrumented-tests` → `instrumented.yml`,
+`ci-ok`), `quality.yml` (`quality`: lint och R8), `release.yml` (`gate`: master och `ci-ok` på
+commiten; `instrumented`; `release`: R8 och lint) och `release-debug.yml`. Ett rött `gate` är
+oftast att CI på master inte var klart eller grönt. Utöver pluginens generella felsorter:
+
+| Fel | Vad du tar reda på |
+|---|---|
+| Roborazzi | referensbilderna i `app/src/test/screenshots/`, diffarna i artifacten `screenshot-diffs` |
+| `cpdCheck` | CPD-rapporten i `test-results`; ingen ny rad i `config/cpd-baseline.txt` |
+| Migreringstest | vilken `MigrationXYTest`, vilken kolumn eller vilket värde som inte överlevde; schemat i `AppDatabase` mot migreringen |
+| Rundtur (`BackupRoundTripTest`) | vilket fält som tappas i `BackupPayload`/`BackupSerializer` |
+| Signeringsgrind | vilken nyckelfil som hamnat i repot |
+| Release/snapshot | `versionName`, tagg, signering eller publiceringssteget |
