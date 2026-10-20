@@ -19,6 +19,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -139,6 +141,26 @@ class TransactionFormScreenTest {
                 "Gå tillbaka; säljet finns i Händelser utan koppling."
         ).assertIsDisplayed()
         composeRule.onNodeWithText("Spara säljet").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `ett sparfel sags under Spara och inmatningen star kvar`() {
+        val state = buyRequired.copy(switchField = buyRequired.switchField!!.copy(selected = watch), failure = AppErrors.map(DataError.Unknown))
+        composeRule.setContent { FonderTheme { TransactionFormContent(state = state) } }
+
+        composeRule.onNodeWithText("Något gick fel. Försök igen.").assertIsDisplayed()
+        composeRule.onNodeWithText("102,5641").assertIsDisplayed()
+        composeRule.onNodeWithText("179,40").assertIsDisplayed()
+        composeRule.onNode(hasText("Fond") and hasText("Avanza Global")).assertIsDisplayed()
+        composeRule.onNodeWithText("Spara").assertIsEnabled()
+    }
+
+    @Test
+    fun `Spara ar slackt medan transaktionen sparas`() {
+        val state = buyRequired.copy(switchField = buyRequired.switchField!!.copy(selected = watch), saving = true)
+        composeRule.setContent { FonderTheme { TransactionFormContent(state = state) } }
+
+        composeRule.onNodeWithText("Spara").assertIsNotEnabled()
     }
 
     @Test

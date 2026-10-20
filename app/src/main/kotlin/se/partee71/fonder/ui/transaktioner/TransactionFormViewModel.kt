@@ -21,7 +21,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.data.common.suspendRunCatching
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -38,6 +42,7 @@ import se.partee71.fonder.domain.usecase.SwitchQuestions
 import se.partee71.fonder.domain.usecase.TransactionFormValidator
 import se.partee71.fonder.domain.usecase.TransactionPrefill
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.common.UiError
 
 /**
  * Inledningen i säljformuläret från Följ (BYT-2): vilket förslag säljet registreras för.
@@ -61,6 +66,10 @@ data class TransactionFormUiState(
      * [TransactionFormViewModel.onSavedHandled], så att navigeringen sker exakt en gång (även vid rotation).
      */
     val saved: Boolean = false,
+    /** Transaktionen sparas just nu — Spara är släckt, så ett dubbeltryck inte sparar två gånger. */
+    val saving: Boolean = false,
+    /** Sparningen misslyckades — sägs under Spara, och formuläret står kvar med inmatningen (NFR-6). */
+    val failure: UiError? = null,
     /**
      * Transaktionen sparades, men bevakningen som skulle kopplas ([SwitchDecision.LinksWatch]) hann
      * kopplas eller stängas av något annat — det sägs rakt ut, och Spara är släckt: säljet finns.
@@ -83,7 +92,7 @@ data class TransactionFormUiState(
     val switchField: SwitchFieldUi? = null
 ) {
     /** Spara kräver giltiga fält **och** ett svar på bytesfrågan (BYT-2: släckt tills en fråga utan förval besvarats). */
-    val canSave: Boolean get() = valid && switchField != null && !switchField.unanswered && !linkFailed
+    val canSave: Boolean get() = valid && switchField != null && !switchField.unanswered && !linkFailed && !saving
 
     /** Spara är släckt bara för att bytesfrågan saknar svar — skärmen säger det. */
     val blockedBySwitch: Boolean get() = valid && switchField?.unanswered == true
@@ -97,6 +106,9 @@ private data class FormFields(
     val priceText: String,
     val feeText: String
 )
+
+/** Sparningens läge: klar, pågår eller misslyckad. */
+private data class SaveState(val saved: Boolean = false, val saving: Boolean = false, val failure: UiError? = null)
 
 /** Det förifyllda lägets flaggor ur nyckeln — låst och laddande från start, löses av uppslaget. */
 private data class PrefillState(
@@ -137,7 +149,7 @@ class TransactionFormViewModel @AssistedInject constructor(
     private val sharesText = MutableStateFlow("")
     private val priceText = MutableStateFlow("")
     private val feeText = MutableStateFlow("")
-    private val saved = MutableStateFlow(false)
+    private val saveState = MutableStateFlow(SaveState())
     private val linkFailed = MutableStateFlow(false)
 
     // Låst från start när nyckeln pekar ut en fond: annars hann ett val i fondväljaren göras
@@ -178,7 +190,7 @@ class TransactionFormViewModel @AssistedInject constructor(
     )
 
     val uiState: StateFlow<TransactionFormUiState> =
-        combine(shownFunds, formFields, saved, prefill, switchState) { funds, fields, saved, prefill, (inputs, chosen, lookedUp, linkFailed) ->
+        combine(shownFunds, formFields, saveState, prefill, switchState) { funds, fields, save, prefill, (inputs, chosen, lookedUp, linkFailed) ->
             val shares = SwedishNumberFormat.parse(fields.sharesText)
             val price = SwedishNumberFormat.parse(fields.priceText)
             val fee = parseFee(fields.feeText)
@@ -191,7 +203,9 @@ class TransactionFormViewModel @AssistedInject constructor(
                 priceText = fields.priceText,
                 feeText = fields.feeText,
                 valid = TransactionFormValidator.isValid(fields.fund?.fundId, shares, price, fields.date, fee),
-                saved = saved,
+                saved = save.saved,
+                saving = save.saving,
+                failure = save.failure,
                 linkFailed = linkFailed,
                 prefilled = key.prefilled,
                 fundLocked = prefill.fundLocked,
@@ -313,7 +327,9 @@ class TransactionFormViewModel @AssistedInject constructor(
      * inte utan svar på bytesfrågan. "Ja" på frågan om en okopplad bevakning skrivs som
      * [SwitchDecision.LinksWatch] i samma anrop; gjordes kopplingen inte (bevakningen hann kopplas
      * eller stängas) sägs det ([TransactionFormUiState.linkFailed]) i stället för att formuläret
-     * stängs som om allt gått bra.
+     * stängs som om allt gått bra. Ett fel vid sparningen sägs under Spara
+     * ([TransactionFormUiState.failure], NFR-6) och formuläret står kvar med inmatningen; ett avbrott
+     * släpps igenom och är inget fel.
      */
     fun save() {
         val fund = selectedFund.value ?: return
@@ -324,30 +340,45 @@ class TransactionFormViewModel @AssistedInject constructor(
         val inputs = switchInputs.value ?: return
         val option = question(inputs, lookedUpFollow.value, fund, type.value, date.value).resolve(chosenSwitch.value) ?: return
         if (saveJob?.isActive == true) return
+        val transaction = Transaction(
+            fundId = fund.fundId,
+            type = type.value,
+            epochDay = date.value.toEpochDay(),
+            shares = shares,
+            pricePerShare = price,
+            fee = fee
+        )
+        // Ett nytt försök — felet från det förra gäller inte längre.
+        saveState.value = SaveState(saving = true)
         saveJob = viewModelScope.launch {
-            if (lookedUpFund.value?.fundId == fund.fundId && funds.value.none { it.fundId == fund.fundId }) {
-                transactionRepository.upsertFund(fund)
-            }
-            val transaction = Transaction(
-                fundId = fund.fundId,
-                type = type.value,
-                epochDay = date.value.toEpochDay(),
-                shares = shares,
-                pricePerShare = price,
-                fee = fee
-            )
-            val recorded = recordTransaction.record(RecordTransaction.Entry(transaction, option.decision))
-            if (option.decision is SwitchDecision.LinksWatch && recorded.watchId == null) {
-                linkFailed.value = true
-            } else {
-                saved.value = true
+            try {
+                // Sparningen är lokal (Room): ett skrivfel är aldrig "kunde inte nå källan" eller
+                // "gick inte att läsa" — samma val som Riskprofilen.
+                suspendRunCatching({ DataError.Unknown }) { write(fund, RecordTransaction.Entry(transaction, option.decision)) }
+                    .onSuccess { recorded ->
+                        if (option.decision is SwitchDecision.LinksWatch && recorded.watchId == null) {
+                            linkFailed.value = true
+                        } else {
+                            saveState.value = SaveState(saved = true)
+                        }
+                    }
+                    .onFailure { error -> saveState.value = SaveState(failure = AppErrors.map(error)) }
+            } finally {
+                saveState.update { it.copy(saving = false) }
             }
         }
     }
 
+    private suspend fun write(fund: Fund, entry: RecordTransaction.Entry): RecordTransaction.Recorded {
+        if (lookedUpFund.value?.fundId == fund.fundId && funds.value.none { it.fundId == fund.fundId }) {
+            transactionRepository.upsertFund(fund)
+        }
+        return recordTransaction.record(entry)
+    }
+
     /** Kvitterar [TransactionFormUiState.saved] när skärmen gått tillbaka, så att det inte upprepas. */
     fun onSavedHandled() {
-        saved.value = false
+        saveState.update { it.copy(saved = false) }
     }
 
     /** Tomt avgiftsfält tolkas som 0.0 (ingen känd avgift) — annars måste texten vara ett giltigt tal. */
