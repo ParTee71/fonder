@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ const patternsRel = 'app/src/test/resources/ui-forbidden.txt';
 const allowRel = 'app/src/test/resources/ui-allowlist.txt';
 const examplesRel = 'app/src/test/resources/ui-forbidden-examples.txt';
 const pkg = 'app/src/main/kotlin/se/partee71/fonder';
-const hookFiles = ['regel4-check.mjs', 'session-start.sh'];
+const hookFiles = ['regel4-check.mjs', 'session-start.sh', 'maven-central-mirror.init.gradle.kts'];
 
 const readPatterns = () => readFileSync(path.join(repoRoot, patternsRel), 'utf8');
 
@@ -246,12 +246,14 @@ test('hook-kommandona i settings.json hittar skripten både i repot och från en
     });
     assert.equal(post.status, 2, `PostToolUse med projektrot ${projectDir}: ${post.stderr}`);
 
+    const home = mkdtempSync(path.join(tmpdir(), 'hem-'));
     const start = spawnSync('bash', ['-c', startCmd], {
-      env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir, CLAUDE_CODE_REMOTE: 'true' },
+      env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir, CLAUDE_CODE_REMOTE: 'true', HOME: home },
       encoding: 'utf8',
     });
     assert.equal(start.status, 0, start.stderr);
     assert.match(start.stdout, /Android SDK: /);
+    assert.ok(existsSync(path.join(home, '.gradle/init.d/maven-central-mirror.init.gradle.kts')), 'spegeln för Maven Central');
   }
 
   const none = spawnSync('bash', ['-c', postCmd], {
