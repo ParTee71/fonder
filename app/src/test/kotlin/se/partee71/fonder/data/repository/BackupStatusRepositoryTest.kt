@@ -7,8 +7,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -86,6 +88,24 @@ class BackupStatusRepositoryTest {
 
         repo.reminder.test {
             assertNull(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en avbruten lasning ger ingen tillfallig null, bara nasta lasnings svar`() = runTest(dispatcher) {
+        // BackupRoundTripTest (instrument) föll ibland med null: Rooms ändringssignal kommer
+        // asynkront, `mapLatest` avbryter den pågående läsningen, och ett avbrott som fångades
+        // som ett vanligt fel gav en påminnelse som blinkade till null på Hem.
+        backup.payload.value = withData
+        backup.hangNextSnapshot = true
+        val repo = BackupStatusRepository(backup, preferences())
+
+        repo.reminder.test {
+            advanceTimeBy(BackupStatusRepository.DEBOUNCE_MILLIS + 1)
+            backup.payload.value = withData.copy(funds = withData.funds + Fund(fundId = "SHB2", name = "Fond B"))
+
+            assertNotNull(awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
     }

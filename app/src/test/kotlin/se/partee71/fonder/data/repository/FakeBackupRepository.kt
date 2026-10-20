@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.repository
 
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -21,6 +22,12 @@ class FakeBackupRepository : BackupRepository {
     /** Sätts för att få [snapshot] att kasta, som en Room-läsning som går fel. */
     var snapshotFailure: Throwable? = null
 
+    /**
+     * Sätts för att få nästa [snapshot] att hänga tills den avbryts — som en Room-läsning på en
+     * annan tråd som ännu inte svarat när nästa ändringssignal kommer och `mapLatest` avbryter den.
+     */
+    var hangNextSnapshot = false
+
     override suspend fun export(): Result<String> = exportResult
 
     override suspend fun restore(json: String): Result<RestoreSummary> {
@@ -30,6 +37,10 @@ class FakeBackupRepository : BackupRepository {
 
     override suspend fun snapshot(): BackupPayload {
         snapshotFailure?.let { throw it }
+        if (hangNextSnapshot) {
+            hangNextSnapshot = false
+            awaitCancellation()
+        }
         return payload.value
     }
 
