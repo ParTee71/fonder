@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name att bygga med (visas i appen, t.ex. i Inställningar) — lämna tomt för värdet i build.gradle.kts'
+        description: 'Version name att bygga med (visas i appen, t.ex. i Inställningar) — lämna tomt för värdet i version.properties'
         required: false
         type: string
 

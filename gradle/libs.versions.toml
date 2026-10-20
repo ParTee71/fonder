@@ -1,4 +1,6 @@
 [versions]
+# Utanför Compose BOM med flit: i BOM:ens stabila material3 (1.4.x) är Expressive-API:erna
+# internal (ARKITEKTUR.md → Verifierade API:er). Byts till stabil 1.5.0 när den släpps.
 material3 = "1.5.0-beta01"
 agp = "9.4.1"
 coreSplashscreen = "1.2.0"

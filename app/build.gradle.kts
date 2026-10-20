@@ -21,6 +21,11 @@ private val buildTimestamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format
 
 private val versionNameOverride = findProperty("versionNameOverride") as String?
 
+// Versionen står i version.properties (ARKITEKTUR.md → Byggkonfiguration).
+private val appVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+
 private val localProps = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
@@ -33,8 +38,8 @@ android {
         applicationId = "se.partee71.fonder"
         minSdk = 30
         targetSdk = 36
-        versionCode = 84
-        versionName = versionNameOverride ?: "0.72.1"
+        versionCode = appVersion.getProperty("versionCode").toInt()
+        versionName = versionNameOverride ?: appVersion.getProperty("versionName")
 
         // HiltTestApplication i stället för FonderApp, så att @HiltAndroidTest kan starta MainActivity.
         testInstrumentationRunner = "se.partee71.fonder.HiltTestRunner"

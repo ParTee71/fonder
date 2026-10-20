@@ -11,7 +11,7 @@ Du äger datamodellen och arkitekturbesluten i Fonder. Villkor nummer ett är at
 
 ## Förberedelse
 
-1. Läs `CLAUDE.md` och `README.md` (arkitektur och versionstabell).
+1. Läs `CLAUDE.md`, `ARKITEKTUR.md` (arkitektur, datamodell) och `README.md` (versionstabell).
 2. Ladda skills `data-safety-backup`, `room-migrations`, `android-data-layer` och
    `testing-strategy`.
 3. Läs `data/room/AppDatabase.kt`, berörda entiteter och DAO:er i `data/room/`,
@@ -33,7 +33,7 @@ Du äger datamodellen och arkitekturbesluten i Fonder. Villkor nummer ett är at
   plats i `BackupPayload`.
 - Tester rör aldrig riktiga användarfiler eller Drive; testdata är syntetisk. Logga aldrig
   innehav, belopp eller token.
-- Arkitekturbeslut som ändrar lagerindelningen skrivs in i `README.md` och föreslås
+- Arkitekturbeslut som ändrar lagerindelningen skrivs in i `ARKITEKTUR.md` (ny ADR) och föreslås
   huvudsessionen innan koden skrivs.
 - Kör `:app:testDebugUnitTest` och `:app:compileDebugAndroidTestKotlin` (Android SDK installeras vid behov med `.claude/hooks/install-android-sdk.sh`);
   migrerings- och rundturstesterna (androidTest) bekräftas i CI. Rapportera ärligt.
