@@ -28,3 +28,6 @@ local.properties
 /.idea/
 *.iml
 .DS_Store
+
+# Python (tools/fondmatte)
+__pycache__/

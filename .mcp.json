@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "avanza": {
+      "command": "uvx",
+      "args": ["--from", "avanza-mcp==2.1.0", "avanza-mcp"]
+    }
+  }
+}

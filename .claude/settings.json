@@ -96,5 +96,8 @@
   },
   "enabledPlugins": {
     "android@claude-android": true
-  }
+  },
+  "enabledMcpjsonServers": [
+    "avanza"
+  ]
 }

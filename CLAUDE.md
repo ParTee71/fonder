@@ -123,6 +123,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
 node --test .claude/hooks/test/*.test.mjs    # hooktest regel4-check + baslinjen (ingen SDK behövs)
 node tools/regel4-baseline.mjs               # skriv om baslinjen i ui-allowlist.txt när en skärm rättats
+python tools/fondmatte/fondmatte.py golden <fixtur>  # förväntade värden till beräkningstester (skill fondmatematik)
 ```
 
 **Gradle körs i sessionen med Android SDK i `/opt/android-sdk`** (session-start-hooken säger
