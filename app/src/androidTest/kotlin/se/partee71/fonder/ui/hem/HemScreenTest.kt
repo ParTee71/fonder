@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
@@ -165,6 +166,7 @@ class HemScreenTest {
                     totalValue = 500.0,
                     totalGainLoss = 100.0,
                     totalGainLossFraction = 0.2,
+                    total = PortfolioTotalCalc.Result(netDepositsKr = 400.0, totalGainKr = 100.0, totalGainFraction = 0.25, moneyWeightedAnnualReturn = null, partial = false, ageDays = 100),
                     performance = PortfolioPerformanceCalc.PortfolioPerformance(
                         day = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 50.0, fraction = 0.05, partial = false),
                         week = PortfolioPerformanceCalc.PortfolioPeriodResult.Available(amount = 90.0, fraction = 0.1, partial = false),
@@ -180,6 +182,9 @@ class HemScreenTest {
         }
 
         composeRule.onNodeWithText("500,00 kr", substring = true).assertExists()
+        composeRule.onNodeWithText("Totalresultat").assertExists()
+        composeRule.onNodeWithText("+25,0 % · 100,00 kr", substring = true).assertExists() // HEM-1, issue #191
+        composeRule.onNodeWithText("Varav orealiserat").assertExists()
         composeRule.onNodeWithText("+20,0 % · 100,00 kr", substring = true).assertExists()
         composeRule.onNodeWithText("+5,0 % · 50,00 kr", substring = true).assertExists()
         composeRule.onNodeWithText("Otillräcklig data").assertExists()
@@ -196,6 +201,7 @@ class HemScreenTest {
                     totalValue = 500.0,
                     totalGainLoss = 100.0,
                     totalGainLossFraction = 0.2,
+                    total = PortfolioTotalCalc.Result(netDepositsKr = 400.0, totalGainKr = 100.0, totalGainFraction = 0.25, moneyWeightedAnnualReturn = null, partial = false, ageDays = 100),
                     performance = PortfolioPerformanceCalc.PortfolioPerformance(
                         day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
                         week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
@@ -209,7 +215,9 @@ class HemScreenTest {
             FonderTheme { HemContent(state = state) }
         }
 
+        // Tre perioder – totalkortets årsavkastning säger "Visas efter ett år", inte "Otillräcklig data" (HEM-1).
         composeRule.onAllNodesWithText("Otillräcklig data").assertCountEquals(3)
+        composeRule.onNodeWithText("Visas efter ett år").assertExists()
     }
 
     @Test
