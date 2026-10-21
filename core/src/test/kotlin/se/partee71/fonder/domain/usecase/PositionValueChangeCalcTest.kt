@@ -50,6 +50,17 @@ class PositionValueChangeCalcTest {
     }
 
     @Test
+    fun `transaktion pa en dag utan kurs raknas som handlad till nasta kurs`() {
+        // Kurser bara dag 1 (100) och dag 4 (120), som fredag och måndag. Köp en lördag (dag 2) till
+        // måndagens kurs får ingen rörelse alls, och ett sälj samma lördag behåller rörelsen fram
+        // till måndagen – inte fredagens kurs.
+        val gap = listOf(FundPrice(fundId = "A", epochDay = 1L, nav = 100.0), FundPrice(fundId = "A", epochDay = 4L, nav = 120.0))
+        assertEquals(0.0, PositionValueChangeCalc.valueChange(listOf(kop(day = 2, shares = 10.0, price = 120.0)), gap, 1L, 4L)!!, 1e-9)
+        val solgt = listOf(kop(day = 0, shares = 10.0, price = 95.0), salj(day = 2, shares = 10.0, price = 120.0))
+        assertEquals(200.0, PositionValueChangeCalc.valueChange(solgt, gap, 1L, 4L)!!, 1e-9)
+    }
+
+    @Test
     fun `inget innehav vid periodstart och inget kop ger noll`() {
         assertEquals(0.0, change(emptyList())!!, 0.0)
         // Köpet ligger efter perioden: ingenting ägdes, oavsett hur kursen rört sig.

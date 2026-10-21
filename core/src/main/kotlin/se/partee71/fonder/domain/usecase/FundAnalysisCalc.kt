@@ -139,7 +139,7 @@ object FundAnalysisCalc {
             val fraction = priceReturn(start, priceHistory, currentNav)
             val amount = when {
                 // Positionens faktiska vinst — samma tal som GAV-raden, så skärmen inte visar två "vinster".
-                period == Period.SEDAN_KOP -> holding.netShares * currentNav - holding.netInvested
+                period == Period.SEDAN_KOP -> holding.gainLoss ?: (holding.netShares * currentNav - holding.netInvested)
 
                 fraction == null -> null
 

@@ -202,9 +202,9 @@ def market_value(transactions: list[Transaction], prices: Prices, day: date) -> 
 def value_change(transactions: list[Transaction], prices: Prices, fund: str, start: date, end: date) -> float | None:
     """Värdeförändringen i kr på de andelar som faktiskt ägts, dag för dag, som appens
     PositionValueChangeCalc (issue #193): från kurspunkten på eller före `start` till den sista
-    på eller före `end` räknas `andelar × (NAV_i − NAV_{i−1})` på andelarna som ägdes före
-    punktens dag – ett köp på dagen får rörelsen först från nästa punkt, ett sälj på dagen har den
-    med. None utan kurs på eller före `start`."""
+    på eller före `end` räknas `andelar × (NAV_i − NAV_{i−1})` på andelarna som ägdes vid
+    förra kurspunkten – ett köp på en kursdag får rörelsen först från nästa punkt, ett sälj har den
+    med, och en transaktion på en dag utan kurs räknas som handlad till nästa kurs. None utan kurs på eller före `start`."""
     series = [(d, v) for d, v in prices.series.get(fund, []) if d <= end]
     start_index = max((i for i, (d, _) in enumerate(series) if d <= start), default=None)
     if start_index is None:
@@ -212,12 +212,14 @@ def value_change(transactions: list[Transaction], prices: Prices, fund: str, sta
     own = [t for t in transactions if t.fund == fund]
     units: dict[str, float] = {}
     next_tx, previous, change = 0, series[start_index][1], 0.0
+    previous_day = series[start_index][0]
     for day, nav in series[start_index + 1 :]:
-        while next_tx < len(own) and own[next_tx].day < day:
+        # Andelarna vid förra kurspunkten; en transaktion på en dag utan kurs handlas till nästa kurs.
+        while next_tx < len(own) and own[next_tx].day <= previous_day:
             apply_transaction(units, own[next_tx])
             next_tx += 1
         change += units.get(fund, 0.0) * (nav - previous)
-        previous = nav
+        previous, previous_day = nav, day
     return change
 
 

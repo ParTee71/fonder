@@ -190,6 +190,15 @@ class PeriodRowsTest(unittest.TestCase):
         change = fm.value_change(trades, self.P, "A", date(2026, 1, 1), date(2026, 1, 4))
         self.assertAlmostEqual(change, 100.0 - 110.0 + 126.0, places=12)
 
+    def test_trade_on_a_day_without_price_is_traded_at_the_next_price(self):
+        # Kurs bara fredag den 2:a (100) och måndag den 5:e (120): ett köp på lördagen till
+        # måndagens kurs får ingen rörelse, ett sälj på lördagen behåller rörelsen till måndagen.
+        gap = prices(A=[("2026-01-02", 100.0), ("2026-01-05", 120.0)])
+        buy = fm.value_change([tx("2026-01-03", "BUY", 10, 120.0)], gap, "A", date(2026, 1, 2), date(2026, 1, 5))
+        self.assertAlmostEqual(buy, 0.0, places=12)
+        sell = [tx("2025-12-01", "BUY", 10, 90.0), tx("2026-01-03", "SELL", 10, 120.0)]
+        self.assertAlmostEqual(fm.value_change(sell, gap, "A", date(2026, 1, 2), date(2026, 1, 5)), 200.0, places=12)
+
     def test_nothing_held_is_zero_and_no_start_price_is_none(self):
         self.assertEqual(fm.value_change([tx("2026-02-01", "BUY", 10, 120.0)], self.P, "A", date(2026, 1, 1), date(2026, 1, 4)), 0.0)
         self.assertIsNone(fm.value_change([tx("2025-12-01", "BUY", 10, 90.0)], self.P, "A", date(2025, 12, 31), date(2026, 1, 4)))

@@ -8,9 +8,9 @@ import se.partee71.fonder.domain.model.TransactionType
  * Värdeförändringen i kronor på de andelar som **faktiskt ägts**, dag för dag (issue #193).
  *
  * Mellan två på varandra följande kurspunkter räknas rörelsen `andelar × (NAV_i − NAV_{i−1})`
- * på de andelar som ägdes före punktens dag: ett köp på dagen betalar dagens NAV och får
- * rörelsen fram till dagen först från nästa punkt, ett sälj på dagen får dagens NAV och har
- * därför rörelsen med. Summan är det belopp som faktiskt ändrats på kontot under perioden –
+ * på de andelar som ägdes vid förra kurspunkten: ett köp på en kursdag betalar dagens NAV och får
+ * rörelsen först från nästa punkt, ett sälj på en kursdag får dagens NAV och har därför rörelsen
+ * med. En transaktion på en dag utan kurs (helg, lucka) räknas som handlad till nästa kurs. Summan är det belopp som faktiskt ändrats på kontot under perioden –
  * samma kedja som [PortfolioReturnSeriesCalc], fast i kronor i stället för i procent.
  *
  * Tidigare räknades periodraderna som `(NAV nu − NAV vid periodstart) × dagens andelar`, vilket
@@ -42,19 +42,21 @@ object PositionValueChangeCalc {
         val sortedTransactions = transactions.sortedBy { it.epochDay }
         var nextTransaction = 0
         var shares = 0.0
-        var previousNav = points[startIndex].nav
+        var previous = points[startIndex]
         var change = 0.0
         for (index in startIndex + 1 until points.size) {
             val point = points[index]
-            while (nextTransaction < sortedTransactions.size && sortedTransactions[nextTransaction].epochDay < point.epochDay) {
+            // Andelarna under steget är de som ägdes vid förra kurspunkten: en transaktion på en dag
+            // utan kurs (helg, lucka) handlas till nästa kurs och får inte stegets rörelse före sig.
+            while (nextTransaction < sortedTransactions.size && sortedTransactions[nextTransaction].epochDay <= previous.epochDay) {
                 val transaction = sortedTransactions[nextTransaction++]
                 shares = when (transaction.type) {
                     TransactionType.KOP -> shares + transaction.shares
                     TransactionType.SALJ -> maxOf(0.0, shares - transaction.shares)
                 }
             }
-            change += shares * (point.nav - previousNav)
-            previousNav = point.nav
+            change += shares * (point.nav - previous.nav)
+            previous = point
         }
         return change
     }

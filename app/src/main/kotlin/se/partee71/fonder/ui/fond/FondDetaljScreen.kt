@@ -569,9 +569,10 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
         SignalExplanations(analysis = analysis)
         Column(modifier = Modifier.padding(top = Spacing.s)) {
             analysis.keyFigures.periodReturns.forEach { periodReturn ->
-                // "Sedan köp" krockar lätt med "min vinst" — den visar fondens kursutveckling
-                // sedan förstaköpsdagen, inte den egna avkastningen (som GAV-raden visar). Egen,
-                // tydligare förklaring bara för den perioden; övriga delar den generiska texten.
+                // "Sedan köp" blandar två mått: procenten är fondens kursutveckling sedan
+                // förstaköpsdagen, kronorna positionens vinst mot anskaffningsvärdet (samma tal som
+                // GAV-raden, issue #193). Egen förklaring bara för den perioden; övriga delar den
+                // generiska texten.
                 val explanation = if (periodReturn.period == FundAnalysisCalc.Period.SEDAN_KOP) {
                     stringResource(R.string.analys_period_sedan_kop_explain)
                 } else {
