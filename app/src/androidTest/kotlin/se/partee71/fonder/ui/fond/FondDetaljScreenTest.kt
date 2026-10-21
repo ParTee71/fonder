@@ -46,7 +46,8 @@ class FondDetaljScreenTest {
         cagr: Double? = 0.05,
         portfolioShareFraction: Double? = 0.25,
         annualizedVolatility: Double? = 0.18,
-        sharpeRatio: Double? = 0.8
+        sharpeRatio: Double? = 0.8,
+        riskWindowYears: Int? = 3
     ) = FundAnalysisCalc.KeyFigures(
         periodReturns = FundAnalysisCalc.Period.entries.map { FundAnalysisCalc.PeriodReturn(it, amount = 10.0, fraction = 0.05) },
         cagr = cagr,
@@ -55,7 +56,8 @@ class FondDetaljScreenTest {
         gavFraction = 0.2,
         portfolioShareFraction = portfolioShareFraction,
         annualizedVolatility = annualizedVolatility,
-        sharpeRatio = sharpeRatio
+        sharpeRatio = sharpeRatio,
+        riskWindowYears = riskWindowYears
     )
 
     /** En analys med grön status och [keyFigures] om testet inte anger annat. */
@@ -248,22 +250,45 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_volatilitet_och_sharpe_nar_historiken_racker() {
-        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8)))
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8, riskWindowYears = 3)))
 
         expandAnalysis()
-        composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
+        // Fönstret som måtten räknats på står i etiketten (issue #195).
+        composeRule.onNodeWithText("Volatilitet (3 år)").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Sharpe-kvot (3 år)").performScrollTo().assertExists()
         composeRule.onNodeWithText("18,0 %").assertExists()
         composeRule.onNodeWithText("0,80").assertExists()
     }
 
     @Test
-    fun visar_otillrackligt_data_for_riskmatt_utan_tillracklig_historik() {
-        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = null, sharpeRatio = null)))
+    fun visar_ettarsfonstret_i_etiketten_nar_historiken_inte_nar_tre_ar() {
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8, riskWindowYears = 1)))
 
         expandAnalysis()
+        composeRule.onNodeWithText("Volatilitet (1 år)").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Sharpe-kvot (1 år)").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun visar_otillrackligt_data_for_riskmatt_utan_tillracklig_historik() {
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = null, sharpeRatio = null, riskWindowYears = null)))
+
+        expandAnalysis()
+        // Utan fönster (för kort historik) står den allmänna etiketten kvar.
         composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
         // Båda riskmåtten saknar värde → markeras som otillräcklig data (ANA-4), inget gissat 0.
         assertTrue(composeRule.onAllNodesWithText("Otillräcklig data").fetchSemanticsNodes().size >= 2)
+    }
+
+    @Test
+    fun visar_odefinierad_sharpe_for_en_fond_utan_kursrorelse() {
+        // Fönstret finns men kursen har inte rört sig: volatilitet 0, Sharpe odefinierad — inte
+        // otillräcklig data (ANA-7).
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = 0.0, sharpeRatio = null, riskWindowYears = 3)))
+
+        expandAnalysis()
+        composeRule.onNodeWithText("Sharpe-kvot (3 år)").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Ej definierad (ingen kursrörelse)").assertExists()
     }
 
     // --- Billigare alternativ (ANA-9, issue #59) ---

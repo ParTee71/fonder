@@ -401,37 +401,266 @@ class FundAnalysisCalcTest {
     /** [nDays]+1 punkter med kurser som växlar mellan [low] och [high] varje dag. */
     private fun alternating(nDays: Long, low: Double, high: Double) = (0..nDays).map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) high else low) }
 
+    /** Dagliga kurser [fromDaysAgo]..0 med ett mönster som ger nollskild volatilitet. */
+    private fun wavy(fromDaysAgo: Long, amplitude: Double = 1.0) = (0..fromDaysAgo).map { daysAgo -> price(daysAgo, 100.0 + amplitude * ((daysAgo * 7) % 13)) }
+
     @Test
     fun `platt kurshistorik ger nollvolatilitet och ingen Sharpe (ingen division med noll)`() {
-        val flat = (0..100L).map { price(it, nav = 100.0) }
+        val flat = (0..400L).map { price(it, nav = 100.0) }
         val kf = analyzeWith(flat).keyFigures
         assertEquals(0.0, kf.annualizedVolatility!!, 1e-9)
         assertNull(kf.sharpeRatio) // vol = 0 → Sharpe odefinierad, null i stället för oändlig
+        assertEquals(1, kf.riskWindowYears)
+        // UI:t säger "ej definierad (ingen kursrörelse)", inte otillräcklig data.
+        assertTrue(kf.sharpeUndefinedWithoutMovement)
     }
 
     @Test
     fun `for kort historik ger null for bade volatilitet och Sharpe`() {
-        // 30 punkter → 29 dagsavkastningar, under minimigränsen (~60).
+        // 30 punkter → 29 dagsavkastningar: kortare än ett år och långt under täckningskravet (152).
         val short = (0..29L).map { price(it, nav = 100.0 + it) }
         val kf = analyzeWith(short).keyFigures
         assertNull(kf.annualizedVolatility)
         assertNull(kf.sharpeRatio)
+        assertNull(kf.riskWindowYears)
+        assertFalse(kf.sharpeUndefinedWithoutMovement)
+    }
+
+    @Test
+    fun `historik under ett ar ger otillracklig data trots manga dagsavkastningar`() {
+        // 364 dagliga punkter: gott om avkastningar, men ingen kurs på eller före senaste − 1 år (issue #195).
+        val kf = analyzeWith(wavy(fromDaysAgo = 364)).keyFigures
+        assertNull(kf.annualizedVolatility)
+        assertNull(kf.sharpeRatio)
+        assertNull(kf.riskWindowYears)
     }
 
     @Test
     fun `storre svangningar ger hogre volatilitet`() {
-        val calm = analyzeWith(alternating(100, low = 99.0, high = 101.0)).keyFigures.annualizedVolatility!!
-        val wild = analyzeWith(alternating(100, low = 90.0, high = 110.0)).keyFigures.annualizedVolatility!!
+        val calm = analyzeWith(alternating(400, low = 99.0, high = 101.0)).keyFigures.annualizedVolatility!!
+        val wild = analyzeWith(alternating(400, low = 90.0, high = 110.0)).keyFigures.annualizedVolatility!!
         assertTrue(wild > calm)
     }
 
     @Test
     fun `stigande kurshistorik ger positiv Sharpe`() {
         // Stadig uppgång — positiv medelavkastning och positiv (nollskild) volatilitet.
-        val rising = (0..120L).map { daysAgo -> price(daysAgo, nav = 120.0 - daysAgo * 0.2) }
+        val rising = (0..400L).map { daysAgo -> price(daysAgo, nav = 120.0 - daysAgo * 0.05 + (daysAgo % 3) * 0.1) }
         val kf = analyzeWith(rising).keyFigures
         assertTrue(kf.annualizedVolatility!! > 0.0)
         assertTrue(kf.sharpeRatio!! > 0.0)
+    }
+
+    @Test
+    fun `historik over tre ar raknas pa de senaste tre aren och aldre kurser paverkar inte`() {
+        // Fyra år: det äldsta året är vilt (en krasch), de senaste tre lugna. Fönstret ska bara se de tre åren.
+        val threeYearsAgo = today.minusYears(3).toEpochDay()
+        val calm = wavy(fromDaysAgo = today.toEpochDay() - threeYearsAgo)
+        val crash = (today.toEpochDay() - threeYearsAgo + 1..today.toEpochDay() - threeYearsAgo + 365)
+            .map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) 40.0 else 160.0) }
+
+        val withCrash = analyzeWith(calm + crash).keyFigures
+        val onlyWindow = analyzeWith(calm).keyFigures
+
+        assertEquals(3, withCrash.riskWindowYears)
+        assertEquals(3, onlyWindow.riskWindowYears)
+        assertEquals(onlyWindow.annualizedVolatility!!, withCrash.annualizedVolatility!!, 1e-12)
+        assertEquals(onlyWindow.sharpeRatio!!, withCrash.sharpeRatio!!, 1e-12)
+    }
+
+    @Test
+    fun `historik mellan ett och tre ar raknas pa senaste aret`() {
+        // Två år: bara det senaste året (från kursen på senaste − 1 år) räknas, oavsett anroparens lista.
+        val oneYearAgo = today.minusYears(1).toEpochDay()
+        val lastYear = wavy(fromDaysAgo = today.toEpochDay() - oneYearAgo)
+        val yearBefore = (today.toEpochDay() - oneYearAgo + 1..730L).map { daysAgo -> price(daysAgo, if (daysAgo % 2 == 0L) 50.0 else 150.0) }
+
+        val twoYears = analyzeWith(lastYear + yearBefore).keyFigures
+        val oneYear = analyzeWith(lastYear).keyFigures
+
+        assertEquals(1, twoYears.riskWindowYears)
+        assertEquals(1, oneYear.riskWindowYears)
+        assertEquals(oneYear.annualizedVolatility!!, twoYears.annualizedVolatility!!, 1e-12)
+        assertEquals(oneYear.sharpeRatio!!, twoYears.sharpeRatio!!, 1e-12)
+    }
+
+    @Test
+    fun `fonstret raknas fran senaste kurs inte fran idag`() {
+        // Senaste kursen är tio dagar gammal och historiken når exakt ett år bakåt från den.
+        val latest = today.minusDays(10)
+        val days = latest.toEpochDay() - latest.minusYears(1).toEpochDay()
+        val history = (0..days).map { back -> price(10 + back, 100.0 + (back * 7) % 13) }
+
+        val kf = analyzeWith(history).keyFigures
+
+        assertEquals(1, kf.riskWindowYears)
+        assertTrue(kf.annualizedVolatility!! > 0.0)
+        // En dag kortare: ingen kurs på eller före senaste − 1 år → otillräcklig data.
+        assertNull(analyzeWith(history.dropLast(1)).keyFigures.annualizedVolatility)
+    }
+
+    /**
+     * Daglig historik 400 dagar bakåt utan kurser dagarna [gapDays] (räknat från idag); kurserna
+     * efter luckan är multiplicerade med [jumpAfterGap] — ett hopp som bara syns i paret över luckan.
+     */
+    private fun withGap(gapDays: LongRange, jumpAfterGap: Double) = alternating(400, low = 99.0, high = 101.0)
+        .filter { LocalDate.ofEpochDay(it.epochDay) !in gapDays.map { d -> today.minusDays(d) } }
+        .map { if (it.epochDay > today.minusDays(gapDays.first).toEpochDay()) it.copy(nav = it.nav * jumpAfterGap) else it }
+
+    @Test
+    fun `kurspar med langre lucka an fem dagar hoppas over`() {
+        // Kurs 110 dagar sedan och sedan 100 dagar sedan: 10 dagar isär. Hoppet på +100 % över
+        // luckan ska inte räknas som en dagsavkastning — volatiliteten blir densamma som utan hopp.
+        val gap = 101L..109L
+        val withJump = analyzeWith(withGap(gap, jumpAfterGap = 2.0)).keyFigures
+        val withoutJump = analyzeWith(withGap(gap, jumpAfterGap = 1.0)).keyFigures
+
+        assertEquals(withoutJump.annualizedVolatility!!, withJump.annualizedVolatility!!, 1e-12)
+        // Sharpe räknas på fönstrets totala utveckling, så hoppet över luckan syns i täljaren.
+        assertTrue(withJump.sharpeRatio!! > withoutJump.sharpeRatio!!)
+    }
+
+    @Test
+    fun `fall over en overhoppad lucka sanker Sharpe men inte volatiliteten`() {
+        // Kursen faller 30 % mellan 110 och 100 dagar sedan (10 dagar isär, paret hoppas över).
+        // Med medel(dagsavkastning) × 252 i täljaren hade fallet försvunnit ur Sharpe.
+        val gap = 101L..109L
+        val fallen = withGap(gap, jumpAfterGap = 0.7)
+        val kf = analyzeWith(fallen).keyFigures
+        val flat = analyzeWith(withGap(gap, jumpAfterGap = 1.0)).keyFigures
+
+        assertEquals(flat.annualizedVolatility!!, kf.annualizedVolatility!!, 1e-12)
+        assertTrue(kf.sharpeRatio!! < 0.0)
+        assertTrue(kf.sharpeRatio!! < flat.sharpeRatio!!)
+        // Täljaren = (NAV_slut / NAV_ankare)^(365,2425 / dagar) − 1; ankaret är kursen på senaste − 1 år.
+        val anchor = fallen.filter { it.epochDay <= today.minusYears(1).toEpochDay() }.maxBy { it.epochDay }
+        val last = fallen.maxBy { it.epochDay }
+        val days = (last.epochDay - anchor.epochDay).toDouble()
+        val expected = (Math.pow(last.nav / anchor.nav, 365.2425 / days) - 1.0) / kf.annualizedVolatility!!
+        assertEquals(expected, kf.sharpeRatio!!, 1e-12)
+    }
+
+    @Test
+    fun `kurspar fem dagar isar raknas som en handelsdag (helg plus helgdag)`() {
+        // Påsk: torsdag → tisdag = 5 dagar. Paret räknas, så hoppet över luckan syns i volatiliteten.
+        val gap = 101L..104L
+        val withJump = analyzeWith(withGap(gap, jumpAfterGap = 2.0)).keyFigures
+        val withoutJump = analyzeWith(withGap(gap, jumpAfterGap = 1.0)).keyFigures
+
+        assertTrue(withJump.annualizedVolatility!! > withoutJump.annualizedVolatility!! * 2)
+    }
+
+    @Test
+    fun `gles historik inom fonstret ger otillracklig data`() {
+        // Veckokurser i tre år: inget par ligger högst fem dagar isär, så det finns inga dagsavkastningar.
+        val weekly = (0..(3 * 366L) step 7).map { daysAgo -> price(daysAgo, 100.0 + (daysAgo % 13)) }
+        val kf = analyzeWith(weekly).keyFigures
+        assertNull(kf.annualizedVolatility)
+        assertNull(kf.sharpeRatio)
+        assertNull(kf.riskWindowYears)
+    }
+
+    @Test
+    fun `tackningskravet ar 60 procent av 252 handelsdagar per ar`() {
+        assertEquals(152, FundAnalysisCalc.minWindowReturns(1))
+        assertEquals(454, FundAnalysisCalc.minWindowReturns(3))
+    }
+
+    @Test
+    fun `glest trearsfonster faller tillbaka till ett ar`() {
+        // Veckokurser de två äldsta åren (inga par högst fem dagar isär) och dagliga det senaste
+        // året: treårsfönstret har bara ~365 giltiga avkastningar (< 454) och får inte heta "3 år".
+        val oneYearBack = today.toEpochDay() - today.minusYears(1).toEpochDay()
+        val daily = wavy(fromDaysAgo = oneYearBack)
+        // Veckopunkterna når förbi treårsstarten, så ankaret finns (högst 5 dagar före) och inget glapp
+        // överstiger 31 dagar — det är bara täckningen som fäller treårsfönstret.
+        val weekly = (oneYearBack + 7..3 * 366L + 7 step 7).map { daysAgo -> price(daysAgo, 100.0 + (daysAgo % 11)) }
+
+        val sparse = analyzeWith(daily + weekly).keyFigures
+        val onlyDaily = analyzeWith(daily).keyFigures
+
+        assertEquals(1, sparse.riskWindowYears)
+        assertEquals(onlyDaily.annualizedVolatility!!, sparse.annualizedVolatility!!, 1e-12)
+        assertEquals(onlyDaily.sharpeRatio!!, sparse.sharpeRatio!!, 1e-12)
+    }
+
+    @Test
+    fun `ettarsfonster under tackningskravet ger otillracklig data`() {
+        // Ankare exakt ett år bakåt, veckokurser fram till n dagar sedan (7 dagar isär: inga
+        // dagsavkastningar men inget glapp över 31 dagar) och sedan n dagliga avkastningar: 152 räcker, 151 inte.
+        val oneYearBack = today.toEpochDay() - today.minusYears(1).toEpochDay()
+        fun history(n: Long) = (oneYearBack downTo n + 6 step 7).map { price(it, 100.0 + (it % 11)) } + wavy(fromDaysAgo = n)
+
+        assertEquals(1, analyzeWith(history(152)).keyFigures.riskWindowYears)
+        val kf = analyzeWith(history(151)).keyFigures
+        assertNull(kf.riskWindowYears)
+        assertNull(kf.annualizedVolatility)
+        assertNull(kf.sharpeRatio)
+    }
+
+    @Test
+    fun `ankaret far ligga hogst fem dagar fore fonstrets start`() {
+        // Daglig historik det senaste året utom startdagen, plus en ensam äldre kurs som ankare.
+        val oneYearBack = today.toEpochDay() - today.minusYears(1).toEpochDay()
+        fun history(anchorBefore: Long) = wavy(fromDaysAgo = oneYearBack - 1) + price(oneYearBack + anchorBefore, 100.0)
+
+        assertEquals(1, analyzeWith(history(5)).keyFigures.riskWindowYears)
+        val kf = analyzeWith(history(6)).keyFigures
+        assertNull(kf.riskWindowYears)
+        assertNull(kf.annualizedVolatility)
+    }
+
+    @Test
+    fun `glapp over 31 dagar i fonstret gor det ogiltigt`() {
+        // Daglig historik med ett hål mitt i året: 31 dagar mellan två punkter går, 32 inte.
+        val oneYearBack = today.toEpochDay() - today.minusYears(1).toEpochDay()
+        fun history(gap: Long) = wavy(fromDaysAgo = oneYearBack).filter { daysAgo(it) !in 150L until 150L + gap - 1 }
+
+        assertEquals(1, analyzeWith(history(31)).keyFigures.riskWindowYears)
+        assertNull(analyzeWith(history(32)).keyFigures.riskWindowYears)
+    }
+
+    @Test
+    fun `glapp i trearsfonstret faller tillbaka till ett ar`() {
+        // Tre års daglig historik med ett hål på 40 dagar för två år sedan: 3 år ogiltigt, 1 år gäller.
+        val threeYearsBack = today.toEpochDay() - today.minusYears(3).toEpochDay()
+        val history = wavy(fromDaysAgo = threeYearsBack).filter { daysAgo(it) !in 700L until 739L }
+
+        assertEquals(1, analyzeWith(history).keyFigures.riskWindowYears)
+    }
+
+    private fun daysAgo(p: FundPrice) = today.toEpochDay() - p.epochDay
+
+    @Test
+    fun `volatilitet och Sharpe matchar fondmatte golden for riskfonster`() {
+        // tools/fondmatte/riskfonster.json → funds.A: vardagar 2024-03-04–2026-03-13 utan påskens
+        // helgdagar 2025 och utan 7–18 juli 2025; kurs = 100 + 0,05·i + 0,3·(7·i mod 13).
+        val end = LocalDate.of(2026, 3, 13)
+        val skipped = setOf(LocalDate.of(2025, 4, 18), LocalDate.of(2025, 4, 21)) +
+            (0L until 12L).map { LocalDate.of(2025, 7, 7).plusDays(it) }
+        val history = mutableListOf<FundPrice>()
+        var day = LocalDate.of(2024, 3, 4)
+        while (!day.isAfter(end)) {
+            if (day.dayOfWeek != java.time.DayOfWeek.SATURDAY && day.dayOfWeek != java.time.DayOfWeek.SUNDAY && day !in skipped) {
+                val i = history.size
+                history += FundPrice(fundId = fond.fundId, epochDay = day.toEpochDay(), nav = 100.0 + 0.05 * i + 0.3 * ((i * 7) % 13))
+            }
+            day = day.plusDays(1)
+        }
+
+        val kf = FundAnalysisCalc.analyze(
+            today = end,
+            holding = riskHolding,
+            transactions = emptyList(),
+            priceHistory = history,
+            firstPurchaseDate = LocalDate.of(2024, 3, 4),
+            portfolioTotalValue = 1200.0,
+            otherHoldingsAverageThreeMonthReturn = null
+        )!!.keyFigures
+
+        assertEquals(1, kf.riskWindowYears)
+        assertEquals(0.2555423226530543, kf.annualizedVolatility!!, 1e-9)
+        assertEquals(0.43567903130850577, kf.sharpeRatio!!, 1e-9)
     }
 
     // --- Vinstsignal (S4, ANA-8, issue #26) ---
@@ -642,7 +871,22 @@ class FundAnalysisCalcTest {
         // En kurs på eller före "3 år"-periodens startdag måste rymmas även över ett skottår
         // och en långhelg — och snittets 290 dagar med råge.
         assertTrue(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS >= java.time.temporal.ChronoUnit.DAYS.between(today.minusYears(3), today) + 7)
+        // Treårsfönstret räknas från senaste NAV: en NAV som är fem veckor gammal ska också rymmas.
+        assertTrue(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS >= java.time.temporal.ChronoUnit.DAYS.between(today.minusYears(3), today) + 35)
         assertTrue(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS > MovingAverageCalc.WINDOW_DAYS)
+    }
+
+    @Test
+    fun `nyss kopt fond med tre veckor gammal NAV far anda treårsfonstret`() {
+        // Vardagskurser fyra år bakåt men senaste NAV tre veckor gammal (källan släpar). Historiken
+        // klipps som i appen vid analysisHistoryStart för en fond köpt för tre månader sedan.
+        val start = FundAnalysisCalc.analysisHistoryStart(today.minusMonths(3), today)
+        val history = (21L..4 * 366L)
+            .map { today.minusDays(it) }
+            .filter { it.dayOfWeek != java.time.DayOfWeek.SATURDAY && it.dayOfWeek != java.time.DayOfWeek.SUNDAY && !it.isBefore(start) }
+            .map { price(today.toEpochDay() - it.toEpochDay(), 100.0 + (it.toEpochDay() * 7) % 13) }
+
+        assertEquals(3, analyzeWith(history).keyFigures.riskWindowYears)
     }
 
     @Test

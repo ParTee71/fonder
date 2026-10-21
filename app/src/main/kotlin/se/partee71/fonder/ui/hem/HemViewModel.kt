@@ -404,9 +404,12 @@ class HemViewModel @Inject constructor(
      * gemensamma hämtningen i flödet ovan (lokal cache, Room — ingen nätverksuppdatering) och
      * når [FundAnalysisCalc.analysisHistoryStart] bakåt, samma fönster som
      * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond (issue #214).
-     * Fönstret är inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela
-     * listan den får (ANA-7), så ett annat fönster hade tyst gett andra siffror än fondkortet
-     * visar. Periodradernas kronor och "sedan köp" utgår från köpet inne i [FundAnalysisCalc.analyze].
+     * Fönstret är inte kosmetiskt: S1/S2 och S3 räknas på listan [FundAnalysisCalc] får, så ett
+     * annat fönster hade tyst kunnat ge andra siffror än fondkortet visar. Volatilitet och Sharpe
+     * väljer sitt eget fasta fönster (3 eller 1 år bakåt från senaste NAV, ANA-7) ur listan; att
+     * historiken alltid når minst tre år (+ 45 dagar) bakåt gör att de inte längre beror på när
+     * fonden köptes (issue #195). Periodradernas kronor och "sedan köp" utgår från köpet inne i
+     * [FundAnalysisCalc.analyze].
      */
     private fun buildAnalysisSummary(
         enriched: List<Holding>,

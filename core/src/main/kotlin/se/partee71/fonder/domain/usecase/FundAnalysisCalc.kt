@@ -36,19 +36,52 @@ object FundAnalysisCalc {
     private const val TRADING_DAYS_PER_YEAR = 252.0
     private const val RISK_FREE_RATE = 0.0
 
-    /** Minsta antal dagsavkastningar för att volatilitet/Sharpe ska beräknas (~3 mån handel). */
-    private const val MIN_RETURN_SAMPLES = 60
+    /**
+     * Minsta täckning av fönstret (issue #195): andelen av de förväntade handelsdagarna
+     * (≈ [TRADING_DAYS_PER_YEAR] × år) som måste finnas som giltiga dagsavkastningar (kurspar högst
+     * [MAX_RETURN_GAP_DAYS] isär) för att fönstret ska väljas — 454 för 3 år, 152 för 1 år. Är
+     * treårsfönstret mest glest (nedsamplad eller delvis backfillad historik, issue #35) prövas
+     * ettårsfönstret, annars otillräcklig data, så att etiketten "(3 år)" aldrig påstår mer än
+     * kurserna bär.
+     */
+    private const val MIN_WINDOW_COVERAGE = 0.6
+
+    /**
+     * Längsta lucka i kalenderdagar mellan två kurspunkter för att paret ska räknas som en
+     * dagsavkastning, och längsta avstånd mellan fönstrets ankare och startdag (issue #195):
+     * [NavCalendar.MAX_NAV_GAP_DAYS], helg plus helgdag. Längre luckor hoppas över i stället för
+     * att räknas som en enda, för stor "dag".
+     */
+    private const val MAX_RETURN_GAP_DAYS = NavCalendar.MAX_NAV_GAP_DAYS
+
+    /**
+     * Största tillåtna glapp i kalenderdagar mellan två på varandra följande kurspunkter i
+     * riskmåttens fönster (issue #195). Täckningskravet ([MIN_WINDOW_COVERAGE]) räknar bara
+     * antalet avkastningar; utan glappgränsen kunde ett ankare, ett halvårs hål och sju täta
+     * månader heta "1 år". En månad tål enstaka saknade veckor i kurscachen.
+     */
+    private const val MAX_WINDOW_GAP_DAYS = 31L
+
+    /**
+     * Riskmåttens fasta fönster i år bakåt från senaste kurs, längsta först (issue #195): 3 år
+     * om historiken når så långt, annars 1 år. Oberoende av hur länge fonden ägts och av hur
+     * lång historik anroparen skickar in, så att måtten går att jämföra mellan fonder.
+     */
+    private val RISK_WINDOW_YEARS = listOf(3L, 1L)
 
     /** Vinstsignalens tröskel (ANA-8, issue #26) — fast för v1, samma princip som övriga trösklar. */
     private const val PROFIT_TAKE_THRESHOLD = 0.50
 
     /**
      * Hur långt bakåt analysens kurshistorik når (issue #214): tre år ([Period.TRE_AR] och
-     * kommande treårsfönster för volatilitet/Sharpe, #195) plus tio dagars marginal för skottår,
-     * helger och röda dagar, så att det finns en kurs **på eller före** fönstrets startdag. Täcker
-     * med god marginal 200-dagarssnittet ([MovingAverageCalc.WINDOW_DAYS] = 290 dagar).
+     * treårsfönstret för volatilitet/Sharpe, #195) plus 45 dagars marginal. Treårsfönstret räknas
+     * bakåt från **senaste** NAV, inte från idag, och kräver en kurs högst [MAX_RETURN_GAP_DAYS]
+     * före sin startdag: marginalen täcker skottår, helger och röda dagar vid ankaret och en
+     * senaste NAV som är upp till ~5 veckor gammal (källan släpar, appen har inte uppdaterats),
+     * så att en nyss köpt fond inte tyst får "(1 år)". Täcker med god marginal 200-dagarssnittet
+     * ([MovingAverageCalc.WINDOW_DAYS] = 290 dagar).
      */
-    const val ANALYSIS_LOOKBACK_DAYS = 3L * 365L + 10L
+    const val ANALYSIS_LOOKBACK_DAYS = 3L * 365L + 45L
 
     /**
      * Första dagen i analysens kurshistorik (issue #214) — den **enda** regeln för hur långt
@@ -107,11 +140,21 @@ object FundAnalysisCalc {
         val gavFraction: Double?,
         /** Null om portföljens totala värde är 0/okänt. */
         val portfolioShareFraction: Double?,
-        /** Annualiserad standardavvikelse på dagsavkastningar (ANA-7). Null = för kort historik (ANA-4). */
+        /** Annualiserad standardavvikelse på dagsavkastningar i [riskWindowYears] (ANA-7). Null = för kort historik (ANA-4). */
         val annualizedVolatility: Double?,
         /** Riskjusterad avkastning, [annualizedVolatility] i nämnaren (ANA-7). Null = för kort historik eller nollvolatilitet. */
-        val sharpeRatio: Double?
-    )
+        val sharpeRatio: Double?,
+        /** Fönstret i år (3 eller 1) som volatilitet och Sharpe räknats på; null när [annualizedVolatility] saknas. */
+        val riskWindowYears: Int?
+    ) {
+        /**
+         * Sharpe-kvoten är odefinierad för att kursen inte rört sig alls i fönstret (volatilitet
+         * 0), inte för att historiken saknas (ANA-7) — UI:t säger då det i stället för
+         * "otillräcklig data".
+         */
+        val sharpeUndefinedWithoutMovement: Boolean
+            get() = riskWindowYears != null && annualizedVolatility == 0.0
+    }
 
     /**
      * [distanceFromHigh]/[trend]/[momentum] null = otillräcklig data för just den signalen
@@ -192,9 +235,9 @@ object FundAnalysisCalc {
         val threeMonthReturn = periodReturns.first { it.period == Period.TRE_MANADER }.fraction
         val momentum = momentumSignal(threeMonthReturn, otherHoldingsAverageThreeMonthReturn)
 
-        val dailyReturns = dailyReturns(priceHistory)
-        val annualizedVolatility = annualizedVolatility(dailyReturns)
-        val sharpeRatio = sharpeRatio(dailyReturns, annualizedVolatility)
+        val riskWindow = riskWindow(priceHistory)
+        val annualizedVolatility = riskWindow?.annualizedVolatility
+        val sharpeRatio = riskWindow?.let { sharpeRatio(it) }
 
         return Analysis(
             keyFigures = KeyFigures(
@@ -205,7 +248,8 @@ object FundAnalysisCalc {
                 gavFraction = gavFraction,
                 portfolioShareFraction = portfolioShareFraction,
                 annualizedVolatility = annualizedVolatility,
-                sharpeRatio = sharpeRatio
+                sharpeRatio = sharpeRatio,
+                riskWindowYears = riskWindow?.years
             ),
             distanceFromHigh = distanceFromHigh,
             trend = trend,
@@ -240,9 +284,9 @@ object FundAnalysisCalc {
      * "Sedan köp" och CAGR utgår från **positionens** startdatum, [Holding.firstPurchaseEpochDay]
      * (första köpet efter att innehavet senast var noll, POR-6) — samma datum som Fonddetalj
      * använder (issue #194; tidigare räknade Hem och Portfölj från fondens första transaktion
-     * någonsin). Signalerna (S1/S2, volatilitet, Sharpe) räknas på hela [historyByFundId], och S3
-     * mot de övriga fondernas; är fönstren desamma som i Fonddetalj ([analysisHistoryStart])
-     * blir nyckeltal och signalnivå identiska på alla tre skärmar.
+     * någonsin). Signalerna S1/S2 räknas på hela [historyByFundId], volatilitet och Sharpe i sitt
+     * fasta fönster ur den (ANA-7), och S3 mot de övriga fondernas; är fönstren desamma som i
+     * Fonddetalj ([analysisHistoryStart]) blir nyckeltal och signalnivå identiska på alla tre skärmar.
      *
      * @param transactionsByFundId transaktionerna per fond (periodradernas kronor, se [analyze]).
      * @param historyByFundId kurshistorik per fond från [analysisHistoryStart] — samma fönster
@@ -296,37 +340,84 @@ object FundAnalysisCalc {
     }
 
     /**
-     * Enkla dagsavkastningar (`nav_t / nav_{t-1} − 1`) mellan på varandra följande kända
-     * kurspunkter, i tidsordning (ANA-7). NAV-serien har luckor (helger/röda dagar saknas) —
-     * varje par av tillgängliga punkter räknas som en "dag", en godtagbar approximation för ett
-     * vägledande riskmått. Punkter med NAV ≤ 0 hoppas över så att kvoten aldrig blir ogiltig.
+     * Riskmåttens fönster: längd i år, kurspunkterna (tidsordnade, NAV > 0), deras giltiga
+     * dagsavkastningar och volatiliteten på dem — finns fönstret finns alltid volatiliteten.
      */
-    private fun dailyReturns(priceHistory: List<FundPrice>): List<Double> {
-        val navs = priceHistory.sortedBy { it.epochDay }.map { it.nav }.filter { it > 0.0 }
-        if (navs.size < 2) return emptyList()
-        return navs.zipWithNext { prev, next -> (next - prev) / prev }
+    private class RiskWindow(val years: Int, val points: List<FundPrice>, val dailyReturns: List<Double>) {
+        val annualizedVolatility: Double = annualizedVolatility(dailyReturns)
+    }
+
+    /** Minsta antal giltiga dagsavkastningar för ett fönster på [years] år ([MIN_WINDOW_COVERAGE]). */
+    internal fun minWindowReturns(years: Long): Int = kotlin.math.ceil(MIN_WINDOW_COVERAGE * TRADING_DAYS_PER_YEAR * years).toInt()
+
+    /**
+     * Riskmåttens fönster (ANA-7, issue #195): [RISK_WINDOW_YEARS] bakåt från senaste kurs —
+     * 3 år om fönstret är giltigt, annars 1 år på samma villkor, annars null (otillräcklig data,
+     * ANA-4). Fönstret börjar i ankaret, den senaste kursen på eller före startdagen (samma
+     * princip som [priceReturn]), så att första avkastningen täcker startdagen. Giltigt betyder:
+     * - ankaret ligger högst [MAX_RETURN_GAP_DAYS] före startdagen,
+     * - inget glapp mellan två på varandra följande punkter i fönstret är längre än
+     *   [MAX_WINDOW_GAP_DAYS], och
+     * - minst [minWindowReturns] giltiga dagsavkastningar finns.
+     * Äldre historik än ankaret påverkar aldrig måtten, hur lång lista anroparen än skickar in.
+     * Punkter med NAV ≤ 0 hoppas över så att kvoten aldrig blir ogiltig.
+     */
+    private fun riskWindow(priceHistory: List<FundPrice>): RiskWindow? {
+        val points = priceHistory.filter { it.nav > 0.0 }.sortedBy { it.epochDay }
+        val latest = points.lastOrNull() ?: return null
+        val latestDate = LocalDate.ofEpochDay(latest.epochDay)
+        for (years in RISK_WINDOW_YEARS) {
+            val startEpochDay = latestDate.minusYears(years).toEpochDay()
+            val anchor = points.indexOfLast { it.epochDay <= startEpochDay }
+            if (anchor < 0 || startEpochDay - points[anchor].epochDay > MAX_RETURN_GAP_DAYS) continue
+            val window = points.subList(anchor, points.size)
+            if (window.zipWithNext().any { (prev, next) -> next.epochDay - prev.epochDay > MAX_WINDOW_GAP_DAYS }) continue
+            val returns = dailyReturns(window)
+            if (returns.size >= minWindowReturns(years)) return RiskWindow(years.toInt(), window, returns)
+        }
+        return null
     }
 
     /**
-     * Annualiserad standardavvikelse (ANA-7) — dagsavkastningarnas spridning × √252. Null om
-     * färre än [MIN_RETURN_SAMPLES] avkastningar finns (för kort historik, ANA-4) i stället för
-     * ett osäkert/gissat värde. Använder urvalsstandardavvikelse (n−1 i nämnaren).
+     * Enkla dagsavkastningar (`nav_t / nav_{t-1} − 1`) mellan på varandra följande kurspunkter i
+     * [points] (tidsordnade, NAV > 0), ANA-7. Helger och helgdagar saknar kurs, så bara par högst
+     * [MAX_RETURN_GAP_DAYS] kalenderdagar isär räknas som en handelsdag; längre luckor (nedsamplad
+     * eller delvis backfillad historik) hoppas över i stället för att blåsa upp volatiliteten.
      */
-    private fun annualizedVolatility(dailyReturns: List<Double>): Double? {
-        if (dailyReturns.size < MIN_RETURN_SAMPLES) return null
+    private fun dailyReturns(points: List<FundPrice>): List<Double> = points.zipWithNext()
+        .filter { (prev, next) -> next.epochDay - prev.epochDay <= MAX_RETURN_GAP_DAYS }
+        .map { (prev, next) -> (next.nav - prev.nav) / prev.nav }
+
+    /**
+     * Annualiserad standardavvikelse (ANA-7) — dagsavkastningarnas spridning × √252, på fönstrets
+     * giltiga dagsavkastningar (täckningen är redan kontrollerad i [riskWindow]). Använder
+     * urvalsstandardavvikelse (n−1 i nämnaren).
+     */
+    private fun annualizedVolatility(dailyReturns: List<Double>): Double {
         val mean = dailyReturns.average()
         val variance = dailyReturns.sumOf { (it - mean).pow(2) } / (dailyReturns.size - 1)
         return kotlin.math.sqrt(variance) * kotlin.math.sqrt(TRADING_DAYS_PER_YEAR)
     }
 
     /**
-     * Sharpe-kvot (ANA-7) — (annualiserad medelavkastning − [RISK_FREE_RATE]) / [annualizedVolatility].
-     * Riskfri ränta är 0 % i v1. Null om volatiliteten saknas (för kort historik) eller är 0
-     * (ingen risk att dividera med — ett meningslöst/oändligt tal undviks, ANA-4-principen).
+     * Sharpe-kvot (ANA-7) — (annualiserad avkastning − [RISK_FREE_RATE]) / [annualizedVolatility].
+     *
+     * Täljaren är fönstrets **totala** kursutveckling i årstakt, `(NAV_slut / NAV_start)^(365,2425 /
+     * dagar) − 1` (samma årslängd som [cagr]), inte medlet av dagsavkastningarna × 252: de
+     * luckfiltrerade dagsavkastningarna tappar rörelsen över luckor längre än
+     * [MAX_RETURN_GAP_DAYS], vilket är rätt för spridningen men skulle ge en fond som föll över en
+     * lucka en för hög avkastning (issue #195). Nämnaren är volatiliteten på de luckfiltrerade
+     * dagsavkastningarna. Riskfri ränta är 0 % i v1, vilket hjälptexten säger (kvoten blir något
+     * högre än fondbolagens). Null om volatiliteten är 0 (ingen risk att dividera med — ett
+     * meningslöst/oändligt tal undviks, ANA-4-principen).
      */
-    private fun sharpeRatio(dailyReturns: List<Double>, annualizedVolatility: Double?): Double? {
-        if (annualizedVolatility == null || annualizedVolatility <= 0.0) return null
-        val annualizedReturn = dailyReturns.average() * TRADING_DAYS_PER_YEAR
+    private fun sharpeRatio(window: RiskWindow): Double? {
+        val annualizedVolatility = window.annualizedVolatility
+        if (annualizedVolatility <= 0.0) return null
+        val first = window.points.first()
+        val last = window.points.last()
+        val days = (last.epochDay - first.epochDay).toDouble()
+        val annualizedReturn = (last.nav / first.nav).pow(DAYS_PER_YEAR / days) - 1.0
         return (annualizedReturn - RISK_FREE_RATE) / annualizedVolatility
     }
 

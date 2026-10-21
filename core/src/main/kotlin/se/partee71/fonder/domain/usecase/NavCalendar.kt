@@ -14,6 +14,15 @@ import java.time.LocalDateTime
 object NavCalendar {
 
     /**
+     * Längsta lucka i kalenderdagar mellan två kurspunkter som fortfarande räknas som
+     * "närmast föregående handelsdag": helg plus helgdag, t.ex. påsk (torsdag → tisdag). Den enda
+     * gränsen för det i `:core` — periodstarten i [PortfolioPerformanceCalc] (issue #35) och
+     * riskmåttens dagsavkastningar och ankare i [FundAnalysisCalc] (issue #195). Längre luckor
+     * beror troligen på att kurscachen saknar data, inte på stängda börsdagar.
+     */
+    internal const val MAX_NAV_GAP_DAYS = 5L
+
+    /**
      * Ungefärlig klockslag på kvällen då svenska fond-NAV:er brukar vara publicerade för
      * dagen — en approximation (v1, ej per fondbolag), lätt att justera vid behov.
      */

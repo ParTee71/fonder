@@ -198,7 +198,8 @@ class PortfoljScreenTest {
         gavFraction = gavFraction,
         portfolioShareFraction = null,
         annualizedVolatility = null,
-        sharpeRatio = null
+        sharpeRatio = null,
+        riskWindowYears = null
     )
 
     @Test

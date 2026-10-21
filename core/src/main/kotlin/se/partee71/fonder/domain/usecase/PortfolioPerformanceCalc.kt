@@ -29,14 +29,11 @@ object PortfolioPerformanceCalc {
 
     /**
      * Max antal dagar en historisk kurs får ligga före periodens måldag för att fortfarande
-     * dugas som "periodens start" (issue #35). Täcker vanliga helger/röda dagar ([NavCalendar]
-     * hanterar bara lördag/söndag, inte svenska röda dagar) — en lucka större än så beror
-     * troligen på att kurscachen faktiskt saknar data för perioden (t.ex. en källa som samplar
-     * ner långa intervall), inte på stängda börsdagar. Utan denna gräns kunde två olika
-     * perioder tyst råka välja samma, för gamla, kurs och visa identiska men missvisande tal
-     * (samma symptom som "En dag" och "Senaste veckan" råkade dela exakt samma siffra).
+     * dugas som "periodens start" (issue #35), [NavCalendar.MAX_NAV_GAP_DAYS]. Utan denna gräns
+     * kunde två olika perioder tyst råka välja samma, för gamla, kurs och visa identiska men
+     * missvisande tal (samma symptom som "En dag" och "Senaste veckan" råkade dela exakt samma siffra).
      */
-    private const val MAX_PRICE_GAP_DAYS = 5L
+    private const val MAX_PRICE_GAP_DAYS = NavCalendar.MAX_NAV_GAP_DAYS
 
     /**
      * Resultatet av [holdingChange] för ett enskilt innehav (issue #18):

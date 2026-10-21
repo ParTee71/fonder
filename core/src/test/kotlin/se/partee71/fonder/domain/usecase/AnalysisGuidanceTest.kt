@@ -19,7 +19,8 @@ class AnalysisGuidanceTest {
         gavFraction = gavFraction,
         portfolioShareFraction = 0.25,
         annualizedVolatility = 0.18,
-        sharpeRatio = 0.8
+        sharpeRatio = 0.8,
+        riskWindowYears = 3
     )
 
     private fun analysis(

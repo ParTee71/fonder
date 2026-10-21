@@ -475,7 +475,8 @@ private val galleryAnalysis = FundAnalysisCalc.Analysis(
         gavFraction = -0.087,
         portfolioShareFraction = 0.31,
         annualizedVolatility = 0.211,
-        sharpeRatio = 0.3
+        sharpeRatio = 0.3,
+        riskWindowYears = 3
     ),
     distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(SignalLevel.ROD, -0.236),
     trend = FundAnalysisCalc.TrendSignal(SignalLevel.ROD),
