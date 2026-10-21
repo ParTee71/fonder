@@ -28,14 +28,6 @@ object PortfolioPerformanceCalc {
     const val HISTORY_LOOKBACK_DAYS = 60L
 
     /**
-     * Max antal dagar en historisk kurs får ligga före periodens måldag för att fortfarande
-     * dugas som "periodens start" (issue #35), [NavCalendar.MAX_NAV_GAP_DAYS]. Utan denna gräns
-     * kunde två olika perioder tyst råka välja samma, för gamla, kurs och visa identiska men
-     * missvisande tal (samma symptom som "En dag" och "Senaste veckan" råkade dela exakt samma siffra).
-     */
-    private const val MAX_PRICE_GAP_DAYS = NavCalendar.MAX_NAV_GAP_DAYS
-
-    /**
      * Resultatet av [holdingChange] för ett enskilt innehav (issue #18):
      * - [Available] — referensdagens NAV och en NAV [Period.days] dagar dessförinnan finns, kr + % beräknat.
      * - [InsufficientHistory] — historiken når inte tillbaka [Period.days] dagar före referensdagen
@@ -65,15 +57,13 @@ object PortfolioPerformanceCalc {
     /**
      * Referensdagen är den senaste NAV-dagen på eller före [today] i [history] (så en hypotetisk
      * framtida punkt aldrig råkar bli referens). Null om historiken inte når [Period.days] dagar
-     * före referensdagen, om närmaste kurs ligger mer än [MAX_PRICE_GAP_DAYS] före måldagen, eller
+     * före referensdagen, om närmaste kurs ligger mer än [NavCalendar.MAX_NAV_GAP_DAYS] (issue #35) före måldagen, eller
      * om ingen kurs finns alls.
      */
     private fun window(period: Period, today: LocalDate, history: List<FundPrice>): Window? {
         val todayEpochDay = today.toEpochDay()
-        val referenceDay = history.filter { it.epochDay <= todayEpochDay }.maxOfOrNull { it.epochDay } ?: return null
-        val targetDay = referenceDay - period.days
-        val historicalPrice = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay } ?: return null
-        if (targetDay - historicalPrice.epochDay > MAX_PRICE_GAP_DAYS) return null
+        val referenceDay = NavCalendar.latestOnOrBefore(history, todayEpochDay)?.epochDay ?: return null
+        val historicalPrice = NavCalendar.startPriceOnOrBefore(history, referenceDay - period.days) ?: return null
         return Window(referenceDay, historicalPrice)
     }
 

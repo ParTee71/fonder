@@ -1,7 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import kotlin.math.pow
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
@@ -71,6 +70,20 @@ object FundAnalysisCalc {
      */
     private val RISK_WINDOW_YEARS = listOf(3L, 1L)
 
+    /**
+     * Periodradernas start- och slutkurs (issue #198): startkursen får ligga högst
+     * [NavCalendar.MAX_NAV_GAP_DAYS] före periodens startdag (som periodstarten i
+     * [PortfolioPerformanceCalc], issue #35) och slutkursen är den senaste NAV:en på eller före
+     * idag. Slutkursen är inaktuell ([PeriodReturn.endIsStale]) när den är äldre än senaste
+     * förväntade NAV-dagen ([NavCalendar.expectedLatestNavDay], före kl. 18) med mer än
+     * [STALE_MARGIN_DAYS] — en helg plus helgdagar som jul och påsk räknas inte som inaktuell.
+     * UI:t anger då datumet.
+     */
+    internal const val STALE_MARGIN_DAYS = 4L
+
+    /** Slutkursen [endEpochDay] är äldre än förväntad senaste NAV-dag minus [STALE_MARGIN_DAYS] (issue #198). */
+    internal fun isStaleEnd(endEpochDay: Long, today: LocalDate): Boolean = NavCalendar.expectedLatestNavDay(today.atStartOfDay()).toEpochDay() - endEpochDay > STALE_MARGIN_DAYS
+
     /** Vinstsignalens tröskel (ANA-8, issue #26) — fast för v1, samma princip som övriga trösklar. */
     private const val PROFIT_TAKE_THRESHOLD = 0.50
 
@@ -109,9 +122,24 @@ object FundAnalysisCalc {
      * i kr på de andelar som faktiskt ägts under perioden, dag för dag ([PositionValueChangeCalc],
      * issue #193); för [Period.SEDAN_KOP] positionens vinst mot anskaffningsvärdet (samma tal som
      * GAV-raden och portföljkortet, [Holding.gainLoss]). Null = otillräcklig kurshistorik för
-     * perioden (ANA-1/ANA-4), aldrig gissat.
+     * perioden (ANA-1/ANA-4), aldrig gissat — även när startkursen ligger längre än
+     * [NavCalendar.MAX_NAV_GAP_DAYS] före periodens startdag (issue #198).
+     *
+     * [startEpochDay]/[endEpochDay] är NAV-dagarna procenten faktiskt mäter mellan (null när
+     * [fraction] är null). [endIsStale] = slutkursen är äldre än några dagar före idag, så UI:t
+     * ska ange "per <datum>".
      */
-    data class PeriodReturn(val period: Period, val amount: Double?, val fraction: Double?)
+    data class PeriodReturn(
+        val period: Period,
+        val amount: Double?,
+        val fraction: Double?,
+        val startEpochDay: Long? = null,
+        val endEpochDay: Long? = null,
+        val endIsStale: Boolean = false
+    )
+
+    /** Kursutvecklingen [fraction] mellan två NAV-dagar. */
+    private class PriceMove(val fraction: Double, val startEpochDay: Long, val endEpochDay: Long)
 
     enum class SignalLevel { GRON, GUL, ROD }
 
@@ -137,6 +165,9 @@ object FundAnalysisCalc {
         /** Null om innehavet är yngre än ett år, eller "sedan köp"-perioden saknar data. */
         val cagr: Double?,
         val currentNav: Double,
+        /** NAV-dagen [currentNav] gäller, och om den är äldre än förväntat ([isStaleEnd]) så UI:t anger "per <datum>" på CAGR, GAV och andel. */
+        val currentNavEpochDay: Long = 0L,
+        val currentNavIsStale: Boolean = false,
         val gavPerShare: Double,
         /** Null bara om [gavPerShare] är 0 (bör inte kunna hända för ett verkligt innehav). */
         val gavFraction: Double?,
@@ -198,7 +229,10 @@ object FundAnalysisCalc {
         otherHoldingsAverageThreeMonthReturn: Double?
     ): Analysis? {
         if (holding.netShares <= 0.0) return null
-        val latest = priceHistory.maxByOrNull { it.epochDay } ?: return null
+        // Slutkursen är senaste NAV på eller före idag (issue #198), så en framtida punkt aldrig blir slut.
+        // Allt analysen räknar på slutar idag: en framtida punkt påverkar varken slutkurs, signaler eller riskmått.
+        val history = priceHistory.filter { it.epochDay <= today.toEpochDay() }
+        val latest = NavCalendar.latestOnOrBefore(history, today.toEpochDay()) ?: return null
         val currentNav = latest.nav
 
         val periodReturns = listOf(
@@ -208,21 +242,28 @@ object FundAnalysisCalc {
             Period.TRE_AR to today.minusYears(3),
             Period.SEDAN_KOP to firstPurchaseDate
         ).map { (period, start) ->
-            val fraction = priceReturn(start, priceHistory, currentNav)
+            val move = priceMove(start, latest, history)
+            val fraction = move?.fraction
             val amount = when {
                 // Positionens faktiska vinst — samma tal som GAV-raden, så skärmen inte visar två "vinster".
                 period == Period.SEDAN_KOP -> holding.gainLoss ?: (holding.netShares * currentNav - holding.netInvested)
 
-                fraction == null -> null
+                move == null -> null
 
-                else -> PositionValueChangeCalc.valueChange(transactions, priceHistory, start.toEpochDay(), latest.epochDay)
+                // Från samma NAV-dag som procenten (issue #198), inte från periodens startdag.
+                else -> PositionValueChangeCalc.valueChange(transactions, history, move.startEpochDay, latest.epochDay)
             }
-            PeriodReturn(period, amount, fraction)
+            PeriodReturn(
+                period = period,
+                amount = amount,
+                fraction = fraction,
+                startEpochDay = move?.startEpochDay,
+                endEpochDay = move?.endEpochDay,
+                endIsStale = move != null && isStaleEnd(move.endEpochDay, today)
+            )
         }
 
-        val sincePurchaseFraction = periodReturns.first { it.period == Period.SEDAN_KOP }.fraction
-        val holdingDays = ChronoUnit.DAYS.between(firstPurchaseDate, today)
-        val cagr = computeCagr(holdingDays, sincePurchaseFraction)
+        val cagr = periodReturns.first { it.period == Period.SEDAN_KOP }.let { computeCagr(it.startEpochDay, it.endEpochDay, it.fraction) }
 
         val gavPerShare = holding.netInvested / holding.netShares
         val gavFraction = if (gavPerShare > 0.0) (currentNav - gavPerShare) / gavPerShare else null
@@ -232,12 +273,12 @@ object FundAnalysisCalc {
             null
         }
 
-        val distanceFromHigh = distanceFromHighSignal(today, priceHistory, currentNav)
-        val trend = trendSignal(today, priceHistory, currentNav)
+        val distanceFromHigh = distanceFromHighSignal(today, history, currentNav)
+        val trend = trendSignal(today, history, currentNav)
         val threeMonthReturn = periodReturns.first { it.period == Period.TRE_MANADER }.fraction
         val momentum = momentumSignal(threeMonthReturn, otherHoldingsAverageThreeMonthReturn)
 
-        val riskWindow = riskWindow(priceHistory)
+        val riskWindow = riskWindow(history)
         val annualizedVolatility = riskWindow?.annualizedVolatility
         val sharpeRatio = riskWindow?.let { sharpeRatio(it) }
 
@@ -246,6 +287,8 @@ object FundAnalysisCalc {
                 periodReturns = periodReturns,
                 cagr = cagr,
                 currentNav = currentNav,
+                currentNavEpochDay = latest.epochDay,
+                currentNavIsStale = isStaleEnd(latest.epochDay, today),
                 gavPerShare = gavPerShare,
                 gavFraction = gavFraction,
                 portfolioShareFraction = portfolioShareFraction,
@@ -268,14 +311,8 @@ object FundAnalysisCalc {
      * [analyze] eftersom den ska köras för *övriga* innehav, inte det analyserade.
      */
     fun threeMonthReturn(today: LocalDate, priceHistory: List<FundPrice>): Double? {
-        val currentNav = priceHistory.maxByOrNull { it.epochDay }?.nav ?: return null
-        val historicalNav = priceHistory
-            .filter { it.epochDay <= today.minusMonths(3).toEpochDay() }
-            .maxByOrNull { it.epochDay }
-            ?.nav
-            ?: return null
-        if (historicalNav <= 0.0) return null
-        return (currentNav - historicalNav) / historicalNav
+        val end = NavCalendar.latestOnOrBefore(priceHistory, today.toEpochDay()) ?: return null
+        return priceMove(today.minusMonths(3), end, priceHistory)?.fraction
     }
 
     /**
@@ -325,20 +362,23 @@ object FundAnalysisCalc {
         return if (fractions.isEmpty()) null else fractions.average()
     }
 
-    /** Fondens kursutveckling från senaste kända NAV på eller före [periodStart] till [currentNav]; null utan sådan kurs. */
-    private fun priceReturn(periodStart: LocalDate, priceHistory: List<FundPrice>, currentNav: Double): Double? {
-        val historicalNav = priceHistory
-            .filter { it.epochDay <= periodStart.toEpochDay() }
-            .maxByOrNull { it.epochDay }
-            ?.nav
-        if (historicalNav == null || historicalNav <= 0.0) return null
-        return (currentNav - historicalNav) / historicalNav
+    /**
+     * Fondens kursutveckling från startkursen ([NavCalendar.startPriceOnOrBefore], högst
+     * [NavCalendar.MAX_NAV_GAP_DAYS] före [periodStart]) till slutkursen [end] (senaste NAV på eller
+     * före idag); null utan startkurs — aldrig en gammal kurs som ger sken av att mäta perioden (issue #198).
+     */
+    private fun priceMove(periodStart: LocalDate, end: FundPrice, priceHistory: List<FundPrice>): PriceMove? {
+        val start = NavCalendar.startPriceOnOrBefore(priceHistory, periodStart.toEpochDay()) ?: return null
+        if (start.nav <= 0.0) return null
+        return PriceMove((end.nav - start.nav) / start.nav, start.epochDay, end.epochDay)
     }
 
-    private fun computeCagr(holdingDays: Long, sincePurchaseFraction: Double?): Double? {
-        if (holdingDays < CAGR_MIN_DAYS || sincePurchaseFraction == null) return null
-        val years = holdingDays / DAYS_PER_YEAR
-        return (1.0 + sincePurchaseFraction).pow(1.0 / years) - 1.0
+    /** Årstakt mellan de två NAV-dagarna (issue #198), inte mellan köpdag och idag; null under ett år eller utan procent. */
+    private fun computeCagr(startEpochDay: Long?, endEpochDay: Long?, sincePurchaseFraction: Double?): Double? {
+        if (startEpochDay == null || endEpochDay == null || sincePurchaseFraction == null) return null
+        val days = endEpochDay - startEpochDay
+        if (days < CAGR_MIN_DAYS) return null
+        return (1.0 + sincePurchaseFraction).pow(DAYS_PER_YEAR / days) - 1.0
     }
 
     /**

@@ -254,6 +254,7 @@
     <string name="analys_period_1ar">1 år</string>
     <string name="analys_period_3ar">3 år</string>
     <string name="analys_period_sedan_kop">Sedan köp</string>
+    <string name="format_analys_period_as_of">per %1$s</string>
     <string name="analys_cagr_label">Årlig snittavkastning (CAGR)</string>
     <string name="analys_gav_label">GAV</string>
     <string name="format_analys_gav_label">GAV %1$s</string>
@@ -291,7 +292,7 @@
     <!-- Nyckeltalsförklaringar -->
     <string name="analys_period_explain">Procenten är hur mycket fondens kurs ändrats under perioden. Kronorna är hur mycket värdet på dina andelar ändrats under samma tid, dag för dag — andelar du köpt under perioden räknas från köpdagen och sålda till säljdagen. Enskilda perioder svänger — se dem tillsammans, inte var för sig.</string>
     <string name="analys_period_sedan_kop_explain">Procenten är hur mycket fondens kurs rört sig sedan positionens första köpdag — inte din egen avkastning. Kronorna är din faktiska vinst eller förlust på positionen mot vad du betalat, köpavgifter inräknade — samma tal som GAV-raden. Har du köpt fler andelar senare, till en annan kurs, skiljer sig procenten från vinsten.</string>
-    <string name="analys_cagr_explain">Genomsnittlig årlig avkastning sedan ditt första köp, utjämnad över åren (ränta-på-ränta). Visas först när du ägt fonden minst ett år, så siffran blir meningsfull.</string>
+    <string name="analys_cagr_explain">Genomsnittlig årlig avkastning sedan ditt första köp, utjämnad över åren (ränta-på-ränta). Räknas mellan kursdagen vid köpet och den senaste kursdagen, och visas först när de ligger minst ett år isär, så siffran blir meningsfull.</string>
     <string name="analys_gav_explain">Ditt genomsnittliga anskaffningsvärde per andel (GAV) jämfört med dagens kurs. Plus betyder att du ligger över vad du betalat i snitt, minus under — oavsett var toppen låg.</string>
     <string name="analys_portfolio_share_explain">Hur stor del av portföljens totala värde den här fonden utgör. En hög andel betyder att mycket av ditt sparande hänger på en enda fond (lägre spridning).</string>
     <!-- Riskmått (issue #24, ANA-7) -->

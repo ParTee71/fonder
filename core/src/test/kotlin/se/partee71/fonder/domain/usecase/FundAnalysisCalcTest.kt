@@ -101,6 +101,146 @@ class FundAnalysisCalcTest {
         assertEquals(kotlin.math.sqrt(2.0) - 1.0, analysis.keyFigures.cagr!!, 1e-3)
     }
 
+    private val holding198 = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1200.0)
+
+    private fun analyze198(history: List<FundPrice>, today: LocalDate, firstPurchase: LocalDate) = FundAnalysisCalc.analyze(
+        today = today,
+        holding = holding198,
+        transactions = emptyList(),
+        priceHistory = history,
+        firstPurchaseDate = firstPurchase,
+        portfolioTotalValue = 1200.0,
+        otherHoldingsAverageThreeMonthReturn = null
+    )!!
+
+    private fun fundPrice(day: String, nav: Double) = FundPrice(fond.fundId, LocalDate.parse(day).toEpochDay(), nav)
+
+    @Test
+    fun `lucka fore periodens start ger otillrcklig data i stallet for en gammal kurs (issue 198)`() {
+        // Kurser till 2026-03-01, sedan från 2026-09-15; idag 2026-10-20. "3 månader" startar 2026-07-20.
+        val history = listOf(fundPrice("2026-03-01", 100.0), fundPrice("2026-09-15", 120.0), fundPrice("2026-10-20", 130.0))
+        val today = LocalDate.of(2026, 10, 20)
+
+        val analysis = analyze198(history, today, firstPurchase = LocalDate.of(2026, 9, 15))
+
+        val threeMonths = analysis.row(FundAnalysisCalc.Period.TRE_MANADER)
+        assertNull(threeMonths.fraction)
+        assertNull(threeMonths.amount)
+        assertNull(FundAnalysisCalc.threeMonthReturn(today, history))
+    }
+
+    @Test
+    fun `startkurs fem dagar fore periodens start anvands men sex dagar ger otillrcklig data`() {
+        val today = LocalDate.of(2026, 10, 20) // 3 mån = 2026-07-20
+        val five = listOf(fundPrice("2026-07-15", 100.0), fundPrice("2026-10-20", 110.0))
+        val six = listOf(fundPrice("2026-07-14", 100.0), fundPrice("2026-10-20", 110.0))
+
+        assertEquals(0.10, FundAnalysisCalc.threeMonthReturn(today, five)!!, 1e-12)
+        assertNull(FundAnalysisCalc.threeMonthReturn(today, six))
+    }
+
+    @Test
+    fun `slutkursen ar senaste NAV pa eller fore idag och en gammal slutkurs markeras med datum (issue 198)`() {
+        // Senaste NAV 2026-01-02, idag 2026-01-23; en framtida punkt får aldrig bli slutkurs.
+        val history = listOf(
+            fundPrice("2025-01-02", 100.0),
+            fundPrice("2026-01-02", 125.0),
+            fundPrice("2026-02-01", 999.0)
+        )
+        val today = LocalDate.of(2026, 1, 23)
+
+        val oneYear = analyze198(history, today, firstPurchase = LocalDate.of(2025, 1, 2)).row(FundAnalysisCalc.Period.ETT_AR)
+
+        // 1 år startar 2025-01-23: närmaste kurs 2025-01-02 ligger 21 dagar före, så otillräcklig data.
+        assertNull(oneYear.fraction)
+        val sincePurchase = analyze198(history, today, firstPurchase = LocalDate.of(2025, 1, 2)).row(FundAnalysisCalc.Period.SEDAN_KOP)
+        assertEquals(0.25, sincePurchase.fraction!!, 1e-12)
+        assertEquals(LocalDate.of(2025, 1, 2).toEpochDay(), sincePurchase.startEpochDay)
+        assertEquals(LocalDate.of(2026, 1, 2).toEpochDay(), sincePurchase.endEpochDay)
+        assertTrue(sincePurchase.endIsStale)
+    }
+
+    @Test
+    fun `slutkurs fran i fredags ar inte inaktuell`() {
+        val history = listOf(fundPrice("2025-10-17", 100.0), fundPrice("2026-10-16", 110.0)) // fredag
+        val analysis = analyze198(history, LocalDate.of(2026, 10, 19), firstPurchase = LocalDate.of(2025, 10, 17))
+
+        assertFalse(analysis.row(FundAnalysisCalc.Period.SEDAN_KOP).endIsStale)
+    }
+
+    @Test
+    fun `julhelgen ar inte en inaktuell slutkurs men en vecka utan kurs ar det (issue 198)`() {
+        val history = listOf(fundPrice("2024-12-30", 100.0), fundPrice("2025-12-23", 110.0)) // tis
+        // Idag mån 2025-12-29 före 18: förväntad senaste NAV är fre 12-26, tre dagar efter.
+        val christmas = analyze198(history, LocalDate.of(2025, 12, 29), firstPurchase = LocalDate.of(2024, 12, 30))
+        assertFalse(christmas.row(FundAnalysisCalc.Period.YTD).endIsStale)
+        assertFalse(christmas.keyFigures.currentNavIsStale)
+
+        val later = analyze198(history, LocalDate.of(2026, 1, 5), firstPurchase = LocalDate.of(2024, 12, 30))
+        assertTrue(later.keyFigures.currentNavIsStale)
+        assertEquals(LocalDate.of(2025, 12, 23).toEpochDay(), later.keyFigures.currentNavEpochDay)
+    }
+
+    @Test
+    fun `sedan kop utan kurs inom fem dagar fore kopet har kronor men varken procent eller CAGR (issue 198)`() {
+        // Första kursen kommer 40 dagar efter köpet. Kronorna är GAV-vinsten (10 × 120 − 1 000 = 200).
+        val today = LocalDate.of(2026, 7, 31)
+        val purchase = today.minusYears(2)
+        val history = listOf(
+            FundPrice(fond.fundId, purchase.plusDays(40).toEpochDay(), 100.0),
+            FundPrice(fond.fundId, today.toEpochDay(), 120.0)
+        )
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1200.0)
+
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), history, purchase, 1200.0, null)!!
+
+        val sinceBuy = analysis.row(FundAnalysisCalc.Period.SEDAN_KOP)
+        assertEquals(200.0, sinceBuy.amount!!, 1e-9)
+        assertNull(sinceBuy.fraction)
+        assertNull(analysis.keyFigures.cagr)
+    }
+
+    @Test
+    fun `periodraderna matchar fondmatte golden for periodgap (issue 198)`() {
+        // tools/fondmatte/periodgap.json → funds.A.periods: lucka före 3 mån, senaste NAV 2026-10-12 mot idag 2026-10-20.
+        val today = LocalDate.of(2026, 10, 20)
+        val history = listOf("2025-10-01" to 95.0, "2025-10-20" to 100.0, "2025-12-31" to 110.0, "2026-03-02" to 120.0, "2026-09-15" to 130.0, "2026-10-12" to 140.0)
+            .map { (day, nav) -> fundPrice(day, nav) }
+        val buy = Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = LocalDate.of(2025, 10, 1).toEpochDay(), shares = 10.0, pricePerShare = 95.0)
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 950.0, currentValue = 1400.0)
+
+        val analysis = FundAnalysisCalc.analyze(today, holding, listOf(buy), history, LocalDate.of(2025, 10, 1), 1400.0, null)!!
+
+        for (period in listOf(FundAnalysisCalc.Period.TRE_MANADER, FundAnalysisCalc.Period.TRE_AR)) {
+            assertNull(analysis.row(period).fraction)
+            assertNull(analysis.row(period).amount)
+        }
+        val ytd = analysis.row(FundAnalysisCalc.Period.YTD)
+        assertEquals(0.2727272727272727, ytd.fraction!!, 1e-12)
+        assertEquals(300.0, ytd.amount!!, 1e-9)
+        assertEquals(LocalDate.of(2025, 12, 31).toEpochDay(), ytd.startEpochDay)
+        assertEquals(LocalDate.of(2026, 10, 12).toEpochDay(), ytd.endEpochDay)
+        assertTrue(ytd.endIsStale)
+        val oneYear = analysis.row(FundAnalysisCalc.Period.ETT_AR)
+        assertEquals(0.3999999999999999, oneYear.fraction!!, 1e-12)
+        assertEquals(400.0, oneYear.amount!!, 1e-9)
+        val sinceBuy = analysis.row(FundAnalysisCalc.Period.SEDAN_KOP)
+        assertEquals(0.4736842105263157, sinceBuy.fraction!!, 1e-12)
+        assertEquals(LocalDate.of(2025, 10, 1).toEpochDay(), sinceBuy.startEpochDay)
+        assertEquals(0.45742534226654086, analysis.keyFigures.cagr!!, 1e-12)
+    }
+
+    @Test
+    fun `CAGR rknas mellan de tv NAV-dagarna, inte fram till idag (issue 198)`() {
+        // Golden (fondmatte.py period_rows): NAV 100 -> 200 mellan 2024-01-02 och 2026-01-02 (731 dagar),
+        // idag 2026-01-23: 2^(365,2425/731) − 1 = 0,4138683015541049. Mot idag (752 dagar) blev det 0,4034.
+        val history = listOf(fundPrice("2024-01-02", 100.0), fundPrice("2026-01-02", 200.0))
+
+        val analysis = analyze198(history, LocalDate.of(2026, 1, 23), firstPurchase = LocalDate.of(2024, 1, 2))
+
+        assertEquals(0.4138683015541049, analysis.keyFigures.cagr!!, 1e-12)
+    }
+
     @Test
     fun `GAV ar kvarvarande anskaffningsvarde per andel, jamfort mot aktuell NAV`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 800.0, currentValue = 1200.0)
@@ -253,7 +393,7 @@ class FundAnalysisCalcTest {
     @Test
     fun `S3 momentum - minst 5 procentenheter samre an portfoljsnittet ger gul`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
-        val history = listOf(price(100, 100.0), price(0, 90.0)) // -10 % senaste 3 mån
+        val history = listOf(price(92, 100.0), price(0, 90.0)) // -10 % senaste 3 mån
 
         val analysis = FundAnalysisCalc.analyze(
             today,
@@ -272,7 +412,7 @@ class FundAnalysisCalcTest {
     @Test
     fun `S3 ar null om portfoljsnittet saknas`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
-        val history = listOf(price(100, 100.0), price(0, 90.0))
+        val history = listOf(price(92, 100.0), price(0, 90.0))
 
         val analysis = FundAnalysisCalc.analyze(
             today,
@@ -326,12 +466,12 @@ class FundAnalysisCalcTest {
 
     @Test
     fun `threeMonthReturn och averageThreeMonthReturn`() {
-        val history = listOf(price(100, 100.0), price(0, 110.0))
+        val history = listOf(price(92, 100.0), price(0, 110.0))
         assertEquals(0.10, FundAnalysisCalc.threeMonthReturn(today, history)!!, 1e-9)
 
         val average = FundAnalysisCalc.averageThreeMonthReturn(
             today,
-            mapOf("A" to history, "B" to listOf(price(100, 100.0), price(0, 90.0)))
+            mapOf("A" to history, "B" to listOf(price(92, 100.0), price(0, 90.0)))
         )
         assertEquals(0.0, average!!, 1e-9) // (+10 % + -10 %) / 2
     }
@@ -350,8 +490,8 @@ class FundAnalysisCalcTest {
         val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1100.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
         val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 900.0, currentValue = 900.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
         val holdingC = Holding(fund = fondC, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
-        val historyA = listOf(price(100, 100.0), price(0, 110.0))
-        val historyB = listOf(price(100, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
+        val historyA = listOf(price(92, 100.0), price(0, 110.0))
+        val historyB = listOf(price(92, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
         val histories = mapOf(fond.fundId to historyA, "B" to historyB, "C" to historyB.map { it.copy(fundId = "C") })
 
         val result = FundAnalysisCalc.analyzeAll(
@@ -735,12 +875,12 @@ class FundAnalysisCalcTest {
 
     private fun FundAnalysisCalc.Analysis.row(period: FundAnalysisCalc.Period) = keyFigures.periodReturns.first { it.period == period }
 
-    /** 3 mån-raden när kursen var 80 för ett år och 100 dagar sedan, 100 för 30 dagar sedan och 120 idag. */
+    /** 3 mån-raden när kursen var 80 för ett år och 92 dagar sedan, 100 för 30 dagar sedan och 120 idag. */
     private fun threeMonthsWithTradeThirtyDaysAgo(holding: Holding, transactions: List<Transaction>) = FundAnalysisCalc.analyze(
         today,
         holding,
         transactions,
-        listOf(price(daysAgo = 365, nav = 80.0), price(daysAgo = 100, nav = 80.0), price(daysAgo = 30, nav = 100.0), price(daysAgo = 0, nav = 120.0)),
+        listOf(price(daysAgo = 365, nav = 80.0), price(daysAgo = 92, nav = 80.0), price(daysAgo = 30, nav = 100.0), price(daysAgo = 0, nav = 120.0)),
         today.minusDays(365),
         holding.currentValue!!,
         null
@@ -817,8 +957,8 @@ class FundAnalysisCalcTest {
         val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
         val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 1000.0, currentValue = 900.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
         val histories = mapOf(
-            fond.fundId to listOf(price(100, 100.0), price(0, 110.0)),
-            "B" to listOf(price(100, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
+            fond.fundId to listOf(price(92, 100.0), price(0, 110.0)),
+            "B" to listOf(price(92, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
         )
         // A har sitt köp i kartan, B saknas där: B:s kronor räknas inte på A:s transaktioner.
         val transactions = mapOf(fond.fundId to listOf(kop(daysAgo = 365, shares = 10.0, nav = 100.0)))

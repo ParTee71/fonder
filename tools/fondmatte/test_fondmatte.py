@@ -353,6 +353,55 @@ class PeriodRowsTest(unittest.TestCase):
             self.assertEqual(rows[period], {"amount": None, "fraction": None})
 
 
+class PeriodRowsGapAndStaleEndTest(unittest.TestCase):
+    """Startkursens glappgräns, inaktuell slutkurs och årstakt mellan NAV-dagarna (issue #198)."""
+
+    def test_gap_before_period_start_gives_none_not_an_old_price(self):
+        # Kurser till 1/3, sedan från 15/9; idag 20/10: "3 mån" (start 20/7) saknar startkurs inom fem dagar.
+        p = prices(A=[("2025-12-01", 90.0), ("2026-03-01", 100.0), ("2026-09-15", 120.0), ("2026-10-20", 130.0)])
+        rows = fm.period_rows([tx("2025-01-01", "BUY", 10, 90.0)], p, "A", date(2026, 10, 20))
+        self.assertEqual(rows["3m"], {"amount": None, "fraction": None})
+        # "I år" startar 2026-01-01: den enda kursen före är 2025-12-01, 31 dagar tidigare.
+        self.assertEqual(rows["ytd"], {"amount": None, "fraction": None})
+
+    def test_start_price_five_days_before_is_used_and_six_is_not(self):
+        p = prices(A=[("2026-07-15", 100.0), ("2026-10-20", 110.0)])
+        rows = fm.period_rows([], p, "A", date(2026, 10, 20))
+        self.assertAlmostEqual(rows["3m"]["fraction"], 0.10, places=12)
+        p = prices(A=[("2026-07-14", 100.0), ("2026-10-20", 110.0)])
+        self.assertIsNone(fm.period_rows([], p, "A", date(2026, 10, 20))["3m"]["fraction"])
+
+    def test_stale_end_is_marked_and_cagr_runs_between_the_nav_days(self):
+        # Köp 2024-01-02, senaste NAV 2026-01-02 (idag 2026-01-23): NAV 100 -> 200 över 731 dagar.
+        p = prices(A=[("2024-01-02", 100.0), ("2026-01-02", 200.0)])
+        rows = fm.period_rows([tx("2024-01-02", "BUY", 10, 100.0)], p, "A", date(2026, 1, 23))
+        sp = rows["since_purchase"]
+        self.assertEqual((sp["start_day"], sp["end_day"], sp["end_is_stale"]), ("2024-01-02", "2026-01-02", True))
+        self.assertAlmostEqual(sp["fraction"], 1.0, places=12)
+        self.assertAlmostEqual(sp["cagr"], 2.0 ** (365.2425 / 731) - 1.0, places=12)
+
+    def test_christmas_gap_is_not_stale(self):
+        # Senaste NAV tis 2025-12-23, idag mån 2025-12-29 (förväntad senaste NAV: fre 12-26).
+        p = prices(A=[("2024-12-30", 100.0), ("2025-12-23", 110.0)])
+        rows = fm.period_rows([], p, "A", date(2025, 12, 29))
+        self.assertFalse(rows["ytd"]["end_is_stale"])
+
+    def test_periodgap_fixture(self):
+        with open(Path(__file__).with_name("periodgap.json"), encoding="utf-8") as f:
+            rows = fm.golden(json.load(f))["funds"]["A"]["periods"]
+        for period in ("3m", "3y", "day", "week", "month"):
+            self.assertEqual(rows[period], {"amount": None, "fraction": None})
+        self.assertAlmostEqual(rows["ytd"]["fraction"], 140 / 110 - 1, places=12)
+        self.assertEqual((rows["ytd"]["start_day"], rows["ytd"]["end_day"], rows["ytd"]["end_is_stale"]), ("2025-12-31", "2026-10-12", True))
+        self.assertAlmostEqual(rows["ytd"]["amount"], 300.0, places=9)
+        self.assertAlmostEqual(rows["since_purchase"]["cagr"], (140 / 95) ** (365.2425 / 376) - 1, places=12)
+
+    def test_end_two_days_old_is_not_stale(self):
+        p = prices(A=[("2025-01-02", 100.0), ("2026-01-02", 110.0)])
+        rows = fm.period_rows([], p, "A", date(2026, 1, 4))
+        self.assertFalse(rows["1y"]["end_is_stale"])
+
+
 class MovingAverageTest(unittest.TestCase):
     def test_window_is_290_calendar_days_regardless_of_gaps(self):
         # Bara vardagar har kurs. Första snittet kommer när serien nått 290 dagar bakåt.
