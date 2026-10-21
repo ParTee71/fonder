@@ -183,6 +183,39 @@ object FundAnalysisCalc {
         return (currentNav - historicalNav) / historicalNav
     }
 
+    /**
+     * Analyserar varje innehav i [holdings] (ANA-3/ANA-8) — den gemensamma slingan för Hem och
+     * Portfölj. Momentum-signalen (S3) jämför varje fond mot snittet av **övriga** fonders
+     * tremånadersutveckling, och portföljandelen räknas mot hela [holdings].
+     *
+     * @param historyByFundId kurshistorik per fond, redan klippt till den räckvidd anroparen vill
+     *   analysera (sedan första köpet).
+     * @param firstPurchaseByFund första köpdag per fond; innehav utan köpdag utelämnas.
+     * @return analysen per fundId i [holdings] ordning; fonder som [analyze] inte kan analysera
+     *   utelämnas.
+     */
+    fun analyzeAll(
+        today: LocalDate,
+        holdings: List<Holding>,
+        historyByFundId: Map<String, List<FundPrice>>,
+        firstPurchaseByFund: Map<String, LocalDate>
+    ): Map<String, Analysis> {
+        val portfolioTotalValue = PortfolioCalc.totalValue(holdings)
+        return holdings.mapNotNull { holding ->
+            val fundId = holding.fund.fundId
+            val firstPurchase = firstPurchaseByFund[fundId] ?: return@mapNotNull null
+            val analysis = analyze(
+                today = today,
+                holding = holding,
+                priceHistory = historyByFundId[fundId].orEmpty(),
+                firstPurchaseDate = firstPurchase,
+                portfolioTotalValue = portfolioTotalValue,
+                otherHoldingsAverageThreeMonthReturn = averageThreeMonthReturn(today, historyByFundId.filterKeys { it != fundId })
+            ) ?: return@mapNotNull null
+            fundId to analysis
+        }.toMap()
+    }
+
     /** Snittet av [threeMonthReturn] över flera fonders kurshistorik — null om ingen hade tillräcklig historik. */
     fun averageThreeMonthReturn(today: LocalDate, historiesByFundId: Map<String, List<FundPrice>>): Double? {
         val fractions = historiesByFundId.values.mapNotNull { threeMonthReturn(today, it) }

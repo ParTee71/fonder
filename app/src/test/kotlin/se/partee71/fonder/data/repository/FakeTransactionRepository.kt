@@ -9,12 +9,14 @@ import se.partee71.fonder.domain.model.Transaction
 /**
  * In-memory-fake av [TransactionRepository] för läsare av de bevakade fonderna — som
  * [se.partee71.fonder.domain.usecase.FacitSummary], som slår upp säljfondens fundId ur [funds].
- * Den delade fake:n — nya tester ska använda den i stället för att bära en egen inbäddad.
+ * Den delade fake:n — nya tester ska använda den i stället för att bära en egen inbäddad. Ett test
+ * som redan äger sina flöden skickar in dem; en variant (fel, fördröjning) är en
+ * `object : TransactionRepository by fake { … }`.
  */
-class FakeTransactionRepository : TransactionRepository {
-
-    val funds = MutableStateFlow<List<Fund>>(emptyList())
-    val transactions = MutableStateFlow<List<Transaction>>(emptyList())
+class FakeTransactionRepository(
+    val funds: MutableStateFlow<List<Fund>> = MutableStateFlow(emptyList()),
+    val transactions: MutableStateFlow<List<Transaction>> = MutableStateFlow(emptyList())
+) : TransactionRepository {
 
     /** Antal gånger fondlistan begärts — en import ska läsa den en gång, inte per rad. */
     var fundsReads = 0

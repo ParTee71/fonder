@@ -83,28 +83,25 @@ private class FakeFundMetadataDao : FundMetadataDao {
  * En katalog som hämtades men inte innehåller testets fonder — ett riktigt "finns inte". En **tom**
  * katalog är sedan issue #153 ett svar som inte kom fram och ger null, inte false.
  */
-private val UNRELATED_CATALOG = FundCatalog(
-    companies = emptyList(),
-    funds = listOf(Fund(fundId = "XZ", name = "Orelaterad Räntefond Kort", currency = "SEK"))
-)
+private val UNRELATED_CATALOG = catalogOf(Fund(fundId = "XZ", name = "Orelaterad Räntefond Kort", currency = "SEK"))
+
+/** Fondkatalogen med bara [funds] (inga fondbolag). */
+private fun catalogOf(vararg funds: Fund) = FundCatalog(companies = emptyList(), funds = funds.toList())
+
+/** Katalogfonden med samma namn som metadataraden SE1 — uppslaget verifierar den mot ISIN:et. */
+private val LF_SVERIGE_INDEX_X1 = Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK")
 
 private class FakeFundPriceRepository(
     /** Null = katalogen kunde inte hämtas (nätverksfel), skilt från en tom katalog. */
     var catalog: FundCatalog? = UNRELATED_CATALOG,
     private val isinByFundId: Map<String, String> = emptyMap()
-) : FundPriceRepository {
+) : FundPriceRepository by FakeCachedPriceRepository() {
     var fetchFundCatalogCallCount = 0
     var lookupIsinCallCount = 0
 
-    override suspend fun latestPrice(fundId: String): FundPrice? = null
-    override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-    override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
-    override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
+    // Ingen kurs hämtas här; metadatalagret frågar bara katalogen och ISIN-uppslaget.
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean = false
     override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean = false
-    override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-    override suspend fun suggestIsin(fundName: String): String? = null
-    override suspend fun findFundByIsin(isin: String): Fund? = null
 
     override suspend fun lookupIsin(fundId: String): String? {
         lookupIsinCallCount++
@@ -152,6 +149,12 @@ class FundMetadataRepositoryTest {
              "filterCounts":{"fundTypeCounts":[{"title":"Aktiefond","count":10,"type":"fundType","active":false,"group":0}]}}
         """.trimIndent()
     }
+
+    /** Taggarna för en svensk aktiefond — innehavet och dess kandidater i jämförelsetesterna (ANA-9). */
+    private val swedishEquityTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
+
+    /** Innehavet SE_HELD: en aktiv svensk aktiefond med avgiften [totalFee]. */
+    private fun heldSwedishEquityView(totalFee: Double) = fundView("SE_HELD", "Innehavet", totalFee = totalFee, indexFund = false, tags = swedishEquityTags)
 
     /** Full kontroll över en enskild rad (avgift, indexstatus, godtyckliga taggar) — issue #59. Risknivå/12-månadersavkastning tillagda i issue #70 (bytesplanen). */
     private fun fundView(
@@ -332,10 +335,7 @@ class FundMetadataRepositoryTest {
     fun `resolveHandelsbankenAvailability isin-verifierad traff satter true och cachar`() = runTest {
         dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Länsförsäkringar Sverige Index")
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(
-                companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
-            ),
+            catalog = catalogOf(LF_SVERIGE_INDEX_X1),
             isinByFundId = mapOf("X1" to "SE1")
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
@@ -356,7 +356,7 @@ class FundMetadataRepositoryTest {
             catalog = FundCatalog(
                 companies = emptyList(),
                 funds = listOf(
-                    Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"),
+                    LF_SVERIGE_INDEX_X1,
                     Fund(fundId = "X2", name = "Helt Annan Fond", currency = "SEK")
                 )
             ),
@@ -388,10 +388,7 @@ class FundMetadataRepositoryTest {
         // En namnträff vars sida inte gick att läsa (lookupIsin null) är okänd, inte en miss.
         dao.stored["SE1"] = fundMetadataEntity(isin = "SE1", name = "Länsförsäkringar Sverige Index")
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(
-                companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
-            ),
+            catalog = catalogOf(LF_SVERIGE_INDEX_X1),
             isinByFundId = emptyMap()
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
@@ -414,10 +411,7 @@ class FundMetadataRepositoryTest {
         assertNull(dao.stored["SE1"]?.availabilityResolvedAtEpochDay)
 
         // Ingen cachad miss står i vägen när katalogen är tillgänglig igen.
-        fundPriceRepo.catalog = FundCatalog(
-            companies = emptyList(),
-            funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
-        )
+        fundPriceRepo.catalog = catalogOf(LF_SVERIGE_INDEX_X1)
 
         assertEquals(true, repository.resolveHandelsbankenAvailability("SE1"))
         assertEquals(true, dao.stored["SE1"]?.availableAtHandelsbanken)
@@ -449,10 +443,7 @@ class FundMetadataRepositoryTest {
             availabilityResolvedAtEpochDay = LocalDate.now().minusDays(40).toEpochDay()
         )
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(
-                companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
-            ),
+            catalog = catalogOf(LF_SVERIGE_INDEX_X1),
             isinByFundId = mapOf("X1" to "SE1")
         )
         val repository = repo(FakeAvanzaSource(), fundPriceRepo)
@@ -471,10 +462,7 @@ class FundMetadataRepositoryTest {
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(1, listOf(candidateView)))
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(
-                companies = emptyList(),
-                funds = listOf(Fund(fundId = "X1", name = "Länsförsäkringar Sverige Index", currency = "SEK"))
-            ),
+            catalog = catalogOf(LF_SVERIGE_INDEX_X1),
             isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
@@ -502,8 +490,7 @@ class FundMetadataRepositoryTest {
 
     @Test
     fun `suggestCheaperAlternatives sparar sokt-utan-traff, skilt fran aldrig sokt`() = runTest {
-        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
-        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = heldTags)
+        val heldView = heldSwedishEquityView(totalFee = 0.5)
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
         val repository = repo(source)
@@ -536,8 +523,7 @@ class FundMetadataRepositoryTest {
 
     @Test
     fun `suggestCheaperAlternatives tom lista om inga kandidater kvalificerar`() = runTest {
-        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
-        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.5, indexFund = false, tags = heldTags)
+        val heldView = heldSwedishEquityView(totalFee = 0.5)
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
         val repository = repo(source)
@@ -549,11 +535,10 @@ class FundMetadataRepositoryTest {
 
     @Test
     fun `suggestCheaperAlternatives stannar efter tre bekraftade alternativ`() = runTest {
-        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
-        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.73, indexFund = false, tags = heldTags)
+        val heldView = heldSwedishEquityView(totalFee = 0.73)
         val candidateFees = listOf(0.10, 0.15, 0.20, 0.25, 0.30)
         val candidateViews = candidateFees.mapIndexed { i, fee ->
-            fundView("SE_C$i", "Kandidat $i", totalFee = fee, indexFund = false, tags = heldTags)
+            fundView("SE_C$i", "Kandidat $i", totalFee = fee, indexFund = false, tags = swedishEquityTags)
         }
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(candidateViews.size, candidateViews))
@@ -574,10 +559,9 @@ class FundMetadataRepositoryTest {
 
     @Test
     fun `suggestCheaperAlternatives stannar efter tio provade aven om inga bekraftas`() = runTest {
-        val heldTags = listOf("Aktiefond" to "TYPE", "Sverige" to "COMMON_REGION")
-        val heldView = fundView("SE_HELD", "Innehavet", totalFee = 0.73, indexFund = false, tags = heldTags)
+        val heldView = heldSwedishEquityView(totalFee = 0.73)
         val candidateViews = (1..12).map { i ->
-            fundView("SE_C$i", "Kandidat $i", totalFee = 0.73 - i * 0.01, indexFund = false, tags = heldTags)
+            fundView("SE_C$i", "Kandidat $i", totalFee = 0.73 - i * 0.01, indexFund = false, tags = swedishEquityTags)
         }
         val source = FakeAvanzaSource()
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(candidateViews.size, candidateViews))
@@ -590,6 +574,25 @@ class FundMetadataRepositoryTest {
         assertEquals(emptyList<Any>(), result)
         // 12 kvalificerade kandidater fanns — budgeten (högst 10 prövade) stoppar innan alla testats.
         assertEquals(10, fundPriceRepo.fetchFundCatalogCallCount)
+    }
+
+    /**
+     * Bevisar att baslinjen fortfarande är 1499. Cachen skiljer sig medvetet från källans (påstått
+     * tystade) live-svar — och live-svarets fond har en ANNAN region än filtret (matchar alltså
+     * inte "region=Sverige") så att den, även om den skrivs igenom till cachen (query() cachar
+     * alltid det som kommer tillbaka), inte kan råka dyka upp i ett offline-filtrerat resultat och
+     * maskera en förorenad baslinje. Ett live-svar med samma totalNoFunds som baslinjen tolkas som
+     * "källan ignorerar filtret" och besvaras ur cachen: med baslinjen förorenad används live-svaret
+     * SE_LIVE rakt av, med den intakt matchar bara SE_CACHE.
+     */
+    private suspend fun assertBaselineIntact(source: FakeAvanzaSource, repository: AvanzaFundMetadataRepository) {
+        dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
+            .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
+        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))
+
+        val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
+
+        assertEquals(listOf("SE_CACHE"), result.map { it.isin })
     }
 
     @Test
@@ -613,21 +616,8 @@ class FundMetadataRepositoryTest {
         source.enqueue(fullListJson(1, listOf(heldView)), fullListJson(0, emptyList()))
         repository.suggestCheaperAlternatives("SE_HELD", 300_000.0)
 
-        // 3) Cachen skiljer sig medvetet från källans (påstått tystade) live-svar — och
-        // live-svarets fond har en ANNAN region än filtret (matchar alltså inte
-        // "region=Sverige") så att den, även om den skrivs igenom till cachen (query()
-        // cachar alltid det som kommer tillbaka), inte kan råka dyka upp i ett offline-
-        // filtrerat resultat och maskera en förorenad baslinje. Testet kan därför skilja
-        // mellan "baslinjen förorenad" (live-svaret SE_LIVE används rakt av) och "baslinjen
-        // intakt" (källan upptäcks ha ignorerat filtret, frågan besvaras ur cachen i stället,
-        // bara SE_CACHE matchar).
-        dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
-            .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
-        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))
-
-        val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
-
-        assertEquals(listOf("SE_CACHE"), result.map { it.isin })
+        // 3) Baslinjen är fortfarande 1499.
+        assertBaselineIntact(source, repository)
     }
 
     // --- metadataFor (HEM-5, issue #60) ---
@@ -727,13 +717,7 @@ class FundMetadataRepositoryTest {
         // Samma teknik som den redan existerande baslinjeregressionen ovan: ett live-svar med
         // samma totalNoFunds som baslinjen ska tolkas som "källan ignorerar filtret" och
         // besvaras ur cachen — bara möjligt om baslinjen fortfarande är 1499, inte 1.
-        dao.stored["SE_CACHE"] = fundMetadataEntity(isin = "SE_CACHE", name = "Cache Sverige")
-            .copy(tagsJson = """[{"title":"Sverige","category":"COMMON_REGION"}]""")
-        source.response = fundListJson(1499, listOf(Triple("SE_LIVE", "Live-svar", "Global")))
-
-        val result = repository.query(FundScreenQuery(region = listOf("Sverige")))
-
-        assertEquals(listOf("SE_CACHE"), result.map { it.isin })
+        assertBaselineIntact(source, repository)
     }
 
     // --- knownRiskLevels (SET-3, issue #68) ---
@@ -779,7 +763,7 @@ class FundMetadataRepositoryTest {
         val candidateView = fundView("SE_CAND", "Kandidatfond", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3, developmentOneYear = 0.12)
         val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Kandidatfond", currency = "SEK"))),
+            catalog = catalogOf(Fund(fundId = "X1", name = "Kandidatfond", currency = "SEK")),
             isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
@@ -797,7 +781,7 @@ class FundMetadataRepositoryTest {
         val candidateView = fundView("SE_CAND", "Utan avkastning", totalFee = 0.3, indexFund = false, tags = emptyList(), risk = 3)
         val source = FakeAvanzaSource(fullListJson(1, listOf(candidateView)))
         val fundPriceRepo = FakeFundPriceRepository(
-            catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Utan avkastning", currency = "SEK"))),
+            catalog = catalogOf(Fund(fundId = "X1", name = "Utan avkastning", currency = "SEK")),
             isinByFundId = mapOf("X1" to "SE_CAND")
         )
         val repository = repo(source, fundPriceRepo)
@@ -870,10 +854,7 @@ class FundMetadataRepositoryTest {
         val repository = repo(
             FakeAvanzaSource(fullListJson(2, listOf(active, index))),
             FakeFundPriceRepository(
-                catalog = FundCatalog(
-                    companies = emptyList(),
-                    funds = listOf(Fund(fundId = "X1", name = "Aktiv fond", currency = "SEK"), Fund(fundId = "X2", name = "Indexfond", currency = "SEK"))
-                ),
+                catalog = catalogOf(Fund(fundId = "X1", name = "Aktiv fond", currency = "SEK"), Fund(fundId = "X2", name = "Indexfond", currency = "SEK")),
                 isinByFundId = mapOf("X1" to "SE_AKTIV", "X2" to "SE_INDEX")
             )
         )
@@ -902,7 +883,7 @@ class FundMetadataRepositoryTest {
         val repository = repo(
             source,
             FakeFundPriceRepository(
-                catalog = FundCatalog(companies = emptyList(), funds = listOf(Fund(fundId = "X1", name = "Indexfond", currency = "SEK"))),
+                catalog = catalogOf(Fund(fundId = "X1", name = "Indexfond", currency = "SEK")),
                 isinByFundId = mapOf("X1" to "SE_INDEX")
             )
         )

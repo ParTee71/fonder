@@ -1,8 +1,6 @@
 package se.partee71.fonder.data.room
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.flow.first
@@ -36,24 +34,7 @@ class Migration67Test {
 
     @Test
     fun migration_6_7_lagger_till_fx_rates_och_tommer_kurscachen() = runTest {
-        context.deleteDatabase(dbName)
-        val dbFile = context.getDatabasePath(dbName)
-
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL(
-                "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
-            )
-            db.execSQL(
-                "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
-            )
-            db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
-            db.execSQL(
-                "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
-            )
+        context.createLegacyDatabase(dbName, version = 6) { db ->
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
                     "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417', '0P0000O30D')"
@@ -63,14 +44,9 @@ class Migration67Test {
                     "VALUES ('LU0496367417', 'KOP', 20000, 2.0, 150.0, 0.0)"
             )
             db.execSQL("INSERT INTO fund_prices VALUES ('LU0496367417', 20658, 164.35, 'SEK')")
-            db.version = 6
         }
 
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
-
-        db.openHelper.writableDatabase
+        val db = context.openMigratedDatabase(dbName)
 
         // Kurscachen är tömd — hämtas om vid nästa uppdatering, nu via fondlista + konvertering.
         assertTrue(

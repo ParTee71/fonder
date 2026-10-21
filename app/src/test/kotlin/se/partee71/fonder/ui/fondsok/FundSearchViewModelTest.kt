@@ -20,6 +20,9 @@ import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.R
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -62,17 +65,8 @@ class FundSearchViewModelTest {
 
     private val addedFunds = mutableListOf<Fund>()
 
-    private open inner class FakePriceRepo : FundPriceRepository {
+    private open inner class FakePriceRepo : FundPriceRepository by FakeCachedPriceRepository() {
         val companyCalls = mutableListOf<String>()
-        override suspend fun latestPrice(fundId: String): FundPrice? = null
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
         override suspend fun lookupIsin(fundId: String): String? = "SE000$fundId"
 
         // Nullbar som i kontraktet, så en subklass kan simulera en misslyckad hämtning.
@@ -88,32 +82,15 @@ class FundSearchViewModelTest {
     /** Redan bevakade fonder — Fondsök ska aldrig erbjuda dem som nya (issue #78). */
     private val trackedFunds = MutableStateFlow<List<Fund>>(emptyList())
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = trackedFunds
-        override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = MutableStateFlow(emptyList())
+    private val fakeTransactionRepo = object : TransactionRepository by FakeTransactionRepository(trackedFunds) {
         override suspend fun upsertFund(fund: Fund) {
             addedFunds.add(fund)
         }
-        override suspend fun addTransaction(tx: Transaction): Long = 0
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
     }
 
     /** Risknivåer ur metadatacachen (UI-10) — nyckel är normaliserat fondnamn, se [FundNameKey]. */
-    private var cachedRiskByName: Map<String, Int> = emptyMap()
-
-    private val fakeMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary(): Flow<FundFilterVocabulary> = flowOf(FundFilterVocabulary())
-        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = cachedRiskByName
-        override suspend fun knownRiskLevels(): List<Int> = emptyList()
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
-    }
+    private val fakeMetadataRepo = FakeFundMetadataRepository()
+    private var cachedRiskByName: Map<String, Int> by fakeMetadataRepo::riskByFundName
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 

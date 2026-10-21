@@ -28,7 +28,7 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Compose-UI i JVM | `app/src/test/…/ui/**` (först: `ui/components/EmptyStateTest.kt`) | Robolectric (`@RunWith(RobolectricTestRunner::class)`) + `createComposeRule`; SDK, mått och `Application` i `app/src/test/resources/robolectric.properties` | `android.yml` (`build-and-test`) |
 | Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `composeRule.captureLightAndDark(name) { … }`, ljust + mörkt – en per komponent i `ComponentScreenshotTest` och `FundLineChartScreenshotTest` | `android.yml` (`build-and-test`): `verifyRoborazziDebug` – samma körning som enhetstesterna, jämför mot referenserna med 0,1 % pixeltolerans och fäller vid skillnad; diffbilderna som artifact `screenshot-diffs`. Se "Skärmdumpsreferenser" nedan |
 | Konsistens (regel 4) | `app/src/test/…/consistency/UiConsistencyTest.kt` mot hela `app/src/main` (`:core` skannas inte: utan Compose-, Vico- och coroutines-beroenden kan inget av mönstren förekomma där) | Konsist + `ui-forbidden.txt`/`ui-allowlist.txt` | `android.yml` (`build-and-test`) |
-| Dubbelkod (regel 4) | hela `core/src` och `app/src` (`main`, `test`, `androidTest`) mot `config/cpd-baseline.txt` | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
+| Dubbelkod (regel 4) | hela `core/src` och `app/src` (`main`, `test`, `androidTest`), utan baslinje | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
 | Hooken `regel4-check` och baslinjeskriptet | `.claude/hooks/test/regel4-check.test.mjs` | `node --test` | `android.yml` (`changes`, varje PR) |
 
 Vad som körs när i CI står i skill `ci-budget` (enda källan). **Selektiv körning ändrar inte

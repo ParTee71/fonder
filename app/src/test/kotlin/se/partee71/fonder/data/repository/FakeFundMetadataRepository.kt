@@ -13,9 +13,9 @@ import se.partee71.fonder.domain.usecase.SwitchPlanCalc
  * In-memory-fake av [FundMetadataRepository] för de läsare som bara behöver metadata och
  * köpkandidater — bevakningsskärmen (ANA-12/ANA-13) och Sålda fonder (SLD-5), issue #114.
  *
- * Öppen så ett enskilt test kan skärpa en metod (t.ex. räkna anrop) utan att implementera hela
- * det nio metoder stora gränssnittet på nytt. Äldre testers inbäddade fakes lämnas orörda —
- * de driver andra beteenden och skulle bara bli svårare att läsa av en gemensam bas.
+ * Den delade fake:n — tester bär ingen egen inbäddad (issue #175). Öppen så ett enskilt test kan
+ * skärpa en metod (t.ex. räkna anrop) utan att implementera hela det nio metoder stora
+ * gränssnittet på nytt.
  */
 open class FakeFundMetadataRepository(
     var metadataByIsin: Map<String, FundMetadata> = emptyMap(),
@@ -37,9 +37,15 @@ open class FakeFundMetadataRepository(
 
     override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
 
-    override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
+    /** Risknivåer ur metadatacachen, nyckel normaliserat fondnamn (UI-10). */
+    var riskByFundName: Map<String, Int> = emptyMap()
 
-    override suspend fun knownRiskLevels(): List<Int> = emptyList()
+    override suspend fun cachedRiskByFundName(): Map<String, Int> = riskByFundName
+
+    /** Nivåerna källan känner till (riskprofilen). */
+    var riskLevels: List<Int> = emptyList()
+
+    override suspend fun knownRiskLevels(): List<Int> = riskLevels
 
     /** Sant spelar "köpbarheten gick inte att kontrollera" i [searchSwitchCandidates] (issue #149). */
     var switchLookupFailed: Boolean = false

@@ -51,8 +51,8 @@ variant av något som redan finns; utöka den delade komponenten i stället.
 **Kontrolleras automatiskt:** hooken `regel4-check` ger besked direkt efter varje filändring;
 `UiConsistencyTest` (Konsist) och `cpdCheck` (copy-paste-detektor) fäller bygget. Förbjudna mönster
 finns i en fil (`ui-forbidden.txt`), undantag bara via `ui-allowlist.txt` med motivering och
-användarens ok i PR:en. Brotten och kopiorna från före kontrollerna står som baslinjer som bara får
-krympa (`tools/regel4-baseline.mjs`, `config/cpd-baseline.txt`).
+användarens ok i PR:en. Brotten från före kontrollerna står som baslinje som bara får krympa
+(`tools/regel4-baseline.mjs`); `cpdCheck` har ingen baslinje – varje kopia fäller bygget.
 → Skill: **shared-ui-components**.
 
 ### 5. CI-budget

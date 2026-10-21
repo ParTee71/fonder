@@ -21,19 +21,8 @@ class IsPriceStaleTest {
 
     private var cachedPrice: FundPrice? = null
 
-    private val fakeRepo = object : FundPriceRepository {
+    private val fakeRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun latestPrice(fundId: String): FundPrice? = cachedPrice
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?): Boolean = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean = true
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
     @Test

@@ -12,11 +12,12 @@ import se.partee71.fonder.domain.model.FundPrice
  * In-memory-fake av [FundPriceRepository] för läsarna av **kurscachen** — Översikten och
  * [se.partee71.fonder.domain.usecase.PendingDecisionsSource]. [latestPrices] är cachens senaste
  * kurser (alla nycklar, oavsett vilka som efterfrågas), [priceHistoryByFundId] dess historik.
- * Inga nätverksvägar: hämtningarna svarar tomt.
+ * Inga nätverksvägar: hämtningarna svarar tomt (och lyckas). En variant — en hämtning som
+ * misslyckas, en katalog — är en `object : FundPriceRepository by FakeCachedPriceRepository() { … }`.
  */
-class FakeCachedPriceRepository : FundPriceRepository {
-
-    val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
+class FakeCachedPriceRepository(
+    val latestPrices: MutableStateFlow<Map<String, FundPrice>> = MutableStateFlow(emptyMap())
+) : FundPriceRepository {
     var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
 
     /** Varje `priceHistory`-anrop, i ordning — driver testet att hämtningen sker en gång per fond och emission. */

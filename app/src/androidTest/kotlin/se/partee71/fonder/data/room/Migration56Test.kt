@@ -1,7 +1,6 @@
 package se.partee71.fonder.data.room
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -41,24 +40,7 @@ class Migration56Test {
 
     @Test
     fun migration_5_6_rensar_kurser_i_annan_valuta_men_behaller_kronor() = runTest {
-        context.deleteDatabase(dbName)
-        val dbFile = context.getDatabasePath(dbName)
-
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL(
-                "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, `fondlistaFundId` TEXT, PRIMARY KEY(`fundId`))"
-            )
-            db.execSQL(
-                "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
-            )
-            db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
-            db.execSQL(
-                "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
-            )
+        context.createLegacyDatabase(dbName, version = 5) { db ->
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
                     "VALUES ('LU0496367417', 'Franklin Gold', 'USD', 'LU0496367417', '0P0000O30D')"
@@ -72,14 +54,9 @@ class Migration56Test {
             db.execSQL("INSERT INTO fund_prices VALUES ('LU0496367417', 20655, 1878.75, 'SEK')")
             db.execSQL("INSERT INTO fund_prices VALUES ('LU0496367417', 20658, 193.48, 'USD')")
             db.execSQL("INSERT INTO fund_prices VALUES ('0P00000L4S', 20658, 323.07, 'SEK')")
-            db.version = 5
         }
 
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
-
-        db.openHelper.writableDatabase
+        val db = context.openMigratedDatabase(dbName)
 
         // Testet öppnar (som alla migreringstester i det här repot) via den riktiga,
         // kompilerade AppDatabase-klassen — Room kör då alltid HELA kedjan fram till den

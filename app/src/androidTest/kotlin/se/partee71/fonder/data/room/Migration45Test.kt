@@ -1,7 +1,6 @@
 package se.partee71.fonder.data.room
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -51,24 +50,7 @@ class Migration45Test {
 
     @Test
     fun migration_4_5_lagger_till_fondlistaFundId_och_rensar_helgkurser() = runTest {
-        context.deleteDatabase(dbName)
-        val dbFile = context.getDatabasePath(dbName)
-
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL(
-                "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, `isin` TEXT, PRIMARY KEY(`fundId`))"
-            )
-            db.execSQL(
-                "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL, `fee` REAL NOT NULL DEFAULT 0.0)"
-            )
-            db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
-            db.execSQL(
-                "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
-            )
+        context.createLegacyDatabase(dbName, version = 4) { db ->
             // En importmatchad fond: identiteten ÄR ISIN:et (findFundByIsin, TP-13/TP-14).
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin) " +
@@ -94,16 +76,10 @@ class Migration45Test {
                         "VALUES ('LU0496367417', $day, $nav, 'SEK')"
                 )
             }
-            db.version = 4
         }
 
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            // Hela kedjan, av samma skäl som i de äldre migreringstesterna.
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
-
         // Öppnar (och migrerar) — kastar om det resulterande schemat inte matchar entiteterna.
-        db.openHelper.writableDatabase
+        val db = context.openMigratedDatabase(dbName)
 
         // Fonden och dess transaktion är orörda; nya kolumnen är null tills den slås upp.
         val fund = db.fundDao().getByFundId("LU0496367417")

@@ -32,6 +32,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
@@ -59,7 +61,10 @@ import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
+import se.partee71.fonder.testing.price
+import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
@@ -105,7 +110,7 @@ class FondDetaljViewModelTest {
         override suspend fun clearAll() {}
     }
 
-    private val fakePriceRepo = object : FundPriceRepository {
+    private val fakePriceRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun latestPrice(fundId: String): FundPrice? = latestPriceValue
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPricesFlow
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = history.value
@@ -129,38 +134,28 @@ class FondDetaljViewModelTest {
             suggestIsinCalledWith = fundName
             return suggestIsinReturn
         }
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
     private var suggestCheaperAlternativesCall: Pair<String, Double>? = null
     private var suggestCheaperAlternativesReturn: List<FeeComparisonCalc.Alternative>? = emptyList()
 
-    /** Metadata per ISIN — fondens egen risknivå (UI-10) och bytesplanens uppslag (ANA-10). */
-    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
-
     /** Kurshistorik per ISIN för jämförelsediagrammet (ANA-11), och räknaren som visar att den hämtas lazily. */
     private var historyByIsin: Map<String, List<FundPrice>> = emptyMap()
     private val historyForIsinCalls = mutableListOf<String>()
 
-    private val fakeFundMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
-        override suspend fun knownRiskLevels(): List<Int> = emptyList()
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
+    private val fakeFundMetadataRepo = object : FakeFundMetadataRepository() {
         override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? {
             suggestCheaperAlternativesCall = isin to holdingValue
             return suggestCheaperAlternativesReturn
         }
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-
-        /** Samma karta som `metadataFor` — testets metadata *är* cachen (de avstådda raderna slås upp här). */
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
+
+    /**
+     * Metadata per ISIN — fondens egen risknivå (UI-10) och bytesplanens uppslag (ANA-10). Samma
+     * karta för `metadataFor` och `cachedMetadataFor`: testets metadata *är* cachen (de avstådda
+     * raderna slås upp där).
+     */
+    private var metadataByIsin: Map<String, FundMetadata> by fakeFundMetadataRepo::metadataByIsin
 
     private val fakeSuggestionRecordRepo = object : SuggestionRecordRepository {
         val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
@@ -230,8 +225,7 @@ class FondDetaljViewModelTest {
         }
         val vm = viewModel(failingRepo)
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertNull(state.content.fundName)
@@ -267,8 +261,7 @@ class FondDetaljViewModelTest {
         }
         val vm = viewModel(slowRepo)
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.error == null) state = awaitItem()
+            var state = awaitItemSkipping { it.error == null }
 
             failing = false
             vm.onEvent(FondDetaljEvent.Retry)
@@ -288,8 +281,7 @@ class FondDetaljViewModelTest {
         funds.value = emptyList()
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(DataError.NotFound, state.error?.cause)
             assertFalse(state.error!!.retryable)
             assertFalse(state.isEmpty)
@@ -301,8 +293,7 @@ class FondDetaljViewModelTest {
     fun `tomt tillstand nar ingen kurshistorik finns`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertTrue(state.isEmpty)
             assertEquals("Fond A", state.content.fundName)
             cancelAndIgnoreRemainingEvents()
@@ -319,8 +310,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(listOf(200L, 100L), state.content.prices.map { it.epochDay })
             cancelAndIgnoreRemainingEvents()
         }
@@ -334,8 +324,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals((200L..250L).toList(), state.content.movingAverage.map { it.first })
             // Dag 250: medel av dag 50 … 250 → NAV 150 … 350 = 250.
             assertEquals(250.0, state.content.movingAverage.last().second, 1e-9)
@@ -359,8 +348,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(listOf(100L, 200L), state.content.purchaseEpochDays.sorted())
             cancelAndIgnoreRemainingEvents()
         }
@@ -410,8 +398,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -427,8 +414,7 @@ class FondDetaljViewModelTest {
         assertEquals("Fond A", suggestIsinCalledWith)
 
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals("SE0004297927", state.content.suggestedIsin)
             cancelAndIgnoreRemainingEvents()
         }
@@ -473,13 +459,12 @@ class FondDetaljViewModelTest {
         transactionsForFund.value = listOf(tx)
         allTransactions.value = listOf(tx)
         // Flat kurshistorik varannan vecka i två år — inga signaler ska triggas.
-        history.value = (0..730L step 14).map { daysAgo -> FundPrice(fundId = fund.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) }
-        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        history.value = (0..730L step 14).map { daysAgo -> price(fund, today.minusDays(daysAgo), 100.0) }
+        latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, 100.0))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(FundAnalysisCalc.SignalLevel.GRON, state.content.analysis?.status)
             cancelAndIgnoreRemainingEvents()
         }
@@ -492,13 +477,12 @@ class FondDetaljViewModelTest {
         val sell = Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = today.minusMonths(1).toEpochDay(), shares = 10.0, pricePerShare = 110.0)
         transactionsForFund.value = listOf(buy, sell)
         allTransactions.value = listOf(buy, sell)
-        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 110.0))
-        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 110.0))
+        history.value = listOf(price(fund, today, 110.0))
+        latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, 110.0))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertNull(state.content.analysis)
             // Helt avsåld fond är inget innehav längre — inget första köp/inköpsvärde att visa (POR-6).
             assertNull(state.content.firstPurchaseEpochDay)
@@ -513,13 +497,12 @@ class FondDetaljViewModelTest {
         val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         transactionsForFund.value = listOf(tx)
         allTransactions.value = listOf(tx)
-        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
-        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        history.value = listOf(price(fund, today, 100.0))
+        latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, 100.0))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(today.minusYears(1).toEpochDay(), state.content.firstPurchaseEpochDay)
             assertEquals(1000.0, state.content.netInvested)
             cancelAndIgnoreRemainingEvents()
@@ -534,8 +517,8 @@ class FondDetaljViewModelTest {
         val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
         transactionsForFund.value = listOf(tx)
         allTransactions.value = listOf(tx)
-        history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
-        latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        history.value = listOf(price(fund, today, 120.0))
+        latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, 120.0))
     }
 
     @Test
@@ -552,14 +535,13 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertNull("Utan kurser finns ingen analys ännu", state.content.analysis)
             assertNull(state.feeComparison)
 
             // Kurserna landar (motsvarar att refreshSince fyllt cachen).
-            history.value = listOf(FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
-            latestPricesFlow.value = mapOf(fund.fundId to FundPrice(fundId = fund.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+            history.value = listOf(price(fund, today, 120.0))
+            latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, 120.0))
 
             state = awaitItem()
             while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
@@ -575,8 +557,7 @@ class FondDetaljViewModelTest {
         // Inga transaktioner — inget innehav, inget kort ska visas alls (skiljs från "Unavailable").
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertNull(state.content.analysis)
             assertNull(state.feeComparison)
             cancelAndIgnoreRemainingEvents()
@@ -591,8 +572,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertTrue(state.content.analysis != null)
             while (state.feeComparison == null) state = awaitItem()
             assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
@@ -617,12 +597,7 @@ class FondDetaljViewModelTest {
     fun `feeComparison blir Found med alternativen fran repositoryt`() = runTest(dispatcher) {
         setUpHolding()
         val alternative = FeeComparisonCalc.Alternative(
-            candidate = FundMetadata(
-                isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345",
-                totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND",
-                companyName = "Länsförsäkringar", risk = null, indexFund = true, startDateEpochDay = null,
-                minimumBuy = null, tags = emptyList()
-            ),
+            candidate = testFundMetadata(isin = "SE0000581434", name = "Länsförsäkringar Sverige Index", orderbookId = "12345", totalFee = 0.21, managementFee = 0.2, category = "Sverige", fundType = "EQUITY_FUND", companyName = "Länsförsäkringar", indexFund = true),
             candidateFeePercent = 0.21,
             annualSavingsKr = 1560.0
         )
@@ -630,8 +605,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
             val found = state.feeComparison as FeeComparisonUiState.Found
             assertEquals(listOf(alternative), found.alternatives)
@@ -646,8 +620,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
             assertEquals(FeeComparisonUiState.NoCheaperAlternative, state.feeComparison)
             cancelAndIgnoreRemainingEvents()
@@ -661,8 +634,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             while (state.feeComparison == null || state.feeComparison is FeeComparisonUiState.Loading) state = awaitItem()
             assertEquals(FeeComparisonUiState.Unavailable, state.feeComparison)
             cancelAndIgnoreRemainingEvents()
@@ -671,11 +643,7 @@ class FondDetaljViewModelTest {
 
     // --- Bytesbeslutet på fondkortet (ANA-10/ANA-11/UI-10, issue #85) ---
 
-    private fun metadata(isin: String, name: String, risk: Int?, fee: Double?) = FundMetadata(
-        isin = isin, name = name, orderbookId = "ob-$isin", totalFee = fee, managementFee = fee,
-        category = "Sverige", fundType = "EQUITY_FUND", companyName = "Bolaget", risk = risk,
-        indexFund = true, startDateEpochDay = null, minimumBuy = null, tags = emptyList<FundTag>()
-    )
+    private fun metadata(isin: String, name: String, risk: Int?, fee: Double?) = testFundMetadata(isin = isin, name = name, orderbookId = "ob-$isin", totalFee = fee, managementFee = fee, category = "Sverige", fundType = "EQUITY_FUND", companyName = "Bolaget", risk = risk, indexFund = true, tags = emptyList<FundTag>())
 
     /** Seedar ett innehav med ISIN, en ISK/KF-kontotyp och en färsk inspelad bytesplan. */
     private suspend fun setUpSwitchPlan(
@@ -706,8 +674,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.riskLevel == null) state = awaitItem()
+            var state = awaitItemSkipping { it.riskLevel == null }
             assertEquals(6, state.riskLevel)
             cancelAndIgnoreRemainingEvents()
         }
@@ -720,8 +687,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             advanceUntilIdle()
             assertNull("Okänd risk ska aldrig gissas (ANA-4)", state.riskLevel)
             cancelAndIgnoreRemainingEvents()
@@ -735,8 +701,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.switchPlan.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.switchPlan.isEmpty() }
 
             val suggestion = state.switchPlan.single()
             assertEquals(0, suggestion.planIndex)
@@ -754,8 +719,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             advanceUntilIdle()
             assertTrue("SET-4-gaten gäller även på fondkortet", state.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
@@ -770,8 +734,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             advanceUntilIdle()
             assertTrue(state.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
@@ -803,8 +766,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             advanceUntilIdle()
             assertTrue("Planen nämner inte den öppnade fonden", state.switchPlan.isEmpty())
             cancelAndIgnoreRemainingEvents()
@@ -826,8 +788,7 @@ class FondDetaljViewModelTest {
         // Tillståndet måste kollektas: uiState delas med WhileSubscribed, så utan en aktiv
         // prenumerant körs uppströmsflödet aldrig och `value` stannar på initialtillståndet.
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             advanceUntilIdle()
             assertTrue("Ingen hämtning innan något fällts ut", historyForIsinCalls.isEmpty())
 
@@ -851,8 +812,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             vm.onEvent(FondDetaljEvent.SuggestionExpanded("SE0000581434"))
             advanceUntilIdle()
@@ -887,8 +847,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.recordedFeeSwitches.isEmpty() }
 
             val recorded = state.recordedFeeSwitches.getValue("SE0000581434")
             assertEquals(21L, recorded.recordId)
@@ -906,8 +865,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.recordedFeeSwitches.isEmpty() }
 
             assertNull(state.recordedFeeSwitches["SE0000581434"])
             cancelAndIgnoreRemainingEvents()
@@ -923,8 +881,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.switchPlan.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.switchPlan.isEmpty() }
             advanceUntilIdle()
 
             assertTrue(state.recordedFeeSwitches.isEmpty())
@@ -942,8 +899,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.recordedFeeSwitches.isEmpty() }
 
             assertEquals(6L, state.recordedFeeSwitches.getValue("SE0000581434").recordId)
             cancelAndIgnoreRemainingEvents()
@@ -958,8 +914,7 @@ class FondDetaljViewModelTest {
         setUpSwitchPlan()
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.switchPlan.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.switchPlan.isEmpty() }
 
             val key = TransactionFormKey.follow(state.switchPlan.single())
             assertEquals(
@@ -986,8 +941,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.dismissedPlanCount == 0) state = awaitItem()
+            var state = awaitItemSkipping { it.dismissedPlanCount == 0 }
             assertTrue(state.switchPlan.isEmpty())
             assertEquals(1, state.dismissedCount)
             cancelAndIgnoreRemainingEvents()
@@ -1005,8 +959,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.switchPlan.isEmpty() || !state.switchPlan.single().inProgress) state = awaitItem()
+            var state = awaitItemSkipping { it.switchPlan.isEmpty() || !it.switchPlan.single().inProgress }
             assertEquals(7L, state.switchPlan.single().recordId)
             cancelAndIgnoreRemainingEvents()
         }
@@ -1033,8 +986,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.dismissedPlanCount == 0 || state.switchPlan.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.dismissedPlanCount == 0 || it.switchPlan.isEmpty() }
             assertEquals(listOf(8L), state.switchPlan.map { it.recordId })
             assertEquals(1, state.dismissedPlanCount)
             cancelAndIgnoreRemainingEvents()
@@ -1049,8 +1001,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.switchPlan.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.switchPlan.isEmpty() }
             assertEquals(0, state.dismissedPlanCount)
             cancelAndIgnoreRemainingEvents()
         }
@@ -1074,8 +1025,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.feeComparison !is FeeComparisonUiState.Found) state = awaitItem()
+            var state = awaitItemSkipping { it.feeComparison !is FeeComparisonUiState.Found }
             val found = state.feeComparison as FeeComparisonUiState.Found
             assertEquals(listOf("SE0009778954"), found.alternatives.map { it.candidate.isin })
             assertEquals(1, state.dismissedFeeCount)
@@ -1091,8 +1041,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.feeComparison !is FeeComparisonUiState.Found || state.recordedFeeSwitches.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.feeComparison !is FeeComparisonUiState.Found || it.recordedFeeSwitches.isEmpty() }
             assertEquals(1, (state.feeComparison as FeeComparisonUiState.Found).alternatives.size)
             assertEquals(0, state.dismissedFeeCount)
             cancelAndIgnoreRemainingEvents()
@@ -1112,8 +1061,7 @@ class FondDetaljViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.feeComparison !is FeeComparisonUiState.Found) state = awaitItem()
+            var state = awaitItemSkipping { it.feeComparison !is FeeComparisonUiState.Found }
             assertEquals(1, (state.feeComparison as FeeComparisonUiState.Found).alternatives.size)
             assertEquals(0, state.dismissedCount)
             cancelAndIgnoreRemainingEvents()
