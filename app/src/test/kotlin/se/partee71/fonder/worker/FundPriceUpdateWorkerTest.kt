@@ -58,6 +58,11 @@ import se.partee71.fonder.testing.TestDays
  * de fonderna saknar.
  */
 class FundPriceUpdateWorkerTest {
+    /**
+     * En enda dag för hela testet: fixturernas kursdagar och den dag som skickas till workern
+     * måste vara samma, annars faller testerna när körningen passerar midnatt.
+     */
+    private val testDay: LocalDate = LocalDate.now()
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -93,6 +98,12 @@ class FundPriceUpdateWorkerTest {
      */
     private val isinChainPrices = mutableMapOf<String, FundPrice>()
 
+    /**
+     * Äldre cachade kurser per fundId utöver den senaste i [cachedPrices] — historiken
+     * `priceHistory` ger, så samma-dag-uppslaget vid inspelningen (issue #197) kan testas.
+     */
+    private val olderPrices = mutableMapOf<String, List<FundPrice>>()
+
     private val fakeTransactionRepo = object : TransactionRepository {
         override fun observeFunds(): Flow<List<Fund>> = funds
         override fun observeTransactions(): Flow<List<Transaction>> = transactions
@@ -106,7 +117,9 @@ class FundPriceUpdateWorkerTest {
     private val fakeFundPriceRepo = object : FundPriceRepository {
         override suspend fun latestPrice(fundId: String): FundPrice? = cachedPrices[fundId]
         override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(cachedPrices)
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
+        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = (olderPrices[fundId].orEmpty() + listOfNotNull(cachedPrices[fundId]))
+            .filter { it.epochDay in fromEpochDay..toEpochDay }
+            .sortedBy { it.epochDay }
         override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundIds.add(fundId)
@@ -254,7 +267,7 @@ class FundPriceUpdateWorkerTest {
         // inte trigga en onödig hämtning — gör den periodiska backstopen billig.
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
-        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 
@@ -268,8 +281,8 @@ class FundPriceUpdateWorkerTest {
         val farsk = Fund(fundId = "SHB0000442", name = "Fond A")
         val inaktuell = Fund(fundId = "SHB0000443", name = "Fond B")
         funds.value = listOf(farsk, inaktuell)
-        cachedPrices[farsk.fundId] = FundPrice(fundId = farsk.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
-        cachedPrices[inaktuell.fundId] = FundPrice(fundId = inaktuell.fundId, epochDay = LocalDate.now().minusDays(10).toEpochDay(), nav = 100.0)
+        cachedPrices[farsk.fundId] = FundPrice(fundId = farsk.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
+        cachedPrices[inaktuell.fundId] = FundPrice(fundId = inaktuell.fundId, epochDay = testDay.minusDays(10).toEpochDay(), nav = 100.0)
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 
@@ -282,7 +295,7 @@ class FundPriceUpdateWorkerTest {
         // Den manuella "Uppdatera nu"-knappen (SET-2) bypassar staleness-gaten.
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
-        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[fond.fundId] = FundPrice(fundId = fond.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
 
         val success = FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo, force = true)
 
@@ -363,8 +376,8 @@ class FundPriceUpdateWorkerTest {
         val medIsin = Fund(fundId = "MED", name = "Med ISIN", isin = "SE_MED")
         funds.value = listOf(utanIsin, medIsin)
         transactions.value = listOf(buy(utanIsin.fundId, 1.0, 100.0), buy(medIsin.fundId, 1.0, 100.0))
-        cachedPrices[utanIsin.fundId] = FundPrice(fundId = utanIsin.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
-        cachedPrices[medIsin.fundId] = FundPrice(fundId = medIsin.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[utanIsin.fundId] = FundPrice(fundId = utanIsin.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
+        cachedPrices[medIsin.fundId] = FundPrice(fundId = medIsin.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, FakeSuggestionRecordRepository())
 
@@ -378,7 +391,7 @@ class FundPriceUpdateWorkerTest {
         val fundIds = (1..5).map { "F$it" }
         funds.value = fundIds.map { Fund(fundId = it, name = it, isin = "SE_$it") }
         transactions.value = fundIds.map { buy(it, 1.0, 100.0) }
-        fundIds.forEach { cachedPrices[it] = FundPrice(fundId = it, epochDay = LocalDate.now().toEpochDay(), nav = 100.0) }
+        fundIds.forEach { cachedPrices[it] = FundPrice(fundId = it, epochDay = testDay.toEpochDay(), nav = 100.0) }
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, FakeSuggestionRecordRepository())
 
@@ -392,9 +405,9 @@ class FundPriceUpdateWorkerTest {
         val large = Fund(fundId = "LARGE", name = "Large", isin = "SE_LARGE")
         funds.value = listOf(small, medium, large)
         transactions.value = listOf(buy(small.fundId, 1.0, 100.0), buy(medium.fundId, 1.0, 100.0), buy(large.fundId, 1.0, 100.0))
-        cachedPrices[small.fundId] = FundPrice(fundId = small.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 10.0)
-        cachedPrices[medium.fundId] = FundPrice(fundId = medium.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
-        cachedPrices[large.fundId] = FundPrice(fundId = large.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 1000.0)
+        cachedPrices[small.fundId] = FundPrice(fundId = small.fundId, epochDay = testDay.toEpochDay(), nav = 10.0)
+        cachedPrices[medium.fundId] = FundPrice(fundId = medium.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
+        cachedPrices[large.fundId] = FundPrice(fundId = large.fundId, epochDay = testDay.toEpochDay(), nav = 1000.0)
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, FakeSuggestionRecordRepository())
 
@@ -403,7 +416,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `scanComparisons hoppar over farska resultat, tar aldrig sokta eller utgangna`() = runTest {
-        val today = LocalDate.now()
+        val today = testDay
         val farsk = Fund(fundId = "FARSK", name = "Färsk", isin = "SE_FARSK")
         val utgangen = Fund(fundId = "UTGANGEN", name = "Utgången", isin = "SE_UTGANGEN")
         val aldrigSokt = Fund(fundId = "ALDRIG", name = "Aldrig sökt", isin = "SE_ALDRIG")
@@ -430,7 +443,7 @@ class FundPriceUpdateWorkerTest {
         val held = Fund(fundId = "HELD", name = "Innehav", isin = "SE_HELD")
         funds.value = listOf(held)
         transactions.value = listOf(buy(held.fundId, 100.0, 100.0))
-        cachedPrices[held.fundId] = FundPrice(fundId = held.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 100.0)
+        cachedPrices[held.fundId] = FundPrice(fundId = held.fundId, epochDay = testDay.toEpochDay(), nav = 100.0)
         metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0)
     }
 
@@ -477,8 +490,8 @@ class FundPriceUpdateWorkerTest {
         )
         fundByIsin["SE_BILLIG"] = Fund(fundId = "SE_BILLIG", name = "Billig", isin = "SE_BILLIG")
         fundByIsin["SE_NASTBILLIG"] = Fund(fundId = "SE_NASTBILLIG", name = "Näst billigast", isin = "SE_NASTBILLIG")
-        altNav?.let { isinChainPrices["SE_BILLIG"] = FundPrice(fundId = "SE_BILLIG", epochDay = LocalDate.now().toEpochDay(), nav = it) }
-        isinChainPrices["SE_NASTBILLIG"] = FundPrice(fundId = "SE_NASTBILLIG", epochDay = LocalDate.now().toEpochDay(), nav = 25.0)
+        altNav?.let { isinChainPrices["SE_BILLIG"] = FundPrice(fundId = "SE_BILLIG", epochDay = testDay.toEpochDay(), nav = it) }
+        isinChainPrices["SE_NASTBILLIG"] = FundPrice(fundId = "SE_NASTBILLIG", epochDay = testDay.toEpochDay(), nav = 25.0)
     }
 
     @Test
@@ -491,7 +504,7 @@ class FundPriceUpdateWorkerTest {
             fakeFundPriceRepo,
             fakeFundMetadataRepo,
             suggestionRepo,
-            LocalDate.of(2026, 1, 1)
+            testDay
         )
 
         // Alla visade alternativ, inte bara det billigaste (issue #93): de är varandras
@@ -505,8 +518,30 @@ class FundPriceUpdateWorkerTest {
         assertEquals(50.0, best.buyNavAtSuggestion, 1e-9)
         // Ett avgiftsbyte avser hela positionen, till skillnad från planens gap-storlek.
         assertEquals(10_000.0, best.switchValueKr!!, 1e-9)
-        assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), best.suggestedAtEpochDay)
+        assertEquals(testDay.toEpochDay(), best.suggestedAtEpochDay)
         assertEquals(25.0, suggestionRepo.recorded[1].buyNavAtSuggestion, 1e-9)
+        // Båda kurserna är dagens, och dagen sparas med raden (issue #197).
+        assertTrue(suggestionRepo.recorded.all { it.navEpochDay == testDay.toEpochDay() })
+    }
+
+    @Test
+    fun `scanComparisons spelar in salj- och kop-NAV fran samma dag`() = runTest {
+        // Issue #197, punkt 3: säljfondens senaste kurs var gårdagens medan kandidatens just hämtats —
+        // utgångsläget mätte då två olika dagar. Nu tas båda från gårdagen, den senaste gemensamma dagen.
+        val yesterday = testDay.minusDays(1)
+        setUpHoldingWithCheaperAlternative()
+        cachedPrices["HELD"] = FundPrice(fundId = "HELD", epochDay = yesterday.toEpochDay(), nav = 100.0)
+        olderPrices["SE_BILLIG"] = listOf(FundPrice(fundId = "SE_BILLIG", epochDay = yesterday.toEpochDay(), nav = 48.0))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, testDay)
+
+        // SE_NASTBILLIG har ingen kurs i går: ingen gemensam dag, alltså ingen rad hellre än en från två dagar.
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_BILLIG", record.buyIsin)
+        assertEquals(100.0, record.sellNavAtSuggestion, 1e-9)
+        assertEquals(48.0, record.buyNavAtSuggestion, 1e-9)
+        assertEquals(yesterday.toEpochDay(), record.navEpochDay)
     }
 
     @Test
@@ -515,7 +550,7 @@ class FundPriceUpdateWorkerTest {
         // stämplar comparisonResolvedAtEpochDay, så hängde inspelningen på omskanningens urval
         // blev just de fonder användaren tittar på permanent överhoppade — kryssrutan dök
         // aldrig upp för dem. Ett råd spelas in för att det gavs, inte för att det räknades om.
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpHoldingWithCheaperAlternative()
         metadataByIsin["SE_HELD"] = heldMetadata("SE_HELD", risk = 5, totalFee = 1.0).copy(
             comparisonResolvedAtEpochDay = today.toEpochDay(),
@@ -540,7 +575,7 @@ class FundPriceUpdateWorkerTest {
             shownAlternativeIsins = listOf("SE_GAMMAL")
         )
         fundByIsin["SE_GAMMAL"] = Fund(fundId = "SE_GAMMAL", name = "Gammal", isin = "SE_GAMMAL")
-        isinChainPrices["SE_GAMMAL"] = FundPrice(fundId = "SE_GAMMAL", epochDay = LocalDate.now().toEpochDay(), nav = 10.0)
+        isinChainPrices["SE_GAMMAL"] = FundPrice(fundId = "SE_GAMMAL", epochDay = testDay.toEpochDay(), nav = 10.0)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo)
@@ -592,7 +627,7 @@ class FundPriceUpdateWorkerTest {
     fun `scanComparisons spelar in samma avgiftsbyte hogst en gang per dygn`() = runTest {
         setUpHoldingWithCheaperAlternative()
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
 
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
         FundPriceUpdateWorker.scanComparisons(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, suggestionRepo, today)
@@ -626,7 +661,7 @@ class FundPriceUpdateWorkerTest {
         // Sex innehav med ett alternativ vardera fyller budgeten exakt. Är de tre största redan
         // inspelade ska de tre minsta komma med i samma körning — annars hade ett innehav som
         // ligger långt ner i värdeordningen aldrig hunnit med, trots att budgeten var oanvänd.
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpNineHoldingsWithFreshComparisons(today)
         val suggestionRepo = FakeSuggestionRecordRepository()
         // De tre största är redan inspelade i dag.
@@ -655,7 +690,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `inspelningen ar budgeterad per korning`() = runTest {
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpNineHoldingsWithFreshComparisons(today)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -671,7 +706,7 @@ class FundPriceUpdateWorkerTest {
         // historien för ett fondpar som legitimt föreslås av båda källorna.
         setUpHoldingWithCheaperAlternative()
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         suggestionRepo.record(
             SuggestionRecord(
                 suggestedAtEpochDay = today.toEpochDay(),
@@ -747,7 +782,7 @@ class FundPriceUpdateWorkerTest {
     /** [FundPriceUpdateWorker.scanSwitchPlan] med testets fakes — avståenden riggas på [dismissalRepo]. */
     private suspend fun scanSwitchPlan(
         suggestionRepo: SuggestionRecordRepository,
-        today: LocalDate = LocalDate.now(),
+        today: LocalDate = testDay,
         batchEpochMillis: Long = System.currentTimeMillis()
     ) = FundPriceUpdateWorker.scanSwitchPlan(
         fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo,
@@ -773,7 +808,7 @@ class FundPriceUpdateWorkerTest {
         fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat SE_CAND", isin = "SE_CAND")
         // Kandidatens kurs finns bara via ISIN-kedjan — precis som skarpt, där fonden saknar
         // Handelsbanken-FundId. Förseedas den i cachen döljs buggen i issue #75, punkt 2.
-        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = LocalDate.now().toEpochDay(), nav = 50.0)
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = testDay.toEpochDay(), nav = 50.0)
     }
 
     @Test
@@ -817,7 +852,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1))
+        scanSwitchPlan(suggestionRepo, testDay)
 
         val record = suggestionRepo.recorded.single()
         assertEquals("SE_HELD", record.sellIsin)
@@ -825,9 +860,88 @@ class FundPriceUpdateWorkerTest {
         assertEquals(0, record.planIndex)
         assertEquals(100.0, record.sellNavAtSuggestion, 1e-9)
         assertEquals(50.0, record.buyNavAtSuggestion, 1e-9)
-        assertEquals(LocalDate.of(2026, 1, 1).toEpochDay(), record.suggestedAtEpochDay)
+        assertEquals(testDay.toEpochDay(), record.suggestedAtEpochDay)
         // Hela innehavet är överviktat (mål 100 % nivå 3), så bytet omfattar hela 10 000 kr.
         assertEquals(10_000.0, record.switchValueKr ?: -1.0, 1e-9)
+        assertEquals(testDay.toEpochDay(), record.navEpochDay)
+    }
+
+    @Test
+    fun `scanSwitchPlan tar salj- och kop-NAV fran senaste gemensamma dag`() = runTest {
+        // Issue #197: säljfonden har dagens kurs, kandidaten bara gårdagens. Utgångsläget tas från
+        // gårdagen för båda — säljfondens gårdagskurs 96, inte dagens 100.
+        val yesterday = testDay.minusDays(1)
+        setUpOverweightedPortfolio()
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = yesterday.toEpochDay(), nav = 50.0)
+        olderPrices["HELD"] = listOf(FundPrice(fundId = "HELD", epochDay = yesterday.toEpochDay(), nav = 96.0))
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, testDay)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals(96.0, record.sellNavAtSuggestion, 1e-9)
+        assertEquals(50.0, record.buyNavAtSuggestion, 1e-9)
+        assertEquals(yesterday.toEpochDay(), record.navEpochDay)
+        assertEquals(testDay.toEpochDay(), record.suggestedAtEpochDay)
+    }
+
+    @Test
+    fun `scanSwitchPlan spelar inte in med en gemensam dag mer an 30 dagar fore forslaget`() = runTest {
+        // Granskning #197: utgångsläget får aldrig ligga mer än 30 dagar före förslagsdagen.
+        val today = testDay
+        val old = today.minusDays(31)
+        // Säljfonden har dagens kurs och en från för 31 dagar sedan; kandidaten bara den gamla.
+        setUpOverweightedPortfolio()
+        olderPrices["HELD"] = listOf(FundPrice(fundId = "HELD", epochDay = old.toEpochDay(), nav = 90.0))
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = old.toEpochDay(), nav = 50.0)
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
+    }
+
+    @Test
+    fun `scanSwitchPlan tar aldrig ett utgangslage efter forslagsdagen`() = runTest {
+        // Granskning #197: en kurs daterad efter förslagsdagen (klocka, tidszon) mäter inte rådet.
+        // Senaste gemensamma dag i morgon hoppas över; gårdagen, som båda också har, används.
+        val today = testDay
+        val tomorrow = today.plusDays(1)
+        val yesterday = today.minusDays(1)
+        setUpOverweightedPortfolio()
+        cachedPrices["HELD"] = FundPrice(fundId = "HELD", epochDay = tomorrow.toEpochDay(), nav = 101.0)
+        olderPrices["HELD"] = listOf(FundPrice(fundId = "HELD", epochDay = yesterday.toEpochDay(), nav = 96.0))
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = tomorrow.toEpochDay(), nav = 51.0)
+        olderPrices["SE_CAND"] = listOf(FundPrice(fundId = "SE_CAND", epochDay = yesterday.toEpochDay(), nav = 49.0))
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals(yesterday.toEpochDay(), record.navEpochDay)
+        assertEquals(96.0, record.sellNavAtSuggestion, 1e-9)
+        assertEquals(49.0, record.buyNavAtSuggestion, 1e-9)
+    }
+
+    @Test
+    fun `scanSwitchPlan spelar inte in utan en dag dar bada fonderna har en kurs`() = runTest {
+        // Kandidatens enda kurs är från i går, säljfondens från i dag och inget mer: ett par från
+        // två dagar mäter två perioder — hellre ingen rad (issue #197).
+        setUpOverweightedPortfolio()
+        isinChainPrices["SE_CAND"] = FundPrice(fundId = "SE_CAND", epochDay = testDay.minusDays(1).toEpochDay(), nav = 50.0)
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, testDay)
+
+        assertTrue(suggestionRepo.recorded.isEmpty())
     }
 
     @Test
@@ -1084,7 +1198,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         switchCandidateDelayMillis = 100
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
 
         val first = launch { scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000) }
         val second = launch { scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000) }
@@ -1110,7 +1224,7 @@ class FundPriceUpdateWorkerTest {
                 fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, preferencesRepository, suggestionRepo, dismissalRepo, switchWatchRepo,
                 calendar = {
                     reads += "dag-$name"
-                    LocalDate.of(2026, 1, 1)
+                    testDay
                 },
                 clock = {
                     reads += name
@@ -1189,10 +1303,10 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1))
+        scanSwitchPlan(suggestionRepo, testDay)
 
         // Gallringen körs efter inspelningen, så dagens rader aldrig faller offer för den.
-        assertEquals(LocalDate.of(2026, 1, 1), suggestionRepo.prunedAt)
+        assertEquals(testDay, suggestionRepo.prunedAt)
         assertEquals(1, suggestionRepo.recorded.size)
     }
 
@@ -1205,7 +1319,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
 
-        scanSwitchPlan(suggestionRepo, LocalDate.of(2026, 1, 1), batchEpochMillis = 1_767_222_000_000)
+        scanSwitchPlan(suggestionRepo, testDay, batchEpochMillis = 1_767_222_000_000)
 
         assertEquals(1_767_222_000_000L, suggestionRepo.recorded.single().batchEpochMillis)
     }
@@ -1274,7 +1388,7 @@ class FundPriceUpdateWorkerTest {
     fun `likvid som vantar pa kop fyller gapet - ingen ny plan och tomheten ar bevislig`() = runTest {
         // BYT-3: utan likviden hade planen föreslagit att sälja 5 000 kr till ur HELD för ett gap
         // som säljet redan finansierat. Ingen källfråga görs när ingen nivå är underviktad.
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpPendingProceeds(today, sellTransactionId = 42)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -1288,7 +1402,7 @@ class FundPriceUpdateWorkerTest {
     @Test
     fun `en bevakning utan saljtransaktion raknas inte som likvid - planen ges som forut`() = runTest {
         // "Bevaka alternativ" ur ett förslag säger inte att pengarna är fria.
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpPendingProceeds(today, sellTransactionId = null)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
@@ -1302,7 +1416,7 @@ class FundPriceUpdateWorkerTest {
     fun `ett kop i kandidaten sedan saljdagen forbrukar likviden - gapet ar oppet igen`() = runTest {
         // Köpet gjordes utan att bevakningen stängdes ("Inget byte" i väljaren): pengarna är
         // placerade på nivå 3 som innehav, och likviden får inte räknas en gång till.
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         setUpPendingProceeds(today, sellTransactionId = 42)
         val cand = fundByIsin.getValue("SE_CAND")
         funds.value = funds.value + cand
@@ -1327,7 +1441,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
 
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
@@ -1348,7 +1462,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
 
         // En andra fond på nivå 5 kommer till — planen får två steg.
@@ -1375,11 +1489,11 @@ class FundPriceUpdateWorkerTest {
         setUpOverweightedPortfolio()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
-        addLevelFiveHolding(fundId = "EXTRA", name = "Extra", totalFee = 0.5, shares = 50.0, day = LocalDate.now())
+        addLevelFiveHolding(fundId = "EXTRA", name = "Extra", totalFee = 0.5, shares = 50.0, day = testDay)
         addSecondCandidate(priceDay = null)
         // Ingen källa i kedjan känner SE_CAND2 — raden kan inte spelas in.
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
 
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 2_000)
@@ -1496,7 +1610,7 @@ class FundPriceUpdateWorkerTest {
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val suggestionRepo = FakeSuggestionRecordRepository()
-        val today = LocalDate.of(2026, 1, 1)
+        val today = testDay
         scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
 
         // En dyrare fond på nivå 5 tar steg 0 (Dyr → CAND), HELD får CAND2 som steg 1 — men
@@ -1512,6 +1626,31 @@ class FundPriceUpdateWorkerTest {
         assertEquals(1_000L, record.batchEpochMillis)
         assertEquals(0, record.planIndex)
         assertEquals(1, suggestionRepo.observeLatestBatch().first().size)
+    }
+
+    @Test
+    fun `kan ett senare steg inte spelas in skrivs resten av planen anda med sin plats`() = runTest {
+        // Granskning #197: `?: break` tappade alla steg efter det första som saknade NAV. Nu hoppas
+        // bara det steget över; steg 2 skrivs med planIndex 2 (rangen), inte 1, så facit per plats stämmer.
+        setUpOverweightedPortfolio()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val today = testDay
+        addLevelFiveHolding(fundId = "DYR", name = "Dyr", totalFee = 2.0, shares = 50.0, day = today)
+        addLevelFiveHolding(fundId = "EXTRA", name = "Extra", totalFee = 0.5, shares = 50.0, day = today)
+        // CAND2 (steg 1) känner ingen källa; CAND3 (steg 2) har en kurs.
+        addSecondCandidate(priceDay = null)
+        switchCandidatesByLevel[3] = switchCandidatesByLevel.getValue(3) +
+            SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND3", risk = 3, totalFee = 0.5, developmentOneYear = 0.1), 0.1)
+        fundByIsin["SE_CAND3"] = Fund(fundId = "SE_CAND3", name = "Kandidat SE_CAND3", isin = "SE_CAND3")
+        isinChainPrices["SE_CAND3"] = FundPrice(fundId = "SE_CAND3", epochDay = today.toEpochDay(), nav = 30.0)
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, today, batchEpochMillis = 1_000)
+
+        val recorded = suggestionRepo.recorded.sortedBy { it.planIndex }
+        assertEquals(listOf(0, 2), recorded.map { it.planIndex })
+        assertEquals(listOf("SE_CAND", "SE_CAND3"), recorded.map { it.buyIsin })
     }
 
     @Test
@@ -1537,10 +1676,10 @@ class FundPriceUpdateWorkerTest {
         setUpOverweightedPortfolio()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
-        addSecondCandidate(priceDay = LocalDate.now())
-        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, LocalDate.now())
+        addSecondCandidate(priceDay = testDay)
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND", SuggestionKind.RISK_PLAN, testDay)
         // Ett avgiftsbyte för det andra paret rör inte planen — bara planens egna avståenden räknas.
-        dismissalRepo.dismiss("SE_HELD", "SE_CAND2", SuggestionKind.FEE, LocalDate.now())
+        dismissalRepo.dismiss("SE_HELD", "SE_CAND2", SuggestionKind.FEE, testDay)
         val suggestionRepo = FakeSuggestionRecordRepository()
 
         scanSwitchPlan(suggestionRepo)
@@ -1577,7 +1716,7 @@ class FundPriceUpdateWorkerTest {
     fun `scanSwitchWatches fyller kandidaternas kurser och hoppar over bevakade fonder`() = runTest {
         // Hems kort (HEM-11) ska kunna peka ut ledaren utan nätverk — därför cachas kandidaternas
         // senaste kurs här. Säljsidan är en bevakad fond och uppdateras redan av refreshAll.
-        val today = LocalDate.now()
+        val today = testDay
         funds.value = listOf(Fund(fundId = "SHB1", name = "Såld", isin = "SE_TRACKED"))
         listOf("SE_A", "SE_B").forEach { isin ->
             fundByIsin[isin] = Fund(fundId = isin, name = "Kandidat $isin", isin = isin)
@@ -1605,7 +1744,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `scanSwitchWatches stanger utgangna bevakningar utan att radera dem`() = runTest {
-        val today = LocalDate.now()
+        val today = testDay
         val watchRepo = FakeSwitchWatchRepository()
         watchRepo.start(
             SwitchWatch(
@@ -1630,7 +1769,7 @@ class FundPriceUpdateWorkerTest {
             fakeTransactionRepo,
             fakeFundPriceRepo,
             FakeSwitchWatchRepository(),
-            LocalDate.now()
+            testDay
         )
 
         assertTrue(refreshSinceCalls.isEmpty())
@@ -1639,7 +1778,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `scanOutcomeNavs hamtar kurs for kopkandidaten via ISIN-kedjan`() = runTest {
-        val today = LocalDate.now()
+        val today = testDay
         fundByIsin["SE_CAND"] = Fund(fundId = "SE_CAND", name = "Kandidat", isin = "SE_CAND")
         val suggestionRepo = FakeSuggestionRecordRepository()
         suggestionRepo.record(outcomeRecord(1, "SE_CAND", today.toEpochDay()))
@@ -1657,7 +1796,7 @@ class FundPriceUpdateWorkerTest {
         // Säljsidan (och varje annan bevakad fond) uppdateras redan av refreshAll under fondens
         // egen fundId — att hämta den igen via ISIN-vägen hade kostat ett anrop till och lagt en
         // dubblettrad i cachen under en annan nyckel.
-        val today = LocalDate.now()
+        val today = testDay
         funds.value = listOf(Fund(fundId = "SHB1", name = "Bevakad", isin = "SE_TRACKED"))
         fundByIsin["SE_TRACKED"] = Fund(fundId = "SE_TRACKED", name = "Bevakad", isin = "SE_TRACKED")
         val suggestionRepo = FakeSuggestionRecordRepository()
@@ -1670,7 +1809,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `scanOutcomeNavs ar budgeterad och tar de nyaste forslagen forst`() = runTest {
-        val today = LocalDate.now()
+        val today = testDay
         val suggestionRepo = FakeSuggestionRecordRepository()
         // Sex distinkta köpkandidater, äldst inspelad först — budgeten är fyra per körning.
         (1..6).forEach { n ->
@@ -1686,7 +1825,7 @@ class FundPriceUpdateWorkerTest {
 
     @Test
     fun `scanOutcomeNavs gor ingenting utan inspelad historik`() = runTest {
-        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, FakeSuggestionRecordRepository(), LocalDate.now())
+        FundPriceUpdateWorker.scanOutcomeNavs(fakeTransactionRepo, fakeFundPriceRepo, FakeSuggestionRecordRepository(), testDay)
 
         assertTrue(refreshSinceCalls.isEmpty())
         assertTrue(refreshCalls.isEmpty())

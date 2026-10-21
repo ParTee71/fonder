@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -124,7 +125,7 @@ fun FacitContent(
 }
 
 /**
- * De två måtten per sort, plus snittet per plats i planen. **Alla förslag** och **enbart
+ * De två måtten per sort, utfallen per horisont och per plats i planen. **Alla förslag** och **enbart
  * genomförda** står som skilda rader och slås aldrig ihop: ett oföljt förslag är ett
  * hypotetiskt utfall, ett följt ett verkligt, och en gemensam siffra hade mätt ingetdera
  * (SET-5).
@@ -160,12 +161,21 @@ private fun SummaryCard(state: FacitUiState) {
                 summary = state.planFollowedSummary,
                 modifier = Modifier.padding(top = Spacing.xs)
             )
+        }
+
+        // Procent bara inom ett horisontband (issue #197): ett par dagars utfall och ett års i samma
+        // snitt säger ingenting. Band utan utvärderade förslag visas inte.
+        if (state.planByHorizon.isNotEmpty()) {
             Text(
-                stringResource(
-                    R.string.format_facit_evaluated_count,
-                    state.planAllSummary.evaluatedCount,
-                    state.planAllSummary.totalCount
-                ),
+                stringResource(R.string.facit_by_horizon_title),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = Spacing.l)
+            )
+            state.planByHorizon.forEach { entry ->
+                HorizonRow(entry = entry, modifier = Modifier.padding(top = Spacing.xs))
+            }
+            Text(
+                stringResource(R.string.facit_by_horizon_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = Spacing.xs)
@@ -203,9 +213,15 @@ private fun SummaryCard(state: FacitUiState) {
                 modifier = Modifier.padding(top = Spacing.l)
             )
             state.byPlanIndex.forEach { entry ->
-                SummaryRow(
+                PeriodRow(
                     label = stringResource(R.string.format_facit_plan_index_label, entry.planIndex + 1),
-                    summary = entry.summary,
+                    amount = null,
+                    fraction = null,
+                    valueText = hitRateText(entry.summary),
+                    valueTone = hitRateTone(entry.summary),
+                    supportingValue = entry.summary.medianExcessReturn?.let {
+                        stringResource(R.string.format_facit_median, MoneyFormat.percentSigned(it))
+                    },
                     modifier = Modifier.padding(top = Spacing.xs)
                 )
             }
@@ -220,17 +236,73 @@ private fun SummaryCard(state: FacitUiState) {
 }
 
 /**
- * En summeringsrad via den delade [PeriodRow] (regel 4) — procenten är huvudmåttet och
- * kronorna dess konsekvens, därför [PeriodRow]s `stackValue`. Utan utvärderade förslag
- * saknas båda talen, och raden faller tillbaka på komponentens egen "otillräcklig data".
+ * En summeringsrad via den delade [PeriodRow] (regel 4): **träffandelen** ("3 av 5 bättre") är
+ * huvudmåttet, färgad efter om majoriteten var bättre, med kronsumman under — aldrig ett snitt i
+ * procent, som blandade förslag med olika ålder (issue #197). Under etiketten hur många som gått
+ * att utvärdera. Utan utvärderade förslag faller raden tillbaka på komponentens "otillräcklig data".
  */
 @Composable
 private fun SummaryRow(label: String, summary: SwitchOutcomeCalc.Summary, modifier: Modifier = Modifier) {
     PeriodRow(
         label = label,
-        amount = summary.totalExcessKr,
-        fraction = summary.averageExcessReturn,
-        stackValue = true,
+        amount = null,
+        fraction = null,
+        valueText = hitRateText(summary),
+        valueTone = hitRateTone(summary),
+        supportingValue = summary.totalExcessKr?.let { MoneyFormat.krSigned(it) },
+        supportingLabel = if (summary.totalCount > 0) {
+            pluralStringResource(R.plurals.format_facit_evaluated_of, summary.evaluatedCount, summary.evaluatedCount, summary.totalCount)
+        } else {
+            null
+        },
+        modifier = modifier
+    )
+}
+
+/** "x av n bättre" — null utan utvärderade förslag, så raden visar "otillräcklig data" i stället för "0 av 0". */
+@Composable
+private fun hitRateText(summary: SwitchOutcomeCalc.Summary): String? = if (summary.evaluatedCount > 0) {
+    stringResource(R.string.format_facit_better_of, summary.betterCount, summary.evaluatedCount)
+} else {
+    null
+}
+
+/** Vinstfärg när majoriteten var bättre än att ha behållit, förlustfärg när majoriteten var sämre, dämpad vid exakt hälften. */
+private fun hitRateTone(summary: SwitchOutcomeCalc.Summary): Double = summary.hitRateSign.toDouble()
+
+/**
+ * Ett horisontband (issue #197): under ett halvår medianen i procent, över ett halvår medianen i
+ * årstakt — så ett halvårs och ett treårs utfall går att jämföra. Träffandelen står under.
+ *
+ * Båda varianterna går genom `valueText` + `valueTone`, så en median på exakt noll färgas lika —
+ * dämpat — i alla band, och ett tecken ger samma vinst-/förlustfärg som i resten av appen.
+ */
+@Composable
+private fun HorizonRow(entry: SwitchOutcomeCalc.HorizonSummary, modifier: Modifier = Modifier) {
+    val label = stringResource(
+        when (entry.horizon) {
+            SwitchOutcomeCalc.Horizon.UNDER_ONE_MONTH -> R.string.format_facit_horizon_under_one_month
+            SwitchOutcomeCalc.Horizon.ONE_TO_SIX_MONTHS -> R.string.format_facit_horizon_one_to_six_months
+            SwitchOutcomeCalc.Horizon.OVER_SIX_MONTHS -> R.string.format_facit_horizon_over_six_months
+        },
+        entry.count
+    )
+    val better = stringResource(
+        if (entry.isAnnualized) R.string.format_facit_horizon_annualized_better else R.string.format_facit_horizon_median_better,
+        entry.betterCount,
+        entry.count
+    )
+    PeriodRow(
+        label = label,
+        amount = null,
+        fraction = null,
+        valueText = if (entry.isAnnualized) {
+            stringResource(R.string.format_facit_per_year, MoneyFormat.percentSigned(entry.medianExcessReturn))
+        } else {
+            MoneyFormat.percentSigned(entry.medianExcessReturn)
+        },
+        valueTone = entry.medianExcessReturn,
+        supportingValue = better,
         modifier = modifier
     )
 }
@@ -296,11 +368,30 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
             // Utfallet via den delade PeriodRow (regel 4): procent + kronor, färgat efter
             // procenten. Är raden inte utvärderad ännu är båda talen null och komponenten
             // markerar den som otillräcklig data — aldrig som 0, som lästs som "gav ingenting".
+            // Mätdagen står under etiketten (issue #197): båda fonderna mäts samma dag, och utan en
+            // sådan dag efter förslaget är raden ej utvärderad. Saknar förslaget ett utgångsläge
+            // (NAV ≤ 0 vid förslaget) blir det aldrig utvärderat — då "Otillräcklig data", inte "väntar".
+            val measuredAt = row.outcome.measuredAtEpochDay
+            val days = row.outcome.days
+            val hasBaseNav = row.outcome.hasBaseNav
             PeriodRow(
                 label = stringResource(R.string.facit_row_excess_label),
                 amount = row.outcome.excessKr,
                 fraction = row.outcome.excessReturn,
                 stackValue = true,
+                insufficientText = if (hasBaseNav) stringResource(R.string.facit_row_not_evaluated) else null,
+                supportingLabel = when {
+                    measuredAt != null && days != null -> pluralStringResource(
+                        R.plurals.format_facit_measured_at,
+                        days.toInt(),
+                        LocalDate.ofEpochDay(measuredAt).format(dateFormatter),
+                        days.toInt()
+                    )
+
+                    hasBaseNav -> stringResource(R.string.facit_row_waiting_same_day)
+
+                    else -> null
+                },
                 modifier = Modifier.padding(top = Spacing.s)
             )
 
@@ -335,7 +426,7 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
                         )
                     } else {
                         Text(
-                            stringResource(R.string.facit_not_evaluated_explain),
+                            stringResource(if (row.outcome.hasBaseNav) R.string.facit_not_evaluated_explain else R.string.facit_not_evaluable_explain),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

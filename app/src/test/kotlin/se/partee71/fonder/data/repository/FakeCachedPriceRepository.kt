@@ -4,6 +4,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
@@ -49,6 +50,20 @@ class FakeCachedPriceRepository(
     }
 
     override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
+
+    /**
+     * Historiken som cachen har: [priceHistoryByFundId] plus den senaste kursen ur [latestPrices] (som i
+     * Room är en punkt i samma tabell), reaktivt på [latestPrices] — facit (issue #197).
+     */
+    override fun observeHistories(fundIds: List<String>, fromEpochDay: Long): Flow<Map<String, List<FundPrice>>> = latestPrices.map { latest ->
+        fundIds.associateWith { id ->
+            (priceHistoryByFundId[id].orEmpty() + listOfNotNull(latest[id]))
+                .filter { it.epochDay >= fromEpochDay }
+                .associateBy { it.epochDay }
+                .values
+                .sortedBy { it.epochDay }
+        }.filterValues { it.isNotEmpty() }
+    }
 
     override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
 }

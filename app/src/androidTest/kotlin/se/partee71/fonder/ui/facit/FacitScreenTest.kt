@@ -32,13 +32,13 @@ class FacitScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun record(id: Long, planIndex: Int = 0, switchValueKr: Double? = 10_000.0, followed: Boolean? = null) = SuggestionRecord(
+    private fun record(id: Long, planIndex: Int = 0, switchValueKr: Double? = 10_000.0, followed: Boolean? = null, sellNav: Double = 100.0) = SuggestionRecord(
         id = id,
         suggestedAtEpochDay = 20_000,
         planIndex = planIndex,
         sellIsin = "SE_SELL",
         buyIsin = "SE_BUY",
-        sellNavAtSuggestion = 100.0,
+        sellNavAtSuggestion = sellNav,
         buyNavAtSuggestion = 200.0,
         switchValueKr = switchValueKr,
         followed = followed
@@ -53,7 +53,8 @@ class FacitScreenTest {
         followed: Boolean = false,
         sellNavNow: Double? = 105.0,
         buyNavNow: Double? = 224.0,
-        kind: SuggestionKind = SuggestionKind.RISK_PLAN
+        kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+        sellNavAtSuggestion: Double = 100.0
     ) = FacitRad(
         recordId = id,
         kind = kind,
@@ -64,9 +65,9 @@ class FacitScreenTest {
         switchValueKr = switchValueKr,
         followed = followed,
         outcome = SwitchOutcomeCalc.evaluate(
-            record = record(id, planIndex, switchValueKr, followed),
-            sellNavNow = sellNavNow,
-            buyNavNow = buyNavNow
+            record = record(id, planIndex, switchValueKr, followed, sellNavAtSuggestion),
+            // Båda kurserna samma dag, 30 dagar efter förslaget — saknas en finns ingen gemensam dag (issue #197).
+            nav = if (sellNavNow != null && buyNavNow != null) SwitchOutcomeCalc.SameDayNav(20_030, sellNavNow, buyNavNow) else null
         )
     )
 
@@ -121,9 +122,13 @@ class FacitScreenTest {
 
         composeRule.onNodeWithText("Alla förslag").assertExists()
         composeRule.onNodeWithText("Enbart genomförda").assertExists()
-        // 140,00 kr finns bara i "alla"-totalen — raderna visar 70,00 kr var.
-        composeRule.onNodeWithText("140,00 kr").assertExists()
-        composeRule.onNodeWithText("2 av 2 förslag utvärderade").assertExists()
+        // +140,00 kr finns bara i "alla"-totalen — raderna visar 70,00 kr var. Träffandelen i stället
+        // för ett snitt i procent (issue #197), och hur många som gått att utvärdera under etiketten.
+        composeRule.onNodeWithText("+140,00 kr").assertExists()
+        composeRule.onNodeWithText("2 utvärderade av 2").assertExists()
+        // Singular när ett förslag är utvärderat ("1 utvärderad", inte "1 utvärderade").
+        composeRule.onNodeWithText("1 utvärderad av 1").assertExists()
+        composeRule.onAllNodesWithText("2 av 2 bättre").onFirst().assertExists()
     }
 
     @Test
@@ -135,6 +140,20 @@ class FacitScreenTest {
         composeRule.onNodeWithText("Per plats i planen").assertExists()
         composeRule.onNodeWithText("Plats 1").assertExists()
         composeRule.onNodeWithText("Plats 2").assertExists()
+        composeRule.onAllNodesWithText("median +7,0 %").onFirst().assertExists()
+    }
+
+    @Test
+    fun matdagen_och_horisonten_visas() {
+        // Issue #197: varje rad säger vilken dag båda fonderna mättes, och procent visas per horisont.
+        composeRule.setContent {
+            FonderTheme { FacitContent(state = state(rad(id = 1))) }
+        }
+
+        composeRule.onNodeWithText("mätt till 2024-11-03 · 30 dagar").assertExists()
+        composeRule.onNodeWithText("Per horisont · alla förslag").assertExists()
+        composeRule.onNodeWithText("1–6 månader · 1 st").assertExists()
+        composeRule.onNodeWithText("median · 1 av 1 bättre").assertExists()
     }
 
     @Test
@@ -147,7 +166,24 @@ class FacitScreenTest {
         // Texten står på flera ställen (båda summeringarna, plats-raden och själva raden) —
         // det viktiga är att den står *någonstans* i stället för en nolla.
         composeRule.onAllNodesWithText("Otillräcklig data").onFirst().assertExists()
+        composeRule.onNodeWithText("Ej utvärderad ännu").assertExists()
+        composeRule.onNodeWithText("väntar på kurs samma dag för båda fonderna").assertExists()
         composeRule.onNodeWithText("0,00 kr").assertDoesNotExist()
+    }
+
+    @Test
+    fun rad_utan_utgangslage_vantar_inte_pa_kurs() {
+        // NAV ≤ 0 vid förslaget: raden blir aldrig utvärderad, så "väntar på kurs" vore fel besked.
+        composeRule.setContent {
+            FonderTheme { FacitContent(state = state(rad(id = 1, sellNavAtSuggestion = 0.0))) }
+        }
+
+        composeRule.onNodeWithText("Ej utvärderad ännu").assertDoesNotExist()
+        composeRule.onNodeWithText("väntar på kurs samma dag för båda fonderna").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Såld fond → Köpt fond").performClick()
+
+        composeRule.onNodeWithText("Kan inte utvärderas", substring = true).assertExists()
     }
 
     @Test
@@ -233,8 +269,8 @@ class FacitScreenTest {
 
         composeRule.onNodeWithText("Bytesplanen").assertExists()
         composeRule.onNodeWithText("Billigare alternativ").assertExists()
-        composeRule.onNodeWithText("140,00 kr").assertExists()
-        composeRule.onNodeWithText("10,00 kr").assertExists()
+        composeRule.onNodeWithText("+140,00 kr").assertExists()
+        composeRule.onNodeWithText("+10,00 kr").assertExists()
     }
 
     @Test

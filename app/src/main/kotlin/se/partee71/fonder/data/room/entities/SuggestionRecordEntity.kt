@@ -37,7 +37,12 @@ data class SuggestionRecordEntity(
      * kolumn. Okänt värde läses som [SuggestionKind.RISK_PLAN] — en fil från en nyare version
      * ska degradera, inte krascha.
      */
-    val kind: String = SuggestionKind.RISK_PLAN.name
+    val kind: String = SuggestionKind.RISK_PLAN.name,
+    /**
+     * Dagen båda NAV-utgångslägena gäller — se [SuggestionRecord.navEpochDay] (issue #197). Nullbar
+     * utan default i SQL: en rad från före version 20 vet inte vilken dag kurserna var från.
+     */
+    val navEpochDay: Long? = null
 ) {
     fun toDomain() = SuggestionRecord(
         id = id,
@@ -50,7 +55,8 @@ data class SuggestionRecordEntity(
         switchValueKr = switchValueKr,
         followed = followed,
         batchEpochMillis = batchEpochMillis,
-        kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN)
+        kind = runCatching { SuggestionKind.valueOf(kind) }.getOrDefault(SuggestionKind.RISK_PLAN),
+        navEpochDay = navEpochDay
     )
 
     companion object {
@@ -68,7 +74,8 @@ data class SuggestionRecordEntity(
             switchValueKr = record.switchValueKr,
             followed = record.followed,
             batchEpochMillis = record.batchEpochMillis,
-            kind = record.kind.name
+            kind = record.kind.name,
+            navEpochDay = record.navEpochDay
         )
     }
 }

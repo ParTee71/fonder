@@ -50,6 +50,7 @@ data class FacitUiState(
     val feeAllSummary: SwitchOutcomeCalc.Summary get() = facit.feeAllSummary
     val feeFollowedSummary: SwitchOutcomeCalc.Summary get() = facit.feeFollowedSummary
     val byPlanIndex: List<SwitchOutcomeCalc.PlanIndexSummary> get() = facit.byPlanIndex
+    val planByHorizon: List<SwitchOutcomeCalc.HorizonSummary> get() = facit.planByHorizon
 
     val isEmpty: Boolean get() = list is ListUiState.Empty
 

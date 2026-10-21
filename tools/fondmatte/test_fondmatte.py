@@ -392,6 +392,93 @@ class MovingAverageTest(unittest.TestCase):
         self.assertGreater(sma["count"], 0)
 
 
+class FacitTest(unittest.TestCase):
+    """Facit för bytesförslag (SET-5, issue #197): samma dag för båda fonderna, horisontband, median och årstakt."""
+
+    def suggestion(self, **overrides):
+        base = {"id": 1, "suggested": "2025-01-02", "nav_date": "2025-01-02", "sell": "S", "buy": "K", "sell_nav": 100.0, "buy_nav": 50.0, "value_kr": 10_000.0}
+        return base | overrides
+
+    def test_measures_on_latest_day_both_funds_have_a_price(self):
+        # Säljfonden har en kurs den 10:e, köpfonden inte: mätdagen blir den 9:e för båda.
+        p = prices(S=[("2025-01-02", 100.0), ("2025-01-09", 104.0), ("2025-01-10", 110.0)], K=[("2025-01-02", 50.0), ("2025-01-09", 51.0)])
+        row = fm.facit_row(self.suggestion(), p)
+        self.assertEqual(row["measured"], "2025-01-09")
+        self.assertEqual(row["days"], 7)
+        self.assertAlmostEqual(row["excess"], 0.02 - 0.04, places=12)
+        self.assertAlmostEqual(row["excess_kr"], -200.0, places=9)
+
+    def test_no_common_day_after_the_suggestion_is_not_evaluated(self):
+        # Bara förslagsdagen är gemensam: noll dagar är inget utfall, och "inte bättre" vore fel.
+        p = prices(S=[("2025-01-02", 100.0), ("2025-01-03", 101.0)], K=[("2025-01-02", 50.0), ("2025-01-06", 52.0)])
+        row = fm.facit_row(self.suggestion(), p)
+        self.assertIsNone(row["excess"])
+        self.assertIsNone(row["measured"])
+
+    def test_row_without_nav_date_is_measured_from_the_suggestion_day(self):
+        p = prices(S=[("2025-01-02", 100.0), ("2025-02-01", 100.0)], K=[("2025-01-02", 50.0), ("2025-02-01", 55.0)])
+        row = fm.facit_row(self.suggestion(nav_date=None), p)
+        self.assertEqual(row["days"], 30)
+        self.assertEqual(row["horizon"], "ONE_TO_SIX_MONTHS")
+
+    def test_horizon_bands(self):
+        self.assertEqual(fm.facit_horizon(29), "UNDER_ONE_MONTH")
+        self.assertEqual(fm.facit_horizon(30), "ONE_TO_SIX_MONTHS")
+        self.assertEqual(fm.facit_horizon(182), "ONE_TO_SIX_MONTHS")
+        self.assertEqual(fm.facit_horizon(183), "OVER_SIX_MONTHS")
+
+    def test_annualized_excess(self):
+        # +21 % över två år (730,485 dagar) är +10 % per år; ett helt år är oförändrat.
+        self.assertAlmostEqual(fm.facit_annualized(0.21, 730.485), 0.10, places=12)
+        self.assertAlmostEqual(fm.facit_annualized(0.12, 365.2425), 0.12, places=12)
+        self.assertEqual(fm.facit_annualized(-1.5, 400), -1.0)
+        self.assertIsNone(fm.facit_annualized(0.1, 0))
+        # Samma formel som GIPS-årstakten, bara utan ettårsgränsen.
+        self.assertEqual(fm.facit_annualized(0.21, 730), fm.annualized(0.21, 730))
+
+    def test_annualized_is_on_relative_return_not_excess(self):
+        # Säljfonden +50 %, köpfonden +65 %: meravkastningen +15 pp men den relativa utvecklingen +10 %.
+        p = prices(S=[("2025-01-02", 100.0), ("2027-01-01", 150.0)], K=[("2025-01-02", 50.0), ("2027-01-01", 82.5)])
+        row = fm.facit_row(self.suggestion(), p)
+        self.assertAlmostEqual(row["excess"], 0.15, places=12)
+        self.assertAlmostEqual(row["relative"], 0.10, places=12)
+        self.assertAlmostEqual(row["annualized"], 1.10 ** (fm.DAYS_PER_YEAR / row["days"]) - 1.0, places=12)
+
+    def test_median(self):
+        self.assertEqual(fm.median([3.0, 1.0, 2.0]), 2.0)
+        self.assertEqual(fm.median([4.0, 1.0, 2.0, 3.0]), 2.5)
+        self.assertIsNone(fm.median([]))
+
+    def test_issue_example_hit_rate_instead_of_average(self):
+        # Issue #197: A (300 dagar, +12 pp), B och C (3 dagar, −1 pp). Snittet +3,3 pp dolde att två av tre var sämre.
+        rows = [
+            {"excess": 0.12, "excess_kr": 1200.0, "better": True, "horizon": "OVER_SIX_MONTHS", "annualized": 0.147},
+            {"excess": -0.01, "excess_kr": -50.0, "better": False, "horizon": "UNDER_ONE_MONTH", "annualized": None},
+            {"excess": -0.01, "excess_kr": -80.0, "better": False, "horizon": "UNDER_ONE_MONTH", "annualized": None},
+        ]
+        summary = fm.facit_summary(rows)
+        self.assertEqual((summary["better"], summary["evaluated"]), (1, 3))
+        self.assertAlmostEqual(summary["median_excess"], -0.01, places=12)
+        self.assertAlmostEqual(summary["total_excess_kr"], 1070.0, places=9)
+        bands = fm.facit_by_horizon(rows)
+        self.assertEqual([b["horizon"] for b in bands], ["UNDER_ONE_MONTH", "OVER_SIX_MONTHS"])
+        self.assertAlmostEqual(bands[1]["median"], 0.147, places=12)
+
+    def test_facit_fixture(self):
+        with open(Path(__file__).with_name("facit.json"), encoding="utf-8") as f:
+            result = fm.golden(json.load(f))
+        json.dumps(result, allow_nan=False)
+        facit = result["facit"]
+        by_id = {r["id"]: r for r in facit["rows"]}
+        self.assertEqual(by_id[1]["measured"], "2025-12-26")  # köpfonden saknar kurs den 29:e
+        self.assertIsNone(by_id[5]["excess"])
+        self.assertEqual((facit["all"]["better"], facit["all"]["evaluated"], facit["all"]["total"]), (3, 6, 7))
+        self.assertAlmostEqual(facit["all"]["total_excess_kr"], 1200.0 - 50.0 - 80.0 - 4000.0 + 120.0, places=6)
+        self.assertEqual([b["count"] for b in facit["by_horizon"]], [2, 2, 2])
+        self.assertAlmostEqual(by_id[1]["relative"], 1.17 / 1.05 - 1.0, places=12)
+        self.assertAlmostEqual(facit["by_horizon"][2]["median"], -0.0019107436090513574, places=12)
+
+
 class ExampleFixtureTest(unittest.TestCase):
     def test_example_runs_and_methods_differ(self):
         with open(Path(__file__).with_name("exempel.json"), encoding="utf-8") as f:

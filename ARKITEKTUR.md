@@ -244,7 +244,7 @@ staleness-gaten (`isPriceStale`) falskt negativ.
 
 ## Datamodell
 
-**Room** (`data/room/AppDatabase`, version **19**, `exportSchema = true`). Schemafilerna ligger i
+**Room** (`data/room/AppDatabase`, version **20**, `exportSchema = true`). Schemafilerna ligger i
 `app/schemas/` och används av migreringstesterna. Migreringarna 1→2 … 18→19 står i
 `AppDatabase` och har var sitt `MigrationXYTest` (skill `room-migrations`).
 

@@ -37,6 +37,7 @@ import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
@@ -97,7 +98,7 @@ class FacitViewModelTest {
     private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
     private fun viewModel() = FacitViewModel(
-        FacitSummary(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo),
+        FacitSummary(fakeSuggestionRepo, fakeTransactionRepo, fakePriceRepo, fakeMetadataRepo, dispatcher),
         fakeSuggestionRepo,
         fakeScheduler
     )
@@ -276,9 +277,55 @@ class FacitViewModelTest {
             awaitItem()
             val state = awaitItem()
             assertFalse(state.rows.single().outcome.isEvaluated)
-            assertNull(state.planAllSummary.averageExcessReturn)
+            assertNull(state.planAllSummary.medianExcessReturn)
+            assertEquals(0, state.planAllSummary.betterCount)
             assertEquals(0, state.planAllSummary.evaluatedCount)
+            assertTrue(state.planByHorizon.isEmpty())
             assertEquals(1, state.planAllSummary.totalCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `bada fonderna mats pa samma dag aven nar saljfonden har en nyare kurs`() = runTest(dispatcher) {
+        // Issue #197: säljfondens kurs uppdateras varje körning, köpfondens bara ibland. Säljfonden har
+        // en kurs dag 20 105 (150, +50 %) som köpfonden saknar — båda mäts dag 20 100, aldrig på var sin dag.
+        setUpPrices()
+        prices.value = prices.value + ("SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_105, nav = 150.0))
+        fakePriceRepo.priceHistoryByFundId = mapOf("SHB1" to listOf(FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 105.0)))
+        records.value = listOf(record(id = 1))
+
+        viewModel().uiState.test {
+            awaitItem()
+            val outcome = awaitItem().rows.single().outcome
+            assertEquals(20_100L, outcome.measuredAtEpochDay)
+            assertEquals(100L, outcome.days)
+            assertEquals(0.07, outcome.excessReturn!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `traffandel och utfall per horisont`() = runTest(dispatcher) {
+        // Ett förslag 100 dagar gammalt (+7 pp) och ett 5 dagar gammalt (−10 pp): träffandelen 1 av 2 och
+        // var sitt horisontband — inget snitt över de två åldrarna (issue #197).
+        setUpPrices()
+        records.value = listOf(
+            record(id = 1),
+            record(id = 2, sellNav = 105.0, buyNav = 224.0 / 0.9, suggestedAtEpochDay = 20_095)
+        )
+
+        viewModel().uiState.test {
+            awaitItem()
+            val state = awaitItem()
+            assertEquals(1, state.planAllSummary.betterCount)
+            assertEquals(2, state.planAllSummary.evaluatedCount)
+            assertEquals(
+                listOf(SwitchOutcomeCalc.Horizon.UNDER_ONE_MONTH, SwitchOutcomeCalc.Horizon.ONE_TO_SIX_MONTHS),
+                state.planByHorizon.map { it.horizon }
+            )
+            assertEquals(-0.10, state.planByHorizon.first().medianExcessReturn, 1e-9)
+            assertEquals(0.07, state.planByHorizon.last().medianExcessReturn, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }

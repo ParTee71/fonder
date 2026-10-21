@@ -104,8 +104,21 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 - **Likviddagar är en egenskap per fond**, inte en konstant. Fonder handlas till okänd kurs
   (forward pricing): en order före fondens brytpunkt – ofta 15.00 en bankdag, tidigare för vissa
   utländska fonder och före helgdag – får dagens NAV, annars nästa bankdags.
-- **Facit i dag** (`SwitchOutcomeCalc`, SET-5) är meravkastningen köpfond mot säljfond sedan
-  förslagsdagen, två NAV-serier – medvetet inte användarens faktiska resultat.
+- **Facit i dag** (`SwitchOutcomeCalc`, SET-5) är meravkastningen köpfond mot säljfond, två
+  NAV-serier – medvetet inte användarens faktiska resultat. **Båda fonderna mäts alltid på samma
+  dag** (issue #197): utgångsläget är båda kursernas gemensamma dag (`SuggestionRecord.navEpochDay`,
+  gamla rader förslagsdagen), mätdagen den senaste dag båda har en kurs, tidigast förslagsdagen och
+  efter utgångsdagen; annars ej utvärderad. Summeringen är **träffandel** ("x av n bättre",
+  meravkastning > 0), **median** och **kronsumma** – aldrig ett snitt över förslag med olika ålder.
+  Procent jämförs bara inom horisontband räknat från utgångsdag till mätdag: < 30 dagar, 30–182
+  dagar (median) och > 182 dagar (median av den **relativa utvecklingen** i årstakt:
+  r = (1 + köp) / (1 + sälj) − 1, årstakt (1 + r)^(365,2425 / dagar) − 1, −100 % eller sämre ger
+  −100 %). Kompoundera aldrig den aritmetiska meravkastningen köp − sälj – den är ingen avkastning;
+  den relativa utvecklingen har samma tecken och är det som växer i årstakt
+  (`SwitchOutcomeCalc.Outcome.relativeReturn`, `facit_relative` i `fondmatte.py`, som räknar årstakten
+  med samma `annualized` som CAGR men `min_days=1`). Årstakt redan över sex månader är användarens
+  beslut och ett medvetet undantag från GIPS-gränsen på 365 dagar ovan. Golden: `facit` i `fondmatte.py golden`
+  (fixtur `facit.json`), `SwitchOutcomeCalcTest`.
   `SwitchWatchCalc` (ANA-12) nollställer på säljdagens NAV.
 - **Fullt facit**, om det byggs: faktisk XIRR mot "behöll fonden" med samma kassaflöden, inklusive
   avgifter, dagarna utanför marknaden (kontant 0 %), skatt i depå och avgiftsskillnaden över tiden.

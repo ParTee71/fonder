@@ -11,13 +11,15 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 19`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_18_19` ligger i `companion object` och samlas i `MIGRATIONS`.
-  Senaste: `MIGRATION_18_19` ändrar inget schema utan glömmer cachade nej på köpbarhet
+- `data/room/AppDatabase.kt` — `version = 20`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_19_20` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_19_20` lägger `suggestion_records.navEpochDay` (nullbar utan default — dagen
+  båda NAV-utgångslägena gäller; gamla rader vet den inte och mäts från förslagsdagen, SET-5, #197).
+  Före den: `MIGRATION_18_19` ändrar inget schema utan glömmer cachade nej på köpbarhet
   (`fund_metadata.availableAtHandelsbanken = 0` → `NULL`, #153). Före den: `MIGRATION_17_18` lägger `switch_watches.indexOnly` (`NOT NULL DEFAULT 0`, filtret "bara
   indexfonder", ANA-13, #150) — defaulten står också i entiteten (`@ColumnInfo(defaultValue = "0")`),
   så Rooms validering prövar den.
-- Migreringstester: `Migration12Test … Migration1819Test` (ett per steg) i
+- Migreringstester: `Migration12Test … Migration1920Test` (ett per steg) i
   `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
   jobbet `instrumented-tests` i `android.yml`, alltså bara i PR som rör `app/src/main`,
   `app/src/androidTest` eller byggfilerna (skill `ci-budget`).

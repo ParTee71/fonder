@@ -412,7 +412,20 @@
     <string name="facit_summary_fee_explain">Avgiftsbytena redovisas separat: där är vinsten den lägre avgiften, känd på förhand, medan bytesplanens utfall beror på hur fonderna går. Ett gemensamt snitt hade dolt skillnaden.</string>
     <string name="facit_summary_all_label">Alla förslag</string>
     <string name="facit_summary_followed_label">Enbart genomförda</string>
-    <string name="format_facit_evaluated_count">%1$d av %2$d förslag utvärderade</string>
+    <plurals name="format_facit_evaluated_of">
+        <item quantity="one">%1$d utvärderad av %2$d</item>
+        <item quantity="other">%1$d utvärderade av %2$d</item>
+    </plurals>
+    <string name="format_facit_better_of">%1$d av %2$d bättre</string>
+    <string name="format_facit_median">median %1$s</string>
+    <string name="facit_by_horizon_title">Per horisont · alla förslag</string>
+    <string name="format_facit_horizon_under_one_month">Under 1 månad · %1$d st</string>
+    <string name="format_facit_horizon_one_to_six_months">1–6 månader · %1$d st</string>
+    <string name="format_facit_horizon_over_six_months">Över 6 månader · %1$d st</string>
+    <string name="format_facit_horizon_median_better">median · %1$d av %2$d bättre</string>
+    <string name="format_facit_horizon_annualized_better">i årstakt · %1$d av %2$d bättre</string>
+    <string name="format_facit_per_year">%1$s per år</string>
+    <string name="facit_by_horizon_explain">Förslag med olika ålder jämförs aldrig i samma snitt: några dagars utfall säger lite, ett års utfall mer. Över sex månader räknas utfallet i årstakt.</string>
     <string name="facit_by_plan_index_title">Per plats i planen</string>
     <string name="format_facit_plan_index_label">Plats %1$d</string>
     <string name="facit_by_plan_index_explain">Planen är rangordnad, så det första bytet ska vara det starkaste. Presterar de lägre platserna sämre är det ett skäl att inte föreslå fler byten per plan.</string>
@@ -421,14 +434,21 @@
     <string name="facit_kind_plan">Bytesplan</string>
     <string name="facit_kind_fee">Billigare alternativ</string>
     <string name="facit_row_excess_label">Meravkastning</string>
+    <plurals name="format_facit_measured_at">
+        <item quantity="one">mätt till %1$s · %2$d dag</item>
+        <item quantity="other">mätt till %1$s · %2$d dagar</item>
+    </plurals>
+    <string name="facit_row_not_evaluated">Ej utvärderad ännu</string>
+    <string name="facit_row_waiting_same_day">väntar på kurs samma dag för båda fonderna</string>
     <string name="format_facit_plan_index_detail">Plats %1$d i planen</string>
     <string name="format_facit_amount">Belopp: %1$s</string>
     <string name="format_facit_legs">Såld fond %1$s · köpt fond %2$s sedan förslaget</string>
-    <string name="facit_not_evaluated_explain">Kunde inte utvärderas än — kursen för någon av fonderna är inte hämtad. Bakgrundsuppdateringen fyller på den efter hand.</string>
+    <string name="facit_not_evaluated_explain">Kunde inte utvärderas än — det finns ingen dag efter förslaget då båda fonderna har en kurs. Bakgrundsuppdateringen fyller på kurserna efter hand.</string>
+    <string name="facit_not_evaluable_explain">Kan inte utvärderas — kursen vid förslaget saknas för någon av fonderna, så det finns inget utgångsläge att mäta från.</string>
     <string name="facit_followed_label">Genomförd</string>
     <string name="facit_expand">Visa detaljer</string>
     <string name="facit_collapse">Dölj detaljer</string>
-    <string name="facit_disclaimer">Måttet jämför de två fondernas kursutveckling sedan förslagsdagen. Det är inte din faktiska avkastning: den beror på vilken dag du bytte och på eventuella avgifter, och skatt räknas inte alls (bytesförslag ges bara i ISK/KF, där ett byte inte utlöser skatt). Bara förslag som faktiskt gavs mäts här — perioder utan plan syns inte.</string>
+    <string name="facit_disclaimer">Båda fonderna mäts alltid på samma dag — den senaste dag båda har en kurs. Måttet jämför de två fondernas kursutveckling sedan förslagsdagen. Det är inte din faktiska avkastning: den beror på vilken dag du bytte och på eventuella avgifter, och skatt räknas inte alls (bytesförslag ges bara i ISK/KF, där ett byte inte utlöser skatt). Bara förslag som faktiskt gavs mäts här — perioder utan plan syns inte.</string>
     <string name="settings_about_section">Om appen</string>
 
     <!-- Importera innehav (issue #8) -->
