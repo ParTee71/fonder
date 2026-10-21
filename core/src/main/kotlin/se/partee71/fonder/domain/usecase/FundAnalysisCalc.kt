@@ -323,8 +323,8 @@ object FundAnalysisCalc {
     }
 
     /**
-     * S2 — NAV under 200-dagars glidande medelvärde. Null om historiken inte når 200 dagar
-     * tillbaka. Snittet räknas av [MovingAverageCalc] — samma implementering som snittlinjen i
+     * S2 — NAV under 200-dagars glidande medelvärde (200 handelsdagar = 290 kalenderdagar).
+     * Null om historiken inte når 290 dagar tillbaka. Snittet räknas av [MovingAverageCalc] — samma implementering som snittlinjen i
      * kursdiagrammet (ANA-14), så signalen och linjen aldrig kan ge olika besked.
      */
     private fun trendSignal(today: LocalDate, priceHistory: List<FundPrice>, currentNav: Double): TrendSignal? {

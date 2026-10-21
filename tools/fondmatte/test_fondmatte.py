@@ -232,6 +232,45 @@ class PeriodRowsTest(unittest.TestCase):
             self.assertEqual(rows[period], {"amount": None, "fraction": None})
 
 
+class MovingAverageTest(unittest.TestCase):
+    def test_window_is_290_calendar_days_regardless_of_gaps(self):
+        # Bara vardagar har kurs. Första snittet kommer när serien nått 290 dagar bakåt.
+        day = date(2025, 1, 1)
+        points = []
+        while len(points) < 400:
+            if day.weekday() < 5:
+                points.append((day, float(len(points))))
+            day += timedelta(1)
+        result = fm.sma_200(points)
+        first = date.fromisoformat(result["first_date"])
+        self.assertGreaterEqual((first - points[0][0]).days, 290)
+        self.assertLess((first - points[0][0]).days, 293)
+        expected = [v for d, v in points if first - timedelta(290) <= d <= first]
+        self.assertAlmostEqual(result["first"], sum(expected) / len(expected), places=12)
+        self.assertGreater(len(expected), 200)  # ~207 vardagar, inte 200 punkter
+
+    def test_sparse_weekly_points_average_points_within_window(self):
+        points = [(date(2025, 1, 1) + timedelta(7 * k), 100.0 + 7 * k) for k in range(101)]
+        result = fm.sma_200(points)
+        # Dag 294 (k = 42): punkterna k = 1…42 ligger i [4, 294] → NAV 107 … 394, medel 250,5.
+        row = [r for r in result["series"] if r[0] == (date(2025, 1, 1) + timedelta(294)).isoformat()][0]
+        self.assertAlmostEqual(row[1], 250.5, places=12)
+        self.assertEqual(result["first_date"], (date(2025, 1, 1) + timedelta(294)).isoformat())
+
+    def test_too_short_history_gives_none(self):
+        points = [(date(2025, 1, 1) + timedelta(n), 100.0) for n in range(289)]
+        result = fm.sma_200(points)
+        self.assertEqual(result["count"], 0)
+        self.assertIsNone(result["latest"])
+        self.assertEqual(result["series"], [])
+
+    def test_golden_exposes_sma_per_fund(self):
+        with open(Path(__file__).with_name("sma.json"), encoding="utf-8") as f:
+            sma = fm.golden(json.load(f))["funds"]["A"]["sma_200"]
+        self.assertEqual(sma["count"], len(sma["series"]))
+        self.assertGreater(sma["count"], 0)
+
+
 class ExampleFixtureTest(unittest.TestCase):
     def test_example_runs_and_methods_differ(self):
         with open(Path(__file__).with_name("exempel.json"), encoding="utf-8") as f:

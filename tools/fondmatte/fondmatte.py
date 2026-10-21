@@ -297,6 +297,33 @@ def money_weighted_return(transactions: list[Transaction], prices: Prices, end: 
     return xirr(dates, amounts, day_count=DayCount.ACT_365F, silent=True), partial
 
 
+# --- Glidande medelvärde ---------------------------------------------------------------------
+
+SMA_WINDOW_DAYS = 290  # MovingAverageCalc.WINDOW_DAYS: kalenderdagar ≈ 200 handelsdagar
+
+
+def sma_200(points: list[tuple[date, float]], window_days: int = SMA_WINDOW_DAYS) -> dict:
+    """"200-dagarssnittet" (200 handelsdagar) som kalenderfönster, som MovingAverageCalc: för en
+    kurspunkt d är snittet medel av kurserna i [d − window_days, d], men bara om serien börjar på
+    eller före d − window_days (annars None, ANA-4). Kalenderfönster eftersom kurscachen kan vara
+    gles. `series` är [[datum, medel], …]; `count` 0 och `latest` None när historiken inte räcker."""
+    series = []
+    for d, _ in points:
+        start = d - timedelta(window_days)
+        if points[0][0] > start:
+            continue
+        inside = [v for day, v in points if start <= day <= d]
+        series.append((d, sum(inside) / len(inside)))
+    return {
+        "window_days": window_days,
+        "count": len(series),
+        "first_date": series[0][0].isoformat() if series else None,
+        "first": series[0][1] if series else None,
+        "latest": series[-1][1] if series else None,
+        "series": [[d.isoformat(), v] for d, v in series],
+    }
+
+
 # --- Risk -----------------------------------------------------------------------------------
 
 
@@ -509,7 +536,7 @@ def golden(fixture: dict) -> dict:
                 "unrealized_fifo": None if value_partial else value - remaining_cost_fifo,
             },
             "funds": {
-                fund: risk_figures(series) | {"periods": period_rows(transactions, prices, fund, end)}
+                fund: risk_figures(series) | {"periods": period_rows(transactions, prices, fund, end), "sma_200": sma_200(series)}
                 for fund, series in prices.series.items()
             },
             "realized_average_cost": sale_rows(average_cost_sales(transactions)),
