@@ -6,7 +6,7 @@
 
 Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, för alla
 ändringar, oavsett storlek. De detaljerade reglerna ligger som skills i
-`.claude/skills/` — den här filen är kontraktet som binder ihop dem.
+`.claude/skills/` (i projekttrådar `fonder:<namn>`) — den här filen är kontraktet som binder ihop dem.
 
 **Svarslängd:** håll chattsvar minimala. Inga sammanfattningar, ingen upprepning av vad
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
