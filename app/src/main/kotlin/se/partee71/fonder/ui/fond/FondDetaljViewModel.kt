@@ -87,7 +87,7 @@ data class FundDetail(
      * inte, ingen snittlinje (ANA-4).
      */
     val movingAverage: ImmutableList<Pair<Long, Double>> = persistentListOf(),
-    /** Första köp-datum och kvarvarande (FIFO) inköpsvärde — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
+    /** Första köp-datum och kvarvarande inköpsvärde (genomsnittsmetoden) — null om fonden inte är ett kvarvarande innehav (POR-6, issue #18). */
     val firstPurchaseEpochDay: Long? = null,
     val netInvested: Double? = null,
     /** Köpdagar (epochDay) för den här fonden — markeras i diagrammet när de ingår i den

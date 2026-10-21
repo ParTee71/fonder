@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.79.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.79.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -26,7 +26,7 @@ repository-kontrakt, CI) finns; slutfunktionerna byggs som egna issues:
 - [x] Kurshistorik sedan första köpet, utan datumtak (#7-uppföljning, källan utnyttjad fullt ut i #37)
 - [x] Import av exakta transaktioner från PDF-avräkningsnotor, flera samtidigt (#8-uppföljning)
 - [x] Töm databasen från Inställningar, med bekräftelse (SET-1)
-- [x] Realiserat resultat (FIFO) och avgifter vid försäljning, på säljraderna i Händelser (#10, sedan 0.62.0 ingen egen vy)
+- [x] Realiserat resultat (genomsnittsmetoden, som K4) och avgifter vid försäljning, på säljraderna i Händelser (#10, sedan 0.62.0 ingen egen vy)
 - [x] Hem — startskärm med portföljens dag/vecka/månadsresultat (#14)
 - [x] Analys — nyckeltal och säljsignal-status per innehav, summeringskort på Hem (#16)
 - [x] Fondmetadata (avgift, kategori, risk) — sökbart datalager, grund för en framtida
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.79.1 | Anskaffningsvärde och realiserat resultat räknas med **genomsnittsmetoden** (Skatteverkets regel för fondandelar, K4) i stället för FIFO, och köpavgiften ingår i anskaffningsvärdet (#192). Påverkar säljradernas resultat i Händelser, "Realiserat resultat i år", innehavens inköpsvärde, GAV och "Varav orealiserat". Inget nytt sparas. |
 | 0.79.0 | Totalkortet på Hem och Portfölj visar **totalresultatet** (värde + uttag − insättningar, avgifter inräknade, även helt sålda fonder) som huvudtal, **årsavkastning (pengaviktad, XIRR)** efter ett år och orealiserat resultat på kvarvarande andelar som underordnad rad, med en utfällbar förklaring (#191). Tidigare dolde kortet realiserade förluster och avgifter. |
 | 0.78.3 | Kopierad kod sammanslagen till delade delar – analysen av innehaven, importradernas huvud och testernas fakes och fixturer – och kopieringskontrollen (`cpdCheck`) har ingen baslinje längre (#175). Appen ser ut och fungerar som förut. |
 | 0.78.2 | Skärmarna skickar händelser till sina ViewModels (sealed events och `onEvent()`), och alla compose-rules-regler är påslagna i kodstilen (#176). Appen ser ut och fungerar som förut. |
@@ -190,8 +191,8 @@ kurskällor, datamodell och byggkonfiguration står i [ARKITEKTUR.md](ARKITEKTUR
 
 ## Tester
 
-- **Enhet (JVM):** `domain/` i modulen `:core` (`./gradlew :core:test`; PortfolioCalc, RealizedGainCalculator — FIFO inkl.
-  delförsäljning över flera lotter och avgift, FundAnalysisCalc — periodavkastning, CAGR,
+- **Enhet (JVM):** `domain/` i modulen `:core` (`./gradlew :core:test`; PortfolioCalc, RealizedGainCalculator — genomsnittsmetoden inkl.
+  delförsäljning, köp- och säljavgift, FundAnalysisCalc — periodavkastning, CAGR,
   GAV, portföljandel och säljsignalerna S1–S3 kring sina trösklar, MoneyFormat), `data/network/`
   (HTML-/JSON-parsning mot verkliga sid-/API-fixturer, inkl. Avanzas fond-API),
   `data/imports/` (Excel- och PDF-parsning mot verkliga fixturer — köp- **och**

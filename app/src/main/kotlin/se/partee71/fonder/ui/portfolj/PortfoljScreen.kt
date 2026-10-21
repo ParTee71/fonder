@@ -297,7 +297,7 @@ private fun HoldingRow(
     }
 }
 
-/** Första köp-datum + kvarvarande inköpsvärde (FIFO) för innehavet (POR-6, issue #18). */
+/** Första köp-datum + kvarvarande inköpsvärde (genomsnittsmetoden) för innehavet (POR-6, issue #18). */
 @Composable
 private fun FirstPurchaseRow(holding: Holding, modifier: Modifier = Modifier) {
     val firstPurchaseEpochDay = holding.firstPurchaseEpochDay ?: return

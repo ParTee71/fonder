@@ -7,14 +7,13 @@ import se.partee71.fonder.domain.model.TransactionType
 /**
  * Realiserat resultat för en enskild säljtransaktion (issue #10).
  *
- * @param costBasis FIFO-anskaffningsvärde för de sålda andelarna — äldsta köp-lott
- *   konsumeras först. En delförsäljning kan konsumera flera lotter; [costBasis] är då
- *   summan över dem.
- * @param uncoveredShares antal sålda andelar som inte kunde matchas mot någon känd
- *   köp-lott (t.ex. om en tidigare köptransaktion saknas i historiken). [costBasis]
- *   täcker bara de andelar som faktiskt matchades — ett värde > 0 här betyder att
- *   [realizedGain] är en underskattning av kostnaden (överskattning av vinsten) och bör
- *   visas som osäkert i UI, aldrig tystas ner.
+ * @param costBasis anskaffningsvärde för de sålda andelarna enligt **genomsnittsmetoden**
+ *   (Skatteverket, issue #192): sålda andelar × fondens genomsnittliga anskaffningsvärde per
+ *   andel vid säljtillfället, köpavgifter inräknade.
+ * @param uncoveredShares antal sålda andelar som inte täcktes av något känt innehav (t.ex. om en
+ *   tidigare köptransaktion saknas i historiken). [costBasis] täcker bara de andelar som
+ *   faktiskt täcktes — ett värde > 0 här betyder att [realizedGain] är en underskattning av
+ *   kostnaden (överskattning av vinsten) och bör visas som osäkert i UI, aldrig tystas ner.
  */
 data class RealizedSale(
     val transactionId: Long,
@@ -26,7 +25,7 @@ data class RealizedSale(
     val costBasis: Double,
     val uncoveredShares: Double
 ) {
-    /** Realiserat resultat i kr = försäljningsbelopp − avgift − FIFO-anskaffningsvärde. */
+    /** Realiserat resultat i kr = försäljningsbelopp − avgift − anskaffningsvärde (genomsnittsmetoden). */
     val realizedGain: Double get() = proceeds - fee - costBasis
 
     /** Realiserat resultat som andel av anskaffningsvärdet, eller null om det är 0 (inget att jämföra mot). */
@@ -51,60 +50,67 @@ data class RealizedTotal(
 }
 
 /**
- * Kvarvarande (ej sålda) andelar för en fond och deras FIFO-anskaffningsvärde — vad som
- * blir kvar i respektive köp-lott efter att alla kända sälj konsumerat äldsta köpen
- * först. Underlag för [PortfolioCalc] (POR-1), skiljt från [RealizedSale] som gäller de
- * sålda andelarna.
+ * Kvarvarande (ej sålda) andelar för en fond och deras anskaffningsvärde enligt
+ * genomsnittsmetoden — det som är kvar av fondens samlade anskaffningsvärde (köpbelopp +
+ * köpavgifter) efter att varje sälj dragit sin andel. Underlag för [PortfolioCalc] (POR-1),
+ * skiljt från [RealizedSale] som gäller de sålda andelarna.
  */
 data class RemainingPosition(
     val shares: Double,
     val costBasis: Double,
     /**
-     * Köpdatum för den **äldsta kvarvarande** lotten — inte fondens äldsta transaktion.
-     * En position som sålts av helt och köpts igen ska räknas från det nya köpet: både
-     * [costBasis] och "sedan köp"-avkastningen (ANA-1) beskriver annars två olika positioner.
-     * Null bara om positionen saknar köp-lott helt (osannolikt, men [shares] kan täckas av
-     * `uncoveredShares`-fallet).
+     * Köpdatum för **positionens** första köp: det första köpet efter att innehavet senast var
+     * noll — inte fondens äldsta transaktion. En position som sålts av helt och köpts igen ska
+     * räknas från det nya köpet: både [costBasis] och "sedan köp"-avkastningen (ANA-1) beskriver
+     * annars två olika positioner. Genomsnittsmetoden har inga lotter, så ett delsälj flyttar
+     * aldrig datumet (issue #192). Null bara om positionen saknar köp helt.
      */
     val firstPurchaseEpochDay: Long?
 )
 
 /**
- * FIFO-motor (äldsta köp-lott konsumeras först) som ger både realiserat resultat per
- * säljtransaktion och kvarvarande anskaffningsvärde för ej sålda andelar — oavsett om
- * transaktionerna kommer från manuell registrering, Excel-import eller PDF-import
- * (issue #10). Ren, testbar domänlogik utan repository-beroende. Delar en enda
- * lot-konsumering mellan de två vyerna så att [PortfolioCalc]s orealiserade resultat och
- * Händelsers realiserade resultat (SLD-1) alltid bygger på samma sanning.
+ * Anskaffningsmotor enligt **genomsnittsmetoden** (Skatteverket, K4; skill `fondmatematik`,
+ * issue #192 — tidigare FIFO) som ger både realiserat resultat per säljtransaktion och
+ * kvarvarande anskaffningsvärde för ej sålda andelar — oavsett om transaktionerna kommer från
+ * manuell registrering, Excel-import eller PDF-import (issue #10). Per fond: ett genomsnittligt
+ * anskaffningsvärde per andel = (summa köpbelopp + köpavgifter) / andelar, omräknat vid varje
+ * köp; ett sälj konsumerar `sålda andelar × snitt` och ändrar inte snittet; säljavgiften dras
+ * från likviden, inte från anskaffningsvärdet. Ren, testbar domänlogik utan repository-beroende.
+ * Delar en enda genomgång mellan de två vyerna så att [PortfolioCalc]s orealiserade resultat och
+ * Händelsers realiserade resultat (SLD-1) alltid bygger på samma sanning. Golden:
+ * `realized_average_cost` i `tools/fondmatte`.
  */
 object RealizedGainCalculator {
 
-    private data class Lot(var shares: Double, val pricePerShare: Double, val epochDay: Long)
+    private class FundResult(val sales: List<RealizedSale>, val remaining: RemainingPosition)
 
-    private class FundFifoResult(val sales: List<RealizedSale>, val remainingLots: List<Lot>)
-
-    /** Toleransgräns för flyttalsjämförelser av andelar (undviker att avrundningsfel lämnar en försumbar rest-lott). */
+    /** Toleransgräns för flyttalsjämförelser av andelar (undviker att avrundningsfel lämnar en försumbar rest). */
     private const val SHARE_EPSILON = 1e-9
 
-    private fun computeForFund(fundId: String, txsForFund: List<Transaction>): FundFifoResult {
-        val lots = ArrayDeque<Lot>()
+    private fun computeForFund(fundId: String, txsForFund: List<Transaction>): FundResult {
+        var shares = 0.0
+        var cost = 0.0
+        var positionStartEpochDay: Long? = null
         val sales = mutableListOf<RealizedSale>()
         val sorted = txsForFund.sortedWith(compareBy({ it.epochDay }, { it.id }))
 
         for (tx in sorted) {
             when (tx.type) {
-                TransactionType.KOP -> lots.addLast(Lot(tx.shares, tx.pricePerShare, tx.epochDay))
+                TransactionType.KOP -> {
+                    if (shares <= SHARE_EPSILON) positionStartEpochDay = tx.epochDay
+                    shares += tx.shares
+                    cost += tx.amount + tx.fee
+                }
 
                 TransactionType.SALJ -> {
-                    var remaining = tx.shares
-                    var costBasis = 0.0
-                    while (remaining > SHARE_EPSILON && lots.isNotEmpty()) {
-                        val lot = lots.first()
-                        val consumed = minOf(remaining, lot.shares)
-                        costBasis += consumed * lot.pricePerShare
-                        remaining -= consumed
-                        lot.shares -= consumed
-                        if (lot.shares <= SHARE_EPSILON) lots.removeFirst()
+                    val covered = minOf(tx.shares, shares)
+                    val costBasis = if (shares > SHARE_EPSILON) cost * covered / shares else 0.0
+                    shares -= covered
+                    cost -= costBasis
+                    if (shares <= SHARE_EPSILON) {
+                        shares = 0.0
+                        cost = 0.0
+                        positionStartEpochDay = null
                     }
                     sales.add(
                         RealizedSale(
@@ -115,14 +121,14 @@ object RealizedGainCalculator {
                             proceeds = tx.amount,
                             fee = tx.fee,
                             costBasis = costBasis,
-                            uncoveredShares = remaining.coerceAtLeast(0.0)
+                            uncoveredShares = (tx.shares - covered).coerceAtLeast(0.0)
                         )
                     )
                 }
             }
         }
 
-        return FundFifoResult(sales, lots.toList())
+        return FundResult(sales, RemainingPosition(shares = shares, costBasis = cost, firstPurchaseEpochDay = positionStartEpochDay))
     }
 
     /** Realiserade sälj, en post per säljtransaktion, sorterat senaste först. */
@@ -143,19 +149,12 @@ object RealizedGainCalculator {
     fun totalForYear(sales: List<RealizedSale>, year: Int): RealizedTotal = total(sales.filter { LocalDate.ofEpochDay(it.epochDay).year == year })
 
     /**
-     * Kvarvarande andelar och FIFO-anskaffningsvärde per fond, efter att alla kända sälj
-     * konsumerat äldsta köpen först. Fonder utan kvarvarande andelar (helt avsålda) finns
-     * inte med i resultatet — se [PortfolioCalc.computeHoldings] (POR-1).
+     * Kvarvarande andelar och anskaffningsvärde (genomsnittsmetoden) per fond, efter alla kända
+     * sälj. Fonder utan kvarvarande andelar (helt avsålda) finns inte med i resultatet — se
+     * [PortfolioCalc.computeHoldings] (POR-1).
      */
     fun remainingPositions(transactions: List<Transaction>): Map<String, RemainingPosition> = transactions
         .groupBy { it.fundId }
-        .mapValues { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).remainingLots }
-        .mapValues { (_, lots) ->
-            RemainingPosition(
-                shares = lots.sumOf { it.shares },
-                costBasis = lots.sumOf { it.shares * it.pricePerShare },
-                firstPurchaseEpochDay = lots.minOfOrNull { it.epochDay }
-            )
-        }
+        .mapValues { (fundId, txsForFund) -> computeForFund(fundId, txsForFund).remaining }
         .filterValues { it.shares > SHARE_EPSILON }
 }

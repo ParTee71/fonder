@@ -27,25 +27,25 @@ class PortfolioCalcTest {
 
         assertEquals(1, holdings.size)
         assertEquals(6.0, holdings.first().netShares, 1e-9)
-        // netInvested är FIFO-kvarvarande anskaffningsvärde (6 kvarvarande andelar à
-        // ursprungliga 100 kr), inte kassaflödet (1000 − 480) — issue #10.
+        // netInvested är kvarvarande anskaffningsvärde enligt genomsnittsmetoden (6 kvarvarande
+        // andelar à 100 kr i snitt), inte kassaflödet (1000 − 480) — issue #10, #192.
         assertEquals(600.0, holdings.first().netInvested, 1e-9)
     }
 
     @Test
-    fun `netInvested anvander FIFO aven med flera inkopspriser`() {
+    fun `netInvested anvander genomsnittsmetoden med flera inkopspriser`() {
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 1, shares = 5.0, pricePerShare = 100.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 2, shares = 5.0, pricePerShare = 200.0),
-            // Säljer 6 andelar — äldsta lotten (5 à 100) konsumeras helt, plus 1 av den nya (à 200).
+            // Säljer 6 andelar à snittet 150 kr — inte äldsta lotten först (issue #192).
             Transaction(fundId = fondA.fundId, type = TransactionType.SALJ, epochDay = 3, shares = 6.0, pricePerShare = 150.0)
         )
 
         val holdings = PortfolioCalc.computeHoldings(listOf(fondA), txs)
 
         assertEquals(4.0, holdings.first().netShares, 1e-9)
-        // Kvarvarande 4 andelar ur den andra lotten à 200 kr = 800 kr.
-        assertEquals(800.0, holdings.first().netInvested, 1e-9)
+        // Kvarvarande 4 andelar à 150 kr i snitt = 600 kr (FIFO hade gett 800).
+        assertEquals(600.0, holdings.first().netInvested, 1e-9)
     }
 
     @Test
@@ -100,7 +100,7 @@ class PortfolioCalcTest {
 
     @Test
     fun `firstPurchaseEpochDay ar aldsta kvarvarande kop-lott, oavsett transaktionsordning (POR-6)`() {
-        // Köpen ligger i omvänd ordning i listan — FIFO ska ändå konsumera det äldsta först.
+        // Köpen ligger i omvänd ordning i listan — positionen ska ändå räknas från det äldsta.
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 2.0, pricePerShare = 90.0),
@@ -109,7 +109,7 @@ class PortfolioCalcTest {
 
         val holding = PortfolioCalc.computeHoldings(listOf(fondA), txs).first()
 
-        // Säljet konsumerade en av två andelar ur 10-lotten — resten av den lotten finns kvar.
+        // Ett delsälj flyttar inte positionens start (genomsnittsmetoden har inga lotter, issue #192).
         assertEquals(10L, holding.firstPurchaseEpochDay)
     }
 

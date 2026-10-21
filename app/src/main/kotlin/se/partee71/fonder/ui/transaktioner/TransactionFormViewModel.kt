@@ -249,7 +249,7 @@ sealed interface TransactionFormEvent {
  *
  * Vid sälj visas innehavet i vald fond och "Sälj alla andelar" ([onSellAll]) fyller i det; fler
  * andelar än så är ett fältfel (TRX-5). Innehavet räknas av [RealizedGainCalculator.remainingPositions],
- * samma FIFO-matchning som portföljen.
+ * samma genomgång som portföljen.
  */
 @HiltViewModel(assistedFactory = TransactionFormViewModel.Factory::class)
 class TransactionFormViewModel @AssistedInject constructor(

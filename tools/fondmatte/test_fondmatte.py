@@ -170,6 +170,8 @@ class TotalGainTest(unittest.TestCase):
         trades = [tx("2025-01-02", "BUY", 100, 100.0, 10.0), tx("2025-03-03", "SELL", 50, 80.0, 10.0)]
         self.assertAlmostEqual(fm.net_deposits(trades), 6020.0)
         self.assertAlmostEqual(fm.fifo_remaining_cost(trades), 5000.0)
+        # Genomsnittsmetoden: (10 000 + 10) / 100 = 100,1 kr per andel, 50 kvar.
+        self.assertAlmostEqual(fm.average_cost_remaining(trades), 5005.0)
 
 
 class ExampleFixtureTest(unittest.TestCase):
@@ -178,10 +180,11 @@ class ExampleFixtureTest(unittest.TestCase):
             result = fm.golden(json.load(f))
         json.dumps(result, allow_nan=False)
         self.assertFalse(result["portfolio"]["twr_partial"])
-        average, fifo = result["realized_average_cost"][1], result["realized_fifo_as_app"][1]
+        average, fifo = result["realized_average_cost"][1], result["realized_fifo"][1]
         self.assertNotAlmostEqual(average["gain"], fifo["gain"], places=0)
         portfolio = result["portfolio"]
-        self.assertLess(portfolio["total_gain"], portfolio["unrealized_fifo_as_app"])
+        self.assertLess(portfolio["total_gain"], portfolio["unrealized_average_cost_as_app"])
+        self.assertNotAlmostEqual(portfolio["unrealized_average_cost_as_app"], portfolio["unrealized_fifo"], places=0)
 
 
 FI_XML = """<?xml version="1.0" encoding="utf-8"?>

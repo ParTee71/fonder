@@ -57,15 +57,15 @@ class PortfolioTotalCalcTest {
     }
 
     @Test
-    fun `totalresultatet skiljer sig fran orealiserat pa kvarvarande lotter`() {
-        // Dagens totalkort (PortfolioCalc) ser bara de kvarvarande andelarna: +13 248 kr. De två
-        // realiserade förlusterna och avgifterna gör det verkliga resultatet 5 974 kr lägre.
+    fun `totalresultatet skiljer sig fran orealiserat pa kvarvarande andelar`() {
+        // "Varav orealiserat" (PortfolioCalc) ser bara de kvarvarande andelarna: +12 755 kr. De två
+        // realiserade förlusterna gör det verkliga resultatet lägre.
         val enriched = holdings(listOf(global, sverige), exempelTransactions, exempelEndDay, exempelNav)
 
         val unrealized = PortfolioCalc.totalGainLoss(enriched)
         val total = PortfolioTotalCalc.compute(exempelTransactions, enriched, exempelEndDay).totalGainKr!!
 
-        assertEquals(13247.93616657998, unrealized, 1e-9) // fondmatte: unrealized_fifo_as_app
+        assertEquals(12755.016820687932, unrealized, 1e-9) // fondmatte: unrealized_average_cost_as_app
         assertTrue(total < unrealized)
     }
 
