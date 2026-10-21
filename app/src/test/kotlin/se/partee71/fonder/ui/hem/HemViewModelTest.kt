@@ -227,6 +227,8 @@ class HemViewModelTest {
             assertFalse(updated.isEmpty)
             assertEquals(1200.0, updated.content.totalValue, 1e-9)
             assertEquals(200.0, updated.content.totalGainLoss, 1e-9)
+            assertEquals(200.0, updated.content.total.totalGainKr!!, 1e-9) // HEM-1, issue #191: bara köp → samma som orealiserat
+            assertEquals(today.toEpochDay() - today.minusYears(1).toEpochDay(), updated.content.total.ageDays)
             val day = updated.content.performance.day as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
             val week = updated.content.performance.week as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
             val month = updated.content.performance.month as PortfolioPerformanceCalc.PortfolioPeriodResult.Available

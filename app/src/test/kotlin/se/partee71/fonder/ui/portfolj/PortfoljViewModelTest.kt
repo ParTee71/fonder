@@ -195,7 +195,32 @@ class PortfoljViewModelTest {
             var updated = awaitItemSkipping { it.holdings.first().currentValue == null }
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
+            assertEquals(100.0, updated.total.totalGainKr!!, 1e-9) // POR-3, issue #191
             assertEquals(5L, updated.navEpochDay) // POR-7, issue #27
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `totalresultatet raknar med forlusten i en helt avsald fond men orealiserat gor det inte`() = runTest(dispatcher) {
+        val fondA = Fund(fundId = "SHB0000442", name = "Fond A")
+        val fondB = Fund(fundId = "SHB0000443", name = "Fond B")
+        funds.value = listOf(fondA, fondB)
+        transactions.value = listOf(
+            buy(fondA, LocalDate.ofEpochDay(1), 2.0, 150.0),
+            buy(fondB, LocalDate.ofEpochDay(1), 10.0, 100.0),
+            Transaction(fundId = fondB.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 10.0, pricePerShare = 80.0, fee = 10.0)
+        )
+        latestPrices.value = mapOf(fondA.fundId to FundPrice(fundId = fondA.fundId, epochDay = 5, nav = 200.0))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading || it.holdings.firstOrNull()?.currentValue == null }
+            assertEquals(100.0, state.totalGainLoss, 1e-9) // orealiserat på A
+            // 300 + 1 000 in, 790 ut, 400 kvar: 400 + 790 − 1 300 = −110
+            assertEquals(-110.0, state.total.totalGainKr!!, 1e-9)
+            assertEquals(510.0, state.total.netDepositsKr, 1e-9)
+            assertTrue(state.total.youngerThanYear)
             cancelAndIgnoreRemainingEvents()
         }
     }

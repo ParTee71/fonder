@@ -82,6 +82,8 @@ class ComponentScreenshotTest {
             PeriodRow(label = "3 år", amount = null, fraction = null)
             PeriodRow(label = "Sedan köp", amount = 38_214.0, fraction = 0.102, stackValue = true)
             PeriodRow(label = "Volatilitet", amount = null, fraction = null, valueText = "14,8 %")
+            PeriodRow(label = "Varav orealiserat", amount = 13_248.0, fraction = 0.12, muted = true)
+            PeriodRow(label = "Årsavkastning (pengaviktad)", amount = null, fraction = null, insufficientText = "Visas efter ett år")
         }
     }
 

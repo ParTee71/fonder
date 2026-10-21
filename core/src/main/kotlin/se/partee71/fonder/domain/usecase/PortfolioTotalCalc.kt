@@ -40,16 +40,23 @@ object PortfolioTotalCalc {
      * @param moneyWeightedAnnualReturn XIRR i årstakt, null när portföljen är yngre än ett år,
      *   ekvationen saknar lösning eller [partial].
      * @param partial sant när minst ett innehav saknar känd kurs.
+     * @param ageDays portföljens ålder i dagar, första transaktionsdagen till värderingsdagen (eller
+     *   sista transaktionsdagen om den är senare) — så att kortet kan säga "visas efter ett år" när
+     *   [moneyWeightedAnnualReturn] är null av den orsaken och inte av någon annan.
      */
     data class Result(
         val netDepositsKr: Double,
         val totalGainKr: Double?,
         val totalGainFraction: Double?,
         val moneyWeightedAnnualReturn: Double?,
-        val partial: Boolean
+        val partial: Boolean,
+        val ageDays: Long
     ) {
+        /** Sant när årstakten saknas bara för att portföljen är yngre än [ANNUALIZE_MIN_DAYS]. */
+        val youngerThanYear: Boolean get() = ageDays < ANNUALIZE_MIN_DAYS
+
         companion object {
-            val EMPTY = Result(netDepositsKr = 0.0, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null, partial = false)
+            val EMPTY = Result(netDepositsKr = 0.0, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null, partial = false, ageDays = 0)
         }
     }
 
@@ -64,21 +71,24 @@ object PortfolioTotalCalc {
     fun compute(transactions: List<Transaction>, holdings: List<Holding>, valuationEpochDay: Long?): Result {
         if (transactions.isEmpty()) return Result.EMPTY
         val netDeposits = transactions.sumOf { it.signedCashFlow() * -1.0 }
+        val firstDay = transactions.minOf { it.epochDay }
+        val lastDay = maxOf(valuationEpochDay ?: Long.MIN_VALUE, transactions.maxOf { it.epochDay })
+        val ageDays = lastDay - firstDay
         val partial = holdings.any { it.currentValue == null }
-        if (partial) return Result(netDepositsKr = netDeposits, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null, partial = true)
+        if (partial) return Result(netDepositsKr = netDeposits, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null, partial = true, ageDays = ageDays)
 
         val value = holdings.sumOf { it.currentValue ?: 0.0 }
         val gain = value - netDeposits
         val fraction = if (netDeposits > 0.0) gain / netDeposits else null
 
-        val lastDay = valuationEpochDay ?: transactions.maxOf { it.epochDay }
-        val flows = transactions.map { it.epochDay to it.signedCashFlow() } + (lastDay to value)
+        val flows = transactions.map { it.epochDay to it.signedCashFlow() } + ((valuationEpochDay ?: lastDay) to value)
         return Result(
             netDepositsKr = netDeposits,
             totalGainKr = gain,
             totalGainFraction = fraction,
             moneyWeightedAnnualReturn = xirr(flows),
-            partial = false
+            partial = false,
+            ageDays = ageDays
         )
     }
 

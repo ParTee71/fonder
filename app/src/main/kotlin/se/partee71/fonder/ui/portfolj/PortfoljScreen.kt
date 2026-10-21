@@ -118,6 +118,7 @@ fun PortfoljContent(
                         totalInvested = state.totalInvested,
                         gainLoss = state.totalGainLoss,
                         gainLossFraction = state.totalGainLossFraction,
+                        total = state.total,
                         navEpochDay = state.navEpochDay,
                         working = state.totalWorking,
                         modifier = Modifier.padding(Spacing.l)

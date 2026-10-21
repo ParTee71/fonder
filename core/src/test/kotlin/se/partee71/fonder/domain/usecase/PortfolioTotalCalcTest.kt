@@ -52,6 +52,8 @@ class PortfolioTotalCalcTest {
         assertEquals(7273.893961509981, result.totalGainKr!!, 1e-9)
         assertEquals(0.08747287698601212, result.totalGainFraction!!, 1e-9)
         assertFalse(result.partial)
+        assertEquals(452L, result.ageDays)
+        assertFalse(result.youngerThanYear)
     }
 
     @Test
@@ -128,6 +130,8 @@ class PortfolioTotalCalcTest {
         val result = PortfolioTotalCalc.compute(transactions, enriched, exempelEndDay)
 
         assertNull(result.moneyWeightedAnnualReturn) // 317 dagar
+        assertEquals(317L, result.ageDays)
+        assertTrue(result.youngerThanYear)
         assertEquals((189.1714 * 121.4917) - (189.1714 * 105.7242), result.totalGainKr!!, 1e-9)
     }
 

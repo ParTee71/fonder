@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,13 @@ import se.partee71.fonder.ui.theme.ReturnColors
  *   kr/procent-formateringen (issue #24) — för nyckeltal som inte är avkastningar och därför
  *   inte ska tecken-/färgkodas som vinst/förlust (t.ex. volatilitet, Sharpe-kvot). Är det null
  *   markeras raden som otillräcklig data, samma som en saknad avkastning.
+ * @param muted dämpar hela raden (etikett och värde i `onSurfaceVariant`, ingen vinst/förlust-färg)
+ *   för en **underordnad** siffra som inte ska konkurrera med radens huvudtal — totalkortets
+ *   "Varav orealiserat" under totalresultatet (HEM-1, issue #191). Opt-in: utan flaggan är raden
+ *   oförändrad.
+ * @param insufficientText texten som visas i stället för "Otillräcklig data" när värdet saknas —
+ *   när orsaken är känd och säger mer, t.ex. "Visas efter ett år" för en årstakt som inte får
+ *   räknas på en yngre portfölj (HEM-1, issue #191). Null = standardtexten.
  */
 @Composable
 fun PeriodRow(
@@ -48,8 +56,11 @@ fun PeriodRow(
     modifier: Modifier = Modifier,
     partial: Boolean = false,
     stackValue: Boolean = false,
-    valueText: String? = null
+    valueText: String? = null,
+    muted: Boolean = false,
+    insufficientText: String? = null
 ) {
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -64,6 +75,7 @@ fun PeriodRow(
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
+            color = if (muted) mutedColor else Color.Unspecified,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
@@ -71,11 +83,12 @@ fun PeriodRow(
         if (valueText != null) {
             Text(
                 valueText,
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium)
+                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
+                color = if (muted) mutedColor else Color.Unspecified
             )
         } else if (amount == null && fraction == null) {
             Text(
-                stringResource(R.string.period_insufficient_data),
+                insufficientText ?: stringResource(R.string.period_insufficient_data),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -95,7 +108,7 @@ fun PeriodRow(
                     // avkastning är de alltid överens, men GAV-raden i Fonddetalj skickade in
                     // ett *pris* som belopp — alltid positivt — och färgade därför ett innehav
                     // 30 % under GAV grönt (issue #78). Tecken och färg ska alltid följas åt.
-                    color = ReturnColors.forAmount(fraction ?: amount!!)
+                    color = if (muted) mutedColor else ReturnColors.forAmount(fraction ?: amount!!)
                 )
                 if (stacked) {
                     Text(

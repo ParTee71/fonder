@@ -150,6 +150,7 @@ fun HemContent(
                         totalInvested = portfolio.totalInvested,
                         gainLoss = portfolio.totalGainLoss,
                         gainLossFraction = portfolio.totalGainLossFraction,
+                        total = portfolio.total,
                         navEpochDay = portfolio.navEpochDay,
                         working = state.totalWorking,
                         modifier = Modifier.padding(Spacing.l)

@@ -62,7 +62,7 @@
     <!-- Hem — avkastningsdiagram med indexjämförelse (HEM-9/HEM-10, issue #96) -->
     <string name="hem_return_chart_title">Avkastning över tid</string>
     <string name="hem_return_chart_series_portfolio">Din portfölj</string>
-    <string name="hem_return_chart_explain" formatted="false">Hur dina fonder har utvecklats under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Insättningar, uttag och byten flyttar inte kurvan, så perioderna går att jämföra med varandra. Därför slutar den inte på samma procent som visas överst: den siffran är vad du tjänat på insatt kapital, kurvan är hur fonderna gick. Köpdagarna markeras.</string>
+    <string name="hem_return_chart_explain" formatted="false">Hur dina fonder har utvecklats under vald period — kurvorna startar på 0 % vid periodens första dag, så avståndet mellan dem är just den periodens skillnad. Insättningar, uttag och byten flyttar inte kurvan, så perioderna går att jämföra med varandra. Därför slutar den inte på samma procent som totalresultatet överst: det är vad du tjänat på insatt kapital, kurvan är hur fonderna gick. Köpdagarna markeras.</string>
     <string name="format_hem_return_chart_benchmark_explain">Jämförd med %1$s: samma insättningar, samma dagar, där i stället. Blandningen speglar din nuvarande fördelning mellan aktier och räntor. Skatt och courtage ingår inte.</string>
     <string name="format_hem_return_chart_benchmark_unclassified">%1$s av portföljen är blandfonder eller fonder utan känd typ och ingår inte i viktningen — jämförelsen är då en grov uppskattning.</string>
     <string name="hem_return_chart_benchmark_missing">Ingen indexjämförelse än — referensfonden väljs och dess kurshistorik hämtas i bakgrunden just nu. Kurvan dyker upp här när den är på plats.</string>
@@ -95,6 +95,12 @@
     <string name="portfolj_empty_body">Lägg till din första fondtransaktion för att se värde och utveckling.</string>
     <string name="portfolj_total_value">Totalt värde</string>
     <string name="portfolj_price_missing">Kurs saknas ännu</string>
+    <string name="total_result">Totalresultat</string>
+    <string name="total_money_weighted_return">Årsavkastning (pengaviktad)</string>
+    <string name="total_shown_after_a_year">Visas efter ett år</string>
+    <string name="total_unrealized">Varav orealiserat</string>
+    <string name="total_what_counts">Vad räknas in?</string>
+    <string name="total_explain">Totalresultatet är dagens värde plus allt du sålt för, minus allt du köpt för – avgifter inräknade. Vinster och förluster på sålda andelar räknas alltså med, även i fonder du inte längre äger. Procenten är mot insatt netto. Årsavkastningen är den ränta dina pengar faktiskt gett, med hänsyn till när de sattes in och togs ut (pengaviktad); den visas först när portföljen är ett år gammal. Varav orealiserat är resultatet på bara de andelar du äger just nu.</string>
     <string name="format_holding_first_purchase">Första köp %1$s · Inköpsvärde %2$s</string>
     <!-- NAV-datum bredvid värde (POR-7, issue #27) — en normal endagsförskjutning mot en extern källa (t.ex. banken) blir begriplig i stället för att se ut som ett fel. -->
     <string name="format_value_as_of">Värde per %1$s</string>

@@ -45,6 +45,7 @@ import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.Copper
@@ -187,7 +188,15 @@ private fun ColumnScope.CardsAndRows() {
         Text("Farozonen (Tone.Error).")
     }
     Label("TotalCard")
-    TotalCard(totalValue = 412_380.5, totalInvested = 360_000.0, gainLoss = 52_380.5, gainLossFraction = 0.1455, navEpochDay = 20_742, working = true)
+    TotalCard(
+        totalValue = 412_380.5,
+        totalInvested = 360_000.0,
+        gainLoss = 52_380.5,
+        gainLossFraction = 0.1455,
+        total = PortfolioTotalCalc.Result(netDepositsKr = 365_000.0, totalGainKr = 47_380.5, totalGainFraction = 0.1298, moneyWeightedAnnualReturn = 0.071, partial = false, ageDays = 812),
+        navEpochDay = 20_742,
+        working = true
+    )
     Label("CardSegment · ItemRow · AppDivider (android-ui)")
     val rows = listOf(
         Triple("Köp", "Global Indexfond A", "+12 000 kr"),
