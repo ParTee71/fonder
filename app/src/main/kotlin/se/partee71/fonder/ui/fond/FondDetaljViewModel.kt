@@ -61,6 +61,7 @@ import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
 import se.partee71.fonder.ui.common.errorOrNull
@@ -143,7 +144,14 @@ data class FondDetaljUiState(
      * `init`) — rubrikens och diagrammets väntesnurra (NAV-6). En backfillad historik tar
      * sekunder, och utan snurran ser en halvfylld kurva ut som hela sanningen.
      */
-    val priceRefreshing: Boolean = false
+    val priceRefreshing: Boolean = false,
+    /**
+     * Vad ett byte av innehavet kostar i skatt i depå/AF (ANA-15, issue #199) — visas i stället för
+     * "planen föreslår inget". Null utan depå/AF (SET-4) eller när innehavets värde inte är känt.
+     */
+    val switchTax: TaxCalc.SwitchTax? = null,
+    /** Kontotypen är depå/AF (SET-4): bytesavsnittet säger att planen bara ges i ISK/KF, aldrig att den "inte föreslår något" (ANA-15). */
+    val depa: Boolean = false
 ) {
     val loading: Boolean get() = fund is DetailUiState.Loading
 
@@ -454,7 +462,9 @@ class FondDetaljViewModel @AssistedInject constructor(
             comparisons = comparisonsByIsin.toImmutableMap(),
             recordedFeeSwitches = recordedFee.toImmutableMap(),
             watchedSellIsins = watchState.watchedSellIsins.toImmutableSet(),
-            startedSwitchWatchId = watchState.startedWatchId
+            startedSwitchWatchId = watchState.startedWatchId,
+            switchTax = depaSwitchTax(plan.accountType, state.content),
+            depa = plan.accountType == AccountType.DEPA_AF
         )
     }.combine(priceRefreshing) { state, refreshing ->
         // Eget led i kedjan i stället för en sjätte gren i combinen ovan: `combine` tar som mest
@@ -495,6 +505,14 @@ class FondDetaljViewModel @AssistedInject constructor(
         viewModelScope.launch {
             recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
+    }
+
+    /** Skatten på ett byte i depå/AF (ANA-15): innehavets värde mot kvarvarande anskaffningsvärde (genomsnittsmetoden). */
+    private fun depaSwitchTax(accountType: AccountType?, detail: FundDetail): TaxCalc.SwitchTax? {
+        if (accountType != AccountType.DEPA_AF) return null
+        val value = detail.holdingValue ?: return null
+        val costBasis = detail.netInvested ?: return null
+        return TaxCalc.switchTax(value, costBasis)
     }
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */

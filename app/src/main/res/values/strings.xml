@@ -77,6 +77,10 @@
     <string name="hem_fee_title">Fondavgifter per år</string>
     <string name="hem_fee_total_label">Totalt per år</string>
     <string name="hem_fee_explain">Redan avdraget löpande ur fondernas kurs — ingen separat kostnad att hitta på kontot.</string>
+    <!-- Schablonskatt i ISK/KF (HEM-16, issue #199) -->
+    <string name="format_hem_isk_tax_title">Schablonskatt %1$d</string>
+    <string name="format_hem_isk_tax_basis">snittunderlag %1$s · %2$s skattefritt</string>
+    <string name="format_hem_isk_tax_explain">Schablonskatt = (snittunderlag − %1$s) × %2$s × %3$s. Snittunderlaget är medelvärdet av kontots värde vid varje kvartals början plus insättningar under året; kvartal som inte börjat än räknas med dagens värde. Räknas med %4$d års parametrar; slutligt belopp står i deklarationen.</string>
     <string name="format_hem_fee_unknown">%1$d fond(er) saknar känd avgift och räknas inte in i totalen.</string>
     <!-- Samlad besparingspotential (HEM-6, issue #61) -->
     <string name="format_hem_fee_savings">Möjlig besparing %1$s/år (%2$d av %3$d fonder genomsökta)</string>
@@ -130,6 +134,14 @@
     <string name="handelser_filter_all">Alla</string>
     <string name="handelser_realized_year">Realiserat resultat i år</string>
     <string name="handelser_realized_uncertain">Osäkert — något sälj saknar matchande köp i historiken.</string>
+    <!-- Ungefärlig skatt i depå/AF (TRX-8, issue #199) -->
+    <string name="format_handelser_realized_split">vinster %1$s · förluster %2$s</string>
+    <string name="handelser_tax_realized">Varav skatt</string>
+    <string name="format_handelser_tax_realized_basis">%1$s på vinst efter kvittning</string>
+    <string name="handelser_tax_standard_income">Schablonintäkt fonder</string>
+    <string name="format_handelser_tax_standard_income_basis">%1$s av %2$s den 1 januari, skatt %3$s</string>
+    <string name="handelser_tax_explain">Ungefärlig skatt för att du ska se storleksordningen. Den slutliga skatten räknas i deklarationen och kan påverkas av andra vinster och förluster du har.</string>
+    <string name="format_tax_approx">ca %1$s</string>
     <string name="handelser_realized_row">Realiserat resultat</string>
     <string name="handelser_buy_empty_title">Inga köp</string>
     <string name="handelser_buy_empty_body">Registrerade köp visas här.</string>
@@ -229,6 +241,12 @@
     <string name="switch_section_title">Ska du byta?</string>
     <string name="switch_section_explain">Förslagen nedan kommer från din riskprofil (bytesplanen) och från avgiftsjämförelsen. Fäll ut ett förslag för att se motivering och kursjämförelse. Appen genomför aldrig ett byte åt dig.</string>
     <string name="switch_none_plan_body">Riskprofilens bytesplan föreslår inget byte för den här fonden just nu — den ges bara i ISK/KF och när någon risknivå avviker tillräckligt från din målfördelning.</string>
+    <!-- Skatt på ett byte i depå/AF (ANA-15, issue #199) -->
+    <string name="switch_depa_no_plan">Riskprofilens bytesplan ges bara i ISK/KF.</string>
+    <string name="switch_depa_tax_intro">Riskprofilens bytesplan ges bara i ISK/KF. I en depå kostar ett byte skatt på vinsten:</string>
+    <string name="switch_depa_tax_all">Skatt om du byter allt</string>
+    <string name="format_switch_depa_tax_all_basis">vinst %1$s × %2$s</string>
+    <string name="format_switch_depa_tax_per_amount">Skatt per %1$s som byts</string>
     <string name="switch_none_not_a_holding">Bytesförslag ges bara för fonder du äger.</string>
     <plurals name="format_switch_dismissed">
         <item quantity="one">%1$d förslag du avstått från visas inte här. Ångra under Avstådda på fliken Beslut.</item>

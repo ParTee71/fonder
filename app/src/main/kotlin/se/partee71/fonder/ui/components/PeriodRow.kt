@@ -64,7 +64,10 @@ import se.partee71.fonder.ui.theme.ReturnColors
  * @param valueTone färgar [valueText] som vinst eller förlust efter tecknet, för ett färdigformaterat
  *   värde som ändå är ett utfall ("3 av 5 bättre", "+8,4 % per år", issue #197); exakt 0.0 ger den
  *   dämpade färgen (`onSurfaceVariant`), t.ex. för "1 av 2 bättre". Null = neutral färg, som förut.
- *   Ignoreras när [muted] är satt.
+ *   Ignoreras när [muted] eller [valueMuted] är satt.
+ * @param valueMuted dämpar bara **värdet** ([valueText]) men inte etiketten — för ett ungefärligt
+ *   belopp som inte är ett utfall, t.ex. en skatt ([ApproxTaxRow], issue #199). Opt-in: utan
+ *   flaggan är raden oförändrad. Till skillnad från [muted] står etiketten kvar i full färg.
  */
 @Composable
 fun PeriodRow(
@@ -79,7 +82,8 @@ fun PeriodRow(
     insufficientText: String? = null,
     supportingLabel: String? = null,
     supportingValue: String? = null,
-    valueTone: Double? = null
+    valueTone: Double? = null,
+    valueMuted: Boolean = false
 ) {
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -105,7 +109,7 @@ fun PeriodRow(
         }
         if (valueText != null) {
             val valueColor = when {
-                muted -> mutedColor
+                muted || valueMuted -> mutedColor
                 valueTone == 0.0 -> mutedColor
                 valueTone != null -> ReturnColors.forAmount(valueTone)
                 else -> Color.Unspecified

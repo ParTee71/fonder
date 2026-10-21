@@ -20,7 +20,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.RealizedGainCalculator
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.contracts
 import se.partee71.fonder.ui.theme.FonderTheme
@@ -67,6 +69,13 @@ class TransaktionerScreenTest {
             totalRealized = RealizedGainCalculator.total(sales)
         )
     }
+
+    /** Samma lista i depå/AF (TRX-8): skatten på årets vinst efter kvittning och schablonintäkten på 250 000 kr den 1 januari. */
+    private fun depaState(): TransaktionerUiState = state().copy(
+        depa = true,
+        yearRealizedTax = TaxCalc.realizedTax(RealizedGainCalculator.compute(transactions), 2026),
+        standardIncomeTax = TaxCalc.StandardIncomeTax(valueAtYearStart = 250_000.0, tax = TaxCalc.fundStandardIncomeTax(250_000.0))
+    )
 
     @Test
     fun `Händelser följer listramens kontrakt utan lägg till men med vägarna till första transaktionen`() {
@@ -199,5 +208,35 @@ class TransaktionerScreenTest {
     @Test
     fun `skärmdump av Händelser utan transaktioner`() = composeRule.captureLightAndDark("HandelserScreen_tomt") {
         TransaktionerContent(state = TransaktionerUiState(list = ListUiState.Empty))
+    }
+
+    // --- Ungefärlig skatt i depå/AF (TRX-8, issue #199) ---
+
+    @Test
+    fun `depa visar vinster och forluster, skatten och schablonintakten med forklaring`() {
+        val state = depaState()
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = state) } }
+        val tax = state.yearRealizedTax
+        composeRule.onNodeWithText("vinster ${MoneyFormat.krWhole(tax.gains)} · förluster ${MoneyFormat.krWhole(tax.losses)}").assertIsDisplayed()
+        composeRule.onNodeWithText("Varav skatt").assertIsDisplayed()
+        composeRule.onNodeWithText("30 % på vinst efter kvittning").assertIsDisplayed()
+        composeRule.onNodeWithText("ca ${MoneyFormat.krWhole(-tax.tax)}").assertIsDisplayed()
+        composeRule.onNodeWithText("Schablonintäkt fonder").assertIsDisplayed()
+        composeRule.onNodeWithText("0,4 % av ${MoneyFormat.krWhole(250_000.0)} den 1 januari, skatt 30 %").assertIsDisplayed()
+        composeRule.onNodeWithText("ca ${MoneyFormat.krWhole(-300.0)}").assertIsDisplayed()
+        composeRule.onNodeWithText("Ungefärlig skatt för att du ska se storleksordningen.", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `isk visar ingen skatt i arskortet`() {
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = state()) } }
+        composeRule.onNodeWithText("Varav skatt").assertDoesNotExist()
+        composeRule.onNodeWithText("Schablonintäkt fonder").assertDoesNotExist()
+        composeRule.onNodeWithText("vinster", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `skärmdump av Händelser i depå med skatt`() = composeRule.captureLightAndDark("HandelserScreen_depa") {
+        TransaktionerContent(state = depaState())
     }
 }

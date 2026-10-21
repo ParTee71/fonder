@@ -28,6 +28,7 @@ import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.analysisHistory
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
@@ -48,6 +49,7 @@ import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
 import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
 import se.partee71.fonder.ui.common.errorOrNull
@@ -120,7 +122,12 @@ data class HemPortfolio(
     /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
     /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
-    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf()
+    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf(),
+    /**
+     * Årets ungefärliga schablonskatt i ISK/KF (HEM-16, issue #199) — null utan ISK/KF (SET-4), för
+     * ett år utan parametrar ([TaxCalc.ISK_PARAMETERS]) eller när ett innehavs värde inte går att avgöra.
+     */
+    val iskTax: TaxCalc.IskTax? = null
 )
 
 @Immutable
@@ -193,15 +200,37 @@ sealed interface HemEvent {
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-class HemViewModel @Inject constructor(
+class HemViewModel internal constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val preferencesRepository: PreferencesRepository,
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
-    private val backupStatusRepository: BackupStatusRepository
+    private val backupStatusRepository: BackupStatusRepository,
+    /** "Idag" — fast i testerna, så att årets skatt (HEM-16) inte beror på när de körs. */
+    private val today: () -> LocalDate
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        transactionRepository: TransactionRepository,
+        fundPriceRepository: FundPriceRepository,
+        fundMetadataRepository: FundMetadataRepository,
+        preferencesRepository: PreferencesRepository,
+        pendingDecisionsSource: PendingDecisionsSource,
+        fundPriceRefreshScheduler: FundPriceRefreshScheduler,
+        backupStatusRepository: BackupStatusRepository
+    ) : this(
+        transactionRepository,
+        fundPriceRepository,
+        fundMetadataRepository,
+        preferencesRepository,
+        pendingDecisionsSource,
+        fundPriceRefreshScheduler,
+        backupStatusRepository,
+        LocalDate::now
+    )
 
     /**
      * [PortfolioInput.funds] bärs med, inte bara de sammanräknade innehaven: avkastningskurvan
@@ -235,9 +264,10 @@ class HemViewModel @Inject constructor(
                 // blandningen, inte en del av den: väljer man en fond är det den man vill mätas
                 // mot, inte den plus appens gissning om resten.
                 chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: derived
-            }
-        ) { riskProfile, benchmark ->
-            Settings(riskProfile, benchmark)
+            },
+            preferencesRepository.accountType
+        ) { riskProfile, benchmark, accountType ->
+            Settings(riskProfile, benchmark, accountType)
         }
 
     /**
@@ -301,7 +331,7 @@ class HemViewModel @Inject constructor(
                 settings
             ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
-                val today = LocalDate.now()
+                val today = today()
                 val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions).mapValues { LocalDate.ofEpochDay(it.value) }
                 // **En** hämtning per fond, inte en per läsare. Innehaven läser analyshistoriken
                 // (den delade [analysisHistory], minst tre år bakåt, issue #214), som rymmer både
@@ -362,7 +392,8 @@ class HemViewModel @Inject constructor(
                             targetAllocation = it.effectiveAllocation,
                             actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel)
                         )
-                    }.orEmpty().toImmutableList()
+                    }.orEmpty().toImmutableList(),
+                    iskTax = if (currentSettings.accountType == AccountType.ISK_KF) TaxCalc.iskTaxForYear(today.year, today, transactions, historyByFundId) else null
                 )
             }
         }.map { HemUiState(portfolio = DetailUiState.Content(it)) }
@@ -522,6 +553,8 @@ class HemViewModel @Inject constructor(
     private data class Settings(
         val riskProfile: RiskProfile?,
         /** Referensblandningen (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
-        val benchmark: List<BenchmarkComponentRef>
+        val benchmark: List<BenchmarkComponentRef>,
+        /** Kontotypen (SET-4) — ISK/KF visar årets schablonskatt (HEM-16). */
+        val accountType: AccountType?
     )
 }

@@ -34,6 +34,19 @@ beloppet är alltid andelar × kurs, som i appens `Transaction`.
 
 Sålda andelar utan känt köp redovisas i `uncovered_units`, som i appen.
 
+Skatt (issue #199, skill `fondmatematik`), utan fixtur:
+
+```bash
+python tools/fondmatte/fondmatte.py isk 2026 480000 495000 510000 515000 --precise   # ISK/KF, kvartalsvärden 1–4; --precise = full precision för JUnit
+python tools/fondmatte/fondmatte.py depa --gains 12400 -2400 --jan1 250000 --value 65500 --cost 50000
+```
+
+`depa` skriver årets realiserade skatt efter kvittning (`realized`), skatten på schablonintäkten
+0,4 % av värdet 1 januari (`standard_income_tax`) och, med `--value`/`--cost`, skatten på ett byte
+(`switch.tax_all`, `switch.per_amount` per 10 000 kr) i full precision – golden för `TaxCalcTest`.
+Kvartalsvärdena räknas som i appen med `value_at_period_start`: andelarna före dagen × senaste kurs
+på eller före dagen före (högst 5 dagar gammal), dagens värde för ett kvartal som inte börjat.
+
 Värdena klistras in i JUnit-testet för motsvarande objekt i `domain/usecase/` med fixturen som
 indata (tolerans `1e-9`). `exempel.json` är en påhittad portfölj med två fonder, köp, delsälj och
 avgifter – den visar att FIFO och genomsnittsmetoden skiljer 23 kr på första säljet

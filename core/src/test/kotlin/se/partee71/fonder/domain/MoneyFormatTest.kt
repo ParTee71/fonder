@@ -61,4 +61,21 @@ class MoneyFormatTest {
         assertTrue(MoneyFormat.feePercent(0.21).contains("0,21"))
         assertTrue(MoneyFormat.feePercent(0.20).contains("0,20"))
     }
+
+    private fun plain(text: String) = text.replace('\u00A0', ' ').replace('\u202F', ' ')
+
+    @Test
+    fun `krWhole avrundar till hela kronor med akta minustecken`() {
+        assertEquals("−2 130 kr", plain(MoneyFormat.krWhole(-2129.6)))
+        assertEquals("250 000 kr", plain(MoneyFormat.krWhole(250_000.0)))
+        assertEquals("0 kr", plain(MoneyFormat.krWhole(-0.4)))
+    }
+
+    @Test
+    fun `rate visar hogst tva decimaler utan avslutande nollor`() {
+        assertEquals("3,55 %", MoneyFormat.rate(0.0355))
+        assertEquals("0,4 %", MoneyFormat.rate(0.004))
+        assertEquals("30 %", MoneyFormat.rate(0.3))
+        assertEquals("1,25 %", MoneyFormat.rate(0.0125))
+    }
 }

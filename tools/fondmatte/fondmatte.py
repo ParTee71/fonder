@@ -2,7 +2,7 @@
 
 Räknar fram förväntade värden ("golden values") som checkas in i appens JUnit-tester, med
 oberoende implementeringar: XIRR via pyxirr, volatilitet/Sharpe/Sortino/drawdown via
-empyrical-reloaded, och tidsviktad avkastning, genomsnittsmetoden, FIFO och ISK-skatt
+empyrical-reloaded, och tidsviktad avkastning, genomsnittsmetoden, FIFO, ISK-skatt och depåskatt
 skrivna här efter definitionerna i skillen. Körs bara i utvecklingen, aldrig i appen eller CI.
 
     python tools/fondmatte/fondmatte.py golden tools/fondmatte/exempel.json
@@ -44,6 +44,8 @@ ISK_PARAMETERS = {
 }
 ISK_RATE_FLOOR = 0.0125
 CAPITAL_INCOME_TAX = 0.30
+# Schablonintäkt på fondandelar i depå/AF: 0,4 % av värdet vid årets ingång (Skatteverket).
+FUND_STANDARD_INCOME_RATE = 0.004
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,14 @@ class Prices:
             return None
         i = bisect.bisect_right(days, day)
         return self.series[fund][i - 1][1] if i else None
+
+    def point(self, fund: str, day: date) -> tuple[date, float] | None:
+        """Senast kända kurspunkten (dag, NAV) på eller före dagen."""
+        days = self._days.get(fund)
+        if not days:
+            return None
+        i = bisect.bisect_right(days, day)
+        return self.series[fund][i - 1] if i else None
 
     def days(self) -> set[date]:
         return {d for days in self._days.values() for d in days}
@@ -513,9 +523,64 @@ def isk_tax(year: int, quarter_start_values: list[float], deposits: float) -> fl
     if len(quarter_start_values) != 4:
         raise ValueError("fyra kvartalsvärden krävs")
     p = ISK_PARAMETERS[year]
-    base = max(0.0, (sum(quarter_start_values) + deposits) / 4 - p["tax_free_amount"])
-    rate = max(ISK_RATE_FLOOR, p["government_bond_rate"] + 0.01)
-    return base * rate * CAPITAL_INCOME_TAX
+    base = max(0.0, isk_average_base(quarter_start_values, deposits) - p["tax_free_amount"])
+    return base * isk_standard_rate(year) * CAPITAL_INCOME_TAX
+
+
+def value_at_period_start(transactions: list[Transaction], prices: Prices, day: date, today: date) -> float | None:
+    """Innehavets värde vid en periods början (kvartal på ISK/KF, 1 januari i depå/AF), som
+    bankernas kontrolluppgift och TaxCalc.valueAtStartOf: andelarna efter transaktionerna före
+    dagen, var fond till sin senaste kurs på eller före dagen före – föregående bankdag – högst
+    MAX_NAV_GAP_DAYS gammal. En period som inte börjat (dagen efter `today`) räknas med dagens
+    värde; en passerad dag utan sådan kurs ger None (okänt)."""
+    not_started = day > today
+    units = units_held(transactions, today if not_started else day - timedelta(days=1))
+    anchor = today if not_started else day - timedelta(days=1)
+    total = 0.0
+    for fund, held in units.items():
+        point = prices.point(fund, anchor)
+        if point is None or (not not_started and (anchor - point[0]).days > MAX_NAV_GAP_DAYS):
+            return None
+        total += held * point[1]
+    return total
+
+
+def isk_average_base(quarter_start_values: list[float], deposits: float) -> float:
+    """Snittunderlaget före den skattefria nivån: kvartalens ingående värden plus årets
+    insättningar, delat med fyra (TaxCalc.IskTax.averageBase)."""
+    if len(quarter_start_values) != 4:
+        raise ValueError("fyra kvartalsvärden krävs")
+    return (sum(quarter_start_values) + deposits) / 4
+
+
+def isk_standard_rate(year: int) -> float:
+    """Schablonräntan: statslåneräntan 30/11 året före + 1 procentenhet, lägst 1,25 %."""
+    return max(ISK_RATE_FLOOR, ISK_PARAMETERS[year]["government_bond_rate"] + 0.01)
+
+
+def depa_realized_tax(realized_gains: list[float]) -> dict:
+    """Ungefärlig skatt på årets realiserade resultat i depå/AF: vinster och förluster på
+    marknadsnoterade fondandelar kvittas fullt inom året, 30 % på nettovinsten, ingen skatt
+    vid nettoförlust (TaxCalc.realizedTax)."""
+    gains = sum(g for g in realized_gains if g > 0)
+    losses = sum(g for g in realized_gains if g < 0)
+    net = gains + losses
+    return {"gains": gains, "losses": losses, "net": net, "tax": max(0.0, net) * CAPITAL_INCOME_TAX}
+
+
+def fund_standard_income_tax(value_at_year_start: float) -> float:
+    """Skatten på schablonintäkten för fondandelar i depå/AF: 0,4 % av värdet vid årets
+    ingång, beskattat med 30 % (TaxCalc.fundStandardIncomeTax)."""
+    return max(0.0, value_at_year_start) * FUND_STANDARD_INCOME_RATE * CAPITAL_INCOME_TAX
+
+
+def switch_tax(value: float, cost_basis: float, amount: float = 10_000.0) -> dict:
+    """Skatten på ett byte i depå/AF: 30 % på den orealiserade vinsten (värde − kvarvarande
+    anskaffningsvärde, genomsnittsmetoden), ingen vid förlust. `per_amount` är skatten när
+    `amount` kr av innehavet byts – vinstandelen av värdet × beloppet × 30 % (TaxCalc.switchTax)."""
+    gain = max(0.0, value - cost_basis)
+    share = gain / value if value > 0 else 0.0
+    return {"gain": gain, "tax_all": gain * CAPITAL_INCOME_TAX, "per_amount": amount * share * CAPITAL_INCOME_TAX}
 
 
 # --- Facit för bytesförslag (SET-5, issue #197) --------------------------------------------
@@ -772,6 +837,12 @@ def main(argv: list[str]) -> int:
     i.add_argument("year", type=int, choices=sorted(ISK_PARAMETERS))
     i.add_argument("values", type=float, nargs=4, help="ingående värde kvartal 1–4")
     i.add_argument("--deposits", type=float, default=0.0)
+    i.add_argument("--precise", action="store_true", help="full precision (repr) i stället för två decimaler – för golden i JUnit")
+    d = sub.add_parser("depa", help="ungefärlig skatt i depå/AF: realiserat, schablonintäkt och byte")
+    d.add_argument("--gains", type=float, nargs="*", default=[], help="årets realiserade resultat per sälj")
+    d.add_argument("--jan1", type=float, default=0.0, help="fondernas värde den 1 januari")
+    d.add_argument("--value", type=float, help="innehavets värde, för skatten på ett byte")
+    d.add_argument("--cost", type=float, help="innehavets anskaffningsvärde, för skatten på ett byte")
     args = parser.parse_args(argv)
 
     if args.command == "golden":
@@ -785,8 +856,15 @@ def main(argv: list[str]) -> int:
             raise SystemExit(f"Ogiltig fixtur: {e}") from None
         json.dump(result, sys.stdout, indent=2, ensure_ascii=False, allow_nan=False)
         print()
+    elif args.command == "depa":
+        out = {"realized": depa_realized_tax(args.gains), "standard_income_tax": fund_standard_income_tax(args.jan1)}
+        if args.value is not None and args.cost is not None:
+            out["switch"] = switch_tax(args.value, args.cost)
+        json.dump(out, sys.stdout, indent=2, ensure_ascii=False)
+        print()
     else:
-        print(f"{isk_tax(args.year, args.values, args.deposits):.2f}")
+        tax = isk_tax(args.year, args.values, args.deposits)
+        print(repr(tax) if args.precise else f"{tax:.2f}")
     return 0
 
 

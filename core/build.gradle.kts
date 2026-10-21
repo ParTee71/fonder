@@ -12,3 +12,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+// TaxCalcTest jämför ISK_PARAMETERS med tools/fondmatte och skill fondmatematik (issue #199): de
+// två filerna är testets indata, så att build cache inte hoppar över testet när bara de ändrats.
+tasks.test {
+    val taxParameterSources = listOf(
+        rootProject.file("tools/fondmatte/fondmatte.py"),
+        rootProject.file(".claude/skills/fondmatematik/SKILL.md")
+    )
+    inputs.files(taxParameterSources).withPropertyName("taxParameterSources").withPathSensitivity(PathSensitivity.NONE)
+}

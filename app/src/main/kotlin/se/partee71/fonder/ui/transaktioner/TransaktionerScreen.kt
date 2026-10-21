@@ -28,6 +28,8 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.RealizedSale
+import se.partee71.fonder.domain.usecase.TaxCalc
+import se.partee71.fonder.ui.components.ApproxTaxRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.ListFrameCards
@@ -44,6 +46,7 @@ import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyContent
 import se.partee71.ui.components.EntityListScreen
 import se.partee71.ui.components.ItemRow
+import se.partee71.ui.components.ItemRowText
 import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
 
@@ -204,31 +207,67 @@ private fun HandelseFilter.labelRes(): Int = when (this) {
 
 /**
  * "Realiserat resultat i år" (TRX-4) och, i säljfiltret, totalen sedan start (SLD-3). Ett osäkert
- * resultat (SLD-2) sägs ut i text under raderna, aldrig bara med färg.
+ * resultat (SLD-2) sägs ut i text under raderna, aldrig bara med färg. I depå/AF (TRX-8) delas
+ * årets resultat upp i vinster och förluster, och den ungefärliga skatten – på vinsten efter
+ * kvittning och på schablonintäkten – står under, dämpad och med "ca", följd av en förklaring.
  */
 @Composable
 private fun RealizedCard(state: TransaktionerUiState, cardStyle: AppCardStyle, modifier: Modifier = Modifier) {
     val showTotal = state.filter == HandelseFilter.SALJ
     AppCard(modifier = modifier.fillMaxWidth(), style = cardStyle) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            PeriodRow(
-                label = stringResource(R.string.handelser_realized_year),
-                amount = state.yearRealized.realizedGain,
-                fraction = state.yearRealized.realizedGainFraction
-            )
-            if (showTotal) {
+            if (state.showRealizedRow) {
+                PeriodRow(
+                    label = stringResource(R.string.handelser_realized_year),
+                    amount = state.yearRealized.realizedGain,
+                    fraction = state.yearRealized.realizedGainFraction,
+                    supportingLabel = if (state.showRealizedTax) {
+                        stringResource(
+                            R.string.format_handelser_realized_split,
+                            MoneyFormat.krWhole(state.yearRealizedTax.gains),
+                            MoneyFormat.krWhole(state.yearRealizedTax.losses)
+                        )
+                    } else {
+                        null
+                    }
+                )
+            }
+            if (showTotal && state.showRealizedRow) {
                 PeriodRow(
                     label = stringResource(R.string.sold_funds_total_title),
                     amount = state.totalRealized.realizedGain,
                     fraction = state.totalRealized.realizedGainFraction
                 )
             }
+            // Osäkert (SLD-2) hör till resultatet, så det står direkt under resultatraderna — före skatten.
             if (state.yearRealized.uncertain || (showTotal && state.totalRealized.uncertain)) {
                 Text(
                     stringResource(R.string.handelser_realized_uncertain),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
+            }
+            if (state.showRealizedTax) {
+                ApproxTaxRow(
+                    label = stringResource(R.string.handelser_tax_realized),
+                    tax = state.yearRealizedTax.tax,
+                    basis = stringResource(R.string.format_handelser_tax_realized_basis, MoneyFormat.rate(TaxCalc.CAPITAL_INCOME_TAX))
+                )
+            }
+            state.standardIncomeTax?.let { standardIncome ->
+                ApproxTaxRow(
+                    label = stringResource(R.string.handelser_tax_standard_income),
+                    tax = standardIncome.tax,
+                    basis = stringResource(
+                        R.string.format_handelser_tax_standard_income_basis,
+                        MoneyFormat.rate(TaxCalc.FUND_STANDARD_INCOME_RATE),
+                        MoneyFormat.krWhole(standardIncome.valueAtYearStart),
+                        MoneyFormat.rate(TaxCalc.CAPITAL_INCOME_TAX)
+                    )
+                )
+            }
+            if (state.depa && (state.showRealizedTax || state.standardIncomeTax != null)) {
+                ItemRowText(title = null, subtitle = stringResource(R.string.handelser_tax_explain))
             }
         }
     }

@@ -30,8 +30,10 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
+import se.partee71.fonder.ui.components.ApproxTaxRow
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.PeriodRow
@@ -339,6 +341,14 @@ private fun SwitchDecisionSection(
         // hade lästs som att appen inte gjort något (ANA-4-principen). Innan jämförelsen ens
         // hunnit starta sägs ingenting — då är frågan obesvarad, inte besvarad med "nej".
         when {
+            // Depå/AF (ANA-15, issue #199): ingen plan ges där, och skälet är skatten — så den sägs i
+            // kronor. Före "inte ett innehav": skatten finns bara för ett innehav med känt värde, även
+            // när analysen saknas för att historiken är för kort.
+            state.switchTax != null -> DepaSwitchTax(state.switchTax)
+
+            // Depå utan känt värde: ingen skatt att visa, men aldrig "planen föreslår inget" — planen ges inte alls där.
+            state.depa -> SwitchMessage(stringResource(R.string.switch_depa_no_plan))
+
             content.analysis == null -> SwitchMessage(stringResource(R.string.switch_none_not_a_holding))
 
             state.switchPlan.isEmpty() && state.feeComparison == null -> Unit
@@ -353,6 +363,26 @@ private fun SwitchDecisionSection(
         if (state.dismissedCount > 0) {
             SwitchMessage(pluralStringResource(R.plurals.format_switch_dismissed, state.dismissedCount, state.dismissedCount))
         }
+    }
+}
+
+/**
+ * Vad ett byte kostar i skatt i depå/AF (ANA-15, issue #199), i stället för "planen föreslår inget":
+ * skatten om hela innehavet byts och per 10 000 kr som byts, dämpade och med "ca".
+ */
+@Composable
+private fun DepaSwitchTax(switchTax: TaxCalc.SwitchTax) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        SwitchMessage(stringResource(R.string.switch_depa_tax_intro))
+        ApproxTaxRow(
+            label = stringResource(R.string.switch_depa_tax_all),
+            tax = switchTax.taxAll,
+            basis = stringResource(R.string.format_switch_depa_tax_all_basis, MoneyFormat.krWhole(switchTax.gain), MoneyFormat.rate(TaxCalc.CAPITAL_INCOME_TAX))
+        )
+        ApproxTaxRow(
+            label = stringResource(R.string.format_switch_depa_tax_per_amount, MoneyFormat.krWhole(TaxCalc.SWITCH_EXAMPLE_AMOUNT)),
+            tax = switchTax.taxPerExampleAmount
+        )
     }
 }
 
