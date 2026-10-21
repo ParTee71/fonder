@@ -114,6 +114,15 @@ private val EMPTY_EXPOSURE = PortfolioExposureCalc.Result(
 /** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #26) om inget köp finns (bör inte hända för ett verkligt innehav). Samma princip som `HemViewModel`. */
 private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
 
+/** Användarens handlingar på Innehav, till [PortfoljViewModel.onEvent]. */
+sealed interface PortfoljEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : PortfoljEvent
+
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : PortfoljEvent
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PortfoljViewModel @Inject constructor(
@@ -280,8 +289,15 @@ class PortfoljViewModel @Inject constructor(
         }.toMap()
     }
 
+    fun onEvent(event: PortfoljEvent) {
+        when (event) {
+            PortfoljEvent.Refresh -> refresh()
+            PortfoljEvent.Retry -> retry()
+        }
+    }
+
     /** "Försök igen" efter ett läsfel (NFR-6): läser om innehaven och kurserna från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
@@ -290,7 +306,7 @@ class PortfoljViewModel @Inject constructor(
      * samma unika arbetsnamn, så en dragning på den ena skärmen och en på den andra aldrig blir
      * två körningar.
      */
-    fun refresh() {
+    private fun refresh() {
         fundPriceRefreshScheduler.triggerManualRefresh()
     }
 

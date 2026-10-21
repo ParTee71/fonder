@@ -114,15 +114,15 @@ class RiskProfilViewModelTest {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
-            vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             state = awaitItem()
             assertNull(state.suggestedAllocation)
 
-            vm.onReactionSelected(DownturnReaction.KOPER_MER)
+            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.KOPER_MER))
             state = awaitItem()
             assertNull(state.suggestedAllocation)
 
-            vm.onGoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT)
+            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT))
             state = awaitItem()
             assertEquals(RiskProfileCalc.Profile.OFFENSIV.allocation, state.suggestedAllocation)
             cancelAndIgnoreRemainingEvents()
@@ -136,15 +136,15 @@ class RiskProfilViewModelTest {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
-            vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             awaitItem()
-            vm.onReactionSelected(DownturnReaction.KOPER_MER)
+            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.KOPER_MER))
             awaitItem()
-            vm.onGoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT)
+            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.MAXIMAL_TILLVAXT))
             state = awaitItem()
             assertFalse(state.hasManualEdit)
 
-            vm.onAllocationPercentChanged(4, "100")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(4, "100"))
             state = awaitItem()
             assertTrue(state.hasManualEdit)
             assertEquals("100", state.allocationText[4])
@@ -162,7 +162,7 @@ class RiskProfilViewModelTest {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
-            vm.onAllocationPercentChanged(3, "100")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
             assertEquals(mapOf(3 to 1.0), state.effectiveAllocation)
             assertTrue(state.editor.canSave)
@@ -170,7 +170,7 @@ class RiskProfilViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
         val saved = preferencesRepository.riskProfile.first()
         assertEquals(mapOf(3 to 1.0), saved?.targetAllocation)
@@ -184,7 +184,7 @@ class RiskProfilViewModelTest {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
 
-            vm.onAllocationPercentChanged(3, "50")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "50"))
             state = awaitItem()
             assertEquals(50, state.allocationSumPercent)
             assertFalse(state.editor.canSave)
@@ -200,12 +200,12 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onAllocationPercentChanged(3, "50")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "50"))
             awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertFalse(vm.uiState.value.editor.done)
@@ -218,17 +218,17 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.TRE_TILL_7_AR))
             awaitItem()
-            vm.onReactionSelected(DownturnReaction.GOR_INGET)
+            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.GOR_INGET))
             awaitItem()
-            vm.onGoalSelected(PrimaryGoal.BALANSERAD)
+            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.BALANSERAD))
             state = awaitItem()
             assertTrue(state.editor.canSave) // enkätens förslag summerar redan till 100 %
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         val saved = preferencesRepository.riskProfile.first()
@@ -242,11 +242,11 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onAllocationPercentChanged(3, "100")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
             assertTrue(state.editor.canSave)
 
-            vm.save()
+            vm.onEvent(RiskProfilEvent.Save)
             while (!state.editor.done) state = awaitItem()
 
             // Skärmen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
@@ -285,12 +285,12 @@ class RiskProfilViewModelTest {
             var state = awaitItem() // initialValue innan enkäten besvarats
             // Den sparade profilen (ingen) är läst — sedan ändras tillståndet bara av svaren nedan.
             while (state.editor.loading) state = awaitItem()
-            vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.TRE_TILL_7_AR))
             state = awaitItem()
             assertTrue(state.availableLevels.isEmpty())
-            vm.onReactionSelected(DownturnReaction.GOR_INGET)
+            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.GOR_INGET))
             awaitItem()
-            vm.onGoalSelected(PrimaryGoal.BALANSERAD)
+            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.BALANSERAD))
             state = awaitItem()
             assertNull(state.suggestedAllocation)
             assertFalse(state.editor.canSave)
@@ -306,17 +306,17 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onHorizonSelected(TimeHorizon.TRE_TILL_7_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.TRE_TILL_7_AR))
             awaitItem()
-            vm.onReactionSelected(DownturnReaction.GOR_INGET)
+            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.GOR_INGET))
             awaitItem()
-            vm.onGoalSelected(PrimaryGoal.BALANSERAD)
+            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.BALANSERAD))
             state = awaitItem()
             assertTrue(state.editor.canSave)
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, fakeScheduler.switchPlanScans)
@@ -331,13 +331,13 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
-            vm.onHorizonSelected(TimeHorizon.OVER_15_AR)
+            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             state = awaitItem()
             assertTrue(state.editor.canSave)
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(0, fakeScheduler.switchPlanScans)
@@ -357,8 +357,8 @@ class RiskProfilViewModelTest {
             assertFalse(state.editor.isDirty)
             assertFalse(state.editor.canSave)
 
-            vm.onAllocationPercentChanged(3, "50")
-            vm.onAllocationPercentChanged(4, "50")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "50"))
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(4, "50"))
             while (state.allocationSumPercent != 100 || !state.editor.isDirty) state = awaitItem()
             assertTrue(state.editor.canSave)
             cancelAndIgnoreRemainingEvents()
@@ -385,11 +385,11 @@ class RiskProfilViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onAllocationPercentChanged(3, "100")
+            vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
             assertTrue(state.editor.canSave)
 
-            vm.save()
+            vm.onEvent(RiskProfilEvent.Save)
             while (state.editor.failure == null) state = awaitItem()
             assertEquals(DataError.Unknown, state.editor.failure?.cause)
             assertFalse(state.editor.done)
@@ -418,7 +418,7 @@ class RiskProfilViewModelTest {
             assertEquals(DataError.Unknown, state.editor.loadError?.cause)
 
             failRead = false
-            vm.retry()
+            vm.onEvent(RiskProfilEvent.Retry)
             while (state.editor.loading || state.editor.loadError != null || !state.hasManualEdit) state = awaitItem()
             assertEquals(mapOf(4 to 1.0), state.effectiveAllocation)
             assertFalse(state.editor.isDirty)

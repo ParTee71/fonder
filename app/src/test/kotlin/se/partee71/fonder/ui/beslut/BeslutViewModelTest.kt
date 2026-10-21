@@ -195,7 +195,7 @@ class BeslutViewModelTest {
         }
         val vm = viewModel(facitTransactions = flakyRepo)
         vm.uiState.test {
-            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            val state = awaitRecoveryAfterRetry(source, { vm.onEvent(BeslutEvent.Retry) }, { it.loading }, { it.error })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -404,7 +404,7 @@ class BeslutViewModelTest {
             val suggestion = state.decisions.switchPlan.single()
             assertEquals(1, state.decisions.count)
 
-            vm.dismissSuggestion(suggestion)
+            vm.onEvent(BeslutEvent.DismissSuggestion(suggestion))
 
             while (state.decisions.switchPlan.isNotEmpty()) state = awaitItem()
             assertEquals(listOf(42L), state.decisions.dismissedSuggestions.map { it.recordId })
@@ -422,7 +422,7 @@ class BeslutViewModelTest {
                 dismissalRepo.dismissals.value
             )
 
-            vm.undoDismissal(suggestion)
+            vm.onEvent(BeslutEvent.UndoDismissal(suggestion))
 
             while (state.decisions.switchPlan.isEmpty()) state = awaitItem()
             assertTrue(state.decisions.dismissedSuggestions.isEmpty())
@@ -461,7 +461,7 @@ class BeslutViewModelTest {
         setUpCheaperAlternative()
 
         val vm = viewModel()
-        vm.dismissSuggestion(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion)
+        vm.onEvent(BeslutEvent.DismissSuggestion(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion))
         advanceUntilIdle()
 
         assertEquals(0, scheduler.switchPlanScans)
@@ -566,7 +566,7 @@ class BeslutViewModelTest {
             while (state.loading || state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
             val suggestion = state.decisions.cheaperAlternatives.single().suggestion
 
-            vm.dismissSuggestion(suggestion)
+            vm.onEvent(BeslutEvent.DismissSuggestion(suggestion))
 
             while (state.decisions.cheaperAlternatives.isNotEmpty()) state = awaitItem()
             assertEquals(listOf(77L), state.decisions.dismissedCheaperAlternatives.map { it.suggestion.recordId })
@@ -576,7 +576,7 @@ class BeslutViewModelTest {
                 dismissalRepo.dismissals.value
             )
 
-            vm.undoDismissal(suggestion)
+            vm.onEvent(BeslutEvent.UndoDismissal(suggestion))
 
             while (state.decisions.cheaperAlternatives.isEmpty()) state = awaitItem()
             assertTrue(state.decisions.dismissedCheaperAlternatives.isEmpty())
@@ -609,7 +609,7 @@ class BeslutViewModelTest {
         setUpCheaperAlternative(followed = true)
 
         val vm = viewModel()
-        vm.startSwitchWatch(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion)
+        vm.onEvent(BeslutEvent.StartSwitchWatch(loadedCheaper(vm).decisions.cheaperAlternatives.single().suggestion))
         advanceUntilIdle()
 
         val watch = switchWatchRepo.watches.value.single()
@@ -689,7 +689,7 @@ class BeslutViewModelTest {
 
     @Test
     fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
-        viewModel().recomputeSwitchPlan()
+        viewModel().onEvent(BeslutEvent.RecomputeSwitchPlan)
 
         assertEquals(1, scheduler.switchPlanScans)
         // Användarens uttryckliga omräkning hämtar alla kurser först — till skillnad från omräkningen efter en transaktion.
@@ -819,9 +819,9 @@ class BeslutViewModelTest {
             followed = true
         )
 
-        vm.startSwitchWatch(suggestion)
+        vm.onEvent(BeslutEvent.StartSwitchWatch(suggestion))
         advanceUntilIdle()
-        vm.startSwitchWatch(suggestion)
+        vm.onEvent(BeslutEvent.StartSwitchWatch(suggestion))
         advanceUntilIdle()
 
         val watch = switchWatchRepo.watches.value.single()
@@ -841,16 +841,18 @@ class BeslutViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            vm.startSwitchWatch(
-                SwitchPlanResolver.Suggestion(
-                    recordId = 7, planIndex = 0, sellIsin = "SE_SALJ", buyIsin = "SE_KOP",
-                    sellFundName = "Fond A", buyFundName = "Fond B", fromLevel = 6, toLevel = 4, feeDeltaPercent = 0.0
+            vm.onEvent(
+                BeslutEvent.StartSwitchWatch(
+                    SwitchPlanResolver.Suggestion(
+                        recordId = 7, planIndex = 0, sellIsin = "SE_SALJ", buyIsin = "SE_KOP",
+                        sellFundName = "Fond A", buyFundName = "Fond B", fromLevel = 6, toLevel = 4, feeDeltaPercent = 0.0
+                    )
                 )
             )
             while (state.startedSwitchWatchId == null) state = awaitItem()
             assertEquals(switchWatchRepo.watches.value.single().id, state.startedSwitchWatchId)
 
-            vm.onSwitchWatchOpened()
+            vm.onEvent(BeslutEvent.SwitchWatchOpened)
             while (state.startedSwitchWatchId != null) state = awaitItem()
             assertNull(state.startedSwitchWatchId)
             cancelAndIgnoreRemainingEvents()

@@ -114,7 +114,7 @@ class SettingsScreenTest {
         var selected: AccountType? = null
         composeRule.setContent {
             FonderTheme {
-                SettingsContent(state = SettingsUiState(), onAccountTypeSelected = { selected = it })
+                SettingsContent(state = SettingsUiState(), onAccountTypeSelect = { selected = it })
             }
         }
 
@@ -147,7 +147,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(databaseCleared = true),
-                    onClearedMessageDismissed = { dismissed = true }
+                    onClearedMessageDismiss = { dismissed = true }
                 )
             }
         }
@@ -243,7 +243,7 @@ class SettingsScreenTest {
             FonderTheme {
                 SettingsContent(
                     state = SettingsUiState(backupMessage = BackupMessage.Restored(RestoreSummary(2, 5, 3, 1))),
-                    onBackupMessageDismissed = { dismissed = true }
+                    onBackupMessageDismiss = { dismissed = true }
                 )
             }
         }

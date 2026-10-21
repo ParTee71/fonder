@@ -2,6 +2,7 @@ package se.partee71.fonder.ui.fond
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -87,20 +88,20 @@ fun FondDetaljScreen(
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
             openSwitchWatch(watchId)
-            viewModel.onSwitchWatchOpened()
+            viewModel.onEvent(FondDetaljEvent.SwitchWatchOpened)
         }
     }
 
     FondDetaljContent(
         state = state,
         onBack = onBack,
-        onRefresh = viewModel::refresh,
-        onIsinConfirmed = viewModel::onIsinConfirmed,
-        onSuggestionExpanded = viewModel::onSuggestionExpanded,
+        onRefresh = { viewModel.onEvent(FondDetaljEvent.Refresh) },
+        onIsinConfirm = { viewModel.onEvent(FondDetaljEvent.IsinConfirmed(it)) },
+        onSuggestionExpand = { viewModel.onEvent(FondDetaljEvent.SuggestionExpanded(it)) },
         onFollow = { suggestion -> onOpenTransactionForm(TransactionFormKey.follow(suggestion)) },
         onFollowFee = { recordId -> onOpenTransactionForm(TransactionFormKey.follow(fundId, recordId)) },
-        onStartSwitchWatch = viewModel::startSwitchWatch,
-        onRetry = viewModel::retry,
+        onStartSwitchWatch = { viewModel.onEvent(FondDetaljEvent.StartSwitchWatch(it)) },
+        onRetry = { viewModel.onEvent(FondDetaljEvent.Retry) },
         modifier = modifier
     )
 }
@@ -113,14 +114,14 @@ fun FondDetaljScreen(
 @Composable
 fun FondDetaljContent(
     state: FondDetaljUiState,
+    modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     onRefresh: () -> Unit = {},
-    onIsinConfirmed: (String) -> Unit = {},
-    onSuggestionExpanded: (String) -> Unit = {},
+    onIsinConfirm: (String) -> Unit = {},
+    onSuggestionExpand: (String) -> Unit = {},
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit = {},
     onFollowFee: (Long) -> Unit = {},
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit = {},
-    modifier: Modifier = Modifier,
     onRetry: () -> Unit = {}
 ) {
     EntityDetailScreen(
@@ -151,8 +152,8 @@ fun FondDetaljContent(
             FondDetaljSections(
                 state = state,
                 fund = fund,
-                onIsinConfirmed = onIsinConfirmed,
-                onSuggestionExpanded = onSuggestionExpanded,
+                onIsinConfirm = onIsinConfirm,
+                onSuggestionExpand = onSuggestionExpand,
                 onFollow = onFollow,
                 onFollowFee = onFollowFee,
                 onStartSwitchWatch = onStartSwitchWatch
@@ -163,11 +164,11 @@ fun FondDetaljContent(
 
 /** Fonddetaljens sektioner i ramens kolumn, i den ordning ANA-10 anger. */
 @Composable
-private fun FondDetaljSections(
+private fun ColumnScope.FondDetaljSections(
     state: FondDetaljUiState,
     fund: FundDetail,
-    onIsinConfirmed: (String) -> Unit,
-    onSuggestionExpanded: (String) -> Unit,
+    onIsinConfirm: (String) -> Unit,
+    onSuggestionExpand: (String) -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onFollowFee: (Long) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit
@@ -188,7 +189,7 @@ private fun FondDetaljSections(
     SwitchDecisionSection(
         state = state,
         chartPoints = chartPoints,
-        onSuggestionExpanded = onSuggestionExpanded,
+        onSuggestionExpand = onSuggestionExpand,
         onFollow = onFollow,
         onFollowFee = onFollowFee,
         onStartSwitchWatch = onStartSwitchWatch
@@ -213,7 +214,7 @@ private fun FondDetaljSections(
     if (fund.isin == null) {
         IsinInput(
             suggestedIsin = fund.suggestedIsin,
-            onConfirm = onIsinConfirmed,
+            onConfirm = onIsinConfirm,
             modifier = Modifier.padding(bottom = Spacing.s)
         )
     }
@@ -270,7 +271,7 @@ private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) 
 private fun SwitchDecisionSection(
     state: FondDetaljUiState,
     chartPoints: List<Pair<Long, Double>>,
-    onSuggestionExpanded: (String) -> Unit,
+    onSuggestionExpand: (String) -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onFollowFee: (Long) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
@@ -293,7 +294,7 @@ private fun SwitchDecisionSection(
                     fundIsin = content.isin,
                     chartPoints = chartPoints,
                     comparison = state.comparisons[suggestion.counterpartIsin(content.isin)],
-                    onSuggestionExpanded = onSuggestionExpanded,
+                    onSuggestionExpand = onSuggestionExpand,
                     onFollow = onFollow,
                     watched = suggestion.sellIsin in state.watchedSellIsins,
                     onStartSwitchWatch = onStartSwitchWatch
@@ -327,7 +328,7 @@ private fun SwitchDecisionSection(
                     chartPoints = chartPoints,
                     comparison = state.comparisons[alternative.candidate.isin],
                     recorded = state.recordedFeeSwitches[alternative.candidate.isin],
-                    onSuggestionExpanded = onSuggestionExpanded,
+                    onSuggestionExpand = onSuggestionExpand,
                     onFollowFee = onFollowFee
                 )
             }
@@ -401,7 +402,7 @@ private fun SwitchPlanRow(
     fundIsin: String?,
     chartPoints: List<Pair<Long, Double>>,
     comparison: ComparisonUiState?,
-    onSuggestionExpanded: (String) -> Unit,
+    onSuggestionExpand: (String) -> Unit,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     watched: Boolean,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit
@@ -418,7 +419,7 @@ private fun SwitchPlanRow(
     Column {
         ExpandableInfoRow(
             explanation = explanation,
-            onExpand = { onSuggestionExpanded(counterpartIsin) },
+            onExpand = { onSuggestionExpand(counterpartIsin) },
             extraContent = {
                 ComparisonChart(
                     holdingPoints = chartPoints,
@@ -488,7 +489,7 @@ private fun FeeAlternativeRow(
     chartPoints: List<Pair<Long, Double>>,
     comparison: ComparisonUiState?,
     recorded: RecordedFeeSwitch?,
-    onSuggestionExpanded: (String) -> Unit,
+    onSuggestionExpand: (String) -> Unit,
     onFollowFee: (Long) -> Unit
 ) {
     val explanation = stringResource(
@@ -498,7 +499,7 @@ private fun FeeAlternativeRow(
     Column {
         ExpandableInfoRow(
             explanation = explanation,
-            onExpand = { onSuggestionExpanded(alternative.candidate.isin) },
+            onExpand = { onSuggestionExpand(alternative.candidate.isin) },
             extraContent = {
                 ComparisonChart(
                     holdingPoints = chartPoints,

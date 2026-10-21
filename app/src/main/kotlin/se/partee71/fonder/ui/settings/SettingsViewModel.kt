@@ -123,6 +123,54 @@ private data class BackupState(
     val driveNeedsAuth: Boolean = false
 )
 
+/** Användarens handlingar på Inställningar, till [SettingsViewModel.onEvent]. */
+sealed interface SettingsEvent {
+    /** Temat: system, ljust eller mörkt. */
+    data class SetThemeMode(val mode: ThemeMode) : SettingsEvent
+
+    /** Fonden som referens för Hems indexjämförelse (HEM-10). */
+    data class ChooseBenchmark(val fund: Fund) : SettingsEvent
+
+    /** Rensar det egna referensvalet. */
+    data object ClearBenchmark : SettingsEvent
+
+    /** Kontotypen (SET-4). */
+    data class SetAccountType(val type: AccountType) : SettingsEvent
+
+    /** Tömmer hela databasen (SET-1). */
+    data object ClearDatabase : SettingsEvent
+
+    /** Kvitterar "databasen tömd"-meddelandet. */
+    data object ClearedMessageDismissed : SettingsEvent
+
+    /** Exporterar säkerhetskopian; [write] skriver JSON:en dit användaren valt (SET-6). */
+    data class Export(val write: suspend (String) -> Unit) : SettingsEvent
+
+    /** Återställer från en säkerhetskopia som [read] läser (SET-6). */
+    data class Restore(val read: suspend () -> String?) : SettingsEvent
+
+    /** Kvitterar backup-meddelandet. */
+    data object BackupMessageDismissed : SettingsEvent
+
+    /** Loggar in med Google (TP-6); [activityContext] måste vara aktivitetens. */
+    data class SignIn(val activityContext: Context) : SettingsEvent
+
+    /** Loggar ut. */
+    data object SignOut : SettingsEvent
+
+    /** Säkerhetskopierar till Drive nu (SET-7). */
+    data class BackupToDrive(val onNeedsAuthorization: (PendingIntent) -> Unit) : SettingsEvent
+
+    /** Återställer från den senaste kopian i Drive (SET-7). */
+    data class RestoreFromDrive(val onNeedsAuthorization: (PendingIntent) -> Unit) : SettingsEvent
+
+    /** Användaren har kommit tillbaka från Googles ruta för Drive-tillåtelsen. */
+    data object DriveAuthorizationResolved : SettingsEvent
+
+    /** Kvitterar inloggningsfelet. */
+    data object SignInErrorDismissed : SettingsEvent
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
@@ -215,7 +263,27 @@ class SettingsViewModel @Inject constructor(
             initialValue = SettingsUiState()
         )
 
-    fun setThemeMode(mode: ThemeMode) {
+    fun onEvent(event: SettingsEvent) {
+        when (event) {
+            is SettingsEvent.SetThemeMode -> setThemeMode(event.mode)
+            is SettingsEvent.ChooseBenchmark -> chooseBenchmark(event.fund)
+            SettingsEvent.ClearBenchmark -> clearBenchmark()
+            is SettingsEvent.SetAccountType -> setAccountType(event.type)
+            SettingsEvent.ClearDatabase -> clearDatabase()
+            SettingsEvent.ClearedMessageDismissed -> onClearedMessageDismissed()
+            is SettingsEvent.Export -> export(event.write)
+            is SettingsEvent.Restore -> restore(event.read)
+            SettingsEvent.BackupMessageDismissed -> onBackupMessageDismissed()
+            is SettingsEvent.SignIn -> signIn(event.activityContext)
+            SettingsEvent.SignOut -> signOut()
+            is SettingsEvent.BackupToDrive -> backupToDrive(event.onNeedsAuthorization)
+            is SettingsEvent.RestoreFromDrive -> restoreFromDrive(event.onNeedsAuthorization)
+            SettingsEvent.DriveAuthorizationResolved -> onDriveAuthorizationResolved()
+            SettingsEvent.SignInErrorDismissed -> onSignInErrorDismissed()
+        }
+    }
+
+    private fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { preferences.setThemeMode(mode) }
     }
 
@@ -232,7 +300,7 @@ class SettingsViewModel @Inject constructor(
      * bytesplanen (issue #88) — annars hade den valda fondens historik dröjt till nästa
      * backstop, alltså upp till ett halvt dygn.
      */
-    fun chooseBenchmark(fund: Fund) {
+    private fun chooseBenchmark(fund: Fund) {
         viewModelScope.launch {
             val isin = fund.isin ?: fundPriceRepository.lookupIsin(fund.fundId)
             if (isin == null) {
@@ -246,7 +314,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Rensar det egna valet — appens automatiska referens (issue #101) gäller då igen. */
-    fun clearBenchmark() {
+    private fun clearBenchmark() {
         viewModelScope.launch {
             benchmarkPickFailed.value = false
             preferences.clearChosenBenchmarkIsin()
@@ -263,7 +331,7 @@ class SettingsViewModel @Inject constructor(
      * Bara vid faktiskt byte: att välja samma kontotyp igen ska inte kosta en skanning. Byte
      * *till* depå/AF triggar ingenting alls — där ges ingen plan att räkna om.
      */
-    fun setAccountType(type: AccountType) {
+    private fun setAccountType(type: AccountType) {
         viewModelScope.launch {
             val previous = preferences.accountType.first()
             preferences.setAccountType(type)
@@ -278,7 +346,7 @@ class SettingsViewModel @Inject constructor(
      * Tom-markören för bytesplanen (HEM-8) nollställs med: den pekar på en körning som inte
      * längre finns, och hade annars dolt den första planen efter en nystart tills nästa tomma körning.
      */
-    fun clearDatabase() {
+    private fun clearDatabase() {
         viewModelScope.launch {
             transactionRepository.clearAll()
             preferences.clearSwitchPlanEmptiedAt()
@@ -292,7 +360,7 @@ class SettingsViewModel @Inject constructor(
      * uiState är `WhileSubscribed` kom meddelandet tillbaka vid varje rotation och vid varje
      * återbesök i Inställningar efter fem sekunder (issue #78).
      */
-    fun onClearedMessageDismissed() {
+    private fun onClearedMessageDismissed() {
         databaseCleared.update { false }
     }
 
@@ -304,7 +372,7 @@ class SettingsViewModel @Inject constructor(
      * Misslyckas [write] (I/O-fel, användaren valde en plats appen inte får skriva till) räknas
      * det som ett misslyckat export, inte som ett tyst lyckat.
      */
-    fun export(write: suspend (String) -> Unit) {
+    private fun export(write: suspend (String) -> Unit) {
         if (backupJob?.isActive == true) return
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
@@ -330,7 +398,7 @@ class SettingsViewModel @Inject constructor(
      * ingen synlig återkoppling förrän den är klar, och två samtidiga skulle skriva samma rader
      * två gånger.
      */
-    fun restore(read: suspend () -> String?) {
+    private fun restore(read: suspend () -> String?) {
         if (backupJob?.isActive == true) return
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
@@ -371,7 +439,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Kvitterar backup-meddelandet — en händelse, inte ett tillstånd (samma princip som [onClearedMessageDismissed]). */
-    fun onBackupMessageDismissed() {
+    private fun onBackupMessageDismissed() {
         backupProgress.update { it.copy(message = null) }
     }
 
@@ -387,7 +455,7 @@ class SettingsViewModel @Inject constructor(
      * Ett avbrutet val (`CANCELLED`) lämnar inget felmeddelande — användaren stängde rutan med
      * flit och vet redan varför ingen inloggning skedde.
      */
-    fun signIn(activityContext: Context) {
+    private fun signIn(activityContext: Context) {
         if (signInJob?.isActive == true) return
         signInJob = viewModelScope.launch {
             signInInProgress.value = true
@@ -401,7 +469,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun signOut() {
+    private fun signOut() {
         viewModelScope.launch {
             signInError.value = null
             authRepository.signOut()
@@ -416,7 +484,7 @@ class SettingsViewModel @Inject constructor(
      * `drive.appdata` inte är beviljat. Den vägen kan inte gå via tillståndet: en `PendingIntent`
      * är en engångsåtgärd, inte något som ska ligga kvar och kunna spelas upp vid rotation.
      */
-    fun backupToDrive(onNeedsAuthorization: (PendingIntent) -> Unit) {
+    private fun backupToDrive(onNeedsAuthorization: (PendingIntent) -> Unit) {
         if (backupJob?.isActive == true) return
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
@@ -436,7 +504,7 @@ class SettingsViewModel @Inject constructor(
      * Återställer från den senaste kopian i Drive (SET-7). **Ersätter** data, precis som
      * filåterställningen — anropas därför bara bakom samma bekräftelsedialog.
      */
-    fun restoreFromDrive(onNeedsAuthorization: (PendingIntent) -> Unit) {
+    private fun restoreFromDrive(onNeedsAuthorization: (PendingIntent) -> Unit) {
         if (backupJob?.isActive == true) return
         backupJob = viewModelScope.launch {
             backupProgress.update { it.copy(inProgress = true, message = null) }
@@ -479,7 +547,7 @@ class SettingsViewModel @Inject constructor(
      * körning får avgöra. Ett kvarliggande "behöver tillåtelse" efter ett beviljande vore värre
      * än ett som dyker upp igen.
      */
-    fun onDriveAuthorizationResolved() {
+    private fun onDriveAuthorizationResolved() {
         viewModelScope.launch { preferences.setDriveBackupNeedsAuth(false) }
     }
 
@@ -487,7 +555,7 @@ class SettingsViewModel @Inject constructor(
     private fun exportFailed(): BackupMessage = BackupMessage.Failed(AppErrors.map(DataError.BackupExportFailed))
 
     /** Kvitterar inloggningsfelet — en händelse, inte ett tillstånd (samma princip som [onBackupMessageDismissed]). */
-    fun onSignInErrorDismissed() {
+    private fun onSignInErrorDismissed() {
         signInError.value = null
     }
 }

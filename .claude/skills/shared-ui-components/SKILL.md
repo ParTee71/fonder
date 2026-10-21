@@ -148,7 +148,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 - **All kod i `ui/`** – även `ui/components/`, `ui/diagram/` och `ui/theme/`: `Channel(` och
   `.receiveAsFlow(` för engångshändelser. Händelsen blir ett fält i tillståndet som skärmen agerar
   på i en `LaunchedEffect` nyckelad på värdet och kvitterar till ViewModel:n (`saved` +
-  `onSavedHandled()`, `startedSwitchWatchId` + `onSwitchWatchOpened()`; skill `android-projekt`, Flöden).
+  `onSavedHandled()`, `startedSwitchWatchId` + `XxxEvent.SwitchWatchOpened`; skill `android-projekt`, Flöden).
 - **UiState-typer** (icke-privata data classes som heter `*State` och sealed interfaces `*UiState` i `ui/`)
   utan `@Immutable` eller `@Stable`. Listor, kartor och mängder i dem är `ImmutableList`/`ImmutableMap`/`ImmutableSet`;
   domänmodellerna, de beräkningsresultat som ligger i tillstånden och datum-/tidstyperna räknas som stabila via `app/compose-stability.conf` (skill `android:compose-expert`).

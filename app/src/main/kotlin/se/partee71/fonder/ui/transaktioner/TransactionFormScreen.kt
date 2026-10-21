@@ -60,16 +60,16 @@ fun TransactionFormScreen(
         events = viewModel.events,
         onClose = onClose,
         onWatchFund = onWatchFund,
-        onFundSelected = viewModel::onFundSelected,
-        onTypeChange = viewModel::onTypeChange,
-        onDateChange = viewModel::onDateChange,
-        onSharesTextChange = viewModel::onSharesTextChange,
-        onPriceTextChange = viewModel::onPriceTextChange,
-        onFeeTextChange = viewModel::onFeeTextChange,
-        onSwitchSelected = viewModel::onSwitchSelected,
-        onSellAll = viewModel::onSellAll,
-        onSave = viewModel::save,
-        onRetry = viewModel::retry,
+        onFundSelect = { viewModel.onEvent(TransactionFormEvent.FundSelected(it)) },
+        onTypeChange = { viewModel.onEvent(TransactionFormEvent.TypeChange(it)) },
+        onDateChange = { viewModel.onEvent(TransactionFormEvent.DateChange(it)) },
+        onSharesTextChange = { viewModel.onEvent(TransactionFormEvent.SharesTextChange(it)) },
+        onPriceTextChange = { viewModel.onEvent(TransactionFormEvent.PriceTextChange(it)) },
+        onFeeTextChange = { viewModel.onEvent(TransactionFormEvent.FeeTextChange(it)) },
+        onSwitchSelect = { viewModel.onEvent(TransactionFormEvent.SwitchSelected(it)) },
+        onSellAll = { viewModel.onEvent(TransactionFormEvent.SellAll) },
+        onSave = { viewModel.onEvent(TransactionFormEvent.Save) },
+        onRetry = { viewModel.onEvent(TransactionFormEvent.Retry) },
         modifier = modifier
     )
 }
@@ -101,13 +101,13 @@ fun TransactionFormContent(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     onWatchFund: () -> Unit = {},
-    onFundSelected: (Fund) -> Unit = {},
+    onFundSelect: (Fund) -> Unit = {},
     onTypeChange: (TransactionType) -> Unit = {},
     onDateChange: (LocalDate) -> Unit = {},
     onSharesTextChange: (String) -> Unit = {},
     onPriceTextChange: (String) -> Unit = {},
     onFeeTextChange: (String) -> Unit = {},
-    onSwitchSelected: (SwitchOption) -> Unit = {},
+    onSwitchSelect: (SwitchOption) -> Unit = {},
     onSellAll: () -> Unit = {},
     onSave: () -> Unit = {},
     onRetry: () -> Unit = {}
@@ -141,7 +141,7 @@ fun TransactionFormContent(
             options = state.funds,
             selected = state.selectedFund,
             optionLabel = { it.name },
-            onSelect = { fund -> fund?.let(onFundSelected) },
+            onSelect = { fund -> fund?.let(onFundSelect) },
             enabled = !state.fundLocked,
             supportingText = when {
                 state.fundLookupFailed -> stringResource(R.string.transaktionsform_fund_not_found)
@@ -205,7 +205,7 @@ fun TransactionFormContent(
 
         state.switchField?.let { field ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                SwitchDecisionField(field = field, fundName = state.selectedFund?.name, onSelect = onSwitchSelected)
+                SwitchDecisionField(field = field, fundName = state.selectedFund?.name, onSelect = onSwitchSelect)
                 if (state.blockedBySwitch) {
                     Text(
                         stringResource(R.string.transaktionsform_save_blocked),

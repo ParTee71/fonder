@@ -78,6 +78,24 @@ data class FundSearchUiState(
     val error: UiError? get() = list.errorOrNull()
 }
 
+/** Användarens handlingar på Fondsök, till [FundSearchViewModel.onEvent]. */
+sealed interface FundSearchEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : FundSearchEvent
+
+    /** "Försök igen" efter ett fel (NFR-6). */
+    data object Retry : FundSearchEvent
+
+    /** Söktexten ändras. */
+    data class QueryChange(val query: String) : FundSearchEvent
+
+    /** Ett fondbolag väljs; null = "Alla fondbolag". */
+    data class CompanySelected(val company: FundCompany?) : FundSearchEvent
+
+    /** Lägger till fonden i bevakningen. */
+    data class AddFund(val fund: Fund) : FundSearchEvent
+}
+
 /**
  * Sök bland fonder — filtrerat per fondbolag (dropdown, se issue #3-uppföljning) — och lägg
  * till dem i bevakningen.
@@ -172,6 +190,16 @@ class FundSearchViewModel @Inject constructor(
             initialValue = FundSearchUiState()
         )
 
+    fun onEvent(event: FundSearchEvent) {
+        when (event) {
+            FundSearchEvent.Refresh -> refresh()
+            FundSearchEvent.Retry -> retry()
+            is FundSearchEvent.QueryChange -> onQueryChange(event.query)
+            is FundSearchEvent.CompanySelected -> onCompanySelected(event.company)
+            is FundSearchEvent.AddFund -> addFund(event.fund)
+        }
+    }
+
     /**
      * Hämtar fondkatalogen. Körs en gång när skärmen öppnas och sedan **på begäran** när
      * användaren drar ned (UI-11) — samma kodväg, så en dragning ger exakt det skärmöppningen
@@ -181,13 +209,13 @@ class FundSearchViewModel @Inject constructor(
      * En pågående hämtning återanvänds i stället för att avbrytas — katalogen är ~125 kB, och
      * två parallella hämtningar vore två svar på samma fråga.
      */
-    fun refresh() = loadCatalog(pulled = true)
+    private fun refresh() = loadCatalog(pulled = true)
 
     /**
      * "Försök igen" efter ett fel (NFR-6): samma hämtning som [refresh], men listan visar laddning i
      * stället för felet medan katalogen hämtas – knappen står i felvyn, inte ovanpå en lista.
      */
-    fun retry() {
+    private fun retry() {
         if (catalogJob?.isActive == true) return
         catalogState.update { it.copy(loading = true, error = null) }
         loadCatalog(pulled = false)
@@ -228,12 +256,12 @@ class FundSearchViewModel @Inject constructor(
         loadCatalog(pulled = false)
     }
 
-    fun onQueryChange(newQuery: String) {
+    private fun onQueryChange(newQuery: String) {
         query.value = newQuery
     }
 
     /** [company] = null betyder "Alla fondbolag" — då visas hela katalogen igen, utan nytt anrop. */
-    fun onCompanySelected(company: FundCompany?) {
+    private fun onCompanySelected(company: FundCompany?) {
         companyLoadJob?.cancel()
         selectedCompany.value = company
         if (company == null) {
@@ -252,7 +280,7 @@ class FundSearchViewModel @Inject constructor(
         }
     }
 
-    fun addFund(fund: Fund) {
+    private fun addFund(fund: Fund) {
         viewModelScope.launch {
             // Källan bär fondens ISIN på dess egen sida (TP-18) — hämta det direkt i stället
             // för att låta fonden vara utan tills ett namnbaserat förslag bekräftats i

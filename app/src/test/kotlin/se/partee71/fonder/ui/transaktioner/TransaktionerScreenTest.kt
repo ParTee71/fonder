@@ -115,7 +115,7 @@ class TransaktionerScreenTest {
     @Test
     fun `filterraden har Alla Kop och Salj och ett val rapporteras`() {
         var selected: HandelseFilter? = null
-        composeRule.setContent { FonderTheme { TransaktionerContent(state = state(), onFilterSelected = { selected = it }) } }
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = state(), onFilterSelect = { selected = it }) } }
 
         // Etiketterna "Köp"/"Sälj" står även i radernas undertext – filtret är radiovalen.
         fun choice(label: String) = composeRule.onNode(hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))

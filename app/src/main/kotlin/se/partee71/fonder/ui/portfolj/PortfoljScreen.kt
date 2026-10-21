@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.portfolj
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,8 +61,8 @@ fun PortfoljScreen(
     PortfoljContent(
         state = state,
         onFundClick = onFundClick,
-        onRefresh = viewModel::refresh,
-        onRetry = viewModel::retry,
+        onRefresh = { viewModel.onEvent(PortfoljEvent.Refresh) },
+        onRetry = { viewModel.onEvent(PortfoljEvent.Retry) },
         onNewTransaction = onNewTransaction,
         onImportOrders = onImportOrders,
         modifier = modifier
@@ -77,8 +78,8 @@ fun PortfoljScreen(
 fun PortfoljContent(
     state: PortfoljUiState,
     onFundClick: (String) -> Unit,
-    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onRefresh: () -> Unit = {},
     onRetry: () -> Unit = {},
     onNewTransaction: () -> Unit = {},
     onImportOrders: () -> Unit = {}
@@ -204,7 +205,7 @@ private fun ExposureCard(exposure: PortfolioExposureCalc.Result, working: Boolea
 }
 
 @Composable
-private fun ExposureDimensionSection(
+private fun ColumnScope.ExposureDimensionSection(
     title: String,
     dimension: PortfolioExposureCalc.Dimension,
     unknownLabel: String,

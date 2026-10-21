@@ -211,7 +211,7 @@ class FacitViewModelTest {
             assertEquals(DataError.Database, state.error?.cause)
 
             historyFails = false
-            vm.retry()
+            vm.onEvent(FacitEvent.Retry)
             while (state.error != null || state.loading) state = awaitItem()
             assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
@@ -222,7 +222,7 @@ class FacitViewModelTest {
     fun `refresh startar bytesplansskanningen (UI-11)`() = runTest(dispatcher) {
         // Facit läser bara cachen — utan skanningen finns ingenting nytt att räkna om, så det
         // är den dragningen ska starta, inte en kursuppdatering.
-        viewModel().refresh()
+        viewModel().onEvent(FacitEvent.Refresh)
 
         assertEquals(1, fakeScheduler.switchPlanScans)
         assertEquals(0, fakeScheduler.manualRefreshes)
@@ -409,7 +409,7 @@ class FacitViewModelTest {
             awaitItem()
             assertFalse(awaitItem().rows.single().followed)
 
-            vm.setFollowed(7, true)
+            vm.onEvent(FacitEvent.SetFollowed(7, true))
 
             assertTrue(awaitItem().rows.single().followed)
             assertEquals(listOf(7L to true), followedCalls)

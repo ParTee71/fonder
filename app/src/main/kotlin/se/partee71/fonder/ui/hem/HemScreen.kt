@@ -68,11 +68,11 @@ fun HemScreen(
 
     HemContent(
         state = state,
-        onRefresh = viewModel::refresh,
+        onRefresh = { viewModel.onEvent(HemEvent.Refresh) },
         onFundClick = onFundClick,
         onOpenBeslut = onOpenBeslut,
         onOpenBackup = onOpenBackup,
-        onRetry = viewModel::retry,
+        onRetry = { viewModel.onEvent(HemEvent.Retry) },
         onWatchFund = onWatchFund,
         onImportHoldings = onImportHoldings,
         modifier = modifier
@@ -98,11 +98,11 @@ const val HEM_LIST_TEST_TAG = "hem_list"
 @Composable
 fun HemContent(
     state: HemUiState,
+    modifier: Modifier = Modifier,
     onRefresh: () -> Unit = {},
     onFundClick: (String) -> Unit = {},
     onOpenBeslut: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
-    modifier: Modifier = Modifier,
     onRetry: () -> Unit = {},
     onWatchFund: () -> Unit = {},
     onImportHoldings: () -> Unit = {}

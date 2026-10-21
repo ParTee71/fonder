@@ -232,6 +232,27 @@ private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
  */
 private const val COMPARISON_HISTORY_YEARS = 3L
 
+/** Användarens handlingar på Fonddetalj, till [FondDetaljViewModel.onEvent]. */
+sealed interface FondDetaljEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : FondDetaljEvent
+
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : FondDetaljEvent
+
+    /** Ett användarbekräftat eller rättat ISIN. */
+    data class IsinConfirmed(val isin: String) : FondDetaljEvent
+
+    /** Ett förslag fälls ut – jämförelsediagrammets historik hämtas (ANA-11). */
+    data class SuggestionExpanded(val isin: String) : FondDetaljEvent
+
+    /** Startar en bevakning ur ett kvitterat bytesförslag (ANA-12). */
+    data class StartSwitchWatch(val suggestion: SwitchPlanResolver.Suggestion) : FondDetaljEvent
+
+    /** Kvitterar navigeringen till en nystartad bevakning. */
+    data object SwitchWatchOpened : FondDetaljEvent
+}
+
 /**
  * Fonddetalj — kurshistorik sedan första köpet i diagram, inte bara senaste året
  * (issue #7-uppföljning: se KRAVLISTA TP-14/TP-18). Har fonden ett känt ISIN
@@ -437,20 +458,31 @@ class FondDetaljViewModel @AssistedInject constructor(
             initialValue = FondDetaljUiState()
         )
 
+    fun onEvent(event: FondDetaljEvent) {
+        when (event) {
+            FondDetaljEvent.Refresh -> refresh()
+            FondDetaljEvent.Retry -> retry()
+            is FondDetaljEvent.IsinConfirmed -> onIsinConfirmed(event.isin)
+            is FondDetaljEvent.SuggestionExpanded -> onSuggestionExpanded(event.isin)
+            is FondDetaljEvent.StartSwitchWatch -> startSwitchWatch(event.suggestion)
+            FondDetaljEvent.SwitchWatchOpened -> onSwitchWatchOpened()
+        }
+    }
+
     /**
      * Startar en bevakning av ett pågående byte ur ett kvitterat bytesförslag (ANA-12, issue
      * #114) — samma väg som Beslut ([RecordTransaction.startWatchFromSuggestion]), eftersom det är
      * samma förslag och samma inspelade rad: fondkortet och Beslut får aldrig ge två olika
      * bevakningar av samma byte.
      */
-    fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
+    private fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
     }
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
-    fun onSwitchWatchOpened() {
+    private fun onSwitchWatchOpened() {
         startedSwitchWatchId.value = null
     }
 
@@ -489,7 +521,7 @@ class FondDetaljViewModel @AssistedInject constructor(
      * nätverksanrop mot ISIN-källkedjan (TP-14), och de flesta förslag fälls aldrig ut. Ett
      * redan hämtat (eller pågående) ISIN hämtas aldrig om under skärmens livstid.
      */
-    fun onSuggestionExpanded(isin: String) {
+    private fun onSuggestionExpanded(isin: String) {
         if (comparisons.value.containsKey(isin)) return
         comparisons.value = comparisons.value + (isin to ComparisonUiState.Loading)
         viewModelScope.launch {
@@ -549,7 +581,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     // när man öppnar den, i stället för att stå kvar på gammal data till nästa worker-körning.
 
     /** "Försök igen" efter ett läsfel (NFR-6): läser om fonden, kurserna och planen från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
@@ -565,7 +597,7 @@ class FondDetaljViewModel @AssistedInject constructor(
      * kasta bort en backfill som redan är halvvägs, och två parallella hämtningar av samma fond
      * vore två anrop mot en odokumenterad källa (TP-14) för ett svar.
      */
-    fun refresh() {
+    private fun refresh() {
         if (priceRefreshJob?.isActive == true) return
         priceRefreshJob = viewModelScope.launch {
             // `finally`, inte en rad efter hämtningen: en fond vars källa svarar med fel skulle
@@ -632,7 +664,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     }
 
     /** Sparar ett användarbekräftat/rättat ISIN och hämtar direkt historik sedan första köpet med det. */
-    fun onIsinConfirmed(isin: String) {
+    private fun onIsinConfirmed(isin: String) {
         val trimmed = isin.trim().uppercase()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {

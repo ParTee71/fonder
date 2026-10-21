@@ -271,7 +271,7 @@ class SwitchWatchViewModelTest {
 
             metadataRepo.switchLookupFailed = false
             metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
-            vm.onRetryAutoFill()
+            vm.onEvent(SwitchWatchEvent.RetryAutoFill)
             advanceUntilIdle()
 
             val state = expectMostRecentItem()
@@ -294,9 +294,9 @@ class SwitchWatchViewModelTest {
             metadataRepo.switchLookupFailed = false
             metadataRepo.switchCandidates = listOf(SwitchPlanCalc.Candidate(metadata("SE_A"), 0.1))
             metadataRepo.switchSearchDelayMs = 1_000
-            vm.onRetryAutoFill()
+            vm.onEvent(SwitchWatchEvent.RetryAutoFill)
             runCurrent() // första försöket väntar nu i sökningen
-            vm.onRetryAutoFill()
+            vm.onEvent(SwitchWatchEvent.RetryAutoFill)
             advanceUntilIdle()
 
             assertEquals(listOf("SE_A"), expectMostRecentItem().content.rows.map { it.isin })
@@ -314,7 +314,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onAddCandidate(Fund(fundId = "X", name = "Egen fond", isin = "SE_EGEN"))
+            vm.onEvent(SwitchWatchEvent.AddCandidate(Fund(fundId = "X", name = "Egen fond", isin = "SE_EGEN")))
             advanceUntilIdle()
             val state = expectMostRecentItem()
             assertEquals(1, state.content.rows.size)
@@ -416,7 +416,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onAddCandidate(Fund(fundId = "SHB9", name = "Fond utan ISIN", isin = null))
+            vm.onEvent(SwitchWatchEvent.AddCandidate(Fund(fundId = "SHB9", name = "Fond utan ISIN", isin = null)))
             advanceUntilIdle()
             state = expectMostRecentItem()
             cancelAndIgnoreRemainingEvents()
@@ -440,7 +440,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onAddCandidate(Fund(fundId = "SE_NY", name = "Fond ny", isin = "SE_NY"))
+            vm.onEvent(SwitchWatchEvent.AddCandidate(Fund(fundId = "SE_NY", name = "Fond ny", isin = "SE_NY")))
             advanceUntilIdle()
             state = expectMostRecentItem()
             cancelAndIgnoreRemainingEvents()
@@ -569,7 +569,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             val state = expectMostRecentItem()
             assertEquals(3, state.content.targetLevel)
@@ -577,7 +577,7 @@ class SwitchWatchViewModelTest {
             assertNull(state.content.emptyReason)
 
             // Samma nivå igen: ingen ny sökning, inga förslag byts ut.
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -606,7 +606,7 @@ class SwitchWatchViewModelTest {
             advanceUntilIdle()
             assertEquals(listOf("SE_AKTIV"), expectMostRecentItem().content.rows.map { it.isin })
 
-            vm.onIndexOnlyChanged(true)
+            vm.onEvent(SwitchWatchEvent.IndexOnlyChanged(true))
             advanceUntilIdle()
             val filtered = expectMostRecentItem()
             assertTrue(filtered.content.indexOnly)
@@ -616,9 +616,9 @@ class SwitchWatchViewModelTest {
 
             // En indexfond på nivån: filtret av och på igen ger just den, en gång per val.
             metadataRepo.switchCandidates += SwitchPlanCalc.Candidate(metadata("SE_INDEX").copy(indexFund = true), 0.1)
-            vm.onIndexOnlyChanged(false)
+            vm.onEvent(SwitchWatchEvent.IndexOnlyChanged(false))
             advanceUntilIdle()
-            vm.onIndexOnlyChanged(true)
+            vm.onEvent(SwitchWatchEvent.IndexOnlyChanged(true))
             advanceUntilIdle()
             val indexOnly = expectMostRecentItem()
             assertEquals(listOf("SE_INDEX"), indexOnly.content.rows.map { it.isin })
@@ -642,9 +642,9 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             metadataRepo.switchSearchDelayMs = 1_000
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             runCurrent() // sökningen för nivå 3 väntar nu på källan
-            vm.onSelectTargetLevel(4)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(4))
             advanceUntilIdle()
             assertEquals(4, expectMostRecentItem().content.targetLevel)
             cancelAndIgnoreRemainingEvents()
@@ -667,9 +667,9 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             metadataRepo.switchSearchDelayMs = 1_000
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             runCurrent() // nivå 3 är skriven, SE_A borta, sökningen väntar på källan
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -690,7 +690,7 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             runCurrent() // skärmöppningens sökning på nivå 5 väntar på källan
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             val state = expectMostRecentItem()
             assertEquals(3, state.content.targetLevel)
@@ -716,7 +716,7 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             val firstId = switchWatchRepo.watches.value.single().candidates.single().id
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             val readded = switchWatchRepo.watches.value.single().candidates.single()
             assertTrue(readded.id != firstId)
@@ -768,7 +768,7 @@ class SwitchWatchViewModelTest {
             assertNull(switchWatchRepo.watches.value.single().targetLevel)
 
             offline = false
-            vm.onRetryAutoFill()
+            vm.onEvent(SwitchWatchEvent.RetryAutoFill)
             advanceUntilIdle()
             val retried = expectMostRecentItem()
             assertEquals(3, retried.content.profileSuggestedLevel)
@@ -801,11 +801,11 @@ class SwitchWatchViewModelTest {
         vm.uiState.test {
             awaitItem()
             advanceUntilIdle()
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             switchWatchRepo.setTargetLevel(watchId, 5) // en annan väg skriver nivån
             advanceUntilIdle()
-            vm.onSelectTargetLevel(3)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -821,7 +821,7 @@ class SwitchWatchViewModelTest {
         val vm = viewModel(watchId)
 
         vm.uiState.test {
-            vm.onSelectTargetLevel(3) // innan bevakningen ens lästs
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3)) // innan bevakningen ens lästs
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -862,7 +862,7 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             assertNull(switchWatchRepo.watches.value.single().candidates.single().navAtStart)
-            vm.refresh()
+            vm.onEvent(SwitchWatchEvent.Refresh)
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -919,8 +919,8 @@ class SwitchWatchViewModelTest {
             awaitItem()
             advanceUntilIdle()
             assertFalse(expectMostRecentItem().canChangeSelection)
-            vm.onSelectTargetLevel(3)
-            vm.onIndexOnlyChanged(true)
+            vm.onEvent(SwitchWatchEvent.SelectTargetLevel(3))
+            vm.onEvent(SwitchWatchEvent.IndexOnlyChanged(true))
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }

@@ -172,13 +172,13 @@ class TransactionFormViewModelTest {
             while (!state.loaded()) state = awaitItem()
             assertFalse(state.valid)
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
             assertFalse(state.valid)
 
-            vm.onSharesTextChange("2")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             state = awaitItem()
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             state = awaitItem()
             assertTrue(state.valid)
             cancelAndIgnoreRemainingEvents()
@@ -193,7 +193,7 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
             while (state.priceText.isEmpty()) state = awaitItem()
             assertEquals("175.5", state.priceText)
@@ -215,12 +215,12 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
             while (state.priceText.isEmpty()) state = awaitItem()
             assertEquals("175.5", state.priceText)
 
-            vm.onFundSelected(utanKurs)
+            vm.onEvent(TransactionFormEvent.FundSelected(utanKurs))
             state = awaitItem()
             while (state.selectedFund?.fundId != utanKurs.fundId) state = awaitItem()
 
@@ -245,8 +245,8 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
-            vm.onFundSelected(annanFond)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
+            vm.onEvent(TransactionFormEvent.FundSelected(annanFond))
 
             state = awaitItem()
             while (state.priceText.isEmpty()) state = awaitItem()
@@ -268,15 +268,15 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
-            vm.onSharesTextChange("2,5")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2,5"))
             state = awaitItem()
-            vm.onPriceTextChange("150,75")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150,75"))
             state = awaitItem()
             assertTrue(state.valid)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             state = awaitItem()
             while (!state.saved) state = awaitItem()
 
@@ -293,15 +293,15 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
-            vm.onSharesTextChange("2")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             state = awaitItem()
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             state = awaitItem()
             assertTrue(state.valid)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             state = awaitItem()
             while (!state.saved) state = awaitItem()
 
@@ -320,12 +320,12 @@ class TransactionFormViewModelTest {
         vm.uiState.test {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
-            vm.onFundSelected(fund)
-            vm.onSharesTextChange("2")
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             while (!state.valid) state = awaitItem()
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             while (!state.saved) state = awaitItem()
 
             // Ramen har gått tillbaka och kvitterar — händelsen är borta och kommer inte igen.
@@ -344,15 +344,15 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
-            vm.onSharesTextChange("2")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             state = awaitItem()
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             state = awaitItem()
             assertTrue(state.valid)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             state = awaitItem()
             while (!state.saved) state = awaitItem()
 
@@ -368,17 +368,17 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
-            vm.onSharesTextChange("2")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             state = awaitItem()
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             state = awaitItem()
-            vm.onFeeTextChange("25")
+            vm.onEvent(TransactionFormEvent.FeeTextChange("25"))
             state = awaitItem()
             assertTrue(state.valid)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             state = awaitItem()
             while (!state.saved) state = awaitItem()
 
@@ -394,15 +394,15 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             while (!state.loaded()) state = awaitItem()
 
-            vm.onFundSelected(fund)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
-            vm.onSharesTextChange("2")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             state = awaitItem()
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             state = awaitItem()
             assertTrue(state.valid)
 
-            vm.onFeeTextChange("-10")
+            vm.onEvent(TransactionFormEvent.FeeTextChange("-10"))
             state = awaitItem()
             assertFalse(state.valid)
             cancelAndIgnoreRemainingEvents()
@@ -481,8 +481,8 @@ class TransactionFormViewModelTest {
             assertTrue(state.canSave)
 
             // Fond och typ är låsta.
-            vm.onTypeChange(TransactionType.KOP)
-            vm.onFundSelected(other)
+            vm.onEvent(TransactionFormEvent.TypeChange(TransactionType.KOP))
+            vm.onEvent(TransactionFormEvent.FundSelected(other))
             advanceUntilIdle()
             assertEquals(TransactionType.SALJ, vm.uiState.value.type)
             assertEquals(held, vm.uiState.value.selectedFund)
@@ -504,7 +504,7 @@ class TransactionFormViewModelTest {
 
         vm.uiState.test {
             awaitUntil { it.canSave }
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             awaitUntil { it.saved }
             cancelAndIgnoreRemainingEvents()
         }
@@ -525,21 +525,21 @@ class TransactionFormViewModelTest {
 
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(other)
-            vm.onSharesTextChange("10")
-            vm.onPriceTextChange("100")
+            vm.onEvent(TransactionFormEvent.FundSelected(other))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("10"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("100"))
             var state = awaitUntil { it.valid && it.selectedFund == other }
 
             assertTrue(state.switchField!!.unanswered)
             assertFalse(state.canSave)
             assertTrue(state.blockedBySwitch)
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             advanceUntilIdle()
             assertTrue(addedTransactions.isEmpty())
 
-            vm.onSwitchSelected(SwitchOption.Decide(SwitchDecision.ClosesWatch(watchId)))
+            vm.onEvent(TransactionFormEvent.SwitchSelected(SwitchOption.Decide(SwitchDecision.ClosesWatch(watchId))))
             state = awaitUntil { it.canSave }
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             awaitUntil { it.saved }
             cancelAndIgnoreRemainingEvents()
         }
@@ -557,7 +557,7 @@ class TransactionFormViewModelTest {
 
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(other)
+            vm.onEvent(TransactionFormEvent.FundSelected(other))
             val state = awaitUntil { it.selectedFund == other }
             assertTrue(state.switchField!!.hidden)
             assertFalse(state.switchField!!.unanswered)
@@ -580,10 +580,10 @@ class TransactionFormViewModelTest {
             assertEquals(TransactionType.KOP, state.type)
             assertEquals(SwitchOption.Decide(SwitchDecision.ClosesWatch(watchId)), state.switchField?.option)
 
-            vm.onSharesTextChange("100")
-            vm.onPriceTextChange("184")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("100"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("184"))
             state = awaitUntil { it.canSave }
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             awaitUntil { it.saved }
             cancelAndIgnoreRemainingEvents()
         }
@@ -618,17 +618,17 @@ class TransactionFormViewModelTest {
 
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(held)
-            vm.onTypeChange(TransactionType.SALJ)
-            vm.onSharesTextChange("10")
-            vm.onPriceTextChange("300")
+            vm.onEvent(TransactionFormEvent.FundSelected(held))
+            vm.onEvent(TransactionFormEvent.TypeChange(TransactionType.SALJ))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("10"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("300"))
             val state = awaitUntil { it.valid && it.type == TransactionType.SALJ && it.switchField?.options?.size == 3 }
             assertTrue(state.blockedBySwitch)
             assertTrue(SwitchOption.LinkOtherDay(watchId) in state.switchField!!.options.map { it.option })
 
-            vm.onSwitchSelected(SwitchOption.LinkOtherDay(watchId))
+            vm.onEvent(TransactionFormEvent.SwitchSelected(SwitchOption.LinkOtherDay(watchId)))
             awaitUntil { it.canSave }
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             awaitUntil { it.saved }
             cancelAndIgnoreRemainingEvents()
         }
@@ -652,14 +652,14 @@ class TransactionFormViewModelTest {
 
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(held)
-            vm.onTypeChange(TransactionType.SALJ)
-            vm.onSharesTextChange("10")
-            vm.onPriceTextChange("300")
+            vm.onEvent(TransactionFormEvent.FundSelected(held))
+            vm.onEvent(TransactionFormEvent.TypeChange(TransactionType.SALJ))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("10"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("300"))
             awaitUntil { it.valid && it.switchField?.options?.size == 3 }
-            vm.onSwitchSelected(SwitchOption.LinkOtherDay(watchId))
+            vm.onEvent(TransactionFormEvent.SwitchSelected(SwitchOption.LinkOtherDay(watchId)))
             awaitUntil { it.canSave }
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             val state = awaitUntil { it.linkFailed }
             assertFalse(state.saved)
             assertFalse(state.canSave)
@@ -705,7 +705,7 @@ class TransactionFormViewModelTest {
             var state = awaitItem()
             assertTrue(state.editor.loading)
             assertTrue(state.fundLocked)
-            vm.onFundSelected(other)
+            vm.onEvent(TransactionFormEvent.FundSelected(other))
             state = awaitUntil { it.loaded() && it.selectedFund != null && it.priceText.isNotEmpty() }
             assertEquals(held, state.selectedFund)
             assertEquals("325.0", state.priceText)
@@ -718,9 +718,9 @@ class TransactionFormViewModelTest {
     /** Formuläret ifyllt med [fund], 2 andelar à 150 kr — klart att spara. */
     private suspend fun ReceiveTurbine<TransactionFormUiState>.fillValidForm(vm: TransactionFormViewModel) {
         awaitUntil { it.loaded() }
-        vm.onFundSelected(fund)
-        vm.onSharesTextChange("2")
-        vm.onPriceTextChange("150")
+        vm.onEvent(TransactionFormEvent.FundSelected(fund))
+        vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
+        vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
         awaitUntil { it.canSave }
     }
 
@@ -732,12 +732,12 @@ class TransactionFormViewModelTest {
         vm.uiState.test {
             fillValidForm(vm)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             advanceUntilIdle()
             var state = expectMostRecentItem()
             assertTrue(state.saving)
             assertFalse("Spara är släckt medan det sparar", state.canSave)
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             advanceUntilIdle()
             assertEquals("ett dubbeltryck sparar inte två gånger", 1, addCalls)
 
@@ -761,13 +761,13 @@ class TransactionFormViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             fillValidForm(vm)
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             awaitUntil { it.failure != null }
             // Ramen har visat snackbaren och kvitterat.
             vm.events.onFailureShown()
 
             addFailure = null
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             val state = awaitUntil { it.saved }
             assertEquals(null, state.failure)
             cancelAndIgnoreRemainingEvents()
@@ -783,7 +783,7 @@ class TransactionFormViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             fillValidForm(vm)
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             advanceUntilIdle()
             vm.viewModelScope.cancel()
             advanceUntilIdle()
@@ -807,7 +807,7 @@ class TransactionFormViewModelTest {
             assertFalse(state.noFunds)
 
             fundsFailure = null
-            vm.retry()
+            vm.onEvent(TransactionFormEvent.Retry)
             state = awaitUntil { it.loaded() }
             assertEquals(null, state.editor.loadError)
             assertEquals(listOf(fund), state.funds)
@@ -839,13 +839,13 @@ class TransactionFormViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(fund)
-            vm.onTypeChange(TransactionType.SALJ)
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
+            vm.onEvent(TransactionFormEvent.TypeChange(TransactionType.SALJ))
             var state = awaitUntil { it.ownedShares != null && it.selectedFund == fund }
             assertEquals(37.5214, state.ownedShares!!, 1e-9)
 
-            vm.onSellAll()
-            vm.onPriceTextChange("152,40")
+            vm.onEvent(TransactionFormEvent.SellAll)
+            vm.onEvent(TransactionFormEvent.PriceTextChange("152,40"))
             state = awaitUntil { it.sharesText.isNotEmpty() && it.priceText == "152,40" }
             assertEquals("37,5214", state.sharesText)
             assertTrue(state.valid)
@@ -860,21 +860,21 @@ class TransactionFormViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(fund)
-            vm.onTypeChange(TransactionType.SALJ)
-            vm.onSharesTextChange("10,5")
-            vm.onPriceTextChange("150")
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
+            vm.onEvent(TransactionFormEvent.TypeChange(TransactionType.SALJ))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("10,5"))
+            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
             val state = awaitUntil { it.sharesText == "10,5" && it.priceText == "150" && it.type == TransactionType.SALJ }
             assertEquals(R.string.transaktionsform_error_oversell, state.editor.errorFor(TRANSACTION_SHARES))
             assertFalse(state.valid)
             assertFalse(state.canSave)
 
-            vm.save()
+            vm.onEvent(TransactionFormEvent.Save)
             advanceUntilIdle()
             assertTrue(addedTransactions.isEmpty())
 
             // Hela innehavet går bra.
-            vm.onSharesTextChange("10")
+            vm.onEvent(TransactionFormEvent.SharesTextChange("10"))
             assertTrue(awaitUntil { it.sharesText == "10" }.valid)
             cancelAndIgnoreRemainingEvents()
         }
@@ -886,15 +886,15 @@ class TransactionFormViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitUntil { it.loaded() }
-            vm.onFundSelected(fund)
-            vm.onSharesTextChange("20")
+            vm.onEvent(TransactionFormEvent.FundSelected(fund))
+            vm.onEvent(TransactionFormEvent.SharesTextChange("20"))
             val state = awaitUntil { it.selectedFund == fund && it.sharesText == "20" }
             assertEquals(TransactionType.KOP, state.type)
             assertEquals(null, state.ownedShares)
             // Ett köp prövas aldrig mot innehavet.
             assertEquals(null, state.editor.errorFor(TRANSACTION_SHARES))
 
-            vm.onSellAll()
+            vm.onEvent(TransactionFormEvent.SellAll)
             advanceUntilIdle()
             assertEquals("20", vm.uiState.value.sharesText)
             cancelAndIgnoreRemainingEvents()

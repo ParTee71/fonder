@@ -104,7 +104,7 @@ class ImportOrdersScreenTest {
         onDateChange = { _, _ -> },
         onSharesTextChange = { _, _ -> },
         onPriceTextChange = { _, _ -> },
-        onSwitchSelected = { _, _ -> },
+        onSwitchSelect = { _, _ -> },
         onImport = {}
     )
 

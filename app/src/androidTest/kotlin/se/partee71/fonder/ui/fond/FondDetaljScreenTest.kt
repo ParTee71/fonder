@@ -632,7 +632,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
-                    onSuggestionExpanded = { expanded += it }
+                    onSuggestionExpand = { expanded += it }
                 )
             }
         }

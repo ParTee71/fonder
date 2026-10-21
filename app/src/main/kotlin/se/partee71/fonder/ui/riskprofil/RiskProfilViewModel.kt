@@ -124,6 +124,27 @@ data class RiskProfilUiState(
     val valid: Boolean get() = effectiveAllocation.isNotEmpty()
 }
 
+/** Användarens handlingar på Riskprofil, till [RiskProfilViewModel.onEvent]. */
+sealed interface RiskProfilEvent {
+    /** Enkätsvaret om placeringshorisont. */
+    data class HorizonSelected(val horizon: TimeHorizon) : RiskProfilEvent
+
+    /** Enkätsvaret om reaktion på nedgång. */
+    data class ReactionSelected(val reaction: DownturnReaction) : RiskProfilEvent
+
+    /** Enkätsvaret om sparmål. */
+    data class GoalSelected(val goal: PrimaryGoal) : RiskProfilEvent
+
+    /** Andelen i procent för en risknivå. */
+    data class AllocationPercentChanged(val level: Int, val percentText: String) : RiskProfilEvent
+
+    /** Sparar profilen. */
+    data object Save : RiskProfilEvent
+
+    /** "Försök igen" efter ett läsfel. */
+    data object Retry : RiskProfilEvent
+}
+
 /**
  * Riskprofilens enkät + målfördelning (SET-3, issue #68 → målfördelning i issue #71) — en
  * engångsinställning under Inställningar, inte en daglig destination (samma
@@ -176,11 +197,22 @@ class RiskProfilViewModel @Inject constructor(
             initialValue = RiskProfilUiState()
         )
 
-    fun onHorizonSelected(horizon: TimeHorizon) = editor.update(RISK_PROFILE_HORIZON) { it.copy(horizon = horizon) }
-    fun onReactionSelected(reaction: DownturnReaction) = editor.update(RISK_PROFILE_REACTION) { it.copy(reaction = reaction) }
-    fun onGoalSelected(goal: PrimaryGoal) = editor.update(RISK_PROFILE_GOAL) { it.copy(goal = goal) }
+    fun onEvent(event: RiskProfilEvent) {
+        when (event) {
+            is RiskProfilEvent.HorizonSelected -> onHorizonSelected(event.horizon)
+            is RiskProfilEvent.ReactionSelected -> onReactionSelected(event.reaction)
+            is RiskProfilEvent.GoalSelected -> onGoalSelected(event.goal)
+            is RiskProfilEvent.AllocationPercentChanged -> onAllocationPercentChanged(event.level, event.percentText)
+            RiskProfilEvent.Save -> save()
+            RiskProfilEvent.Retry -> retry()
+        }
+    }
 
-    fun onAllocationPercentChanged(level: Int, percentText: String) {
+    private fun onHorizonSelected(horizon: TimeHorizon) = editor.update(RISK_PROFILE_HORIZON) { it.copy(horizon = horizon) }
+    private fun onReactionSelected(reaction: DownturnReaction) = editor.update(RISK_PROFILE_REACTION) { it.copy(reaction = reaction) }
+    private fun onGoalSelected(goal: PrimaryGoal) = editor.update(RISK_PROFILE_GOAL) { it.copy(goal = goal) }
+
+    private fun onAllocationPercentChanged(level: Int, percentText: String) {
         val levels = availableLevels.value
         editor.update(RISK_PROFILE_ALLOCATION) { form ->
             val base = allocationTextFor(levels, suggestionFor(form, levels), form.manualAllocationText)
@@ -188,7 +220,7 @@ class RiskProfilViewModel @Inject constructor(
         }
     }
 
-    fun save() {
+    private fun save() {
         viewModelScope.launch {
             // Inställningarna är lokala: ett skrivfel är aldrig "kunde inte nå källan".
             editor.save { form -> suspendRunCatching({ DataError.Unknown }) { write(form) } }
@@ -216,7 +248,7 @@ class RiskProfilViewModel @Inject constructor(
     }
 
     /** "Försök igen" efter ett läsfel: läser den sparade profilen på nytt. */
-    fun retry() = loader.retry()
+    private fun retry() = loader.retry()
 }
 
 /** Den sparade profilen som formulärvärde — svaren och fördelningen (heltalsprocent per nivå). */

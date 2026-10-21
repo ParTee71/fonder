@@ -3,6 +3,7 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -127,7 +128,7 @@ fun ComponentGallery(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun GallerySection(title: Int, content: @Composable () -> Unit) {
+private fun GallerySection(title: Int, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(
             stringResource(title),
@@ -150,7 +151,7 @@ private fun Label(name: String) {
 }
 
 @Composable
-private fun Buttons() {
+private fun ColumnScope.Buttons() {
     Label("AppButton (android-ui, Fonders knappstil)")
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         AppButton("Spara", {})
@@ -171,7 +172,7 @@ private fun Buttons() {
 }
 
 @Composable
-private fun CardsAndRows() {
+private fun ColumnScope.CardsAndRows() {
     Label("SectionHeader (android-ui) · CardTitleRow")
     SectionHeader(title = "Byten", count = "2 väntar på dig", working = true, workingDescription = "Uppdaterar Byten")
     Label("AppCard (android-ui, Fonders kortstil)")
@@ -248,7 +249,7 @@ private fun CardsAndRows() {
 }
 
 @Composable
-private fun Fields() {
+private fun ColumnScope.Fields() {
     var amount by remember { mutableStateOf("12 000") }
     var date by remember { mutableStateOf<KotlinLocalDate?>(KotlinLocalDate(2026, 9, 3)) }
     var type by remember { mutableStateOf<String?>("Sälj") }
@@ -281,7 +282,7 @@ private fun Fields() {
 }
 
 @Composable
-private fun Values() {
+private fun ColumnScope.Values() {
     Label("PeriodRow · ValueAsOfRow")
     PeriodRow(label = "Idag", amount = 845.0, fraction = 0.0021)
     PeriodRow(label = "I år", amount = -1_960.0, fraction = -0.008)
@@ -295,7 +296,7 @@ private fun Values() {
 }
 
 @Composable
-private fun Status() {
+private fun ColumnScope.Status() {
     Label("AnalysisStatusBanner · AnalysisGuidanceCard")
     AnalysisStatusBanner(analysis = galleryAnalysis)
     AnalysisGuidanceCard(analysis = galleryAnalysis)
@@ -327,7 +328,7 @@ private fun Status() {
 }
 
 @Composable
-private fun Navigation() {
+private fun ColumnScope.Navigation() {
     var tab by remember { mutableIntStateOf(2) }
     var menuOpen by remember { mutableStateOf(false) }
     Label("AppTabHeading · AppTopBar")
@@ -357,7 +358,7 @@ private fun Navigation() {
 }
 
 @Composable
-private fun Dialogs() {
+private fun ColumnScope.Dialogs() {
     var shown by remember { mutableStateOf<GalleryDialog?>(null) }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         GalleryDialog.entries.forEach { dialog ->
@@ -408,7 +409,7 @@ private enum class GalleryDialog(val label: String) {
 }
 
 @Composable
-private fun Library() {
+private fun ColumnScope.Library() {
     Label("AppTopBar (ramarnas topprad) · LocalTopBarStatus")
     CompositionLocalProvider(LocalTopBarStatus provides { WorkerStatusIcon(isRunning = true) }) {
         LibraryTopBar("Riskprofil", size = TopBarSize.Small, onBack = {})

@@ -36,6 +36,7 @@ import se.partee71.fonder.ui.components.RiskLevelPicker
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.ui.common.UiError
 import se.partee71.ui.components.AppButton
 import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.ButtonVariant
@@ -60,8 +61,8 @@ const val SWITCH_WATCH_LIST_TEST_TAG = "switch_watch_list"
 fun SwitchWatchScreen(
     watchId: Long,
     onAddCandidate: () -> Unit,
-    onBought: (String) -> Unit,
-    onClosed: () -> Unit,
+    onBuy: (String) -> Unit,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SwitchWatchViewModel = hiltViewModel<SwitchWatchViewModel, SwitchWatchViewModel.Factory> { it.create(watchId) }
 ) {
@@ -69,7 +70,7 @@ fun SwitchWatchScreen(
 
     // En stängd bevakning har ingen egen skärm att fylla — kvitteringen är avslutet, och att
     // ligga kvar på en död vy hade sett ut som att något mer skulle hända.
-    val close by rememberUpdatedState(onClosed)
+    val close by rememberUpdatedState(onClose)
     val closed = state.content.closed
     LaunchedEffect(closed) {
         if (closed) close()
@@ -77,15 +78,15 @@ fun SwitchWatchScreen(
 
     SwitchWatchContent(
         state = state,
-        onRefresh = viewModel::refresh,
-        onBought = onBought,
-        onRemoveCandidate = viewModel::onRemoveCandidate,
+        onRefresh = { viewModel.onEvent(SwitchWatchEvent.Refresh) },
+        onBuy = onBuy,
+        onRemoveCandidate = { viewModel.onEvent(SwitchWatchEvent.RemoveCandidate(it)) },
         onAddCandidate = onAddCandidate,
-        onCancel = viewModel::onCancel,
-        onMessageShown = viewModel::onMessageShown,
-        onRetryAutoFill = viewModel::onRetryAutoFill,
-        onSelectTargetLevel = viewModel::onSelectTargetLevel,
-        onIndexOnlyChanged = viewModel::onIndexOnlyChanged,
+        onCancel = { viewModel.onEvent(SwitchWatchEvent.Cancel) },
+        onMessageShow = { viewModel.onEvent(SwitchWatchEvent.MessageShown) },
+        onRetryAutoFill = { viewModel.onEvent(SwitchWatchEvent.RetryAutoFill) },
+        onSelectTargetLevel = { viewModel.onEvent(SwitchWatchEvent.SelectTargetLevel(it)) },
+        onIndexOnlyChange = { viewModel.onEvent(SwitchWatchEvent.IndexOnlyChanged(it)) },
         modifier = modifier
     )
 }
@@ -94,31 +95,68 @@ fun SwitchWatchScreen(
 @Composable
 fun SwitchWatchContent(
     state: SwitchWatchUiState,
+    modifier: Modifier = Modifier,
     onRefresh: () -> Unit = {},
-    onBought: (String) -> Unit = {},
+    onBuy: (String) -> Unit = {},
     onRemoveCandidate: (Long) -> Unit = {},
     onAddCandidate: () -> Unit = {},
     onCancel: () -> Unit = {},
-    onMessageShown: () -> Unit = {},
+    onMessageShow: () -> Unit = {},
     onRetryAutoFill: () -> Unit = {},
     onSelectTargetLevel: (Int) -> Unit = {},
-    onIndexOnlyChanged: (Boolean) -> Unit = {},
+    onIndexOnlyChange: (Boolean) -> Unit = {}
+) {
+    val error = state.error
+    if (error != null) {
+        SwitchWatchError(error = error, modifier = modifier)
+    } else {
+        SwitchWatchList(
+            state = state,
+            onRefresh = onRefresh,
+            onBuy = onBuy,
+            onRemoveCandidate = onRemoveCandidate,
+            onAddCandidate = onAddCandidate,
+            onCancel = onCancel,
+            onMessageShow = onMessageShow,
+            onRetryAutoFill = onRetryAutoFill,
+            onSelectTargetLevel = onSelectTargetLevel,
+            onIndexOnlyChange = onIndexOnlyChange,
+            modifier = modifier
+        )
+    }
+}
+
+/** Bevakningen gick inte att läsa eller finns inte. */
+@Composable
+private fun SwitchWatchError(error: UiError, modifier: Modifier = Modifier) {
+    // Bevakningen finns inte (raderad, eller en gammal länk) — skärmen säger det i stället för
+    // att visa tomt; ett läsfel visas som fel (NFR-6).
+    if (error.cause == DataError.NotFound) {
+        EmptyState(
+            title = stringResource(R.string.switch_watch_missing_title),
+            body = stringResource(R.string.switch_watch_missing_body),
+            modifier = modifier
+        )
+    } else {
+        EmptyState(error = error, modifier = modifier)
+    }
+}
+
+/** Bevakningens lista: huvud, väljare, diagram och alternativ. */
+@Composable
+private fun SwitchWatchList(
+    state: SwitchWatchUiState,
+    onRefresh: () -> Unit,
+    onBuy: (String) -> Unit,
+    onRemoveCandidate: (Long) -> Unit,
+    onAddCandidate: () -> Unit,
+    onCancel: () -> Unit,
+    onMessageShow: () -> Unit,
+    onRetryAutoFill: () -> Unit,
+    onSelectTargetLevel: (Int) -> Unit,
+    onIndexOnlyChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    state.error?.let { error ->
-        // Bevakningen finns inte (raderad, eller en gammal länk) — skärmen säger det i stället för
-        // att visa tomt; ett läsfel visas som fel (NFR-6).
-        if (error.cause == DataError.NotFound) {
-            EmptyState(
-                title = stringResource(R.string.switch_watch_missing_title),
-                body = stringResource(R.string.switch_watch_missing_body),
-                modifier = modifier
-            )
-        } else {
-            EmptyState(error = error, modifier = modifier)
-        }
-        return
-    }
     val content = state.content
 
     // Dra ned hämtar om kandidaternas kurvor och säljfondens historik (UI-11). Kandidaterna
@@ -138,7 +176,7 @@ fun SwitchWatchContent(
                     TargetLevelCard(
                         state = state,
                         onSelectTargetLevel = onSelectTargetLevel,
-                        onIndexOnlyChanged = onIndexOnlyChanged
+                        onIndexOnlyChange = onIndexOnlyChange
                     )
                 }
             }
@@ -231,7 +269,7 @@ fun SwitchWatchContent(
                 CandidateCard(
                     row = row,
                     closed = content.closed,
-                    onBought = onBought,
+                    onBuy = onBuy,
                     onRemoveCandidate = onRemoveCandidate
                 )
             }
@@ -259,7 +297,7 @@ fun SwitchWatchContent(
                         )
                         // Meddelandet är en kvittens på en åtgärd, inte ett tillstånd — det kvitteras
                         // när det visats så nästa tillägg inte möts av föregående försöks felmeddelande.
-                        val messageShown by rememberUpdatedState(onMessageShown)
+                        val messageShown by rememberUpdatedState(onMessageShow)
                         LaunchedEffect(message) { messageShown() }
                     }
                     if (!content.closed) {
@@ -343,7 +381,7 @@ private fun HeaderCard(state: SwitchWatchUiState) {
 private fun TargetLevelCard(
     state: SwitchWatchUiState,
     onSelectTargetLevel: (Int) -> Unit,
-    onIndexOnlyChanged: (Boolean) -> Unit
+    onIndexOnlyChange: (Boolean) -> Unit
 ) {
     val content = state.content
     AppCard(modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
@@ -364,7 +402,7 @@ private fun TargetLevelCard(
         SwitchRow(
             title = stringResource(R.string.switch_watch_index_only),
             checked = content.indexOnly,
-            onCheckedChange = onIndexOnlyChanged,
+            onCheckedChange = onIndexOnlyChange,
             modifier = Modifier.padding(top = Spacing.xs)
         )
     }
@@ -439,7 +477,7 @@ private fun ComparisonChart(state: SwitchWatchUiState) {
 private fun CandidateCard(
     row: CandidateRow,
     closed: Boolean,
-    onBought: (String) -> Unit,
+    onBuy: (String) -> Unit,
     onRemoveCandidate: (Long) -> Unit
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.xs)) {
@@ -486,7 +524,7 @@ private fun CandidateCard(
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 AppButton(
                     text = stringResource(R.string.switch_watch_bought_action),
-                    onClick = { onBought(row.isin) },
+                    onClick = { onBuy(row.isin) },
                     variant = ButtonVariant.Text
                 )
                 // Bara handplockade alternativ går att ta bort: de automatiska är appens
