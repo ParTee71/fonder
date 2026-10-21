@@ -179,9 +179,12 @@ def risk_window(points: list[tuple[date, float]]) -> tuple[int, list[tuple[date,
     return None
 
 
-def annualized(total_return: float, days: int, days_per_year: float = DAYS_PER_YEAR) -> float | None:
-    """Årstakt bara från ett år (GIPS); kortare perioder visas som total avkastning."""
-    if days < ANNUALIZE_MIN_DAYS:
+def annualized(total_return: float, days: int, days_per_year: float = DAYS_PER_YEAR, min_days: int = ANNUALIZE_MIN_DAYS) -> float | None:
+    """Årstakt bara från ett år (GIPS); kortare perioder visas som total avkastning.
+
+    `min_days` sänks bara av facit, som räknar årstakt redan över sex månader (issue #197).
+    """
+    if days < max(min_days, 1):
         return None
     return (1.0 + total_return) ** (days_per_year / days) - 1.0
 
@@ -493,6 +496,139 @@ def isk_tax(year: int, quarter_start_values: list[float], deposits: float) -> fl
     return base * rate * CAPITAL_INCOME_TAX
 
 
+# --- Facit för bytesförslag (SET-5, issue #197) --------------------------------------------
+
+FACIT_SHORT_MAX_DAYS = 29  # SwitchOutcomeCalc.SHORT_HORIZON_MAX_DAYS: "under 1 månad" (< 30 dagar)
+FACIT_MEDIUM_MAX_DAYS = 182  # SwitchOutcomeCalc.MEDIUM_HORIZON_MAX_DAYS: "1–6 månader"; längre i årstakt
+
+
+def latest_common_nav(sell: list[tuple[date, float]], buy: list[tuple[date, float]], earliest: date | None = None) -> tuple[date, float, float] | None:
+    """Senaste dag (≥ earliest) där båda fonderna har en kurs > 0: (dag, säljkurs, köpkurs)."""
+    sell_by_day = {d: v for d, v in sell if v > 0 and (earliest is None or d >= earliest)}
+    buy_by_day = {d: v for d, v in buy if v > 0 and (earliest is None or d >= earliest)}
+    common = sorted(set(sell_by_day) & set(buy_by_day))
+    if not common:
+        return None
+    day = common[-1]
+    return day, sell_by_day[day], buy_by_day[day]
+
+
+def facit_horizon(days: int) -> str:
+    if days <= FACIT_SHORT_MAX_DAYS:
+        return "UNDER_ONE_MONTH"
+    if days <= FACIT_MEDIUM_MAX_DAYS:
+        return "ONE_TO_SIX_MONTHS"
+    return "OVER_SIX_MONTHS"
+
+
+def facit_relative(sell_return: float, buy_return: float) -> float:
+    """Köpfondens relativa utveckling mot säljfonden: (1 + köp) / (1 + sälj) − 1.
+
+    Det är den storheten som kan kompounderas i årstakt; den aritmetiska meravkastningen
+    köp − sälj kan inte det (SwitchOutcomeCalc.relativeReturn).
+    """
+    return (1.0 + buy_return) / (1.0 + sell_return) - 1.0
+
+
+def facit_annualized(relative: float, days: int) -> float | None:
+    """Relativ utveckling i årstakt (1 + r)^(365,2425 / dagar) − 1 via `annualized`; −100 % eller sämre ger −100 %.
+
+    Facit räknar årstakt redan över sex månader (issue #197, användarens beslut) – därför
+    `min_days=1` i stället för GIPS-gränsen på ett år.
+    """
+    if days <= 0:
+        return None
+    if 1.0 + relative <= 0:
+        return -1.0
+    return annualized(relative, days, min_days=1)
+
+
+def median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def facit_row(suggestion: dict, prices: Prices) -> dict:
+    """Ett förslags utfall, mätt på den senaste dag båda fonderna har en kurs.
+
+    Utgångsläget är NAV-dagen (`nav_date`, båda fonderna samma dag) eller förslagsdagen för
+    rader utan den. Mätdagen är tidigast förslagsdagen och senare än NAV-dagen; finns ingen
+    sådan gemensam dag är raden ej utvärderad.
+    """
+    suggested = date.fromisoformat(suggestion["suggested"])
+    base = date.fromisoformat(suggestion["nav_date"]) if suggestion.get("nav_date") else suggested
+    earliest = max(suggested, base + timedelta(days=1))
+    pair = latest_common_nav(prices.series.get(suggestion["sell"], []), prices.series.get(suggestion["buy"], []), earliest)
+    row = {"id": suggestion["id"], "measured": None, "days": None, "horizon": None, "sell_return": None, "buy_return": None, "excess": None, "excess_kr": None, "relative": None, "annualized": None, "better": False}
+    if pair is None or suggestion["sell_nav"] <= 0 or suggestion["buy_nav"] <= 0:
+        return row
+    day, sell_nav, buy_nav = pair
+    sell_return = sell_nav / suggestion["sell_nav"] - 1.0
+    buy_return = buy_nav / suggestion["buy_nav"] - 1.0
+    excess = buy_return - sell_return
+    days = (day - base).days
+    value = suggestion.get("value_kr")
+    return row | {
+        "measured": day.isoformat(),
+        "days": days,
+        "horizon": facit_horizon(days),
+        "sell_return": sell_return,
+        "buy_return": buy_return,
+        "excess": excess,
+        "excess_kr": None if value is None else value * excess,
+        "relative": facit_relative(sell_return, buy_return),
+        "annualized": facit_annualized(facit_relative(sell_return, buy_return), days),
+        "better": excess > 0,
+    }
+
+
+def facit_summary(rows: list[dict]) -> dict:
+    """Träffandel, median och kronsumma – aldrig ett snitt över förslag med olika ålder."""
+    evaluated = [r for r in rows if r["excess"] is not None]
+    kr = [r["excess_kr"] for r in evaluated if r["excess_kr"] is not None]
+    return {
+        "total": len(rows),
+        "evaluated": len(evaluated),
+        "better": sum(1 for r in evaluated if r["better"]),
+        "median_excess": median([r["excess"] for r in evaluated]),
+        "total_excess_kr": sum(kr) if kr else None,
+    }
+
+
+def facit_by_horizon(rows: list[dict]) -> list[dict]:
+    """Per horisontband, kortast först; över sex månader är medianen i årstakt. Tomma band utelämnas."""
+    bands = []
+    for horizon in ("UNDER_ONE_MONTH", "ONE_TO_SIX_MONTHS", "OVER_SIX_MONTHS"):
+        group = [r for r in rows if r["horizon"] == horizon]
+        if not group:
+            continue
+        key = "annualized" if horizon == "OVER_SIX_MONTHS" else "excess"
+        bands.append({"horizon": horizon, "count": len(group), "better": sum(1 for r in group if r["better"]), "median": median([r[key] for r in group])})
+    return bands
+
+
+def facit_golden(fixture: dict) -> dict:
+    """Facit för en fixtur med `prices` och `suggestions` (se README)."""
+    try:
+        prices = parse_prices(fixture["prices"])
+        suggestions = fixture["suggestions"]
+        rows = [facit_row(s, prices) for s in suggestions]
+    except KeyError as e:
+        raise FixtureError(f"fältet {e} saknas (se README: prices, suggestions med id, suggested, sell, buy, sell_nav, buy_nav)") from None
+    except (TypeError, ValueError) as e:
+        raise FixtureError(str(e)) from None
+    followed = [r for r, s in zip(rows, suggestions) if s.get("followed")]
+    return {
+        "rows": rows,
+        "all": facit_summary(rows),
+        "followed": facit_summary(followed),
+        "by_horizon": facit_by_horizon(rows),
+    }
+
+
 # --- Kommandoraden --------------------------------------------------------------------------
 
 
@@ -527,6 +663,13 @@ def parse_fixture(fixture: dict) -> tuple[list[Transaction], Prices, date]:
 
 
 def golden(fixture: dict) -> dict:
+    if "suggestions" in fixture:
+        return finite_or_none(
+            {
+                "conventions": {"days_per_year": DAYS_PER_YEAR, "facit_short_max_days": FACIT_SHORT_MAX_DAYS, "facit_medium_max_days": FACIT_MEDIUM_MAX_DAYS},
+                "facit": facit_golden(fixture),
+            }
+        )
     transactions, prices, end = parse_fixture(fixture)
     days = (end - transactions[0].day).days
     twr, twr_partial = time_weighted_return(transactions, prices, end)

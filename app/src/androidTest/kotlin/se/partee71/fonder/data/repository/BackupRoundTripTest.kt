@@ -109,7 +109,9 @@ class BackupRoundTripTest {
             SuggestionRecordEntity(
                 id = 1, suggestedAtEpochDay = 19_800, planIndex = 0, sellIsin = "SE0000582033", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 95.25, switchValueKr = 4_200.0, followed = true,
-                batchEpochMillis = 1_754_200_000_000
+                batchEpochMillis = 1_754_200_000_000,
+                // Dagen båda NAV-utgångslägena gäller (issue #197) — kan inte räknas fram i efterhand.
+                navEpochDay = 19_798
             )
         )
         db.suggestionRecordDao().insert(
@@ -241,6 +243,7 @@ class BackupRoundTripTest {
             records.map { it.toDomain().kind }
         )
         assertEquals(listOf(0, 1, 0), records.map { it.planIndex })
+        assertEquals(listOf(19_798L, null, null), records.map { it.navEpochDay })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
         assertEquals(95.25, records[0].buyNavAtSuggestion, 1e-9)
 

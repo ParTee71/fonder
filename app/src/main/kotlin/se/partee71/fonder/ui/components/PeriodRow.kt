@@ -55,6 +55,16 @@ import se.partee71.fonder.ui.theme.ReturnColors
  * @param insufficientText texten som visas i stället för "Otillräcklig data" när värdet saknas —
  *   när orsaken är känd och säger mer, t.ex. "Visas efter ett år" för en årstakt som inte får
  *   räknas på en yngre portfölj (HEM-1, issue #191). Null = standardtexten.
+ * @param supportingLabel en dämpad rad **under etiketten** – vad värdet bygger på, t.ex. "4 utvärderade
+ *   av 5" eller mätdagen (facit, SET-5/issue #197). Null = bara etiketten, som förut.
+ * @param supportingValue en dämpad rad **under värdet** – t.ex. kronsumman under en träffandel eller
+ *   "median · 2 av 3 bättre" under en procent (issue #197). Visas även under otillräcklig data
+ *   ([insufficientText]), så att ett känt stödvärde aldrig tappas för att huvudvärdet saknas. Null =
+ *   inget under värdet, som förut.
+ * @param valueTone färgar [valueText] som vinst eller förlust efter tecknet, för ett färdigformaterat
+ *   värde som ändå är ett utfall ("3 av 5 bättre", "+8,4 % per år", issue #197); exakt 0.0 ger den
+ *   dämpade färgen (`onSurfaceVariant`), t.ex. för "1 av 2 bättre". Null = neutral färg, som förut.
+ *   Ignoreras när [muted] är satt.
  */
 @Composable
 fun PeriodRow(
@@ -66,7 +76,10 @@ fun PeriodRow(
     stackValue: Boolean = false,
     valueText: String? = null,
     muted: Boolean = false,
-    insufficientText: String? = null
+    insufficientText: String? = null,
+    supportingLabel: String? = null,
+    supportingValue: String? = null,
+    valueTone: Double? = null
 ) {
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -80,26 +93,42 @@ fun PeriodRow(
         // "Handelsbanken Amerika Småbolag Tema Criteria A1" radbröt över två rader och avgiften
         // försvann helt ur vyn (issue #78). Samma lösning som PortfoljScreen redan använder för
         // fondnamnet i sin egen rad.
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (muted) mutedColor else Color.Unspecified,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
-        )
+        val labelModifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
+        val labelColor = if (muted) mutedColor else Color.Unspecified
+        if (supportingLabel == null) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = labelModifier)
+        } else {
+            Column(modifier = labelModifier) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(supportingLabel, style = MaterialTheme.typography.bodySmall, color = mutedColor)
+            }
+        }
         if (valueText != null) {
-            Text(
-                valueText,
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = if (muted) mutedColor else Color.Unspecified
-            )
+            val valueColor = when {
+                muted -> mutedColor
+                valueTone == 0.0 -> mutedColor
+                valueTone != null -> ReturnColors.forAmount(valueTone)
+                else -> Color.Unspecified
+            }
+            val valueStyle = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium)
+            if (supportingValue == null) {
+                Text(valueText, style = valueStyle, color = valueColor)
+            } else {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(valueText, style = valueStyle, color = valueColor)
+                    SupportingValue(supportingValue)
+                }
+            }
         } else if (amount == null && fraction == null) {
-            Text(
-                insufficientText ?: stringResource(R.string.period_insufficient_data),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            val insufficient = insufficientText ?: stringResource(R.string.period_insufficient_data)
+            if (supportingValue == null) {
+                Text(insufficient, style = MaterialTheme.typography.bodySmall, color = mutedColor)
+            } else {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(insufficient, style = MaterialTheme.typography.bodySmall, color = mutedColor)
+                    SupportingValue(supportingValue)
+                }
+            }
         } else {
             Column(horizontalAlignment = Alignment.End) {
                 val stacked = stackValue && amount != null && fraction != null
@@ -130,13 +159,8 @@ fun PeriodRow(
                     style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
                     color = fractionColor
                 )
-                if (stacked) {
-                    Text(
-                        MoneyFormat.kr(amount!!),
-                        style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                if (stacked) SupportingValue(MoneyFormat.kr(amount!!))
+                supportingValue?.let { SupportingValue(it) }
                 if (partial) {
                     Text(
                         stringResource(R.string.period_partial_data),
@@ -147,4 +171,14 @@ fun PeriodRow(
             }
         }
     }
+}
+
+/** Den dämpade raden under värdet — samma stil som den staplade kronsumman (`stackValue`). */
+@Composable
+private fun SupportingValue(text: String) {
+    Text(
+        text,
+        style = MonoAmountStyle.merge(MaterialTheme.typography.bodySmall),
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }

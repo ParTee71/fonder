@@ -55,7 +55,8 @@ class BackupSerializerTest {
                 id = 3, suggestedAtEpochDay = 19_800, planIndex = 0,
                 sellIsin = "SE0000582033", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 95.25,
-                switchValueKr = 4_200.0, followed = true, batchEpochMillis = 1_754_200_000_000
+                switchValueKr = 4_200.0, followed = true, batchEpochMillis = 1_754_200_000_000,
+                navEpochDay = 19_798
             ),
             SuggestionRecord(
                 id = 4, suggestedAtEpochDay = 19_800, planIndex = 1,
@@ -237,7 +238,7 @@ class BackupSerializerTest {
             setOf(
                 "id", "suggestedAtEpochDay", "planIndex", "sellIsin", "buyIsin",
                 "sellNavAtSuggestion", "buyNavAtSuggestion", "switchValueKr", "followed",
-                "batchEpochMillis", "kind"
+                "batchEpochMillis", "kind", "navEpochDay"
             ),
             root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys
         )
@@ -325,6 +326,22 @@ class BackupSerializerTest {
         val closed = restored.switchWatches.first { !it.isOpen }
         assertEquals("SE0001466368", closed.boughtIsin)
         assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
+    }
+
+    @Test
+    fun `nav-dagen overlever och en fil utan den lases som okand dag`() {
+        // Issue #197: dagen båda NAV-utgångslägena gäller kan inte räknas fram i efterhand. En fil
+        // skriven före 0.81.0 saknar nyckeln — tillagt fält med default null, så FORMAT_VERSION höjs inte
+        // och raden mäts från förslagsdagen som förut.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+        assertEquals(listOf(19_798L, null, null), restored.suggestionRecords.map { it.navEpochDay })
+
+        val utanNavDag = BackupSerializer.encode(fullPayload()).replace(Regex(",\\s*\"navEpochDay\": (\\d+|null)"), "")
+        assertFalse(utanNavDag.contains("navEpochDay"))
+        val old = BackupSerializer.decode(utanNavDag).getOrThrow()
+        assertTrue(old.suggestionRecords.all { it.navEpochDay == null })
+        assertEquals(listOf(19_800L, 19_800L, 19_400L), old.suggestionRecords.map { it.navBaseEpochDay })
+        assertEquals(BackupPayload.FORMAT_VERSION, old.formatVersion)
     }
 
     @Test

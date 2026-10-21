@@ -1,6 +1,7 @@
 package se.partee71.fonder.domain.usecase
 
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -25,7 +26,9 @@ class FacitSummaryTest {
     private val priceRepo = FakeCachedPriceRepository()
     private val metadataRepo = FakeFundMetadataRepository()
 
-    private val summary = FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo)
+    /** Samma schemaläggare för `runTest` och beräkningens dispatcher — annars vägrar kotlinx-coroutines-test. */
+    private val dispatcher = UnconfinedTestDispatcher()
+    private val summary = FacitSummary(suggestionRepo, transactionRepo, priceRepo, metadataRepo, dispatcher)
 
     private fun record(
         id: Long,
@@ -49,7 +52,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `vinst - de foljda radernas meravkastning i kronor`() = runTest {
+    fun `vinst - de foljda radernas meravkastning i kronor`() = runTest(dispatcher) {
         prices(sellNavNow = 105.0, buyNavNow = 224.0) // +12 % mot +5 % → +7 pp
         suggestionRepo.records.value = listOf(record(id = 1), record(id = 2, followed = null))
 
@@ -60,7 +63,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `forlust - negativ meravkastning ger negativt belopp`() = runTest {
+    fun `forlust - negativ meravkastning ger negativt belopp`() = runTest(dispatcher) {
         prices(sellNavNow = 110.0, buyNavNow = 200.0) // 0 % mot +10 % → −10 pp
         suggestionRepo.records.value = listOf(record(id = 1))
 
@@ -70,7 +73,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `utan data - inget belopp, aldrig noll`() = runTest {
+    fun `utan data - inget belopp, aldrig noll`() = runTest(dispatcher) {
         prices(sellNavNow = 105.0, buyNavNow = null)
         suggestionRepo.records.value = listOf(record(id = 1))
 
@@ -81,7 +84,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `utan foljda forslag - inget belopp`() = runTest {
+    fun `utan foljda forslag - inget belopp`() = runTest(dispatcher) {
         prices(sellNavNow = 105.0, buyNavNow = 224.0)
         suggestionRepo.records.value = listOf(record(id = 1, followed = false))
 
@@ -92,7 +95,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `foljd rad utan kant belopp ger inget pahittat belopp`() = runTest {
+    fun `foljd rad utan kant belopp ger inget pahittat belopp`() = runTest(dispatcher) {
         prices(sellNavNow = 105.0, buyNavNow = 224.0)
         suggestionRepo.records.value = listOf(record(id = 1, switchValueKr = null))
 
@@ -100,7 +103,7 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `beloppet ar summan av Facits tva genomforda-rader`() = runTest {
+    fun `beloppet ar summan av Facits tva genomforda-rader`() = runTest(dispatcher) {
         // Sorterna summeras var för sig i Facit (issue #91); kronorna för de följda läggs ihop på
         // Beslut, eftersom de redan är vägda med beloppet och mäts mot samma nollpunkt.
         prices(sellNavNow = 105.0, buyNavNow = 224.0)
@@ -118,7 +121,22 @@ class FacitSummaryTest {
     }
 
     @Test
-    fun `tom historik ger ett tomt facit`() = runTest {
+    fun `beslutets kronor mats pa samma dag for bada fonderna`() = runTest(dispatcher) {
+        // Issue #197: säljfondens senaste kurs (dag 20 150) är nyare än köpfondens (20 100). Kronorna på
+        // Beslut (NAV-9) räknas på 20 100 för båda: +12 % mot +5 % → +700 kr, inte på säljfondens 20 150.
+        prices(sellNavNow = 105.0, buyNavNow = 224.0)
+        priceRepo.priceHistoryByFundId = mapOf("SHB1" to listOf(FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 105.0)))
+        priceRepo.latestPrices.value = priceRepo.latestPrices.value + ("SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_150, nav = 50.0))
+        suggestionRepo.records.value = listOf(record(id = 1))
+
+        val snapshot = summary.observe().first()
+
+        assertEquals(700.0, snapshot.followedExcessKr!!, 1e-9)
+        assertEquals(20_100L, snapshot.rows.single().outcome.measuredAtEpochDay)
+    }
+
+    @Test
+    fun `tom historik ger ett tomt facit`() = runTest(dispatcher) {
         val snapshot = summary.observe().first()
 
         assertEquals(0, snapshot.rows.size)

@@ -33,6 +33,12 @@ import kotlinx.serialization.Serializable
  *   inspelad före den här versionen **är** ett riskplansbyte, och migreringen sätter samma
  *   värde. Typen måste följa med i backup-kontraktet — utan den går ett återställt [followed]
  *   inte att tolka, eftersom de två sorterna mäts var för sig i facit.
+ * @param navEpochDay dagen [sellNavAtSuggestion] och [buyNavAtSuggestion] gäller (issue #197) —
+ *   alltid **samma** dag för båda fonderna, den senaste dag båda hade en kurs när förslaget
+ *   spelades in. Utfallet mäts från den dagen, och mätdagen är likaså gemensam
+ *   ([se.partee71.fonder.domain.usecase.SwitchOutcomeCalc]). Null för rader inspelade före
+ *   0.81.0: de vet inte vilken dag kurserna var från, och ett påhittat datum hade sett ut som ett
+ *   känt — de mäts därför från [suggestedAtEpochDay] som förut ([navBaseEpochDay]).
  */
 @Serializable
 data class SuggestionRecord(
@@ -46,8 +52,12 @@ data class SuggestionRecord(
     val switchValueKr: Double? = null,
     val followed: Boolean? = null,
     val batchEpochMillis: Long = 0,
-    val kind: SuggestionKind = SuggestionKind.RISK_PLAN
-)
+    val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
+    val navEpochDay: Long? = null
+) {
+    /** Dagen utfallet mäts från: [navEpochDay], eller förslagsdagen för rader från före 0.81.0. */
+    val navBaseEpochDay: Long get() = navEpochDay ?: suggestedAtEpochDay
+}
 
 /**
  * Sorten av inspelat råd (issue #91) — de mäts var för sig i facit (SET-5) och läses av olika

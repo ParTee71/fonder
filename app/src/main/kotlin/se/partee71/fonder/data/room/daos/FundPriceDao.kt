@@ -43,6 +43,16 @@ interface FundPriceDao {
     )
     fun observeRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPriceEntity>>
 
+    /**
+     * Kurserna från och med [fromEpochDay] för flera fonder i en fråga, reaktivt — facit (SET-5,
+     * issue #197) letar den senaste dag båda fonderna i ett förslag har en kurs.
+     */
+    @Query(
+        "SELECT * FROM fund_prices WHERE fundId IN (:fundIds) " +
+            "AND epochDay >= :fromEpochDay ORDER BY fundId ASC, epochDay ASC"
+    )
+    fun observeFrom(fundIds: List<String>, fromEpochDay: Long): Flow<List<FundPriceEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(prices: List<FundPriceEntity>)
 

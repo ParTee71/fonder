@@ -8,6 +8,7 @@ import java.io.IOException
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -51,6 +52,10 @@ private class FakeFundPriceDao : FundPriceDao {
     override suspend fun getRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPriceEntity> = stored.filter { it.fundId == fundId && it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay }
 
     override fun observeRange(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPriceEntity>> = flowOf(stored.filter { it.fundId == fundId && it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay })
+
+    override fun observeFrom(fundIds: List<String>, fromEpochDay: Long): Flow<List<FundPriceEntity>> = flowOf(
+        stored.filter { it.fundId in fundIds && it.epochDay >= fromEpochDay }.sortedWith(compareBy({ it.fundId }, { it.epochDay }))
+    )
 
     override suspend fun upsertAll(prices: List<FundPriceEntity>) {
         prices.forEach { new ->
@@ -158,6 +163,27 @@ class HandelsbankenFundPriceRepositoryTest {
         val latest = repo.latestPrice("SHB0000442")
         assertEquals(150.0, latest?.nav ?: -1.0, 1e-9)
         assertEquals("SEK", latest?.currency)
+    }
+
+    @Test
+    fun `observeHistories grupperar kurserna per fond fran och med en dag`() = runTest {
+        // Facit (issue #197) letar den senaste dag båda fonderna i ett förslag har en kurs.
+        dao.upsertAll(
+            listOf(
+                FundPriceEntity(fundId = "SHB1", epochDay = 9, nav = 99.0, currency = "SEK"),
+                FundPriceEntity(fundId = "SHB1", epochDay = 11, nav = 101.0, currency = "SEK"),
+                FundPriceEntity(fundId = "SHB1", epochDay = 10, nav = 100.0, currency = "SEK"),
+                FundPriceEntity(fundId = "SE_BUY", epochDay = 10, nav = 50.0, currency = "SEK"),
+                FundPriceEntity(fundId = "ANNAN", epochDay = 10, nav = 1.0, currency = "SEK")
+            )
+        )
+
+        val histories = repository().observeHistories(listOf("SHB1", "SE_BUY", "SAKNAS"), fromEpochDay = 10).first()
+
+        assertEquals(setOf("SHB1", "SE_BUY"), histories.keys)
+        assertEquals(listOf(10L, 11L), histories.getValue("SHB1").map { it.epochDay })
+        assertEquals(50.0, histories.getValue("SE_BUY").single().nav, 1e-9)
+        assertTrue(repository().observeHistories(emptyList(), 0).first().isEmpty())
     }
 
     /** Registrerar varje anrop mot fondlista-källan: (fundId, company, from, to). */

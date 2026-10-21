@@ -98,7 +98,7 @@ class BeslutViewModelTest {
             DismissedPlanSource(suggestionRepo, dismissalRepo, preferencesRepository, metadataRepo),
             InProgressSwitches(switchWatchRepo, suggestionRepo)
         ),
-        FacitSummary(suggestionRepo, facitTransactions, priceRepo, metadataRepo),
+        FacitSummary(suggestionRepo, facitTransactions, priceRepo, metadataRepo, dispatcher),
         preferencesRepository,
         RecordTransaction(
             transactionRepo,
@@ -887,12 +887,34 @@ class BeslutViewModelTest {
             "SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 126.0),
             "SE_CAND" to FundPrice(fundId = "SE_CAND", epochDay = 20_100, nav = 56.0)
         )
-        suggestionRepo.records.value = listOf(planRecord(id = 1).copy(followed = true), planRecord(id = 2))
+        // Förslaget gjordes före kursdagen 20 100: mätdagen är den senaste dag båda fonderna har en kurs,
+        // tidigast förslagsdagen (issue #197).
+        suggestionRepo.records.value = listOf(planRecord(id = 1, epochDay = 20_000).copy(followed = true), planRecord(id = 2))
 
         viewModel().uiState.test {
             var state = awaitItem()
             while (state.loading || state.followedExcessKr == null) state = awaitItem()
             assertEquals(1, state.followedCount)
+            assertEquals(175.0, state.followedExcessKr!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `facitradens kronor mats pa samma dag for salj- och kopfonden`() = runTest(dispatcher) {
+        // Issue #197: säljfonden har en nyare kurs (dag 20 104, 60 kr) än köpfonden. Båda mäts dag 20 100
+        // — +7 pp på 2 500 kr = +175 kr, inte säljfondens fall till 60 kr mot köpfondens äldre kurs.
+        transactionRepo.funds.value = listOf(Fund(fundId = "SHB1", name = "Innehav", isin = "SE_HELD"))
+        priceRepo.priceHistoryByFundId = mapOf("SHB1" to listOf(FundPrice(fundId = "SHB1", epochDay = 20_100, nav = 126.0)))
+        priceRepo.latestPrices.value = mapOf(
+            "SHB1" to FundPrice(fundId = "SHB1", epochDay = 20_104, nav = 60.0),
+            "SE_CAND" to FundPrice(fundId = "SE_CAND", epochDay = 20_100, nav = 56.0)
+        )
+        suggestionRepo.records.value = listOf(planRecord(id = 1, epochDay = 20_000).copy(followed = true))
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.followedExcessKr == null) state = awaitItem()
             assertEquals(175.0, state.followedExcessKr!!, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }

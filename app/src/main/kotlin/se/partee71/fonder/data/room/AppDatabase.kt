@@ -34,7 +34,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SwitchWatchCandidateEntity::class,
         SuggestionDismissalEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -474,6 +474,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 19 → 20 (SET-5, issue #197): `suggestion_records.navEpochDay` — dagen förslagets två
+         * NAV-utgångslägen gäller. Sedan 0.81.0 är de alltid från **samma** dag för båda fonderna, och
+         * facit mäter från den dagen till en likaså gemensam mätdag.
+         *
+         * Nullbar **utan** default, med flit: en rad inspelad före den här versionen vet inte vilken dag
+         * kurserna var från (säljfondens kunde vara gårdagens, köpfondens dagens), och ett påhittat
+         * datum hade sett ut som ett känt. Facit mäter sådana rader från förslagsdagen, som förut.
+         * Inga befintliga rader eller kolumner rörs.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `suggestion_records` ADD COLUMN `navEpochDay` INTEGER")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -492,7 +508,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
-            MIGRATION_18_19
+            MIGRATION_18_19,
+            MIGRATION_19_20
         )
     }
 }

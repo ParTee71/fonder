@@ -20,6 +20,7 @@ import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.AccountType
+import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
@@ -30,6 +31,7 @@ import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
+import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanInputs
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
@@ -186,9 +188,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         private const val MAX_WATCH_NAVS_PER_RUN = SwitchWatchCalc.MAX_CANDIDATES
 
         /**
-         * Hur långt bak [resolveBuyNav] hämtar historik för en köpkandidat. Bara den senaste
-         * kursen behövs — fönstret ska bara vara långt nog att överleva helger och röda dagar,
-         * inte backfilla en historik appen ändå aldrig haft för fonden.
+         * Hur långt bak [refreshCandidate] hämtar historik för en köpkandidat, och hur långt bak
+         * [resolveSameDayNavs] letar efter en dag då både säljfonden och kandidaten har en kurs.
+         * Fönstret ska bara vara långt nog att överleva helger och röda dagar, inte backfilla en
+         * historik appen ändå aldrig haft för fonden.
          */
         private const val BUY_NAV_LOOKBACK_DAYS = 30L
 
@@ -414,7 +417,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 .distinct()
                 .take(MAX_OUTCOME_NAVS_PER_RUN)
 
-            targets.forEach { isin -> resolveBuyNav(isin, fundPriceRepository, today) }
+            targets.forEach { isin -> refreshCandidate(isin, fundPriceRepository, today) }
         }
 
         /**
@@ -449,7 +452,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 .filterNot { it in trackedIsins }
                 .distinct()
                 .take(MAX_WATCH_NAVS_PER_RUN)
-                .forEach { isin -> resolveBuyNav(isin, fundPriceRepository, today) }
+                .forEach { isin -> refreshCandidate(isin, fundPriceRepository, today) }
         }
 
         /**
@@ -609,9 +612,9 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * positionen (man byter andelsklass/fond, inte en del av den), medan planens byte
          * storleksbestäms till gapet (issue #75).
          *
-         * Saknas endera NAV spelas raden **inte** in. Utfallet mäts mot just de kurserna
-         * ([SwitchOutcomeCalc]), så en halv rad vore en rad som aldrig kan utvärderas — och den
-         * skulle ändå räknas i "antal givna råd".
+         * Saknas endera NAV — eller ett NAV-par från **samma dag** ([resolveSameDayNavs], issue #197) —
+         * spelas raden **inte** in. Utfallet mäts mot just de kurserna ([SwitchOutcomeCalc]), så en
+         * halv rad vore en rad som aldrig kan utvärderas — och den skulle ändå räknas i "antal givna råd".
          */
         private suspend fun recordFeeSwitches(
             comparable: List<Holding>,
@@ -626,14 +629,14 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             for (holding in comparable) {
                 if (budget == 0) return
                 val sellIsin = holding.fund.isin ?: continue
-                val sellNav = prices[holding.fund.fundId]?.nav ?: continue
+                val sellPrice = prices[holding.fund.fundId] ?: continue
 
                 for (buyIsin in shownIsinsFor(sellIsin)) {
                     if (budget == 0) return
                     // Dedupen först: en redan inspelad rad ska varken kosta ett nätverksanrop
                     // eller ta en plats i budgeten från ett innehav som ännu inte hunnit med.
                     if (suggestionRecordRepository.hasRecordedToday(sellIsin, buyIsin, today.toEpochDay(), SuggestionKind.FEE)) continue
-                    val buyNav = resolveBuyNav(buyIsin, fundPriceRepository, today) ?: continue
+                    val nav = resolveSameDayNavs(holding.fund.fundId, sellPrice, buyIsin, fundPriceRepository, today) ?: continue
 
                     suggestionRecordRepository.record(
                         SuggestionRecord(
@@ -645,11 +648,12 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                             planIndex = 0,
                             sellIsin = sellIsin,
                             buyIsin = buyIsin,
-                            sellNavAtSuggestion = sellNav,
-                            buyNavAtSuggestion = buyNav,
+                            sellNavAtSuggestion = nav.sellNav,
+                            buyNavAtSuggestion = nav.buyNav,
                             switchValueKr = holding.currentValue,
                             batchEpochMillis = batchEpochMillis,
-                            kind = SuggestionKind.FEE
+                            kind = SuggestionKind.FEE,
+                            navEpochDay = nav.epochDay
                         )
                     )
                     budget--
@@ -682,9 +686,12 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * eller allt är avstått) — inte när metadata eller kandidater saknas för att källan inte
          * svarade; då lämnas den inspelade planen orörd, som förut.
          *
-         * Flytt och inspelning görs **atomärt** och bara för det prefix från `planIndex 0` som går
-         * att skriva: kan steg 0 inte spelas in (kandidatens NAV gick inte att lösa upp) rörs inte
-         * den gamla körningen alls — en ny körning utan steg 0 hade fått Beslut att visa ingen plan.
+         * Flytt och inspelning görs **atomärt**. Kan steg 0 inte spelas in (kandidatens NAV gick inte
+         * att lösa upp) skrivs ingenting och den gamla körningen rörs inte alls — en ny körning utan
+         * steg 0 hade fått Beslut att visa ingen plan. Kan ett **senare** steg inte spelas in hoppas
+         * bara det över; de följande stegen skrivs ändå med sin egen `planIndex` (rangen i planen),
+         * så facit inte tappar dem. Beslut visar ändå bara det obrutna prefixet
+         * ([se.partee71.fonder.domain.usecase.SwitchPlanResolver]), så luckan blir aldrig ett råd.
          *
          * Köpkandidatens NAV ([Holding.currentValue] finns bara för redan bevakade fonder)
          * löses upp här, inte i [se.partee71.fonder.ui.hem.HemViewModel] — precis den
@@ -735,12 +742,15 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 return@withLock
             }
 
-            // Bestäm först vad som kan skrivas — längsta prefixet från steg 0 — och skriv sedan allt i en transaktion.
+            // Bestäm först vad som kan skrivas — allt utom de steg som saknar NAV, och ingenting utan
+            // steg 0 — och skriv sedan allt i en transaktion.
             val recordedToday = suggestionRecordRepository.observeRecent(SuggestionKind.RISK_PLAN, today.toEpochDay()).first()
             val moves = mutableListOf<SuggestionRecordRepository.BatchMove>()
             val inserts = mutableListOf<SuggestionRecord>()
             for ((index, switch) in plan.switches.withIndex()) {
-                val sellIsin = switch.sellFund.isin ?: break
+                // Utan steg 0 skrivs ingen körning alls; ett senare steg som inte går att spela in
+                // hoppas över, och resten av planen behåller sina platser.
+                val sellIsin = switch.sellFund.isin ?: if (index == 0) break else continue
 
                 // Samma par redan inspelat i dag → flytta raden till den här körningen (nyaste om flera).
                 val existing = recordedToday
@@ -751,21 +761,25 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     continue
                 }
 
-                // Säljfondens NAV läses direkt ur kurserna. Att härleda det som
+                // Säljfondens NAV läses direkt ur kurscachen. Att härleda det som
                 // `currentValue / netShares` gav exakt samma tal via en division som krävde en
                 // nollvakt och införde flyttalsfel utan vinst (issue #75, punkt 9).
-                val sellNav = plan.prices[switch.sellFund.fundId]?.nav ?: break
-                val buyNav = resolveBuyNav(switch.buyIsin, fundPriceRepository, today) ?: break
+                // Båda kurserna från samma dag (issue #197): säljfondens senaste kurs kan vara gårdagens
+                // när köpkandidatens just hämtats, och då mätte facit två olika perioder.
+                val sellPrice = plan.prices[switch.sellFund.fundId] ?: if (index == 0) break else continue
+                val nav = resolveSameDayNavs(switch.sellFund.fundId, sellPrice, switch.buyIsin, fundPriceRepository, today)
+                    ?: if (index == 0) break else continue
 
                 inserts += SuggestionRecord(
                     suggestedAtEpochDay = today.toEpochDay(),
                     planIndex = index,
                     sellIsin = sellIsin,
                     buyIsin = switch.buyIsin,
-                    sellNavAtSuggestion = sellNav,
-                    buyNavAtSuggestion = buyNav,
+                    sellNavAtSuggestion = nav.sellNav,
+                    buyNavAtSuggestion = nav.buyNav,
                     switchValueKr = switch.sellValueKr,
-                    batchEpochMillis = batchEpochMillis
+                    batchEpochMillis = batchEpochMillis,
+                    navEpochDay = nav.epochDay
                 )
             }
             if (moves.isNotEmpty() || inserts.isNotEmpty()) {
@@ -849,8 +863,9 @@ class FundPriceUpdateWorker @AssistedInject constructor(
         }
 
         /**
-         * Löser upp en köpkandidats aktuella NAV via samma ISIN-uppslagskedja som importflödena
-         * (TP-13/TP-14) — null om källan inte kan slå upp fonden eller sakna en kurs.
+         * Fyller på en köpkandidats kurser via samma ISIN-uppslagskedja som importflödena
+         * (TP-13/TP-14) och returnerar fonden — vars `fundId` är kursernas nyckel i cachen — eller
+         * null om källan inte kan slå upp den.
          *
          * **[FundPriceRepository.refreshSince], inte [FundPriceRepository.refresh]:** en
          * köpkandidat är per definition en fond appen aldrig ägt, så den saknar Handelsbankens
@@ -860,10 +875,42 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * #75, punkt 2). `refreshSince` går via ISIN-källkedjan, som är byggd just för fonder
          * utan plattformskod.
          */
-        private suspend fun resolveBuyNav(isin: String, fundPriceRepository: FundPriceRepository, today: LocalDate): Double? {
+        private suspend fun refreshCandidate(isin: String, fundPriceRepository: FundPriceRepository, today: LocalDate): Fund? {
             val fund = fundPriceRepository.findFundByIsin(isin) ?: return null
             fundPriceRepository.refreshSince(fund.fundId, isin, today.minusDays(BUY_NAV_LOOKBACK_DAYS))
-            return fundPriceRepository.latestPrice(fund.fundId)?.nav
+            return fund
+        }
+
+        /**
+         * NAV-utgångsläget för ett nytt förslag (SET-5, issue #197): säljfondens och köpkandidatens
+         * kurs från **samma dag** — den senaste dag båda har en kurs i cachen, inom fönstret
+         * `[today − BUY_NAV_LOOKBACK_DAYS, today]`. Dagen blir alltså aldrig mer än
+         * [BUY_NAV_LOOKBACK_DAYS] dagar före förslagsdagen och aldrig efter den: ett utgångsläge
+         * från en månad före rådet, eller en kurs daterad i framtiden, mäter inte rådet. Säljfondens senaste kurs
+         * ([sellLatest], ur [refreshAll]s cache) kan vara gårdagens medan köpkandidatens just hämtats;
+         * två kurser från olika dagar mäter två olika perioder, och facit hade fått fel tecken i en
+         * volatil vecka. Null = ingen gemensam dag, och då spelas förslaget inte in.
+         */
+        private suspend fun resolveSameDayNavs(
+            sellFundId: String,
+            sellLatest: FundPrice,
+            buyIsin: String,
+            fundPriceRepository: FundPriceRepository,
+            today: LocalDate
+        ): SwitchOutcomeCalc.SameDayNav? {
+            val buyFund = refreshCandidate(buyIsin, fundPriceRepository, today) ?: return null
+            val buyLatest = fundPriceRepository.latestPrice(buyFund.fundId) ?: return null
+            val todayEpochDay = today.toEpochDay()
+            val from = todayEpochDay - BUY_NAV_LOOKBACK_DAYS
+            SwitchOutcomeCalc.latestCommonNav(listOf(sellLatest), listOf(buyLatest), from)
+                ?.takeIf { it.epochDay <= todayEpochDay }
+                ?.let { return it }
+            val to = minOf(sellLatest.epochDay, buyLatest.epochDay, todayEpochDay)
+            if (to < from) return null
+            return SwitchOutcomeCalc.latestCommonNav(
+                fundPriceRepository.priceHistory(sellFundId, from, to),
+                fundPriceRepository.priceHistory(buyFund.fundId, from, to)
+            )
         }
     }
 }

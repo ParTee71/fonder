@@ -9,6 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -48,6 +49,18 @@ interface FundPriceRepository {
 
     /** Som [priceHistory], men reaktivt — uppdateras när nya kurser cachas (issue #7). */
     fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>>
+
+    /**
+     * Cachad kurshistorik från och med [fromEpochDay] per fondId i [fundIds], stigande per fond,
+     * reaktivt — för alla fonder i facit (SET-5, issue #197). En fond utan kurser saknas i kartan.
+     * Standardvägen går fond för fond via [observePriceHistory]; Room-implementationen gör det i en fråga.
+     */
+    fun observeHistories(fundIds: List<String>, fromEpochDay: Long): Flow<Map<String, List<FundPrice>>> {
+        if (fundIds.isEmpty()) return flowOf(emptyMap())
+        return combine(fundIds.map { id -> observePriceHistory(id, fromEpochDay, Long.MAX_VALUE).map { id to it } }) { pairs ->
+            pairs.filter { it.second.isNotEmpty() }.toMap()
+        }
+    }
 
     /**
      * Hämtar kurser från fondlista-källan och cachar dem. Fel loggas, kraschar aldrig.
@@ -214,6 +227,11 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = dao.getRange(fundId, fromEpochDay, toEpochDay).map { it.toDomain() }
 
     override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = dao.observeRange(fundId, fromEpochDay, toEpochDay).map { list -> list.map { it.toDomain() } }
+
+    override fun observeHistories(fundIds: List<String>, fromEpochDay: Long): Flow<Map<String, List<FundPrice>>> {
+        if (fundIds.isEmpty()) return flowOf(emptyMap())
+        return dao.observeFrom(fundIds, fromEpochDay).map { list -> list.map { it.toDomain() }.groupBy { it.fundId } }
+    }
 
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
         val to = LocalDate.now()

@@ -30,7 +30,9 @@ object FundAnalysisCalc {
     private const val HIGH_WINDOW_DAYS = 364L
     private const val SMA_WINDOW_DAYS = MovingAverageCalc.WINDOW_DAYS
     private const val CAGR_MIN_DAYS = 365L
-    private const val DAYS_PER_YEAR = 365.2425
+
+    /** Kalenderdagar per år för årstakt (skill `fondmatematik`) – delas med facits årstakt ([SwitchOutcomeCalc]). */
+    const val DAYS_PER_YEAR = 365.2425
 
     /** Riskmått (ANA-7, issue #24) — fasta konstanter, ej konfigurerbara i v1. */
     private const val TRADING_DAYS_PER_YEAR = 252.0
