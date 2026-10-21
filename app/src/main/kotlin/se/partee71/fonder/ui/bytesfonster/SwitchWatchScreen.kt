@@ -36,10 +36,10 @@ import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.RiskLevelPicker
-import se.partee71.fonder.ui.components.SwitchRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.ui.components.SwitchRow
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -362,9 +362,9 @@ private fun TargetLevelCard(
             modifier = Modifier.padding(top = Spacing.s)
         )
         SwitchRow(
+            title = stringResource(R.string.switch_watch_index_only),
             checked = content.indexOnly,
             onCheckedChange = onIndexOnlyChanged,
-            label = stringResource(R.string.switch_watch_index_only),
             modifier = Modifier.padding(top = Spacing.xs)
         )
     }

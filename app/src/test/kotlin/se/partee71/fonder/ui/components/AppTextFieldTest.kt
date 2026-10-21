@@ -2,7 +2,6 @@ package se.partee71.fonder.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -20,10 +19,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.components.AppTextField
 
 /**
- * Det delade [AppTextField] (UI-13) i JVM: etiketten och hjälptexten visas, inskriven text går
- * till `onValueChange`, och ett fält med fel markeras som fel för skärmläsaren.
+ * android-ui:s [AppTextField] (UI-13) i Fonders tema i JVM: etiketten och felet visas, inskriven text
+ * går till `onValueChange`, och ett fält med fel markeras som fel för skärmläsaren. Skärmdumpen visar
+ * fältet i Fonders palett (fylld yta, `outlineVariant`-kontur).
  */
 @RunWith(RobolectricTestRunner::class)
 class AppTextFieldTest {
@@ -44,15 +45,14 @@ class AppTextFieldTest {
     }
 
     @Test
-    fun `ett fält med fel visar hjälptexten och markeras som fel`() {
+    fun `ett fält med fel visar felet och markeras som fel`() {
         composeRule.setContent {
             FonderTheme {
                 AppTextField(
                     value = "abc",
                     onValueChange = {},
                     label = "Kurs",
-                    supportingText = "Ange ett tal",
-                    isError = true
+                    error = "Ange ett tal"
                 )
             }
         }
@@ -64,15 +64,13 @@ class AppTextFieldTest {
     @Test
     fun `skärmdump med etikett, enhet och fel`() = composeRule.captureLightAndDark("AppTextField_variants") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppTextField(value = "30 000", onValueChange = {}, label = "Belopp", suffix = "kr", modifier = Modifier.fillMaxWidth())
-            AppTextField(value = "25", onValueChange = {}, suffix = "%", modifier = Modifier.width(100.dp))
+            AppTextField(value = "30 000", onValueChange = {}, label = "Belopp", suffix = "kr", helper = "Courtage ingår")
+            AppTextField(value = "25", onValueChange = {}, label = "Andel", suffix = "%", modifier = Modifier.width(100.dp))
             AppTextField(
                 value = "12,x",
                 onValueChange = {},
                 label = "Antal andelar",
-                supportingText = "Ange ett tal",
-                isError = true,
-                modifier = Modifier.fillMaxWidth()
+                error = "Ange ett tal"
             )
         }
     }

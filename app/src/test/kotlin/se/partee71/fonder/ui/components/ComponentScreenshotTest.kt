@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import kotlinx.datetime.LocalDate as KotlinLocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
 import se.partee71.fonder.testing.captureLightAndDark
+import se.partee71.ui.components.DateField
 
 /**
  * Skärmdumpar ljust + mörkt av varje delad komponent i `ui/components` (UI-12, skill
@@ -150,7 +152,7 @@ class ComponentScreenshotTest {
     @Test
     fun `DateField SelectField och FollowedToggleRow`() = composeRule.captureLightAndDark("FormFields_default") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DateField(label = "Datum", date = LocalDate.of(2026, 8, 12), onDateChange = {})
+            DateField(label = "Datum", date = KotlinLocalDate(2026, 8, 12), onDateChange = {})
             SelectField(
                 label = "Typ",
                 options = listOf("Köp", "Sälj"),

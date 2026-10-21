@@ -2,7 +2,7 @@ package se.partee71.fonder.ui.fondsok
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
@@ -17,9 +17,9 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.EmptyContent
 import se.partee71.ui.components.EntityListScreen
 import se.partee71.ui.components.ItemRow
@@ -128,7 +128,8 @@ private fun SearchFields(state: FundSearchUiState, onCompanySelected: (FundCompa
             value = state.query,
             onValueChange = onQueryChange,
             label = stringResource(R.string.fondsok_label),
-            modifier = Modifier.fillMaxWidth()
+            // Fondnamn skrivs som de står i katalogen – ingen versal i början som bibliotekets standard.
+            keyboardOptions = KeyboardOptions.Default
         )
     }
 }

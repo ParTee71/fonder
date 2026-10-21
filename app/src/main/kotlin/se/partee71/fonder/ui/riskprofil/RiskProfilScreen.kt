@@ -24,9 +24,9 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.TimeHorizon
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.ui.common.EditorEvents
+import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.EntityEditScreen
 import se.partee71.ui.theme.Spacing
 
@@ -193,6 +193,7 @@ private fun AllocationRow(level: Int, percentText: String, onPercentChange: (Str
         AppTextField(
             value = percentText,
             onValueChange = onPercentChange,
+            label = stringResource(R.string.riskprofile_allocation_field_label),
             suffix = "%",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.width(100.dp).testTag(allocationFieldTestTag(level))

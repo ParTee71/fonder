@@ -20,6 +20,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
@@ -30,15 +32,15 @@ import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppCardVariant
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.ChoiceChipRow
-import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.ui.common.EditorEvents
+import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.AppTopBar as LibraryTopBar
+import se.partee71.ui.components.DateField
 import se.partee71.ui.components.EntityEditScreen
 import se.partee71.ui.components.TopBarSize
 import se.partee71.ui.theme.Spacing
@@ -156,9 +158,8 @@ fun TransactionFormContent(
 
         DateField(
             label = stringResource(R.string.transaktionsform_date_label),
-            date = state.date,
-            onDateChange = onDateChange,
-            modifier = Modifier.fillMaxWidth()
+            date = state.date.toKotlinLocalDate(),
+            onDateChange = { onDateChange(it.toJavaLocalDate()) }
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -169,8 +170,7 @@ fun TransactionFormContent(
                     onValueChange = onSharesTextChange,
                     label = stringResource(R.string.transaktionsform_shares_label),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    supportingText = sharesError?.let { stringResource(it) },
-                    isError = sharesError != null,
+                    error = sharesError?.let { stringResource(it) },
                     modifier = Modifier.weight(1f)
                 )
                 val priceError = editor.errorFor(TRANSACTION_PRICE)
@@ -179,8 +179,7 @@ fun TransactionFormContent(
                     onValueChange = onPriceTextChange,
                     label = stringResource(R.string.transaktionsform_price_label),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    supportingText = priceError?.let { stringResource(it) },
-                    isError = priceError != null,
+                    error = priceError?.let { stringResource(it) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -200,9 +199,7 @@ fun TransactionFormContent(
             onValueChange = onFeeTextChange,
             label = stringResource(R.string.transaktionsform_fee_label),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            supportingText = feeError?.let { stringResource(it) },
-            isError = feeError != null,
-            modifier = Modifier.fillMaxWidth()
+            error = feeError?.let { stringResource(it) }
         )
 
         state.switchField?.let { field ->
