@@ -93,8 +93,10 @@ class RiskTest(unittest.TestCase):
         return [(date(2025, 1, 1) + timedelta(d), v) for d, v in enumerate(navs)]
 
     def test_volatility_is_sample_std_times_sqrt_252(self):
-        navs = [100.0 * (1.01 if d % 3 else 0.985) ** d for d in range(61)]
-        r = fm.daily_returns(self.series(navs))
+        # 400 dagliga kurser från 2025-01-01: fönstret är 1 år bakåt från sista kursen (index 399),
+        # alltså från index 34 – de äldre kurserna räknas inte.
+        navs = [100.0 * (1.01 if d % 3 else 0.985) ** d for d in range(400)]
+        r = fm.daily_returns(self.series(navs[34:]))
         mean = sum(r) / len(r)
         expected = math.sqrt(sum((x - mean) ** 2 for x in r) / (len(r) - 1)) * math.sqrt(252)
         self.assertAlmostEqual(fm.risk_figures(self.series(navs))["annualized_volatility"], expected, places=12)
@@ -104,8 +106,127 @@ class RiskTest(unittest.TestCase):
         self.assertEqual((figures["annualized_volatility"], figures["sharpe"], figures["sortino"]), (None, None, None))
 
     def test_zero_volatility_is_zero_and_sharpe_none_like_the_app(self):
-        figures = fm.risk_figures(self.series([100.0] * 70))
+        figures = fm.risk_figures(self.series([100.0] * 400))
         self.assertEqual((figures["annualized_volatility"], figures["sharpe"], figures["sortino"]), (0.0, None, None))
+
+    def test_under_a_year_gives_no_volatility_even_with_many_samples(self):
+        # 365 dagliga kurser når inte senaste − 1 år (2025-12-31 − 1 år = 2024-12-31).
+        figures = fm.risk_figures(self.series([100.0 + d % 7 for d in range(365)]))
+        self.assertEqual((figures["annualized_volatility"], figures["risk_window_years"], figures["sharpe"]), (None, None, None))
+
+    def test_window_is_three_years_and_older_prices_do_not_count(self):
+        # Fyra år där det äldsta året är vilt: samma volatilitet som bara de tre senaste åren.
+        start = date(2022, 1, 1)
+        calm = [(start + timedelta(d), 100.0 + d % 7) for d in range(364, 4 * 365 + 1)]
+        wild = [(start + timedelta(d), 40.0 if d % 2 else 160.0) for d in range(364)]
+        latest = calm[-1][0]
+        window = [(d, v) for d, v in calm if d >= fm.minus_months(latest, 36)]
+        self.assertEqual(window[0][0], fm.minus_months(latest, 36))
+        full, only_window = fm.risk_figures(wild + calm), fm.risk_figures(window)
+        self.assertEqual(full["risk_window_years"], 3)
+        self.assertAlmostEqual(full["annualized_volatility"], only_window["annualized_volatility"], places=12)
+        self.assertAlmostEqual(full["sharpe"], only_window["sharpe"], places=12)
+
+    def test_gap_over_five_days_is_skipped_and_five_days_is_counted(self):
+        # Hopp på +100 % över en lucka: 10 dagar hoppas över (ingen skillnad), 5 dagar räknas.
+        def series(gap_days, jump):
+            base = [(date(2025, 1, 1) + timedelta(d), 99.0 if d % 2 else 101.0) for d in range(400)]
+            kept = [(d, v) for d, v in base if not 200 <= (d - date(2025, 1, 1)).days < 200 + gap_days - 1]
+            return [(d, v * jump if (d - date(2025, 1, 1)).days >= 200 + gap_days - 1 else v) for d, v in kept]
+
+        self.assertAlmostEqual(fm.risk_figures(series(10, 2.0))["annualized_volatility"], fm.risk_figures(series(10, 1.0))["annualized_volatility"], places=12)
+        self.assertGreater(fm.risk_figures(series(5, 2.0))["annualized_volatility"], 2 * fm.risk_figures(series(5, 1.0))["annualized_volatility"])
+
+    def test_sharpe_keeps_the_move_over_a_skipped_gap(self):
+        # Kursen faller 30 % över en lucka på 10 dagar: volatiliteten ser inte luckan, men Sharpe
+        # räknas på fönstrets totala utveckling i årstakt och blir lägre än utan fallet.
+        def series(drop):
+            base = [(date(2025, 1, 1) + timedelta(d), 100.0 + d % 7) for d in range(400)]
+            kept = [(d, v) for d, v in base if not 200 <= (d - date(2025, 1, 1)).days < 209]
+            return [(d, v * drop if (d - date(2025, 1, 1)).days >= 209 else v) for d, v in kept]
+
+        flat, fallen = fm.risk_figures(series(1.0)), fm.risk_figures(series(0.7))
+        self.assertAlmostEqual(flat["annualized_volatility"], fallen["annualized_volatility"], places=12)
+        self.assertLess(fallen["sharpe"], flat["sharpe"])
+        self.assertLess(fallen["sharpe"], 0.0)
+        _, window = fm.risk_window(series(0.7))
+        (d0, v0), (d1, v1) = window[0], window[-1]
+        expected = ((v1 / v0) ** (fm.DAYS_PER_YEAR / (d1 - d0).days) - 1.0) / fallen["annualized_volatility"]
+        self.assertAlmostEqual(fallen["sharpe"], expected, places=12)
+
+    def test_unsorted_points_give_the_same_window_and_figures(self):
+        with open(Path(__file__).with_name("riskfonster.json"), encoding="utf-8") as f:
+            fixture = json.load(f)
+        points = [(date.fromisoformat(d), v) for d, v in fixture["prices"]["A"]]
+        shuffled = points[1::2] + points[0::2][::-1]
+        self.assertNotEqual(shuffled, points)
+        self.assertEqual(fm.risk_window(shuffled), fm.risk_window(points))
+        self.assertEqual(fm.risk_figures(shuffled), fm.risk_figures(points))
+        unsorted = dict(fixture, prices={"A": [[d.isoformat(), v] for d, v in shuffled]})
+        self.assertEqual(fm.golden(unsorted)["funds"], fm.golden(fixture)["funds"])
+
+    def test_min_window_returns_is_60_percent_of_252_per_year(self):
+        self.assertEqual((fm.min_window_returns(1), fm.min_window_returns(3)), (152, 454))
+
+    def test_sparse_three_years_falls_back_to_one_year(self):
+        # Veckokurser de två äldsta åren (inga giltiga par) och dagliga det senaste: treårsfönstret
+        # har för få dagsavkastningar, så etiketten blir 1 år och talen bara det senaste årets.
+        start = date(2022, 1, 1)
+        latest = start + timedelta(3 * 365 + 1)
+        one_year = fm.minus_months(latest, 12)
+        weekly = [(start + timedelta(d), 100.0 + d % 11) for d in range(0, (one_year - start).days, 7)]
+        daily = [(one_year + timedelta(d), 100.0 + d % 7) for d in range((latest - one_year).days + 1)]
+        figures, only_daily = fm.risk_figures(weekly + daily), fm.risk_figures(daily)
+        self.assertEqual(figures["risk_window_years"], 1)
+        self.assertAlmostEqual(figures["annualized_volatility"], only_daily["annualized_volatility"], places=12)
+
+    def test_too_sparse_one_year_gives_none(self):
+        # Ankare exakt ett år bakåt, veckokurser (inga avkastningar, inget glapp över 31 dagar) och
+        # sedan n dagliga avkastningar: 152 räcker, 151 inte.
+        latest = date(2026, 1, 1)
+        one_year = (latest - fm.minus_months(latest, 12)).days
+
+        def series(n):
+            weekly = [(latest - timedelta(d), 100.0 + d % 11) for d in range(one_year, n + 5, -7)]
+            return weekly + [(latest - timedelta(d), 100.0 + d % 7) for d in range(n, -1, -1)]
+
+        self.assertEqual(fm.risk_figures(series(152))["risk_window_years"], 1)
+        none = fm.risk_figures(series(151))
+        self.assertEqual((none["risk_window_years"], none["annualized_volatility"], none["sharpe"]), (None, None, None))
+
+    def test_anchor_at_most_five_days_before_window_start(self):
+        latest = date(2026, 1, 1)
+        one_year = (latest - fm.minus_months(latest, 12)).days
+
+        def series(anchor_before):
+            return [(latest - timedelta(one_year + anchor_before), 100.0)] + [(latest - timedelta(d), 100.0 + d % 7) for d in range(one_year - 1, -1, -1)]
+
+        self.assertEqual(fm.risk_window(series(5))[0], 1)
+        self.assertIsNone(fm.risk_window(series(6)))
+
+    def test_gap_over_31_days_invalidates_the_window(self):
+        latest = date(2026, 1, 1)
+        one_year = (latest - fm.minus_months(latest, 12)).days
+
+        def series(gap):
+            return [(latest - timedelta(d), 100.0 + d % 7) for d in range(one_year, -1, -1) if not 150 <= d < 150 + gap - 1]
+
+        self.assertEqual(fm.risk_window(series(31))[0], 1)
+        self.assertIsNone(fm.risk_window(series(32)))
+
+    def test_riskfonster_fixture_uses_one_year_and_skips_the_july_gap(self):
+        with open(Path(__file__).with_name("riskfonster.json"), encoding="utf-8") as f:
+            fixture = json.load(f)
+        a = fm.golden(fixture)["funds"]["A"]
+        points = [(date.fromisoformat(d), v) for d, v in fixture["prices"]["A"]]
+        years, window = fm.risk_window(points)
+        self.assertEqual((years, a["risk_window_years"]), (1, 1))
+        self.assertEqual(window[0][0], date(2025, 3, 13))
+        gaps = [(b[0] - p[0]).days for p, b in zip(window, window[1:])]
+        self.assertIn(17, gaps)  # 4/7 → 21/7 hoppas över
+        self.assertIn(5, gaps)  # påsken 17/4 → 22/4 räknas
+        self.assertEqual(a["samples"], sum(1 for g in gaps if g <= 5))
+        self.assertEqual(a["samples"], len(window) - 2)
 
     def test_duplicate_date_uses_last_price_like_the_app(self):
         p = prices(A=[("2025-03-03", 101.0), ("2025-03-03", 100.5)])
@@ -116,7 +237,7 @@ class RiskTest(unittest.TestCase):
 
     def test_output_is_valid_json_without_negative_days(self):
         # Bara uppgångar ger oändlig Sortino i empyrical; utskriften ska ha null, inte Infinity.
-        figures = fm.finite_or_none(fm.risk_figures(self.series([100.0 * 1.001**d for d in range(70)])))
+        figures = fm.finite_or_none(fm.risk_figures(self.series([100.0 * 1.001**d for d in range(400)])))
         self.assertIsNone(figures["sortino"])
         json.dumps(figures, allow_nan=False)
 

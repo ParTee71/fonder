@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.80.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.80.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.80.1 | Volatilitet och Sharpe-kvot i Analys räknas nu i ett fast fönster: de senaste 3 åren av fondens kurshistorik, eller det senaste året om treårsfönstret är för kort, för glest (minst 60 % av handelsdagarna måste finnas) eller har hål över en månad – oavsett hur länge du ägt fonden – och fönstret står i etiketten ("Volatilitet (3 år)"). Luckor på mer än 5 dagar i kurshistoriken räknas inte längre som en enda dag, och Sharpe-kvotens avkastning är fondens totala kursutveckling i fönstret i årstakt, så att en rörelse över en lucka inte tappas. En fond med kortare kurshistorik än ett år hos källan visar "otillräcklig data" för volatilitet och Sharpe. En fond vars kurs inte rört sig visar Sharpe som "Ej definierad (ingen kursrörelse)". Analysens kurshistorik hämtas tre år och 45 dagar bakåt (tidigare 10 dagar), så att treårsfönstret ryms även när senaste kursen är några veckor gammal. Sharpe-förklaringen säger att riskfri ränta är satt till 0 % (#195). |
 | 0.80.0 | Säljsignalerna S1/S2, 200-dagarssnittet i Fonddetaljs diagram och riskmåtten räknas på fondens kurs upp till tre år bakåt, även för en fond köpt nyligen eller bara bevakad – tidigare gav en fond köpt för mindre än ~9,5 månader sedan "otillräcklig data" för S2 och ingen snittlinje. Periodraderna i Analys visar därmed fondens kursutveckling även för perioder som börjar före köpet, medan kronorna, "sedan köp", GAV och diagrammens "Allt" fortfarande utgår från köpet. Kurshistoriken hämtas en gång tre år bakåt per fond (ca 300 kB från fondlista), därefter bara de senaste 60 dagarna; en fond yngre än tre år hämtas helt högst en gång per appstart (#214). |
 | 0.79.4 | 200-dagarssnittet (S2 i Analys och snittlinjen i Fonddetaljs diagram) räknas nu över 290 kalenderdagar (≈ 200 handelsdagar) i stället för 200 kalenderdagar (~137 handelsdagar), så att det stämmer med texterna i appen. Snittet kräver därmed ca 290 dagars historik: en fond som ägts kortare tid än ca 9,5 månader visar S2 och snittlinjen först då (otillräcklig data dessförinnan). |
 | 0.79.3 | Kronbeloppen i periodraderna (dag/vecka/månad på Hem och Portfölj, i år/3 mån/1 år/3 år i Analys) är nu värdeförändringen på de andelar som faktiskt ägts, dag för dag – tidigare räknades kursrörelsen på dagens antal andelar, så andelar köpta mitt i perioden fick "avkastning" från före köpet. "Sedan köp" i kronor är positionens vinst mot anskaffningsvärdet, samma tal som GAV-raden (#193). |

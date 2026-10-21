@@ -548,7 +548,8 @@ class HemScreenTest {
             gavFraction = 0.0,
             portfolioShareFraction = null,
             annualizedVolatility = null,
-            sharpeRatio = null
+            sharpeRatio = null,
+            riskWindowYears = null
         ),
         distanceFromHigh = null,
         trend = FundAnalysisCalc.TrendSignal(status),

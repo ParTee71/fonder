@@ -194,7 +194,8 @@ class ComponentScreenshotTest {
                 gavFraction = 0.048,
                 portfolioShareFraction = 0.22,
                 annualizedVolatility = 0.148,
-                sharpeRatio = 0.7
+                sharpeRatio = 0.7,
+                riskWindowYears = 3
             ),
             distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(SignalLevel.GUL, -0.142),
             trend = FundAnalysisCalc.TrendSignal(SignalLevel.GUL),

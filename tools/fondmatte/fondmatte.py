@@ -8,8 +8,10 @@ skrivna här efter definitionerna i skillen. Körs bara i utvecklingen, aldrig i
     python tools/fondmatte/fondmatte.py golden tools/fondmatte/exempel.json
 
 Konventionerna är appens (FundAnalysisCalc): 252 handelsdagar per år, urvalsstandardavvikelse
-(n−1), riskfri ränta 0 %, minst 60 dagsavkastningar för volatilitet och Sharpe, ingen årstakt
-under 365 dagar och 365,2425 dagar per år. XIRR räknas som Excel (ACT/365F).
+(n−1), riskfri ränta 0 %, volatilitet och Sharpe i ett fast fönster bakåt från senaste kurs
+(3 år, annars 1 år, annars inget) på kurspar högst 5 dagar isär, där fönstret väljs bara om minst
+60 % av ≈ 252 × år handelsdagar finns som sådana dagsavkastningar, Sharpe-täljaren som fönstrets
+totala kursutveckling i årstakt (365,2425 dagar), ingen årstakt under 365 dagar och 365,2425 dagar per år. XIRR räknas som Excel (ACT/365F).
 Testdata är alltid påhittad – aldrig riktiga innehav (skill `data-privacy-security`).
 """
 
@@ -27,8 +29,10 @@ TRADING_DAYS_PER_YEAR = 252
 DAYS_PER_YEAR = 365.2425
 XIRR_DAYS_PER_YEAR = 365  # pyxirr DayCount.ACT_365F, samma som Excels XIRR
 ANNUALIZE_MIN_DAYS = 365
-MIN_RETURN_SAMPLES = 60  # FundAnalysisCalc.MIN_RETURN_SAMPLES
-MAX_PRICE_GAP_DAYS = 5  # PortfolioPerformanceCalc.MAX_PRICE_GAP_DAYS
+MIN_WINDOW_COVERAGE = 0.6  # FundAnalysisCalc.MIN_WINDOW_COVERAGE: andel av 252 × år
+MAX_NAV_GAP_DAYS = 5  # NavCalendar.MAX_NAV_GAP_DAYS: helg + helgdag, t.ex. påsk – periodstart, dagsavkastning och ankare
+MAX_WINDOW_GAP_DAYS = 31  # FundAnalysisCalc.MAX_WINDOW_GAP_DAYS: största glapp i riskfönstret
+RISK_WINDOW_YEARS = (3, 1)  # FundAnalysisCalc.RISK_WINDOW_YEARS, längsta först
 EPSILON = 1e-9
 
 # Statslåneräntan den 30 november året före och skattefri nivå per person (ISK + KF + PEPP
@@ -138,10 +142,41 @@ def units_held(transactions: list[Transaction], day: date) -> dict[str, float]:
 # --- Avkastning -----------------------------------------------------------------------------
 
 
-def daily_returns(points: list[tuple[date, float]]) -> list[float]:
-    """Enkla avkastningar mellan på varandra följande kurspunkter, som FundAnalysisCalc."""
-    navs = [v for _, v in points if v > 0.0]
-    return [b / a - 1.0 for a, b in zip(navs, navs[1:])]
+def daily_returns(points: list[tuple[date, float]], max_gap_days: int | None = None) -> list[float]:
+    """Enkla avkastningar mellan på varandra följande kurspunkter. Med `max_gap_days` räknas bara
+    par högst så många kalenderdagar isär (FundAnalysisCalc: längre luckor hoppas över)."""
+    navs = [(d, v) for d, v in points if v > 0.0]
+    return [b / a - 1.0 for (da, a), (db, b) in zip(navs, navs[1:]) if max_gap_days is None or (db - da).days <= max_gap_days]
+
+
+def min_window_returns(years: int) -> int:
+    """Minsta antal giltiga dagsavkastningar för ett fönster på `years` år (FundAnalysisCalc.minWindowReturns)."""
+    return math.ceil(MIN_WINDOW_COVERAGE * TRADING_DAYS_PER_YEAR * years)
+
+
+def risk_window(points: list[tuple[date, float]]) -> tuple[int, list[tuple[date, float]]] | None:
+    """Riskmåttens fönster som i FundAnalysisCalc: 3 år bakåt från senaste kurs om fönstret är
+    giltigt, annars 1 år på samma villkor, annars None. Fönstret börjar i ankaret, den senaste
+    kursen på eller före startdagen. Giltigt: ankaret högst MAX_NAV_GAP_DAYS före startdagen,
+    inget glapp mellan på varandra följande punkter över MAX_WINDOW_GAP_DAYS och minst
+    `min_window_returns(år)` dagsavkastningar högst MAX_NAV_GAP_DAYS isär. Punkterna sorteras
+    stabilt på datum först (som appens sortedBy { epochDay }), så att osorterad indata ger samma
+    fönster."""
+    navs = sorted(((d, v) for d, v in points if v > 0.0), key=lambda p: p[0])
+    if not navs:
+        return None
+    latest = navs[-1][0]
+    for years in RISK_WINDOW_YEARS:
+        start = minus_months(latest, 12 * years)
+        anchor = max((i for i, (d, _) in enumerate(navs) if d <= start), default=None)
+        if anchor is None or (start - navs[anchor][0]).days > MAX_NAV_GAP_DAYS:
+            continue
+        window = navs[anchor:]
+        if any((b[0] - a[0]).days > MAX_WINDOW_GAP_DAYS for a, b in zip(window, window[1:])):
+            continue
+        if len(daily_returns(window, MAX_NAV_GAP_DAYS)) >= min_window_returns(years):
+            return years, window
+    return None
 
 
 def annualized(total_return: float, days: int, days_per_year: float = DAYS_PER_YEAR) -> float | None:
@@ -263,9 +298,9 @@ def period_rows(transactions: list[Transaction], prices: Prices, fund: str, end:
             position_start = t.day
         apply_transaction(held, t)
     rows = {
-        "day": row(reference_day - timedelta(days=1), max_gap_days=MAX_PRICE_GAP_DAYS),
-        "week": row(reference_day - timedelta(days=7), max_gap_days=MAX_PRICE_GAP_DAYS),
-        "month": row(reference_day - timedelta(days=30), max_gap_days=MAX_PRICE_GAP_DAYS),
+        "day": row(reference_day - timedelta(days=1), max_gap_days=MAX_NAV_GAP_DAYS),
+        "week": row(reference_day - timedelta(days=7), max_gap_days=MAX_NAV_GAP_DAYS),
+        "month": row(reference_day - timedelta(days=30), max_gap_days=MAX_NAV_GAP_DAYS),
         "ytd": row(date(end.year, 1, 1)),
         "3m": row(minus_months(end, 3)),
         "1y": row(minus_months(end, 12)),
@@ -328,29 +363,43 @@ def sma_200(points: list[tuple[date, float]], window_days: int = SMA_WINDOW_DAYS
 
 
 def risk_figures(points: list[tuple[date, float]]) -> dict:
-    """Nyckeltal för en kursserie. Volatilitet, Sharpe och Sortino är None under
-    MIN_RETURN_SAMPLES avkastningar och när de inte är ändliga (t.ex. nollvolatilitet), som
-    i FundAnalysisCalc. CAGR gäller seriens första till sista punkt, inte innehavstiden."""
+    """Nyckeltal för en kursserie. Volatilitet, Sharpe och Sortino räknas som i FundAnalysisCalc:
+    i fönstret från `risk_window` (`risk_window_years`), bara på kurspar högst MAX_NAV_GAP_DAYS
+    isär (`samples` = antalet sådana avkastningar), och är None utan fönster (för kort eller för
+    glest, se `risk_window`) och när de inte är ändliga (t.ex. nollvolatilitet). Sharpe-täljaren är
+    fönstrets totala kursutveckling i årstakt, så att en rörelse över en överhoppad lucka inte
+    tappas. Totalavkastning, CAGR och max drawdown gäller hela serien, första till sista punkt."""
     import empyrical
     import numpy as np
 
-    navs = [(d, v) for d, v in points if v > 0.0]
-    returns = np.array(daily_returns(navs))
+    navs = sorted(((d, v) for d, v in points if v > 0.0), key=lambda p: p[0])
+    all_returns = np.array(daily_returns(navs))
+    window = risk_window(navs)
+    returns = np.array(daily_returns(window[1], MAX_NAV_GAP_DAYS)) if window else np.array([])
     out: dict = {"samples": int(returns.size)}
-    if returns.size == 0:
+    if all_returns.size == 0:
         return out
     total = navs[-1][1] / navs[0][1] - 1.0
     out["total_return"] = total
     out["series_cagr"] = annualized(total, (navs[-1][0] - navs[0][0]).days)
-    out["max_drawdown"] = float(empyrical.max_drawdown(returns))
-    enough = returns.size >= MIN_RETURN_SAMPLES
+    out["max_drawdown"] = float(empyrical.max_drawdown(all_returns))
     # empyrical: std med ddof=1 × √252, som FundAnalysisCalc.annualizedVolatility.
     # Nollvolatilitet är 0,0 som i appen; Sharpe och Sortino är då meningslösa och blir None.
-    vol = float(empyrical.annual_volatility(returns, period="daily")) if enough else None
+    vol = float(empyrical.annual_volatility(returns, period="daily")) if window else None
     out["annualized_volatility"] = vol
+    out["risk_window_years"] = window[0] if window else None
     has_risk = vol is not None and math.isfinite(vol) and vol > 0.0
-    # empyrical: medel / std × √252 = (medel × 252) / volatilitet, riskfri ränta 0.
-    out["sharpe"] = float(empyrical.sharpe_ratio(returns, risk_free=0.0, period="daily")) if has_risk else None
+    # Sharpe som i appen: fönstrets totala kursutveckling i årstakt (365,2425 dagar, som CAGR) /
+    # volatiliteten, riskfri ränta 0. Inte empyrical.sharpe_ratio (medel × 252), som tappar
+    # rörelsen över luckor längre än MAX_NAV_GAP_DAYS.
+    if has_risk:
+        (d0, v0), (d1, v1) = window[1][0], window[1][-1]
+        window_return = (v1 / v0) ** (DAYS_PER_YEAR / (d1 - d0).days) - 1.0
+        out["window_annualized_return"] = window_return
+        out["sharpe"] = window_return / vol
+    else:
+        out["window_annualized_return"] = None
+        out["sharpe"] = None
     # Nedsidesrisk över alla perioder: √(medel(min(r, 0)²)) × √252; oändlig utan negativa dagar.
     out["sortino"] = float(empyrical.sortino_ratio(returns, required_return=0.0, period="daily")) if has_risk else None
     return out
@@ -505,7 +554,11 @@ def golden(fixture: dict) -> dict:
                 "days_per_year": DAYS_PER_YEAR,
                 "xirr_day_count": "ACT/365F",
                 "annualize_min_days": ANNUALIZE_MIN_DAYS,
-                "min_return_samples": MIN_RETURN_SAMPLES,
+                "min_window_coverage": MIN_WINDOW_COVERAGE,
+                "min_window_returns": {str(y): min_window_returns(y) for y in RISK_WINDOW_YEARS},
+                "max_return_gap_days": MAX_NAV_GAP_DAYS,
+                "max_window_gap_days": MAX_WINDOW_GAP_DAYS,
+                "risk_window_years": list(RISK_WINDOW_YEARS),
                 "risk_free_rate": 0.0,
                 "volatility_ddof": 1,
             },

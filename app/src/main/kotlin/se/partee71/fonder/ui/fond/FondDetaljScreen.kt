@@ -611,9 +611,13 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     fraction = analysis.keyFigures.portfolioShareFraction
                 )
             }
+            // Fönstret måtten räknats på (3 eller 1 år, ANA-7) står i etiketten; utan fönster är
+            // värdet otillräcklig data och den allmänna etiketten står kvar.
+            val riskWindowYears = analysis.keyFigures.riskWindowYears
             ExpandableInfoRow(explanation = stringResource(R.string.analys_volatility_explain)) {
                 PeriodRow(
-                    label = stringResource(R.string.analys_volatility_label),
+                    label = riskWindowYears?.let { stringResource(R.string.format_analys_volatility_label, it) }
+                        ?: stringResource(R.string.analys_volatility_label),
                     amount = null,
                     fraction = null,
                     valueText = analysis.keyFigures.annualizedVolatility?.let { MoneyFormat.percent(it) }
@@ -621,10 +625,17 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_sharpe_explain)) {
                 PeriodRow(
-                    label = stringResource(R.string.analys_sharpe_label),
+                    label = riskWindowYears?.let { stringResource(R.string.format_analys_sharpe_label, it) }
+                        ?: stringResource(R.string.analys_sharpe_label),
                     amount = null,
                     fraction = null,
-                    valueText = analysis.keyFigures.sharpeRatio?.let { MoneyFormat.decimal(it) }
+                    valueText = analysis.keyFigures.sharpeRatio?.let { MoneyFormat.decimal(it) },
+                    // Volatilitet 0: kvoten är odefinierad, inte otillräcklig data (ANA-7).
+                    insufficientText = if (analysis.keyFigures.sharpeUndefinedWithoutMovement) {
+                        stringResource(R.string.analys_sharpe_undefined)
+                    } else {
+                        null
+                    }
                 )
             }
         }

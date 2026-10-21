@@ -20,11 +20,14 @@ i UI-texten. Kraven står i KRAVLISTA; vid skillnad gäller kravlistan, och skil
 | Minsta period för årstakt | 365 dagar – kortare visas som total avkastning (GIPS) | `FundAnalysisCalc.CAGR_MIN_DAYS` |
 | Standardavvikelse | urval, n − 1 | `FundAnalysisCalc.annualizedVolatility` |
 | Riskfri ränta | 0 % | `FundAnalysisCalc.RISK_FREE_RATE` |
-| Minsta underlag för volatilitet och Sharpe | 60 dagsavkastningar, annars `null`; volatilitet 0 → `0.0`, Sharpe och Sortino → `null` | `FundAnalysisCalc.MIN_RETURN_SAMPLES` |
+| Fönster för volatilitet och Sharpe | 3 år bakåt från senaste kurs om det finns en kurs högst 5 dagar före den dagen, inget glapp i fönstret överstiger 31 dagar och fönstret är tillräckligt tätt (nästa rad), annars 1 år på samma villkor, annars `null`; fönstret börjar i den kursen. Oberoende av anroparens historik (issue #195) | `FundAnalysisCalc.RISK_WINDOW_YEARS`, `MAX_WINDOW_GAP_DAYS`, `riskWindow` |
+| Minsta underlag för volatilitet och Sharpe | 60 % av ≈ 252 × år handelsdagar som giltiga dagsavkastningar i fönstret (454 för 3 år, 152 för 1 år), annars nästa kortare fönster; volatilitet 0 → `0.0`, Sharpe och Sortino → `null` (UI: "Ej definierad (ingen kursrörelse)", `KeyFigures.sharpeUndefinedWithoutMovement`) | `FundAnalysisCalc.MIN_WINDOW_COVERAGE`, `minWindowReturns` |
+| Sharpe-täljare | Fönstrets totala kursutveckling i årstakt, `(NAV_slut / NAV_start)^(365,2425 / dagar) − 1` – inte medel(dagsavkastning) × 252, som tappar rörelsen över överhoppade luckor. Nämnaren är volatiliteten på de luckfiltrerade dagsavkastningarna | `FundAnalysisCalc.sharpeRatio` |
 | Dagräkning för XIRR | ACT/365F (som Excel och pyxirr); löses med inringning + bisektion i [−99,99 %, +1 000 %] | `PortfolioTotalCalc.XIRR_DAYS_PER_YEAR`, `PortfolioTotalCalc.xirr` |
-| Dagsavkastning | `nav_t / nav_{t−1} − 1` mellan på varandra följande kända kurser, NAV ≤ 0 hoppas över | `FundAnalysisCalc.dailyReturns` |
+| Dagsavkastning | `nav_t / nav_{t−1} − 1` mellan på varandra följande kända kurser högst 5 kalenderdagar isär (helg + helgdag); längre luckor hoppas över, NAV ≤ 0 hoppas över | `FundAnalysisCalc.dailyReturns`, `NavCalendar.MAX_NAV_GAP_DAYS` (samma gräns som periodstarten i `PortfolioPerformanceCalc`) |
+| Riskfri ränta i UI-texten | Sharpe-förklaringen säger att den är 0 % och att kvoten därför blir något högre än fondbolagens | `analys_sharpe_explain` |
 | Okänt värde | `null` och en räknare för det som uteslöts – aldrig noll eller en gissning | t.ex. `PortfolioFeeCalc.Result.unknownFeeCount` |
-| Analysens kurshistorik | Från fondens första transaktion eller `idag − (3 × 365 + 10)` dagar, det som ligger tidigast – samma fönster för läsning (Hem, Portfölj, Fonddetalj) och hämtning (backfill). "Sedan köp", GAV, CAGR och periodradernas kronor utgår ändå från köpet | `FundAnalysisCalc.analysisHistoryStart`, `ANALYSIS_LOOKBACK_DAYS` (issue #214) |
+| Analysens kurshistorik | Från fondens första transaktion eller `idag − (3 × 365 + 45)` dagar (marginalen rymmer treårsfönstret räknat från en senaste NAV som är några veckor gammal), det som ligger tidigast – samma fönster för läsning (Hem, Portfölj, Fonddetalj) och hämtning (backfill). "Sedan köp", GAV, CAGR och periodradernas kronor utgår ändå från köpet | `FundAnalysisCalc.analysisHistoryStart`, `ANALYSIS_LOOKBACK_DAYS` (issue #214) |
 
 Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyFormat`).
 
