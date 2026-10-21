@@ -28,22 +28,23 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
 import se.partee71.fonder.domain.usecase.SwitchOption
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.fonder.ui.theme.Filled
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.ui.common.EditorEvents
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.AppTopBar as LibraryTopBar
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.DateField
 import se.partee71.ui.components.EntityEditScreen
 import se.partee71.ui.components.TopBarSize
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 @Composable
 fun TransactionFormScreen(
@@ -130,7 +131,7 @@ fun TransactionFormContent(
         horizontalMargin = Spacing.l
     ) {
         state.followIntro?.let { intro ->
-            AppCard(variant = AppCardVariant.Filled, modifier = Modifier.fillMaxWidth()) {
+            AppCard(tone = Tone.Filled, modifier = Modifier.fillMaxWidth()) {
                 Text(followIntroText(intro), style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -232,7 +233,7 @@ private fun OwnedSharesRow(owned: Double, onSellAll: () -> Unit) {
             modifier = Modifier.weight(1f)
         )
         if (owned > 0.0) {
-            AppButton(stringResource(R.string.transaktionsform_sell_all), onSellAll, variant = AppButtonVariant.Outlined)
+            AppButton(stringResource(R.string.transaktionsform_sell_all), onSellAll, variant = ButtonVariant.Outlined)
         }
     }
 }

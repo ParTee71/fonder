@@ -28,8 +28,6 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.usecase.SwitchOption
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CheckRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
@@ -38,6 +36,8 @@ import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.SwitchDecisionField
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.DateField
 import se.partee71.ui.theme.Spacing

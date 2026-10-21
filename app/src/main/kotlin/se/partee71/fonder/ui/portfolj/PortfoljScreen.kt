@@ -25,7 +25,6 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExposureBar
@@ -39,6 +38,7 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import se.partee71.fonder.ui.transaktioner.firstTransactionActions
+import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.EmptyState
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing

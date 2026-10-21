@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -42,8 +40,6 @@ import se.partee71.fonder.ui.components.AppFabMenu
 import se.partee71.fonder.ui.components.AppFabMenuDefaults
 import se.partee71.fonder.ui.components.AppFabMenuItem
 import se.partee71.fonder.ui.components.AppFloatingToolbar
-import se.partee71.fonder.ui.components.AppIconButton
-import se.partee71.fonder.ui.components.AppIconButtonVariant
 import se.partee71.fonder.ui.components.AppTabHeading
 import se.partee71.fonder.ui.components.AppToolbarTab
 import se.partee71.fonder.ui.components.AppTopBar
@@ -59,10 +55,14 @@ import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.settings.SettingsViewModel
+import se.partee71.fonder.ui.theme.NeutralPrimary
 import se.partee71.fonder.ui.transaktioner.TransactionFormScreen
 import se.partee71.fonder.ui.transaktioner.TransaktionerScreen
+import se.partee71.ui.components.AppIconButton
+import se.partee71.ui.components.IconButtonVariant
 import se.partee71.ui.components.LocalTopBarStatus
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 /**
  * Appens navigering: skalet ([AppNavigationShell]) med Fonders skärmar ([fonderEntries]). Körstatusen
@@ -246,10 +246,11 @@ private fun TabHeading(tab: Screen, isWorkerRunning: Boolean, backStack: AppBack
         WorkerStatusIcon(isRunning = isWorkerRunning)
         when (tab) {
             Screen.Oversikt -> AppIconButton(
-                icon = Icons.Outlined.Settings,
+                icon = R.drawable.ic_settings,
                 contentDescription = stringResource(R.string.nav_settings),
                 onClick = { backStack.push(SettingsKey) },
-                variant = AppIconButtonVariant.Tonal
+                variant = IconButtonVariant.Tonal,
+                tone = Tone.NeutralPrimary
             )
 
             // Händelser är en ramskärm med egen rubrik och kommer inte hit (FrameKey).

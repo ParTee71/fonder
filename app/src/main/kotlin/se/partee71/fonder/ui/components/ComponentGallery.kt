@@ -3,7 +3,6 @@ package se.partee71.fonder.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -48,19 +46,38 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.fonder.ui.theme.Copper
+import se.partee71.fonder.ui.theme.Error
+import se.partee71.fonder.ui.theme.Filled
+import se.partee71.fonder.ui.theme.Gain
+import se.partee71.fonder.ui.theme.Neutral
+import se.partee71.fonder.ui.theme.NeutralPrimary
+import se.partee71.fonder.ui.theme.Tertiary
+import se.partee71.fonder.ui.theme.flushCardStyle
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.AppDivider
+import se.partee71.ui.components.AppIconButton
 import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.AppTopBar as LibraryTopBar
 import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.CardSegment
 import se.partee71.ui.components.ConfirmDialog
 import se.partee71.ui.components.DateField
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyState as LibraryEmptyState
+import se.partee71.ui.components.IconButtonVariant
+import se.partee71.ui.components.InfoPill
+import se.partee71.ui.components.ItemRow
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.components.LocalTopBarStatus
 import se.partee71.ui.components.R as UiR
+import se.partee71.ui.components.SectionHeader
 import se.partee71.ui.components.SwitchRow
 import se.partee71.ui.components.TopBarSize
+import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 /**
  * Alla Fonders delade komponenter (`ui/components`, `ui/diagram`) och de android-ui-delar appen
@@ -134,39 +151,41 @@ private fun Label(name: String) {
 
 @Composable
 private fun Buttons() {
-    Label("AppButton")
+    Label("AppButton (android-ui, Fonders knappstil)")
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         AppButton("Spara", {})
-        AppButton("Välj fond", {}, variant = AppButtonVariant.Tonal)
-        AppButton("Följ", {}, variant = AppButtonVariant.Outlined)
+        AppButton("Välj fond", {}, variant = ButtonVariant.Secondary)
+        AppButton("Följ", {}, variant = ButtonVariant.Outlined)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        AppButton("Avstå", {}, variant = AppButtonVariant.Text)
-        AppButton("Töm databasen", {}, variant = AppButtonVariant.Danger)
+        AppButton("Avstå", {}, variant = ButtonVariant.Text)
+        AppButton("Töm databasen", {}, variant = ButtonVariant.Destructive)
         AppButton("Spara", {}, enabled = false)
     }
-    Label("AppIconButton")
+    Label("AppIconButton (android-ui)")
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        AppIconButton(Icons.Outlined.Settings, "Inställningar", {}, variant = AppIconButtonVariant.Tonal)
-        AppIconButton(Icons.AutoMirrored.Outlined.List, "Händelser", {})
-        AppIconButton(Icons.Outlined.Home, "Översikt", {}, enabled = false)
+        AppIconButton(R.drawable.ic_settings, "Inställningar", {}, variant = IconButtonVariant.Tonal, tone = Tone.NeutralPrimary)
+        AppIconButton(UiR.drawable.ic_close, "Stäng", {})
+        AppIconButton(UiR.drawable.ic_arrow_back, "Tillbaka", {}, enabled = false)
     }
 }
 
 @Composable
 private fun CardsAndRows() {
-    Label("AppCard · CardTitleRow")
+    Label("SectionHeader (android-ui) · CardTitleRow")
+    SectionHeader(title = "Byten", count = "2 väntar på dig", working = true, workingDescription = "Uppdaterar Byten")
+    Label("AppCard (android-ui, Fonders kortstil)")
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        CardTitleRow(title = "Fondavgifter per år", working = true, style = MaterialTheme.typography.titleSmall)
-        Text("Kontur och 16 dp marginal (Outlined).", style = MaterialTheme.typography.bodySmall)
+        CardTitleRow(title = "Fondavgifter per år", working = true, style = AppTheme.typography.itemTitle)
+        Text("Kontur och 16 dp luft.", style = MaterialTheme.typography.bodySmall)
     }
-    AppCard(modifier = Modifier.fillMaxWidth(), variant = AppCardVariant.Filled, onClick = {}) {
-        Text("Klickbart och tonat (Filled).", style = MaterialTheme.typography.bodyMedium)
+    AppCard(modifier = Modifier.fillMaxWidth(), tone = Tone.Filled, onClick = {}) {
+        Text("Klickbart och tonat (Tone.Filled).", style = MaterialTheme.typography.bodyMedium)
     }
-    AppCard(modifier = Modifier.fillMaxWidth(), variant = AppCardVariant.Error) {
-        Text("Farozonen (Error).", color = MaterialTheme.colorScheme.onErrorContainer)
+    AppCard(modifier = Modifier.fillMaxWidth(), tone = Tone.Error, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
+        Text("Farozonen (Tone.Error).")
     }
-    Label("AppCard(groupPosition) · ItemRow")
+    Label("CardSegment · ItemRow · AppDivider (android-ui)")
     val rows = listOf(
         Triple("Köp", "Global Indexfond A", "+12 000 kr"),
         Triple("Sälj", "Tillväxt Norden", "−4 300 kr"),
@@ -174,24 +193,25 @@ private fun CardsAndRows() {
     )
     Column {
         rows.forEachIndexed { index, (type, fund, amount) ->
-            AppCard(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = AppCardNoPadding,
-                groupPosition = AppCardGroupPosition.of(index, rows.size)
-            ) {
+            CardSegment(top = index == 0, bottom = index == rows.lastIndex, style = flushCardStyle) {
                 ItemRow(
-                    headline = fund,
-                    overline = { Text(type, style = MaterialTheme.typography.labelSmall) },
-                    supporting = { Text("14 okt 2026", style = MaterialTheme.typography.bodySmall) },
+                    title = fund,
+                    subtitle = "14 okt 2026",
+                    overline = { Text(type, style = AppTheme.typography.caption) },
                     trailing = { Text(amount, style = MaterialTheme.typography.bodyMedium) }
                 )
             }
         }
     }
-    Label("StateChip · RiskBadge · ProfitTakeBadge · CountBadge · StatusDot")
-    StateChipTone.entries.chunked(CHIPS_PER_ROW).forEach { tones ->
+    AppCard(modifier = Modifier.fillMaxWidth(), style = flushCardStyle) {
+        ItemRow(title = "Mot riskprofil 4,00", subtitle = "Balanserad tillväxt · ISK/KF")
+        AppDivider()
+        ItemRow(title = "1 genomfört förslag", trailing = { Text("+1 240 kr", style = MaterialTheme.typography.bodyLarge) }, navigates = true, onClick = {})
+    }
+    Label("InfoPill (android-ui, 8 dp) · RiskBadge · ProfitTakeBadge · CountBadge · StatusDot")
+    galleryTones.chunked(CHIPS_PER_ROW).forEach { tones ->
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            tones.forEach { tone -> StateChip(text = tone.name, tone = tone) }
+            tones.forEach { (name, tone) -> InfoPill(text = name, tone = tone, shape = AppTheme.shapes.smallTile) }
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
@@ -341,7 +361,7 @@ private fun Dialogs() {
     var shown by remember { mutableStateOf<GalleryDialog?>(null) }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         GalleryDialog.entries.forEach { dialog ->
-            AppButton(dialog.label, { shown = dialog }, variant = AppButtonVariant.Tonal)
+            AppButton(dialog.label, { shown = dialog }, variant = ButtonVariant.Secondary)
         }
     }
     val close = { shown = null }
@@ -423,8 +443,15 @@ private const val LOADING_DIALOG_MS = 2_000L
 /** Plats för flikraden och plusmenyn i utfällt läge. */
 private val FAB_AREA_HEIGHT = 280.dp
 
-/** Kort utan inre marginal – raderna går ut i kanten (som Händelsers lista). */
-private val AppCardNoPadding = PaddingValues(0.dp)
+/** Fonders toner för märkena, med namnen galleriet visar. */
+private val galleryTones = listOf(
+    "Primary" to Tone.Primary,
+    "Copper" to Tone.Copper,
+    "Gain" to Tone.Gain,
+    "Tertiary" to Tone.Tertiary,
+    "Neutral" to Tone.Neutral,
+    "Filled" to Tone.Filled
+)
 
 /** Påhittad analys för statusbannern och vägledningen (aldrig riktiga innehav). */
 private val galleryAnalysis = FundAnalysisCalc.Analysis(

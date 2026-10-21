@@ -138,7 +138,8 @@ ui/
 │                 Transitions · DecisionBadgeViewModel (Beslut-flikens märke, NAV-9)
 ├── components/   Delade komponenter (EmptyState, SelectField, LoadingDialog, PeriodRow, AnalysisStatusBanner/StatusDot,
 │                 ExposureBar — proportionell radlista, POR-9/#66 · ChoiceChipRow — val-chiprad, #68 ·
-│                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge — risknivå 1–7, UI-10/#85 …)
+│                 ExpandableSection/ExpandableInfoRow — utfällning, #22/#85 · RiskBadge/ProfitTakeBadge — på android-ui:s InfoPill, UI-10/#85 …;
+│                 knappar, kort, listrader, märken, avsnittsrubriker och avdelare är android-ui:s sedan 0.77.0)
 ├── diagram/      Delade diagram (FundLineChart — en eller flera indexerade serier, ANA-11/#85)
 └── theme/        Fonders värden till android-ui:s AppTheme: palett, former, Space Grotesk-typskala, ReturnColors/StatusColors (#16, #172)
 worker/           FundPriceUpdateWorker (daglig kursuppdatering + inkrementell jämförelseifyllnad, HEM-6/#61 ·

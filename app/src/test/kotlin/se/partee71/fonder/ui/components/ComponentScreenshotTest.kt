@@ -98,22 +98,6 @@ class ComponentScreenshotTest {
     }
 
     @Test
-    fun `StateChip i alla toner`() = composeRule.captureLightAndDark("StateChip_tones") {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StateChip(text = "Föreslaget", tone = StateChipTone.Primary)
-                StateChip(text = "Sålt · dag 2 av 14", tone = StateChipTone.Accent)
-                StateChip(text = "Köpt 7 okt", tone = StateChipTone.Gain)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StateChip(text = "Avgift", tone = StateChipTone.Tertiary)
-                StateChip(text = "Avstått", tone = StateChipTone.Neutral)
-                StateChip(text = "Utgånget", tone = StateChipTone.Neutral)
-            }
-        }
-    }
-
-    @Test
     fun `ExposureBar mål och utfall`() = composeRule.captureLightAndDark("ExposureBar_default") {
         Column {
             ExposureBar(label = "Aktiefonder", fraction = 0.75)

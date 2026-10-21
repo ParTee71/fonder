@@ -22,8 +22,8 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.usecase.AnalysisGuidance
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.theme.StatusColors
+import se.partee71.ui.components.AppCard
 
 /**
  * Delade byggstenar för att visa [FundAnalysisCalc]-status (issue #16, regel 4) — återanvänds

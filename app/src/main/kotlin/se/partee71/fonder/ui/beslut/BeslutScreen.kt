@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,22 +40,30 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.domain.usecase.SwitchRowState
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableSection
-import se.partee71.fonder.ui.components.ItemRow
-import se.partee71.fonder.ui.components.StateChip
-import se.partee71.fonder.ui.components.StateChipTone
 import se.partee71.fonder.ui.riskprofil.labelRes
 import se.partee71.fonder.ui.settings.labelRes
+import se.partee71.fonder.ui.theme.Copper
+import se.partee71.fonder.ui.theme.Gain
 import se.partee71.fonder.ui.theme.MonoAmountStyle
+import se.partee71.fonder.ui.theme.Neutral
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.fonder.ui.theme.Tertiary
+import se.partee71.fonder.ui.theme.flushCardStyle
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.AppDivider
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.InfoPill
+import se.partee71.ui.components.ItemRow
+import se.partee71.ui.components.ItemRowText
 import se.partee71.ui.components.LoadErrorState
+import se.partee71.ui.components.SectionHeader
+import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 /** Gör Besluts lista adresserbar för `performScrollToIndex` i tester (UI-5, samma mönster som Hem och Facit). */
 const val BESLUT_LIST_TEST_TAG = "beslut_list"
@@ -172,13 +176,9 @@ fun BeslutContent(
                         ),
                         onClick = onRecomputeSwitchPlan,
                         enabled = !state.backgroundWorkRunning,
-                        variant = AppButtonVariant.Text
+                        variant = ButtonVariant.Text
                     )
-                    Text(
-                        stringResource(R.string.switch_plan_recompute_explain),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    ItemRowText(title = null, subtitle = stringResource(R.string.switch_plan_recompute_explain))
                 }
             }
         }
@@ -195,85 +195,64 @@ fun BeslutContent(
 }
 
 /**
- * "Mot riskprofil 4,00 · Balanserad tillväxt · ISK/KF · Ändra" — vad förslagen räknas mot. Målet
- * och kontotypen utelämnas när de inte är satta i stället för att gissas; utan profil sägs det ut.
+ * "Mot riskprofil 4,00" med "Balanserad tillväxt · ISK/KF" under och "Ändra" till höger — vad förslagen
+ * räknas mot. Målet och kontotypen utelämnas när de inte är satta i stället för att gissas; utan profil
+ * sägs det ut.
  */
 @Composable
 private fun ProfileHeader(riskProfile: RiskProfile?, accountType: AccountType?, onChange: () -> Unit) {
-    val parts = buildList {
-        val level = riskProfile?.weightedTargetLevel
-        add(
-            if (level != null) {
-                stringResource(R.string.format_beslut_risk_profile, MoneyFormat.decimal(level))
-            } else {
-                stringResource(R.string.beslut_no_risk_profile)
-            }
-        )
-        riskProfile?.answers?.goal?.let { add(stringResource(it.labelRes())) }
-        accountType?.let { add(stringResource(it.labelRes())) }
+    val level = riskProfile?.weightedTargetLevel
+    val title = if (level != null) {
+        stringResource(R.string.format_beslut_risk_profile, MoneyFormat.decimal(level))
+    } else {
+        stringResource(R.string.beslut_no_risk_profile)
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.s),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            parts.joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        AppButton(
-            text = stringResource(R.string.beslut_change_risk_profile),
-            onClick = onChange,
-            variant = AppButtonVariant.Text
-        )
-    }
+    val details = listOfNotNull(
+        riskProfile?.answers?.goal?.let { stringResource(it.labelRes()) },
+        accountType?.let { stringResource(it.labelRes()) }
+    )
+    ItemRow(
+        title = title,
+        subtitle = details.joinToString(" · ").ifEmpty { null },
+        modifier = Modifier.padding(horizontal = Spacing.xs),
+        trailing = {
+            AppButton(
+                text = stringResource(R.string.beslut_change_risk_profile),
+                onClick = onChange,
+                variant = ButtonVariant.Text
+            )
+        }
+    )
 }
 
-/** Avsnittsrubrik med plats för en väntesnurra (NAV-6) — samma rubrikrad som korten använder. */
+/**
+ * Avsnittsrubrik (20 sp) med plats för väntesnurran (NAV-6) och ett antal i en rund pill – android-ui:s
+ * [SectionHeader], i linje med korten under.
+ */
 @Composable
-private fun SectionHeading(title: String, working: Boolean = false) {
-    CardTitleRow(
+private fun SectionHeading(title: String, working: Boolean = false, count: String? = null) {
+    SectionHeader(
         title = title,
+        modifier = Modifier.padding(start = Spacing.m, end = Spacing.m, top = Spacing.m),
+        count = count,
         working = working,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier
-            .padding(start = Spacing.l, end = Spacing.l, top = Spacing.l, bottom = Spacing.xs)
-            .semantics { heading() }
+        workingDescription = stringResource(R.string.format_card_working, title)
     )
 }
 
 @Composable
 private fun CaptionText(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)
-    )
+    ItemRowText(title = null, subtitle = text, modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s))
 }
 
-/** "Byten · N väntar på dig" — listans rubrik med väntesnurran (NAV-6) och antalet som väntar. */
+/** "Byten · N väntar på dig" — listans rubrik med väntesnurran (NAV-6) och antalet som väntar i en pill. */
 @Composable
 private fun SwitchesHeading(waiting: Int, working: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.l, bottom = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        CardTitleRow(
-            title = stringResource(R.string.beslut_switches_title),
-            working = working,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f).semantics { heading() }
-        )
-        if (waiting > 0) {
-            Text(
-                stringResource(R.string.format_beslut_switches_waiting, waiting),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    SectionHeading(
+        title = stringResource(R.string.beslut_switches_title),
+        working = working,
+        count = if (waiting > 0) stringResource(R.string.format_beslut_switches_waiting, waiting) else null
+    )
 }
 
 /** Chipets text och ton för en rad (BYT-4) — tillståndet står alltid i text (UI-3). */
@@ -301,13 +280,13 @@ private fun SwitchRowChip(row: SwitchRow) {
         SwitchRowState.DISMISSED -> stringResource(R.string.switch_state_dismissed)
     }
     val tone = when (row.state) {
-        SwitchRowState.PROPOSED -> StateChipTone.Primary
-        SwitchRowState.FEE -> StateChipTone.Tertiary
-        SwitchRowState.SOLD -> StateChipTone.Accent
-        SwitchRowState.BOUGHT -> StateChipTone.Gain
-        SwitchRowState.CANCELLED, SwitchRowState.EXPIRED, SwitchRowState.DISMISSED -> StateChipTone.Neutral
+        SwitchRowState.PROPOSED -> Tone.Primary
+        SwitchRowState.FEE -> Tone.Tertiary
+        SwitchRowState.SOLD -> Tone.Copper
+        SwitchRowState.BOUGHT -> Tone.Gain
+        SwitchRowState.CANCELLED, SwitchRowState.EXPIRED, SwitchRowState.DISMISSED -> Tone.Neutral
     }
-    StateChip(text = text, tone = tone)
+    InfoPill(text = text, tone = tone, shape = AppTheme.shapes.smallTile)
 }
 
 /** "7 okt" — dag och kort månad på svenska, utan punkt. */
@@ -335,7 +314,7 @@ private fun SwitchRowCard(
 ) {
     AppCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.xs),
-        contentPadding = PaddingValues(bottom = Spacing.s)
+        style = flushCardStyle
     ) {
         when (row) {
             is SwitchRow.Suggested -> SuggestedRow(row, onFollow, onStartSwitchWatch, onDismiss)
@@ -352,26 +331,16 @@ private fun SwitchRowCard(
 @Composable
 private fun SwitchRowText(row: SwitchRow, origin: String, title: String, details: List<String>, lead: (@Composable () -> Unit)? = null) {
     ItemRow(
-        headline = title,
-        headlineStyle = MaterialTheme.typography.titleSmall,
+        title = title,
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        subtitle = details.joinToString(" · ").ifEmpty { null },
         overline = {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                 SwitchRowChip(row)
-                Text(origin, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(origin, style = AppTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        supporting = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                if (details.isNotEmpty()) {
-                    Text(
-                        details.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                lead?.invoke()
-            }
-        }
+        below = lead
     )
 }
 
@@ -379,7 +348,7 @@ private fun SwitchRowText(row: SwitchRow, origin: String, title: String, details
 @Composable
 private fun SwitchRowActions(content: @Composable () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.s, end = Spacing.s, bottom = Spacing.s),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s, Alignment.End),
         verticalAlignment = Alignment.CenterVertically
     ) { content() }
@@ -430,20 +399,20 @@ private fun SuggestedRow(
                 AppButton(
                     text = stringResource(R.string.switch_watch_start),
                     onClick = { onStartSwitchWatch(suggestion) },
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
         } else {
             AppButton(
                 text = stringResource(R.string.beslut_dismiss),
                 onClick = { onDismiss(suggestion) },
-                variant = AppButtonVariant.Text,
+                variant = ButtonVariant.Text,
                 contentDescription = stringResource(R.string.format_beslut_dismiss_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
             AppButton(
                 text = stringResource(R.string.beslut_register_sale),
                 onClick = { onFollow(suggestion) },
-                variant = AppButtonVariant.Outlined,
+                variant = ButtonVariant.Outlined,
                 contentDescription = stringResource(R.string.format_beslut_register_sale_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
         }
@@ -474,7 +443,7 @@ private fun SoldRow(row: SwitchRow.Sold, onOpen: (Long) -> Unit) {
         AppButton(
             text = stringResource(R.string.beslut_open_watch),
             onClick = { onOpen(watch.watchId) },
-            variant = AppButtonVariant.Outlined,
+            variant = ButtonVariant.Outlined,
             contentDescription = stringResource(R.string.format_beslut_open_watch_a11y, watch.sellFundName)
         )
     }
@@ -524,13 +493,12 @@ private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Sug
         modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s, bottom = Spacing.s)
     ) {
         Column {
-            Text(
-                stringResource(R.string.format_beslut_closed_explain, SwitchWatchCalc.WATCH_TTL_DAYS, SuggestionDismissals.TTL_DAYS),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ItemRowText(
+                title = null,
+                subtitle = stringResource(R.string.format_beslut_closed_explain, SwitchWatchCalc.WATCH_TTL_DAYS, SuggestionDismissals.TTL_DAYS)
             )
             rows.forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s))
+                AppDivider(Modifier.padding(top = Spacing.s))
                 ClosedRow(row, onUndo)
             }
         }
@@ -551,15 +519,14 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
         is SwitchRow.Suggested, is SwitchRow.Sold -> return
     }
     ItemRow(
-        headline = title,
-        headlineStyle = MaterialTheme.typography.bodyMedium,
+        title = title,
         leading = { SwitchRowChip(row) },
         trailing = if (row is SwitchRow.Dismissed) {
             {
                 AppButton(
                     text = stringResource(R.string.beslut_undo_dismissal),
                     onClick = { onUndo(row.suggestion) },
-                    variant = AppButtonVariant.Text,
+                    variant = ButtonVariant.Text,
                     contentDescription = stringResource(
                         R.string.format_beslut_undo_dismissal_a11y,
                         row.suggestion.sellFundName,
@@ -582,28 +549,24 @@ private fun ClosedRow(row: SwitchRow, onUndo: (SwitchPlanResolver.Suggestion) ->
 @Composable
 private fun FacitRow(followedCount: Int, followedExcessKr: Double?, onOpen: () -> Unit) {
     AppCard(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.xs, bottom = Spacing.l)
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.xs, bottom = Spacing.l),
+        style = flushCardStyle
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                pluralStringResource(R.plurals.format_beslut_facit_row, followedCount, followedCount),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            if (followedCount > 0 && followedExcessKr != null) {
-                Text(
-                    MoneyFormat.krSigned(followedExcessKr),
-                    style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                    color = ReturnColors.forAmount(followedExcessKr),
-                    modifier = Modifier.padding(start = Spacing.s)
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        ItemRow(
+            title = pluralStringResource(R.plurals.format_beslut_facit_row, followedCount, followedCount),
+            trailing = if (followedCount > 0 && followedExcessKr != null) {
+                {
+                    Text(
+                        MoneyFormat.krSigned(followedExcessKr),
+                        style = MonoAmountStyle.merge(MaterialTheme.typography.bodyLarge),
+                        color = ReturnColors.forAmount(followedExcessKr)
+                    )
+                }
+            } else {
+                null
+            },
+            navigates = true,
+            onClick = onOpen
+        )
     }
 }

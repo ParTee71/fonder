@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,10 +29,6 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppIconButton
 import se.partee71.fonder.ui.components.CheckRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.EmptyState
@@ -43,8 +37,13 @@ import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.AppIconButton
 import se.partee71.ui.components.AppTextField
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.DateField
+import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
 
 // Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
@@ -223,7 +222,7 @@ private fun ImportRowCard(
                 }
                 if (rowState.occasions.size > 1) {
                     AppIconButton(
-                        icon = Icons.Filled.Close,
+                        icon = UiR.drawable.ic_close,
                         contentDescription = stringResource(R.string.import_remove_occasion),
                         onClick = { onRemoveOccasion(index) }
                     )
@@ -234,7 +233,7 @@ private fun ImportRowCard(
             text = stringResource(R.string.import_add_occasion),
             onClick = onAddOccasion,
             modifier = Modifier.padding(top = Spacing.xs),
-            variant = AppButtonVariant.Text
+            variant = ButtonVariant.Text
         )
         if (rowState.sharesMismatch) {
             Text(

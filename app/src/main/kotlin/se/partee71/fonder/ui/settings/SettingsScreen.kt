@@ -14,7 +14,6 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,14 +40,20 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
+import se.partee71.fonder.ui.theme.Error
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.AppDivider
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.ConfirmDialog
+import se.partee71.ui.components.FieldError
+import se.partee71.ui.components.ItemRowText
+import se.partee71.ui.components.SectionHeader
+import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 /** Säkerhetskopieringskortet — målet för Hems påminnelse (HEM-12), adresserbart i tester. */
 const val SETTINGS_BACKUP_CARD_TEST_TAG = "settings_backup_card"
@@ -191,11 +196,7 @@ fun SettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(Spacing.l)
     ) {
-        Text(
-            stringResource(R.string.settings_theme_section),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(vertical = Spacing.s)
-        )
+        SectionHeader(title = stringResource(R.string.settings_theme_section), modifier = Modifier.padding(bottom = Spacing.s))
         ChoiceChipRow(
             options = ThemeMode.entries,
             selected = state.themeMode,
@@ -204,24 +205,12 @@ fun SettingsContent(
         )
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.xl)) {
-            Text(stringResource(R.string.settings_riskprofile_section), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(R.string.settings_riskprofile_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = stringResource(R.string.settings_riskprofile_section), subtitle = stringResource(R.string.settings_riskprofile_body), modifier = Modifier.padding(bottom = Spacing.s))
             AppButton(text = stringResource(R.string.settings_riskprofile_button), onClick = onOpenRiskProfile)
         }
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-            Text(stringResource(R.string.settings_account_type_section), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(R.string.settings_account_type_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = stringResource(R.string.settings_account_type_section), subtitle = stringResource(R.string.settings_account_type_body), modifier = Modifier.padding(bottom = Spacing.s))
             ChoiceChipRow(
                 options = AccountType.entries,
                 selected = state.accountType,
@@ -233,7 +222,7 @@ fun SettingsContent(
         // Jämförelsereferensen (HEM-10, issue #102) — appens val är ett förslag, användarens
         // val vinner. Raden säger alltid vilket av de två som gäller just nu.
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-            Text(stringResource(R.string.settings_benchmark_section), style = MaterialTheme.typography.titleSmall)
+            ItemRowText(title = stringResource(R.string.settings_benchmark_section), subtitle = null)
             Text(
                 state.chosenBenchmarkName
                     ?.let { stringResource(R.string.format_settings_benchmark_chosen, it) }
@@ -241,19 +230,9 @@ fun SettingsContent(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Spacing.s)
             )
-            Text(
-                stringResource(R.string.settings_benchmark_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_benchmark_body), modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s))
             if (state.benchmarkPickFailed) {
-                Text(
-                    stringResource(R.string.settings_benchmark_pick_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = Spacing.s)
-                )
+                FieldError(stringResource(R.string.settings_benchmark_pick_failed), modifier = Modifier.padding(bottom = Spacing.s))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 AppButton(text = stringResource(R.string.settings_benchmark_button), onClick = onOpenBenchmarkPicker)
@@ -261,20 +240,14 @@ fun SettingsContent(
                     AppButton(
                         text = stringResource(R.string.settings_benchmark_clear),
                         onClick = onClearBenchmark,
-                        variant = AppButtonVariant.Text
+                        variant = ButtonVariant.Text
                     )
                 }
             }
         }
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-            Text(stringResource(R.string.settings_facit_section), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(R.string.settings_facit_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = stringResource(R.string.settings_facit_section), subtitle = stringResource(R.string.settings_facit_body), modifier = Modifier.padding(bottom = Spacing.s))
             AppButton(text = stringResource(R.string.settings_facit_button), onClick = onOpenFacit)
         }
 
@@ -282,20 +255,10 @@ fun SettingsContent(
             CardTitleRow(
                 title = stringResource(R.string.settings_price_update_section),
                 working = state.priceRefreshWorking,
-                style = MaterialTheme.typography.titleSmall
+                style = AppTheme.typography.itemTitle
             )
-            Text(
-                stringResource(R.string.settings_price_update_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
-            Text(
-                lastPriceSyncText(state.lastPriceSyncEpochMillis),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = Spacing.s)
-            )
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_price_update_body), modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s))
+            ItemRowText(title = null, subtitle = lastPriceSyncText(state.lastPriceSyncEpochMillis), modifier = Modifier.padding(bottom = Spacing.s))
             // Ingen "Uppdatera nu"-knapp längre (SET-2 struken): uppdatering sker med en
             // dragning där datan faktiskt visas (UI-11), inte tre skärmar bort under en
             // inställningsrubrik. Raden ovan står kvar — den svarar på "hur färsk är datan",
@@ -309,7 +272,7 @@ fun SettingsContent(
             CardTitleRow(
                 title = stringResource(R.string.settings_account_section),
                 working = state.signInInProgress,
-                style = MaterialTheme.typography.titleSmall
+                style = AppTheme.typography.itemTitle
             )
             Text(
                 state.googleUser?.let { user ->
@@ -321,26 +284,16 @@ fun SettingsContent(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Spacing.s)
             )
-            Text(
-                stringResource(R.string.settings_account_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_account_body), modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s))
             // Ett avbrutet kontoval är inget fel och når aldrig hit — se
             // SettingsViewModel.signIn. Kvitteras bort som övriga engångshändelser (#78).
             state.signInError?.let { error ->
-                Text(
-                    stringResource(error.message),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = Spacing.xs)
-                )
+                FieldError(stringResource(error.message), modifier = Modifier.padding(bottom = Spacing.xs))
                 AppButton(
                     text = stringResource(R.string.close),
                     onClick = onSignInErrorDismissed,
                     modifier = Modifier.padding(bottom = Spacing.xs),
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
             if (state.googleUser == null) {
@@ -354,30 +307,18 @@ fun SettingsContent(
                     text = stringResource(R.string.settings_account_sign_out_button),
                     onClick = onSignOut,
                     enabled = !state.signInInProgress,
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
         }
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-            Text(stringResource(R.string.settings_import_section), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(R.string.settings_import_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = stringResource(R.string.settings_import_section), subtitle = stringResource(R.string.settings_import_body), modifier = Modifier.padding(bottom = Spacing.s))
             AppButton(text = stringResource(R.string.settings_import_button), onClick = onImportHoldings)
         }
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-            Text(stringResource(R.string.settings_import_orders_section), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(R.string.settings_import_orders_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            ItemRowText(title = stringResource(R.string.settings_import_orders_section), subtitle = stringResource(R.string.settings_import_orders_body), modifier = Modifier.padding(bottom = Spacing.s))
             AppButton(text = stringResource(R.string.settings_import_orders_button), onClick = onImportOrders)
         }
 
@@ -391,22 +332,12 @@ fun SettingsContent(
             CardTitleRow(
                 title = stringResource(R.string.settings_backup_section),
                 working = state.backupInProgress,
-                style = MaterialTheme.typography.titleSmall
+                style = AppTheme.typography.itemTitle
             )
-            Text(
-                stringResource(R.string.settings_backup_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs)
-            )
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_backup_body), modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs))
             // En rad för båda transporterna: det är samma kopia, och det är den Hems
             // påminnelse (HEM-12) räknar från.
-            Text(
-                lastBackupText(state.lastBackup),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = Spacing.s)
-            )
+            ItemRowText(title = null, subtitle = lastBackupText(state.lastBackup), modifier = Modifier.padding(bottom = Spacing.s))
             // Meddelandet läses direkt ur tillståndet och kvitteras i ViewModel:en, av samma
             // skäl som "databasen tömd" nedan: en engångshändelse lagrad som bestående
             // tillstånd spelas upp igen vid varje rotation och återbesök (issue #78).
@@ -420,7 +351,7 @@ fun SettingsContent(
                     text = stringResource(R.string.close),
                     onClick = onBackupMessageDismissed,
                     modifier = Modifier.padding(bottom = Spacing.xs),
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
             Row {
@@ -434,31 +365,18 @@ fun SettingsContent(
                     onClick = { showRestoreConfirm = true },
                     enabled = !state.backupInProgress,
                     modifier = Modifier.padding(start = Spacing.s),
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
 
             // Molnbackupen (SET-7) ligger i samma kort som filbackupen, inte i ett eget:
             // det är samma data och samma kontrakt, bara en annan transport. Två kort hade
             // antytt två sorters säkerhetskopia.
-            HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
-            Text(
-                stringResource(R.string.settings_drive_backup_title),
-                style = MaterialTheme.typography.titleSmall
-            )
-            Text(
-                stringResource(R.string.settings_drive_backup_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-            )
+            AppDivider(Modifier.padding(vertical = Spacing.m))
+            ItemRowText(title = stringResource(R.string.settings_drive_backup_title), subtitle = null)
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_drive_backup_body), modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s))
             if (state.driveBackupNeedsAuth) {
-                Text(
-                    stringResource(R.string.settings_drive_backup_needs_auth),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = Spacing.s)
-                )
+                FieldError(stringResource(R.string.settings_drive_backup_needs_auth), modifier = Modifier.padding(bottom = Spacing.s))
             }
             Row {
                 AppButton(
@@ -471,31 +389,26 @@ fun SettingsContent(
                     onClick = { showDriveRestoreConfirm = true },
                     enabled = !state.backupInProgress,
                     modifier = Modifier.padding(start = Spacing.s),
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
         }
 
         if (onOpenGallery != null) {
             AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
-                Text(stringResource(R.string.component_gallery_title), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.settings_components_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
-                )
+                ItemRowText(title = stringResource(R.string.component_gallery_title), subtitle = stringResource(R.string.settings_components_body), modifier = Modifier.padding(bottom = Spacing.s))
                 AppButton(text = stringResource(R.string.settings_components_button), onClick = onOpenGallery)
             }
         }
 
         AppCard(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.l),
-            variant = AppCardVariant.Error
+            tone = Tone.Error,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         ) {
             Text(
                 stringResource(R.string.settings_danger_section),
-                style = MaterialTheme.typography.titleSmall,
+                style = AppTheme.typography.itemTitle,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
             Text(
@@ -519,13 +432,13 @@ fun SettingsContent(
                     text = stringResource(R.string.close),
                     onClick = onClearedMessageDismissed,
                     modifier = Modifier.padding(bottom = Spacing.xs),
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
             }
             AppButton(
                 text = stringResource(R.string.settings_clear_database_button),
                 onClick = { showClearConfirm = true },
-                variant = AppButtonVariant.Danger
+                variant = ButtonVariant.Destructive
             )
         }
     }

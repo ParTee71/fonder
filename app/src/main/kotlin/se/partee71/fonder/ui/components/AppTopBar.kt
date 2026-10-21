@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +20,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import se.partee71.fonder.R
+import se.partee71.ui.components.AppIconButton
+import se.partee71.ui.components.R as UiR
 
 /**
  * Topprad för en skärm **djupare** i stacken (UI-8, UI-14): bakåtpil och rubrik, med valfria
@@ -41,7 +41,8 @@ fun AppTopBar(
         modifier = modifier,
         navigationIcon = {
             AppIconButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                // Samma pil som ramarnas topprad (android-ui), genomskinlig som LocalTopBarBackStyle i FonderTheme.
+                icon = UiR.drawable.ic_arrow_back,
                 contentDescription = stringResource(R.string.back),
                 onClick = onBack
             )

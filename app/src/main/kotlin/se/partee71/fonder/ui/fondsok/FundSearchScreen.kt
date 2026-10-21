@@ -15,11 +15,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.fonder.ui.theme.ListFrameCards
+import se.partee71.ui.components.AppButton
 import se.partee71.ui.components.AppTextField
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyContent
 import se.partee71.ui.components.EntityListScreen
 import se.partee71.ui.components.ItemRow
@@ -80,33 +81,35 @@ fun FundSearchContent(
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    EntityListScreen(
-        title = title,
-        state = state.list,
-        empty = EmptyContent(
-            icon = R.drawable.ic_search,
-            title = stringResource(R.string.fondsok_empty_title),
-            message = stringResource(R.string.fondsok_empty_body)
-        ),
-        add = null,
-        key = { it.fundId },
-        modifier = modifier,
-        onRetry = onRetry,
-        onBack = onBack,
-        filter = { SearchFields(state, onCompanySelected, onQueryChange) },
-        topBarSize = TopBarSize.Small,
-        refreshing = state.refreshing,
-        onRefresh = onRefresh,
-        // Nätverksfel och "inga träffar" är skilda lägen (issue #78) – felet säger att det är listan som inte kom.
-        errorTitle = stringResource(R.string.fondsok_load_failed_title)
-    ) { fund ->
-        FundResultRow(
-            fund = fund,
-            added = onPickFund == null && fund.fundId in state.addedFundIds,
-            riskLevel = state.riskLevels[fund.fundId],
-            actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
-            onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) }
-        )
+    ListFrameCards { _ ->
+        EntityListScreen(
+            title = title,
+            state = state.list,
+            empty = EmptyContent(
+                icon = R.drawable.ic_search,
+                title = stringResource(R.string.fondsok_empty_title),
+                message = stringResource(R.string.fondsok_empty_body)
+            ),
+            add = null,
+            key = { it.fundId },
+            modifier = modifier,
+            onRetry = onRetry,
+            onBack = onBack,
+            filter = { SearchFields(state, onCompanySelected, onQueryChange) },
+            topBarSize = TopBarSize.Small,
+            refreshing = state.refreshing,
+            onRefresh = onRefresh,
+            // Nätverksfel och "inga träffar" är skilda lägen (issue #78) – felet säger att det är listan som inte kom.
+            errorTitle = stringResource(R.string.fondsok_load_failed_title)
+        ) { fund ->
+            FundResultRow(
+                fund = fund,
+                added = onPickFund == null && fund.fundId in state.addedFundIds,
+                riskLevel = state.riskLevels[fund.fundId],
+                actionLabelRes = if (onPickFund == null) R.string.add else R.string.fondsok_pick,
+                onAction = { onPickFund?.invoke(fund) ?: onAddFund(fund) }
+            )
+        }
     }
 }
 
@@ -159,7 +162,7 @@ private fun FundResultRow(
                 AppButton(
                     text = actionLabel,
                     onClick = onAction,
-                    variant = AppButtonVariant.Text,
+                    variant = ButtonVariant.Text,
                     contentDescription = stringResource(R.string.format_fondsok_action, actionLabel, fund.name)
                 )
             }
