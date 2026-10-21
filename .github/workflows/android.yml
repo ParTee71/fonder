@@ -71,6 +71,9 @@ jobs:
             app:
               - 'core/src/**'
               - 'core/build.gradle.kts'
+              # TaxCalcTest läser ISK-parametrarna här (issue #199) – en ändring där ska prövas av :core:test.
+              - 'tools/fondmatte/**'
+              - '.claude/skills/fondmatematik/**'
               - 'app/src/**'
               - 'app/build.gradle.kts'
               - 'config/**'

@@ -1,9 +1,12 @@
 package se.partee71.fonder.ui.transaktioner
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -19,15 +22,22 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.data.repository.FakeTransactionRepository
+import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
+import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -48,6 +58,15 @@ class TransaktionerViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    /** Kontotypen (SET-4) styr årskortets skatt (TRX-8) — en riktig DataStore på testets dispatcher, som i HemViewModelTest. */
+    private lateinit var preferencesRepository: PreferencesRepository
+
+    /** Kurscachen för schablonintäkten den 1 januari (TRX-8). */
+    private val fakePriceRepo = FakeCachedPriceRepository()
+
     private val fund = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige")
     private val funds = MutableStateFlow(listOf(fund))
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
@@ -66,7 +85,7 @@ class TransaktionerViewModelTest {
     /** Fast "idag" så att årets resultat inte beror på när testet körs. */
     private val today = LocalDate.of(2026, 10, 11)
 
-    private fun viewModel(repo: TransactionRepository = fakeRepo) = TransaktionerViewModel(
+    private fun viewModel(repo: TransactionRepository = fakeRepo, prices: FundPriceRepository = fakePriceRepo) = TransaktionerViewModel(
         repo,
         fakeSwitchWatchRepo,
         RecordTransaction(
@@ -76,7 +95,9 @@ class TransaktionerViewModelTest {
             fakeMetadataRepo,
             scheduler,
             testTargetLevelPreselection(repo, fakeSwitchWatchRepo)
-        )
+        ),
+        preferencesRepository,
+        prices
     ) { today }
 
     private fun kop(id: Long, day: Long, shares: Double, price: Double, fundId: String = fund.fundId) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
@@ -90,7 +111,16 @@ class TransaktionerViewModelTest {
         return state
     }
 
-    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+        preferencesRepository = PreferencesRepository(
+            PreferenceDataStoreFactory.create(
+                scope = CoroutineScope(dispatcher + SupervisorJob()),
+                produceFile = { tempFolder.newFile("transaktioner_test.preferences_pb") }
+            )
+        )
+    }
 
     @After fun tearDown() = Dispatchers.resetMain()
 
@@ -224,6 +254,99 @@ class TransaktionerViewModelTest {
             assertEquals(0.3, state.yearRealized.realizedGainFraction!!, 1e-9)
             assertEquals(400.0, state.totalRealized.realizedGain, 1e-9)
             assertTrue(state.showRealizedCard)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Ungefärlig skatt i depå/AF (TRX-8, issue #199) ---
+
+    private val fundY = Fund(fundId = "SHB0000999", name = "Tillväxtmarknad Bred")
+
+    private fun epochDay(year: Int, month: Int, dayOfMonth: Int) = LocalDate.of(year, month, dayOfMonth).toEpochDay()
+
+    /**
+     * Två fonder köpta 2025 (200 à 100 kr och 100 à 300 kr), sålda i år med vinst 12 000 kr och
+     * förlust 2 400 kr; kurserna föregående bankdag, 150 kr (30 december) och 250 kr (31 december),
+     * ger 55 000 kr den 1 januari. Kursen 2 januari används inte.
+     */
+    private fun setUpDepaYear() {
+        funds.value = listOf(fund, fundY)
+        transactions.value = listOf(
+            salj(id = 4, day = epochDay(2026, 8, 3), shares = 40.0, price = 240.0, fundId = fundY.fundId),
+            salj(id = 3, day = epochDay(2026, 5, 12), shares = 120.0, price = 200.0),
+            kop(id = 2, day = epochDay(2025, 4, 1), shares = 100.0, price = 300.0, fundId = fundY.fundId),
+            kop(id = 1, day = epochDay(2025, 3, 3), shares = 200.0, price = 100.0)
+        )
+        fakePriceRepo.priceHistoryByFundId = mapOf(
+            fund.fundId to listOf(FundPrice(fund.fundId, epochDay(2025, 12, 30), 150.0), FundPrice(fund.fundId, epochDay(2026, 1, 2), 160.0)),
+            fundY.fundId to listOf(FundPrice(fundY.fundId, epochDay(2025, 12, 31), 250.0))
+        )
+    }
+
+    @Test
+    fun `depa visar skatt pa arets vinst efter kvittning och schablonintakten (TRX-8)`() = runTest(dispatcher) {
+        setUpDepaYear()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        viewModel().uiState.test {
+            var state = awaitLoaded()
+            while (state.standardIncomeTax == null) state = awaitItem()
+            // python tools/fondmatte/fondmatte.py depa --gains 12000 -2400 --jan1 55000
+            //   → realized.gains 12000, losses −2400, tax 2880; standard_income_tax 66
+            assertTrue(state.depa)
+            assertTrue(state.showRealizedTax)
+            assertEquals(12_000.0, state.yearRealizedTax.gains, 1e-9)
+            assertEquals(-2_400.0, state.yearRealizedTax.losses, 1e-9)
+            assertEquals(2_880.0, state.yearRealizedTax.tax, 1e-9)
+            assertEquals(55_000.0, state.standardIncomeTax!!.valueAtYearStart, 1e-9)
+            assertEquals(66.0, state.standardIncomeTax!!.tax, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett lasfel i kurserna ger ingen skatt men faller inte listan (TRX-8, NFR-6)`() = runTest(dispatcher) {
+        setUpDepaYear()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        val failingPrices = object : FundPriceRepository by fakePriceRepo {
+            override fun observeHistories(fundIds: List<String>, fromEpochDay: Long): Flow<Map<String, List<FundPrice>>> = flow { throw IllegalStateException("kurscachen gick inte att läsa") }
+        }
+        viewModel(prices = failingPrices).uiState.test {
+            val state = awaitLoaded()
+            assertNull(state.error)
+            assertEquals(4, state.rows.size)
+            assertFalse(state.depa)
+            assertNull(state.standardIncomeTax)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `isk visar ingen skatt i arskortet (TRX-8)`() = runTest(dispatcher) {
+        setUpDepaYear()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        viewModel().uiState.test {
+            val state = awaitLoaded()
+            assertFalse(state.depa)
+            assertFalse(state.showRealizedTax)
+            assertNull(state.standardIncomeTax)
+            assertTrue(state.showRealizedCard)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `depa utan salj visar kortet for schablonintakten men inte resultatraden (TRX-8)`() = runTest(dispatcher) {
+        funds.value = listOf(fund)
+        transactions.value = listOf(kop(id = 1, day = epochDay(2025, 3, 3), shares = 200.0, price = 100.0))
+        fakePriceRepo.priceHistoryByFundId = mapOf(fund.fundId to listOf(FundPrice(fund.fundId, epochDay(2025, 12, 30), 150.0)))
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        viewModel().uiState.test {
+            var state = awaitLoaded()
+            while (state.standardIncomeTax == null) state = awaitItem()
+            assertTrue(state.showRealizedCard)
+            assertFalse(state.showRealizedRow)
+            assertFalse(state.showRealizedTax)
+            assertEquals(30_000.0, state.standardIncomeTax!!.valueAtYearStart, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }

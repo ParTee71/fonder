@@ -99,6 +99,7 @@ domain/
                   ChartPeriodFilter (kursdiagrammets periodväljare, #51) ·
                   PurchaseMarkerFilter (köpmarkörer i diagrammet, #55) ·
                   MovingAverageCalc (200-dagarssnittet för S2 och diagrammets snittlinje, ANA-14) ·
+                  TaxCalc (ungefärlig skatt: ISK-schablonskatt, depåns realiserade skatt, schablonintäkt och byte, HEM-16/TRX-8/ANA-15, #199) ·
                   FundScreenFilter + FundMetadataFreshness (fondmetadata-frågor, #57) ·
                   FeeComparisonCalc (billigare alternativ, ANA-9, #59) ·
                   PortfolioFeeCalc (portföljens totala fondavgift + samlade besparingspotential, HEM-5/HEM-6, #60/#61) ·

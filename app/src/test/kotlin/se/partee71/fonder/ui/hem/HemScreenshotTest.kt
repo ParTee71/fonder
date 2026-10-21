@@ -20,11 +20,13 @@ import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.CheaperAlternative
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
 import se.partee71.fonder.ui.theme.FonderTheme
@@ -170,5 +172,43 @@ class HemScreenshotTest {
                 backupReminder = BackupReminder(newTransactions = 3, lastBackupEpochMillis = 1_759_449_600_000L)
             )
         )
+    }
+
+    // --- Schablonskatt i ISK/KF (HEM-16, issue #199) ---
+
+    /** Mockupens värden: snittunderlag 500 000 kr, 300 000 kr skattefritt → ca 2 130 kr, värde per 2026-10-20 (samma år som skatten). */
+    private val iskPortfolio = HemUiState(
+        portfolio = DetailUiState.Content(
+            HemPortfolio(
+                hasHoldings = true,
+                totalInvested = 450_000.0,
+                totalValue = 512_340.0,
+                totalGainLoss = 62_340.0,
+                totalGainLossFraction = 0.139,
+                total = PortfolioTotalCalc.Result(netDepositsKr = 450_000.0, totalGainKr = 62_340.0, totalGainFraction = 0.139, moneyWeightedAnnualReturn = 0.061, partial = false, ageDays = 800),
+                navEpochDay = LocalDate.of(2026, 10, 20).toEpochDay(),
+                iskTax = TaxCalc.iskTax(2026, listOf(480_000.0, 495_000.0, 510_000.0, 515_000.0), 0.0)
+            )
+        )
+    )
+
+    @Test
+    fun `isk-kortet visar schablonskatten med underlag och formel (HEM-16)`() {
+        composeRule.setContent { FonderTheme { HemContent(state = iskPortfolio) } }
+        composeRule.onNodeWithText("Schablonskatt 2026").assertExists()
+        composeRule.onNodeWithText("ca ${MoneyFormat.krWhole(-2_130.0)}").assertExists()
+        composeRule.onNodeWithText("snittunderlag ${MoneyFormat.krWhole(500_000.0)} · ${MoneyFormat.krWhole(300_000.0)} skattefritt").assertExists()
+        composeRule.onNodeWithText("Schablonskatt = (snittunderlag − ${MoneyFormat.krWhole(300_000.0)}) × 3,55 % × 30 %.", substring = true).assertExists()
+    }
+
+    @Test
+    fun `utan isk-skatt visas ingen schablonskatterad (HEM-16)`() {
+        composeRule.setContent { FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true, totalValue = 1_000.0, totalGainLossFraction = 0.0)))) } }
+        composeRule.onNodeWithText("Schablonskatt", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `skarmdump av totalkortet med schablonskatt i ISK`() = composeRule.captureLightAndDark("HemScreen_isk") {
+        HemContent(state = iskPortfolio)
     }
 }

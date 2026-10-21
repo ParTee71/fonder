@@ -283,6 +283,51 @@ class IskTest(unittest.TestCase):
         self.assertEqual(fm.isk_tax(2026, [200_000] * 4, 50_000), 0.0)
 
 
+class DepaTaxTest(unittest.TestCase):
+    def test_realized_gains_and_losses_are_netted_within_the_year(self):
+        # Handräknat: 12 400 − 2 400 = 10 000 kr netto, skatt 30 % = 3 000 kr.
+        result = fm.depa_realized_tax([12_400.0, -2_400.0])
+        self.assertEqual((result["gains"], result["losses"], result["net"]), (12_400.0, -2_400.0, 10_000.0))
+        self.assertAlmostEqual(result["tax"], 3_000.0)
+
+    def test_net_loss_gives_no_tax(self):
+        self.assertEqual(fm.depa_realized_tax([1_000.0, -4_000.0])["tax"], 0.0)
+
+    def test_standard_income_is_0_4_percent_of_january_value_taxed_30_percent(self):
+        # Handräknat: 250 000 × 0,4 % = 1 000 kr schablonintäkt, × 30 % = 300 kr.
+        self.assertAlmostEqual(fm.fund_standard_income_tax(250_000.0), 300.0)
+
+    def test_switch_tax_is_30_percent_of_unrealized_gain_and_zero_at_a_loss(self):
+        # Handräknat: värde 65 500, anskaffning 50 000 → vinst 15 500, skatt 4 650; vinstandel
+        # 15 500 / 65 500, per 10 000 kr: 10 000 × 15 500 / 65 500 × 0,3 = 709,92… kr.
+        switch = fm.switch_tax(65_500.0, 50_000.0)
+        self.assertAlmostEqual(switch["tax_all"], 4_650.0)
+        self.assertAlmostEqual(switch["per_amount"], 10_000 * 15_500 / 65_500 * 0.3)
+        self.assertEqual(fm.switch_tax(40_000.0, 50_000.0), {"gain": 0.0, "tax_all": 0.0, "per_amount": 0.0})
+
+    def test_value_at_period_start_uses_the_previous_bank_day(self):
+        # Handräknat: 1 januari 2026 är en torsdag; dagen före är 31 december, senaste kurs på eller
+        # före den 30 december (470) → 1 000 × 470. Köpet 1 januari räknas inte.
+        txs = [fm.Transaction(date(2025, 3, 3), "A", "BUY", 1_000, 400.0), fm.Transaction(date(2026, 1, 1), "A", "BUY", 10, 480.0)]
+        prices = fm.Prices({"A": [(date(2025, 12, 30), 470.0), (date(2026, 1, 2), 480.0), (date(2026, 9, 30), 515.0)]})
+        self.assertAlmostEqual(fm.value_at_period_start(txs, prices, date(2026, 1, 1), date(2026, 10, 21)), 470_000.0)
+
+    def test_value_at_period_start_is_none_for_a_passed_day_without_a_recent_price(self):
+        txs = [fm.Transaction(date(2025, 3, 3), "A", "BUY", 10, 100.0)]
+        prices = fm.Prices({"A": [(date(2025, 12, 20), 100.0), (date(2026, 1, 2), 101.0)]})
+        self.assertIsNone(fm.value_at_period_start(txs, prices, date(2026, 1, 1), date(2026, 10, 21)))
+
+    def test_value_at_period_start_uses_todays_value_for_a_quarter_not_started(self):
+        txs = [fm.Transaction(date(2025, 3, 3), "A", "BUY", 1_000, 400.0), fm.Transaction(date(2026, 5, 4), "A", "BUY", 100, 520.0)]
+        prices = fm.Prices({"A": [(date(2026, 9, 30), 515.0)]})
+        self.assertAlmostEqual(fm.value_at_period_start(txs, prices, date(2026, 10, 1), date(2026, 9, 30)), 1_100 * 515.0)
+
+    def test_isk_average_base_matches_the_mockup(self):
+        # Mockupen i #199: snittunderlag 500 000 kr, 300 000 kr skattefritt → 2 130 kr.
+        self.assertAlmostEqual(fm.isk_average_base([480_000, 495_000, 510_000, 515_000], 0), 500_000.0)
+        self.assertAlmostEqual(fm.isk_tax(2026, [480_000, 495_000, 510_000, 515_000], 0), 2_130.0)
+
+
 class TotalGainTest(unittest.TestCase):
     def test_total_gain_counts_realized_loss_app_card_does_not(self):
         # Köp 100 × 100 + 10 kr, sälj 50 × 80 − 10 kr: insatt netto 10 010 − 3 990 = 6 020 kr.

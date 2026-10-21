@@ -7,14 +7,23 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
@@ -23,6 +32,7 @@ import se.partee71.fonder.domain.usecase.RealizedSale
 import se.partee71.fonder.domain.usecase.RealizedTotal
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
@@ -63,6 +73,12 @@ data class TransaktionerUiState(
     val yearRealized: RealizedTotal = EMPTY_TOTAL,
     /** Realiserat resultat över alla sälj (SLD-3), visat i säljfiltret. */
     val totalRealized: RealizedTotal = EMPTY_TOTAL,
+    /** Årets vinster och förluster var för sig och den ungefärliga skatten på nettot (TRX-8) — visas bara i depå/AF. */
+    val yearRealizedTax: TaxCalc.RealizedTax = TaxCalc.RealizedTax(gains = 0.0, losses = 0.0, tax = 0.0),
+    /** Kontotypen är depå/AF (SET-4): årskortet visar den ungefärliga skatten (TRX-8). */
+    val depa: Boolean = false,
+    /** Skatten på schablonintäkten för fonderna den 1 januari (TRX-8), null utan depå/AF, utan innehav vid årets början eller utan årets första kurs. */
+    val standardIncomeTax: TaxCalc.StandardIncomeTax? = null,
     /** Sätts när en bevakning just startats (SLD-5), så skärmen kan navigera dit. Kvitteras med [TransaktionerViewModel.onSwitchWatchOpened]. */
     val startedSwitchWatchId: Long? = null
 ) {
@@ -85,8 +101,17 @@ data class TransaktionerUiState(
     /** Inga transaktioner alls — då visas bara tomt tillstånd, inget filter. */
     val isEmpty: Boolean get() = list is ListUiState.Empty
 
-    /** Kortet med realiserat resultat (TRX-4) visas när det finns något sälj och filtret inte är Köp. */
-    val showRealizedCard: Boolean get() = totalRealized.saleCount > 0 && filter != HandelseFilter.KOP
+    /**
+     * Kortet med realiserat resultat (TRX-4) visas när det finns något sälj och filtret inte är Köp —
+     * i depå/AF även utan sälj när årets schablonintäkt är känd (TRX-8).
+     */
+    val showRealizedCard: Boolean get() = filter != HandelseFilter.KOP && (totalRealized.saleCount > 0 || standardIncomeTax != null)
+
+    /** Raden "Realiserat resultat i år" (TRX-4) — när något sälj alls finns. */
+    val showRealizedRow: Boolean get() = totalRealized.saleCount > 0
+
+    /** Raden "Varav skatt" (TRX-8) — i depå/AF när något sälj gjorts i år. */
+    val showRealizedTax: Boolean get() = depa && yearRealized.saleCount > 0
 
     private companion object {
         val EMPTY_TOTAL = RealizedTotal(realizedGain = 0.0, costBasis = 0.0, saleCount = 0, uncertain = false)
@@ -116,11 +141,14 @@ sealed interface TransaktionerEvent {
  * realiserade resultat (TRX-4) och, per sälj, det realiserade resultatet ur
  * [RealizedGainCalculator] (SLD-1…SLD-5) — tidigare en egen vy, Sålda fonder.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TransaktionerViewModel internal constructor(
     private val repository: TransactionRepository,
     switchWatchRepository: SwitchWatchRepository,
     private val recordTransaction: RecordTransaction,
+    private val preferencesRepository: PreferencesRepository,
+    private val fundPriceRepository: FundPriceRepository,
     private val today: () -> LocalDate
 ) : ViewModel() {
 
@@ -128,8 +156,31 @@ class TransaktionerViewModel internal constructor(
     constructor(
         repository: TransactionRepository,
         switchWatchRepository: SwitchWatchRepository,
-        recordTransaction: RecordTransaction
-    ) : this(repository, switchWatchRepository, recordTransaction, LocalDate::now)
+        recordTransaction: RecordTransaction,
+        preferencesRepository: PreferencesRepository,
+        fundPriceRepository: FundPriceRepository
+    ) : this(repository, switchWatchRepository, recordTransaction, preferencesRepository, fundPriceRepository, LocalDate::now)
+
+    /** Depå/AF-delen av årskortet (TRX-8): null i ISK/KF eller utan vald kontotyp. */
+    private class DepaTax(val standardIncome: TaxCalc.StandardIncomeTax?)
+
+    /**
+     * Kontotypen och, i depå/AF, schablonintäkten ur innehavet före årsskiftet och kurserna kring
+     * det — reaktivt på kurscachen, så raden dyker upp när kursen hämtats. Får [transactions] och
+     * [year] av huvudflödet, så listan och skatten aldrig räknar på olika transaktioner eller år.
+     * Ett läsfel här (kontotyp, kurser) ger ingen skatt, men fäller aldrig listan (NFR-6).
+     */
+    private fun depaTax(transactions: List<Transaction>, year: Int, today: LocalDate): Flow<DepaTax?> = preferencesRepository.accountType.flatMapLatest { type ->
+        if (type != AccountType.DEPA_AF) {
+            flowOf(null)
+        } else {
+            val yearStart = LocalDate.of(year, 1, 1)
+            val heldFundIds = transactions.filter { it.epochDay < yearStart.toEpochDay() }.map { it.fundId }.distinct().sorted()
+            fundPriceRepository.observeHistories(heldFundIds, yearStart.minusDays(TaxCalc.PERIOD_START_LOOKBACK_DAYS).toEpochDay()).map { history ->
+                DepaTax(TaxCalc.fundStandardIncomeTaxForYear(year, today, transactions, history))
+            }
+        }
+    }.catch { emit(null) }
 
     /** Läsfelets "Försök igen" (NFR-6) – se [retry]. */
     private val retrySignal = RetrySignal()
@@ -140,35 +191,42 @@ class TransaktionerViewModel internal constructor(
     private val startedSwitchWatchId = MutableStateFlow<Long?>(null)
 
     val uiState: StateFlow<TransaktionerUiState> =
-        combine(
-            repository.observeTransactions(),
-            repository.observeFunds(),
-            switchWatchRepository.observeOpen(),
-            filter,
-            startedSwitchWatchId
-        ) { transactions, funds, openWatches, selectedFilter, startedId ->
-            val fundsById = funds.associateBy { it.fundId }
-            val sales = RealizedGainCalculator.compute(transactions)
-            val salesByTransactionId = sales.associateBy { it.transactionId }
-            val rows = transactions.map { tx ->
-                val fund = fundsById[tx.fundId]
-                val sale = salesByTransactionId[tx.id]
-                val isin = fund?.isin
-                TransaktionRad(
-                    transaction = tx,
-                    fundName = fund?.name ?: tx.fundId,
-                    sale = sale,
-                    fundIsin = isin,
-                    canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) }
+        repository.observeTransactions().flatMapLatest { transactions ->
+            // Ett "idag" per emission: årets resultat, årets skatt och schablonintäkten gäller samma år.
+            val today = today()
+            combine(
+                repository.observeFunds(),
+                switchWatchRepository.observeOpen(),
+                filter,
+                startedSwitchWatchId,
+                depaTax(transactions, today.year, today)
+            ) { funds, openWatches, selectedFilter, startedId, depa ->
+                val fundsById = funds.associateBy { it.fundId }
+                val sales = RealizedGainCalculator.compute(transactions)
+                val salesByTransactionId = sales.associateBy { it.transactionId }
+                val rows = transactions.map { tx ->
+                    val fund = fundsById[tx.fundId]
+                    val sale = salesByTransactionId[tx.id]
+                    val isin = fund?.isin
+                    TransaktionRad(
+                        transaction = tx,
+                        fundName = fund?.name ?: tx.fundId,
+                        sale = sale,
+                        fundIsin = isin,
+                        canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) }
+                    )
+                }
+                TransaktionerUiState(
+                    list = rows.toListUiState(),
+                    filter = selectedFilter,
+                    yearRealized = RealizedGainCalculator.totalForYear(sales, today.year),
+                    totalRealized = RealizedGainCalculator.total(sales),
+                    yearRealizedTax = TaxCalc.realizedTax(sales, today.year),
+                    depa = depa != null,
+                    standardIncomeTax = depa?.standardIncome,
+                    startedSwitchWatchId = startedId
                 )
             }
-            TransaktionerUiState(
-                list = rows.toListUiState(),
-                filter = selectedFilter,
-                yearRealized = RealizedGainCalculator.totalForYear(sales, today().year),
-                totalRealized = RealizedGainCalculator.total(sales),
-                startedSwitchWatchId = startedId
-            )
         }.catchAsListError { TransaktionerUiState(list = it) }.restartOn(retrySignal).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

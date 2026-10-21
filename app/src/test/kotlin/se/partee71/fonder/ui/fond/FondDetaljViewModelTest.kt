@@ -817,6 +817,36 @@ class FondDetaljViewModelTest {
     }
 
     @Test
+    fun `depa visar skatten pa ett byte i stallet for en plan (ANA-15)`() = runTest(dispatcher) {
+        setUpHolding(isin = "SE0004297927")
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+
+        viewModel().uiState.test {
+            val state = awaitItemSkipping { it.loading || it.switchTax == null }
+            val switchTax = state.switchTax!!
+            // 10 andelar à 100 kr, värda 1 200 kr: python tools/fondmatte/fondmatte.py depa --value 1200 --cost 1000
+            //   → switch.gain 200, tax_all 60, per_amount 499.99999999999994
+            assertEquals(200.0, switchTax.gain, 1e-9)
+            assertEquals(60.0, switchTax.taxAll, 1e-9)
+            assertEquals(499.99999999999994, switchTax.taxPerExampleAmount, 1e-9)
+            assertTrue(state.depa)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `isk visar ingen skatt pa ett byte (ANA-15)`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+
+        viewModel().uiState.test {
+            val state = awaitItemSkipping { it.switchPlan.isEmpty() }
+            assertNull(state.switchTax)
+            assertFalse(state.depa)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `visar ingen bytesplan nar den inspelade planen ar for gammal`() = runTest(dispatcher) {
         // Äldre än SwitchPlanCalc.PLAN_TTL_DAYS — ett gammalt råd ska försvinna, inte ligga kvar.
         setUpSwitchPlan(suggestedAtEpochDay = LocalDate.now().minusDays(SwitchPlanCalc.PLAN_TTL_DAYS + 1).toEpochDay())

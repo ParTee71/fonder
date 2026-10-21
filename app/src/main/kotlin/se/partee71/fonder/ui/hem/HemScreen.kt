@@ -28,6 +28,8 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.TaxCalc
+import se.partee71.fonder.ui.components.ApproxTaxRow
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExposureBar
@@ -47,6 +49,7 @@ import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyState
+import se.partee71.ui.components.ItemRowText
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
@@ -150,7 +153,9 @@ fun HemContent(
                         total = portfolio.total,
                         navEpochDay = portfolio.navEpochDay,
                         working = state.totalWorking,
-                        modifier = Modifier.padding(Spacing.l)
+                        modifier = Modifier.padding(Spacing.l),
+                        afterTotalResult = portfolio.iskTax?.let { iskTax -> { IskTaxRow(iskTax) } },
+                        footer = portfolio.iskTax?.let { iskTax -> { IskTaxExplanation(iskTax) } }
                     )
                 }
                 if (state.decisions.count > 0) {
@@ -188,6 +193,40 @@ fun HemContent(
             }
         }
     }
+}
+
+/**
+ * Årets ungefärliga schablonskatt i ISK/KF (HEM-16, issue #199) direkt under totalresultatet, som i
+ * mockupen: beloppet dämpat med "ca", snittunderlaget och den skattefria nivån under etiketten.
+ */
+@Composable
+private fun IskTaxRow(iskTax: TaxCalc.IskTax) {
+    ApproxTaxRow(
+        label = stringResource(R.string.format_hem_isk_tax_title, iskTax.year),
+        tax = iskTax.tax,
+        modifier = Modifier.padding(vertical = Spacing.xs),
+        basis = stringResource(
+            R.string.format_hem_isk_tax_basis,
+            MoneyFormat.krWhole(iskTax.averageBase),
+            MoneyFormat.krWhole(iskTax.parameters.taxFreeAmount)
+        )
+    )
+}
+
+/** Formeln med årets parametrar ur [TaxCalc.ISK_PARAMETERS] i klartext, längst ned i totalkortet (HEM-16). */
+@Composable
+private fun IskTaxExplanation(iskTax: TaxCalc.IskTax) {
+    ItemRowText(
+        title = null,
+        subtitle = stringResource(
+            R.string.format_hem_isk_tax_explain,
+            MoneyFormat.krWhole(iskTax.parameters.taxFreeAmount),
+            MoneyFormat.rate(iskTax.parameters.standardRate),
+            MoneyFormat.rate(TaxCalc.CAPITAL_INCOME_TAX),
+            iskTax.year
+        ),
+        modifier = Modifier.padding(top = Spacing.xs)
+    )
 }
 
 /**

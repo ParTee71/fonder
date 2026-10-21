@@ -126,7 +126,7 @@ class HemViewModelTest {
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()
 
-    private fun viewModel(transactionRepo: TransactionRepository = fakeTransactionRepo) = HemViewModel(
+    private fun viewModel(transactionRepo: TransactionRepository = fakeTransactionRepo, today: () -> LocalDate = LocalDate::now) = HemViewModel(
         transactionRepo,
         fakeFundPriceRepo,
         fakeFundMetadataRepo,
@@ -143,7 +143,8 @@ class HemViewModelTest {
             )
         },
         fakeScheduler,
-        backupStatus
+        backupStatus,
+        today
     )
 
     /** Backup-kontraktets innehåll (HEM-12) — tomt som standard, så påminnelsen syns bara i sina egna tester. */
@@ -1028,6 +1029,62 @@ class HemViewModelTest {
     }
 
     private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = testFundMetadata(isin = isin, name = name, totalFee = 0.2, managementFee = 0.2, fundType = "Aktiefond", risk = 5, indexFund = true)
+
+    // --- Schablonskatt i ISK/KF (HEM-16, issue #199) ---
+
+    private val taxToday = LocalDate.of(2026, 10, 21)
+
+    /**
+     * 1 000 andelar köpta 2025-06-02 med kurserna dagen före varje kvartal — 480 (30 december), 500
+     * (31 mars), 505 (30 juni), 515 (30 september) — och dagens 520: kvartalsvärdena 480 000, 500 000,
+     * 505 000 och 515 000 kr.
+     */
+    private fun setUpIskHolding() {
+        val fund = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0000000001")
+        fakeTransactionRepo.holdOnly(fund, LocalDate.of(2025, 6, 2), shares = 1_000.0, pricePerShare = 400.0)
+        priceHistoryByFundId = mapOf(
+            fund.fundId to listOf(
+                price(fund, LocalDate.of(2025, 6, 2), 400.0),
+                price(fund, LocalDate.of(2025, 12, 30), 480.0),
+                price(fund, LocalDate.of(2026, 3, 31), 500.0),
+                price(fund, LocalDate.of(2026, 6, 30), 505.0),
+                price(fund, LocalDate.of(2026, 9, 30), 515.0),
+                price(fund, taxToday, 520.0)
+            )
+        )
+        fakeFundPriceRepo.quoteOnly(fund, taxToday, 520.0)
+    }
+
+    @Test
+    fun `ISK visar arets schablonskatt ur kvartalens varden (HEM-16)`() = runTest(dispatcher) {
+        setUpIskHolding()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+
+        viewModel(today = { taxToday }).uiState.test {
+            val iskTax = awaitItemSkipping { it.loading || it.content.iskTax == null }.content.iskTax!!
+            // python tools/fondmatte/fondmatte.py isk 2026 480000 500000 505000 515000 --precise → 2129.9999999999995
+            assertEquals(2026, iskTax.year)
+            assertEquals(500_000.0, iskTax.averageBase, 1e-9)
+            assertEquals(2129.9999999999995, iskTax.tax, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ingen schablonskatt i depa eller for ett ar utan parametrar (HEM-16)`() = runTest(dispatcher) {
+        setUpIskHolding()
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        viewModel(today = { taxToday }).uiState.test {
+            assertNull(awaitItemSkipping { it.loading }.content.iskTax)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        viewModel(today = { LocalDate.of(2027, 2, 1) }).uiState.test {
+            assertNull(awaitItemSkipping { it.loading }.content.iskTax)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     private companion object {
         const val BENCHMARK_ISIN = "SE0009999999"

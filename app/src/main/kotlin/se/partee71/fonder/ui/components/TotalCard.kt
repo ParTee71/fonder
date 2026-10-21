@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.components
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,9 @@ import se.partee71.ui.components.AppCard
  *
  * @param gainLoss orealiserat resultat på kvarvarande andelar ([se.partee71.fonder.domain.usecase.PortfolioCalc.totalGainLoss]).
  * @param total totalresultat och pengaviktad avkastning över alla transaktioner, även helt sålda fonder.
+ * @param afterTotalResult rader direkt under totalresultatet — Hems schablonskatt i ISK/KF
+ *   (HEM-16, issue #199, en [ApproxTaxRow]). Null = kortet som förut (Portfölj).
+ * @param footer rader längst ned i kortet — förklaringen till schablonskatten (HEM-16). Null = som förut.
  */
 @Composable
 fun TotalCard(
@@ -41,7 +45,9 @@ fun TotalCard(
     total: PortfolioTotalCalc.Result,
     navEpochDay: Long?,
     modifier: Modifier = Modifier,
-    working: Boolean = false
+    working: Boolean = false,
+    afterTotalResult: (@Composable ColumnScope.() -> Unit)? = null,
+    footer: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     AppCard(modifier = modifier.fillMaxWidth()) {
         CardTitleRow(
@@ -58,6 +64,7 @@ fun TotalCard(
                 modifier = Modifier.padding(top = 4.dp),
                 insufficientText = priceMissing
             )
+            afterTotalResult?.invoke(this)
             PeriodRow(
                 label = stringResource(R.string.total_money_weighted_return),
                 amount = null,
@@ -86,5 +93,6 @@ fun TotalCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        footer?.invoke(this)
     }
 }

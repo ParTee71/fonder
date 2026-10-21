@@ -294,11 +294,12 @@ private fun ColumnScope.Fields() {
 
 @Composable
 private fun ColumnScope.Values() {
-    Label("PeriodRow · ValueAsOfRow")
+    Label("PeriodRow · ApproxTaxRow · ValueAsOfRow")
     PeriodRow(label = "Idag", amount = 845.0, fraction = 0.0021)
     PeriodRow(label = "I år", amount = -1_960.0, fraction = -0.008)
     PeriodRow(label = "5 år", amount = null, fraction = null)
     PeriodRow(label = "Sharpe", amount = null, fraction = null, valueText = "0,6")
+    ApproxTaxRow(label = "Varav skatt", tax = 3_000.0, basis = "30 % på vinst efter kvittning")
     ValueAsOfRow(navEpochDay = LocalDate.of(2026, 10, 16).toEpochDay())
     Label("ExposureBar")
     ExposureBar(label = "Sverige", fraction = 0.46)

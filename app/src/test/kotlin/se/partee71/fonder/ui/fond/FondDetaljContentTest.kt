@@ -27,7 +27,9 @@ import org.robolectric.annotation.Config
 import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.FundPrice
+import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.contracts
 import se.partee71.fonder.testing.isDrawn
@@ -169,6 +171,47 @@ class FondDetaljContentTest {
     @Config(qualifiers = "w390dp-h800dp-xxhdpi")
     fun `skärmdump av Fonddetaljs läsfel`() = composeRule.captureLightAndDark("FondDetalj_error") {
         FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Error(AppErrors.map(DataError.Database))))
+    }
+
+    // --- Skatt på ett byte i depå/AF (ANA-15, issue #199) ---
+
+    /** Mockupens innehav: värt 40 500 kr mot anskaffningsvärdet 25 000 kr → vinst 15 500 kr. */
+    private val depaContent = FondDetaljUiState(
+        fund = DetailUiState.Content(fund.copy(holdingValue = 40_500.0)),
+        riskLevel = 4,
+        feeComparison = FeeComparisonUiState.NoCheaperAlternative,
+        switchTax = TaxCalc.switchTax(value = 40_500.0, costBasis = 25_000.0),
+        depa = true
+    )
+
+    @Test
+    fun `depa visar skatten pa ett byte i stallet for att planen inte foreslar nagot`() {
+        composeRule.setContent { FonderTheme { FondDetaljContent(state = depaContent) } }
+        val tax = depaContent.switchTax!!
+        composeRule.onNodeWithText("Riskprofilens bytesplan ges bara i ISK/KF. I en depå kostar ett byte skatt på vinsten:").assertExists()
+        composeRule.onNodeWithText("Skatt om du byter allt").assertExists()
+        composeRule.onNodeWithText("vinst ${MoneyFormat.krWhole(15_500.0)} × 30 %").assertExists()
+        composeRule.onNodeWithText("ca ${MoneyFormat.krWhole(-4_650.0)}").assertExists()
+        composeRule.onNodeWithText("Skatt per ${MoneyFormat.krWhole(10_000.0)} som byts").assertExists()
+        composeRule.onNodeWithText("ca ${MoneyFormat.krWhole(-tax.taxPerExampleAmount)}").assertExists()
+        composeRule.onNodeWithText("Riskprofilens bytesplan föreslår inget", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `depa utan kant varde sager att planen bara ges i ISK och visar ingen skatt`() {
+        composeRule.setContent { FonderTheme { FondDetaljContent(state = depaContent.copy(switchTax = null, depa = true)) } }
+        composeRule.onNodeWithText("Riskprofilens bytesplan ges bara i ISK/KF.").assertExists()
+        composeRule.onNodeWithText("Skatt om du byter allt").assertDoesNotExist()
+        composeRule.onNodeWithText("Riskprofilens bytesplan föreslår inget", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h1400dp-xxhdpi")
+    fun `skärmdump av Fonddetalj i depå med skatten på ett byte`() = composeRule.captureLightAndDark(
+        "FondDetalj_depa",
+        ready = { isDrawn(hasContentDescription("Kursdiagram", substring = true)) }
+    ) {
+        FondDetaljContent(state = depaContent)
     }
 
     private companion object {

@@ -77,10 +77,30 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
   | 2025 | 1,96 % | 2,96 % | 0,888 % | 150 000 kr |
   | 2026 | 2,55 % | 3,55 % | 1,065 % | 300 000 kr |
 
-  Nytt år läggs till här och i `ISK_PARAMETERS` i `tools/fondmatte/fondmatte.py` i samma ändring.
+  Nytt år läggs till på **tre** ställen i samma ändring: här, i `ISK_PARAMETERS` i
+  `tools/fondmatte/fondmatte.py` och i `TaxCalc.ISK_PARAMETERS` (`:core`, appens enda ställe).
+  `TaxCalcTest` läser tabellen och `fondmatte.py` och fäller bygget om de tre skiljer sig. Ett år
+  som saknas ger ingen skatterad i appen (HEM-16), aldrig en gissning ur förra årets parametrar.
+
+  **I appen** (`TaxCalc.iskTaxForYear`, HEM-16): kvartalets ingående värde är andelarna efter alla
+  transaktioner före kvartalets första dag, värderade som bankernas kontrolluppgift till varje
+  fonds **senaste kurs på eller före dagen före** – föregående bankdag – högst 5 dagar gammal
+  (`TaxCalc.valueAtStartOf`, `NavCalendar.startPriceOnOrBefore`). En passerad kvartalsstart utan
+  sådan kurs ger inget värde och ingen rad. **Ett kvartal som inte börjat än** räknas med
+  **dagens värde** – innehavet × senaste kurs – så beloppet under året är en prognos som stämmer
+  först efter 1 oktober. Golden: `fondmatte.py isk --precise`; värderingen `value_at_period_start`. Årets insättningar är
+  köp med avgift minus sälj efter avgift under året, lägst 0 (`TaxCalc.yearDeposits`): appen ser
+  inte kontots kontanter, så ett byte räknas inte som insättning.
 - **Depå/AF** (`AccountType.DEPA_AF`): 30 % på realiserad vinst vid sälj, plus schablonintäkt
   0,4 % av fondernas värde den 1 januari (skatt 0,12 %). Ett byte i depå kostar alltså skatt –
   därför ger bytesplanen inga förslag där (`SwitchPlanResolver`, `FundPriceUpdateWorker`).
+  **I appen** (`TaxCalc`, TRX-8, ANA-15): årets realiserade resultat kvittas – vinster och
+  förluster på fondandelar under året – och 30 % tas på nettovinsten, 0 vid nettoförlust
+  (`realizedTax`). Värdet den 1 januari är innehavet före årsskiftet värderat till kursen
+  föregående bankdag, högst 5 dagar före 31 december (`valueAtStartOf`, samma regel som
+  ISK-kvartalen; `fundStandardIncomeTaxForYear`); saknas den visas raden inte. Skatten
+  på ett byte är max(0, värde − kvarvarande anskaffningsvärde) × 30 %, och per 10 000 kr som byts
+  10 000 × vinstandelen av värdet × 30 % (`switchTax`). Golden: `fondmatte.py depa`.
 
 ## Risk
 

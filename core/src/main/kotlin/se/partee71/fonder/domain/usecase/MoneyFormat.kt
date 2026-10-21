@@ -22,6 +22,25 @@ object MoneyFormat {
         return sign + kr(kotlin.math.abs(amount))
     }
 
+    /**
+     * Formaterar ett ungefärligt belopp i hela kronor med äkta minustecken, t.ex. -2129.6 → "−2 130 kr"
+     * — för skatter som bara visar storleksordningen (issue #199), där ören vore falsk precision.
+     */
+    fun krWhole(amount: Double): String {
+        val rounded = kotlin.math.round(amount)
+        val sign = if (rounded < 0.0) "−" else "" // äkta minustecken
+        return sign + String.format(locale, "%,.0f kr", kotlin.math.abs(rounded))
+    }
+
+    /**
+     * Formaterar en skattesats eller ränta med högst två decimaler och utan avslutande nollor, t.ex.
+     * 0.0355 → "3,55 %", 0.004 → "0,4 %", 0.3 → "30 %" (issue #199).
+     */
+    fun rate(fraction: Double): String {
+        val text = java.math.BigDecimal.valueOf(fraction * 100.0).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+        return text.replace('.', ',') + " %"
+    }
+
     /** Formaterar en avkastning med tecken, t.ex. 0.1234 → "+12,3 %", -0.05 → "−5,0 %". */
     fun percentSigned(fraction: Double): String {
         val pct = fraction * 100.0
