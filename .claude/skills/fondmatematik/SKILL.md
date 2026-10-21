@@ -37,6 +37,7 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 | Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" Totalkortets huvudtal | `PortfolioTotalCalc.compute` → `totalGainKr`/`totalGainFraction` (golden: `total_gain`) |
 | Periodförändring, procent | Fondens kursutveckling: NAV på referensdagen mot senaste NAV på eller före periodens start; köp och sälj påverkar inte | Dag/vecka/månad (POR-5, HEM-1) och i år/3 mån/1 år/3 år/sedan köp (ANA-1) | `PortfolioPerformanceCalc`, `FundAnalysisCalc` (golden: `funds.<fond>.periods.*.fraction`) |
 | Periodförändring, kronor | Värdeförändringen på de andelar som **faktiskt ägts**, dag för dag: `Σ andelar_före_dag_i × (NAV_i − NAV_{i−1})` från startkursen till referensdagen. Ett köp på en kursdag får rörelsen först från nästa kurspunkt, ett sälj har rörelsen fram till säljdagen med; avgifter ingår inte. Startar perioden utan innehav är det slutvärdet minus nettoköpen (andelar × kurs). "Sedan köp" i kr är i stället positionens vinst mot anskaffningsvärdet (genomsnittsmetoden), samma tal som GAV-raden | Vad har mitt innehav ändrats i kronor under perioden? | `PositionValueChangeCalc.valueChange` (issue #193; golden: `funds.<fond>.periods.*.amount`, fixtur `periodkop.json`) |
+| 200-dagarssnitt | Enkelt medel av kurserna i `[d − 290, d]` (290 kalenderdagar ≈ 200 handelsdagar); historik som inte når `d − 290` = `null` (ANA-4) | S2 och snittlinjen i Fonddetalj (ANA-2, ANA-14) | `MovingAverageCalc` (golden: `funds.<fond>.sma_200`, fixtur `sma.json`) |
 | Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
 
 - **Periodrader:** procent och kronor är olika mått – procenten är fondens, kronorna mina. Ett köp
@@ -105,7 +106,10 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 - **Fullt facit**, om det byggs: faktisk XIRR mot "behöll fonden" med samma kassaflöden, inklusive
   avgifter, dagarna utanför marknaden (kontant 0 %), skatt i depå och avgiftsskillnaden över tiden.
   Kronor alltid, årstakt bara över ett år.
-- **200-dagarssnittet** (`MovingAverageCalc`, ANA-14) presenteras som riskhantering, inte som en
+- **200-dagarssnittet** (`MovingAverageCalc`, ANA-14) är 200 handelsdagar räknat som
+  **kalenderfönster på 290 dagar** (`WINDOW_DAYS`; 200 kalenderdagar vore bara ~137 handelsdagar, och
+  kurscachen kan vara gles så punkträkning vore fel); historik som inte når 290 dagar bakåt = `null`.
+  Golden: `sma_200` per fond i `fondmatte.py golden` (fixtur `sma.json`). Det presenteras som riskhantering, inte som en
   avkastningsfördel: forskningen (Faber 2007; Zakamulin) visar främst lägre drawdown, och efter
   kostnader är fördelen liten. Faber kontrollerar månadsvis; en daglig signal ger fler falsklarm.
 

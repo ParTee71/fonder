@@ -43,7 +43,7 @@ Används i dag i `HemScreen` (avkastningskurva mot referens, `PROCENT`), `FondDe
 | `ChartPeriodFilter` | `apply(points, period)` – fönster bakåt från **senaste punkten**, inte dagens datum; kortare historik ger hela | `ChartPeriodFilterTest` |
 | `ChartSeriesNormalizer` | `index(...)` – serier till 100 vid första gemensamma dag (`partial` om någon beskurits); `rebaseReturns(...)` – avkastningsserier nollställda som **kvot** mot periodens första gemensamma dag | `ChartSeriesNormalizerTest` |
 | `PortfolioReturnSeriesCalc` | `compute(...)` – tidsviktad, kedjad portföljavkastning (HEM-9); `benchmark(...)` – skuggportfölj i referensfonden (HEM-10), `null` om historiken inte räcker | `PortfolioReturnSeriesCalcTest` |
-| `MovingAverageCalc` | `series(points)` – 200-dagars glidande medel per kurspunkt (kurser i `[d − 200, d]`, kräver en kurs på eller före `d − 200`, annars ingen punkt); `averageAt(points, day)` – samma regel för en dag, används av S2 i `FundAnalysisCalc` (en implementering) | `MovingAverageCalcTest` |
+| `MovingAverageCalc` | `series(points)` – 200 handelsdagars glidande medel som kalenderfönster (`WINDOW_DAYS` = 290 dagar; kurser i `[d − 290, d]`, kräver en kurs på eller före `d − 290`, annars ingen punkt); `averageAt(points, day)` – samma regel för en dag, används av S2 i `FundAnalysisCalc` (en implementering) | `MovingAverageCalcTest` |
 | `PurchaseMarkerFilter` | `apply(points, purchaseEpochDays)` – köpdagar inom perioden, snappade till närmaste kurspunkt (Vicos markörer kräver exakt x) | `PurchaseMarkerFilterTest` |
 | `MoneyFormat` | etiketter och sammanfattning ("+12,3 %", "1 234,50 kr") | `domain/MoneyFormatTest` |
 

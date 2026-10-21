@@ -318,19 +318,19 @@ class FondDetaljViewModelTest {
 
     @Test
     fun `levererar 200-dagarssnittet ur hela historiken, och inget nar historiken ar for kort (ANA-14)`() = runTest(dispatcher) {
-        // 250 dagars kurser, osorterade som från en cache: snittet börjar dag 200 (första dagen
+        // 400 dagars kurser, osorterade som från en cache: snittet börjar dag 290 (första dagen
         // med ett helt fönster bakom sig) och ligger i stigande ordning.
-        history.value = (0L..250L).reversed().map { FundPrice(fundId = fund.fundId, epochDay = it, nav = 100.0 + it, currency = "SEK") }
+        history.value = (0L..400L).reversed().map { FundPrice(fundId = fund.fundId, epochDay = it, nav = 100.0 + it, currency = "SEK") }
 
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItemSkipping { it.loading }
-            assertEquals((200L..250L).toList(), state.content.movingAverage.map { it.first })
-            // Dag 250: medel av dag 50 … 250 → NAV 150 … 350 = 250.
-            assertEquals(250.0, state.content.movingAverage.last().second, 1e-9)
+            assertEquals((290L..400L).toList(), state.content.movingAverage.map { it.first })
+            // Dag 400: medel av dag 110 … 400 → NAV 210 … 500 = 355.
+            assertEquals(355.0, state.content.movingAverage.last().second, 1e-9)
 
-            history.value = history.value.filter { it.epochDay >= 100 }
-            do state = awaitItem() while (state.content.prices.size != 151)
+            history.value = history.value.filter { it.epochDay >= 200 }
+            do state = awaitItem() while (state.content.prices.size != 201)
             assertEquals(emptyList<Pair<Long, Double>>(), state.content.movingAverage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -466,6 +466,7 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             var state = awaitItemSkipping { it.loading }
             assertEquals(FundAnalysisCalc.SignalLevel.GRON, state.content.analysis?.status)
+            org.junit.Assert.assertNotNull(state.content.analysis?.trend) // S2 räknas (historiken når 290 dagar)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -209,10 +209,10 @@ class FundAnalysisCalcTest {
     @Test
     fun `S2 trend - NAV under 200-dagars snitt ger gul, annars gron`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
-        // Snitt över fönstret är 100 (två punkter: 100 för 200 dagar sedan, 100 idag) plus en
+        // Snitt över fönstret är 100 (två punkter: 100 för 290 dagar sedan, 100 idag) plus en
         // extra punkt som drar ner/upp aktuell kurs relativt snittet.
-        val underSnitt = listOf(price(200, 100.0), price(100, 100.0), price(0, 80.0))
-        val overSnitt = listOf(price(200, 100.0), price(100, 100.0), price(0, 130.0))
+        val underSnitt = listOf(price(290, 100.0), price(100, 100.0), price(0, 80.0))
+        val overSnitt = listOf(price(290, 100.0), price(100, 100.0), price(0, 130.0))
 
         val gul = FundAnalysisCalc.analyze(today, holding, emptyList(), underSnitt, today.minusYears(1), 800.0, null)!!.trend!!
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, gul.level)
@@ -222,7 +222,7 @@ class FundAnalysisCalcTest {
     }
 
     @Test
-    fun `S2 ar null om historiken inte nar 200 dagar tillbaka`() {
+    fun `S2 ar null om historiken inte nar 290 dagar tillbaka`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
         val history = (0..100L).map { price(it, nav = 100.0) }
 
@@ -232,13 +232,13 @@ class FundAnalysisCalcTest {
     }
 
     @Test
-    fun `S2 raknar snittet over kalenderfonstret till idag, kurser fore fonstret ingar inte`() {
+    fun `S2 raknar snittet over kalenderfonstret (290 dagar) till idag, kurser fore fonstret ingar inte`() {
         // Regression för utbrytningen till MovingAverageCalc (ANA-14): samma fönster som förut —
-        // kurser i [idag − 200, idag], och en kurs på eller före fönstrets start krävs.
+        // kurser i [idag − 290, idag], och en kurs på eller före fönstrets start krävs.
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
-        // 201 dagar gammal toppkurs ligger utanför fönstret: snittet är (100 + 100 + 110) / 3 ≈ 103,3
+        // 291 dagar gammal toppkurs ligger utanför fönstret: snittet är (100 + 100 + 110) / 3 ≈ 103,3
         // och dagens 110 ligger över det. Hade toppen räknats in hade S2 blivit gul.
-        val history = listOf(price(201, 1000.0), price(200, 100.0), price(100, 100.0), price(0, 110.0))
+        val history = listOf(price(291, 1000.0), price(290, 100.0), price(100, 100.0), price(0, 110.0))
 
         val trend = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusYears(1), 1100.0, null)!!.trend!!
 

@@ -5,7 +5,9 @@ package se.partee71.fonder.domain.usecase
  * [FundAnalysisCalc]) och snittlinjen i Fonddetaljs kursdiagram (ANA-14) använder, så att
  * diagrammet aldrig kan visa kursen över snittet samtidigt som S2 säger att den ligger under.
  *
- * Regeln för en dag `d` (fönster `w` = [WINDOW_DAYS] kalenderdagar):
+ * "200-dagarssnittet" är 200 handelsdagar, och eftersom kurscachen kan vara gles (helger, röda
+ * dagar, äldre veckopunkter, dagar utan valutakurs) räknas fönstret i **kalenderdagar**:
+ * [WINDOW_DAYS] = 290 ≈ 200 handelsdagar. Regeln för en dag `d` (fönster `w`):
  * - historiken måste nå minst `w` dagar bakåt, dvs. det finns en kurs på eller före `d − w`
  *   — annars är värdet `null` (otillräcklig data, ANA-4: aldrig gissat);
  * - snittet är medelvärdet av alla kurser med datum i `[d − w, d]`.
@@ -14,8 +16,8 @@ package se.partee71.fonder.domain.usecase
  */
 object MovingAverageCalc {
 
-    /** 200-dagarsfönstret (S2 och diagrammets snittlinje). */
-    const val WINDOW_DAYS = 200L
+    /** Fönstret i kalenderdagar, ≈ 200 handelsdagar (S2 och diagrammets snittlinje). */
+    const val WINDOW_DAYS = 290L
 
     /**
      * Snittet för dag [epochDay] ur [points] (`epochDay` → NAV, valfri ordning). Null om
@@ -38,7 +40,7 @@ object MovingAverageCalc {
     /**
      * Kärnan: snittet för varje dag i [days] (stigande) ur den stigande [sorted]. Fönstrets
      * kurser summeras i datumordning för varje dag (ingen löpande summa som kan glida isär från
-     * ett direkt medelvärde) — med ~140 kurser per fönster är det billigt även för lång historik.
+     * ett direkt medelvärde) — med ~200 kurser per fönster är det billigt även för lång historik.
      */
     private fun evaluate(sorted: List<Pair<Long, Double>>, days: List<Long>, windowDays: Long): List<Double?> {
         val firstDay = sorted.firstOrNull()?.first ?: return days.map { null }
