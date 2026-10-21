@@ -30,6 +30,7 @@ import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.R
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -50,6 +51,8 @@ import se.partee71.fonder.domain.usecase.FollowedSuggestionLookup
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
+import se.partee71.fonder.testing.awaitItemSkipping
+import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testSwitchChoicesSource
 import se.partee71.fonder.testing.testTargetLevelPreselection
@@ -62,6 +65,9 @@ class TransactionFormViewModelTest {
     private val dispatcher = StandardTestDispatcher()
 
     private val fund = Fund(fundId = "SHB0000442", name = "Handelsbanken Amerika Småbolag Tema")
+
+    /** Fondens senast kända kurs i cachen, som förifyller kursfältet. */
+    private val cachedPrice = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
     private val funds = MutableStateFlow(listOf(fund))
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
 
@@ -104,22 +110,12 @@ class TransactionFormViewModelTest {
         override suspend fun clearAll() {}
     }
 
-    private val fakePriceRepo = object : FundPriceRepository {
+    private val fakePriceRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun latestPrice(fundId: String): FundPrice? {
             if (fundId == slowFundId) delay(1_000)
             return pricesByFundId[fundId] ?: latestPriceValue
         }
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long) = emptyList<FundPrice>()
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate) = true
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = foundByIsin[isin]
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
     @get:Rule
@@ -168,8 +164,7 @@ class TransactionFormViewModelTest {
     fun `formularet ar ogiltigt tills fond antal och kurs fyllts i`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
             assertFalse(state.valid)
 
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
@@ -187,15 +182,13 @@ class TransactionFormViewModelTest {
 
     @Test
     fun `onFundSelected forifyller kurs fran senaste kanda pris`() = runTest(dispatcher) {
-        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
+        latestPriceValue = cachedPrice
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            while (state.priceText.isEmpty()) state = awaitItem()
+            state = awaitItemSkipping { it.priceText.isEmpty() }
             assertEquals("175.5", state.priceText)
             cancelAndIgnoreRemainingEvents()
         }
@@ -208,21 +201,18 @@ class TransactionFormViewModelTest {
         // transaktionen kunde sparas på fel fonds kurs (tyst fel i GAV och realiserat resultat).
         val utanKurs = Fund(fundId = "SHB0000999", name = "Handelsbanken Global Index Criteria")
         funds.value = listOf(fund, utanKurs)
-        pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
+        pricesByFundId[fund.fundId] = cachedPrice
         val vm = viewModel()
 
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            while (state.priceText.isEmpty()) state = awaitItem()
+            state = awaitItemSkipping { it.priceText.isEmpty() }
             assertEquals("175.5", state.priceText)
 
             vm.onEvent(TransactionFormEvent.FundSelected(utanKurs))
-            state = awaitItem()
-            while (state.selectedFund?.fundId != utanKurs.fundId) state = awaitItem()
+            state = awaitItemSkipping { it.selectedFund?.fundId != utanKurs.fundId }
 
             assertEquals("", state.priceText)
             assertFalse(state.valid)
@@ -236,20 +226,18 @@ class TransactionFormViewModelTest {
         // att användaren redan bytt fond och skriva över den nya fondens kurs.
         val annanFond = Fund(fundId = "SHB0000999", name = "Handelsbanken Global Index Criteria")
         funds.value = listOf(fund, annanFond)
-        pricesByFundId[fund.fundId] = FundPrice(fundId = fund.fundId, epochDay = 100, nav = 175.5, currency = "SEK")
+        pricesByFundId[fund.fundId] = cachedPrice
         pricesByFundId[annanFond.fundId] = FundPrice(fundId = annanFond.fundId, epochDay = 100, nav = 99.0, currency = "SEK")
         slowFundId = fund.fundId
         val vm = viewModel()
 
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
             vm.onEvent(TransactionFormEvent.FundSelected(annanFond))
 
-            state = awaitItem()
-            while (state.priceText.isEmpty()) state = awaitItem()
+            state = awaitItemSkipping { it.priceText.isEmpty() }
             assertEquals("99.0", state.priceText)
 
             // Även efter att det långsamma uppslaget skulle ha hunnit svara.
@@ -265,8 +253,7 @@ class TransactionFormViewModelTest {
         // formuläret ska inte tyst förbli ogiltigt när användaren skriver "2,5" i stället för "2.5".
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
             state = awaitItem()
@@ -277,8 +264,7 @@ class TransactionFormViewModelTest {
             assertTrue(state.valid)
 
             vm.onEvent(TransactionFormEvent.Save)
-            state = awaitItem()
-            while (!state.saved) state = awaitItem()
+            state = awaitItemSkipping { !it.saved }
 
             assertEquals(2.5, addedTransactions.first().shares, 1e-9)
             assertEquals(150.75, addedTransactions.first().pricePerShare, 1e-9)
@@ -286,24 +272,27 @@ class TransactionFormViewModelTest {
         }
     }
 
+    /** Väljer [fund] och fyller i 2 andelar à 150 kr — ett giltigt köp — och returnerar tillståndet efteråt. */
+    private suspend fun ReceiveTurbine<TransactionFormUiState>.fillValidPurchase(vm: TransactionFormViewModel): TransactionFormUiState {
+        vm.onEvent(TransactionFormEvent.FundSelected(fund))
+        awaitItem()
+        vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
+        awaitItem()
+        vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
+        return awaitItem()
+    }
+
     @Test
     fun `save sparar transaktion och markerar formularet som sparat`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
-            vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
-            state = awaitItem()
+            state = fillValidPurchase(vm)
             assertTrue(state.valid)
 
             vm.onEvent(TransactionFormEvent.Save)
-            state = awaitItem()
-            while (!state.saved) state = awaitItem()
+            state = awaitItemSkipping { !it.saved }
 
             assertEquals(1, addedTransactions.size)
             assertEquals(fund.fundId, addedTransactions.first().fundId)
@@ -318,8 +307,7 @@ class TransactionFormViewModelTest {
     fun `sparat kvitteras och kommer inte tillbaka`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
             vm.onEvent(TransactionFormEvent.FundSelected(fund))
             vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
             vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
@@ -341,20 +329,13 @@ class TransactionFormViewModelTest {
     fun `tomt avgiftsfalt sparas som 0 avgift`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
-            vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
-            state = awaitItem()
+            state = fillValidPurchase(vm)
             assertTrue(state.valid)
 
             vm.onEvent(TransactionFormEvent.Save)
-            state = awaitItem()
-            while (!state.saved) state = awaitItem()
+            state = awaitItemSkipping { !it.saved }
 
             assertEquals(0.0, addedTransactions.first().fee, 1e-9)
             cancelAndIgnoreRemainingEvents()
@@ -365,22 +346,15 @@ class TransactionFormViewModelTest {
     fun `ifylld avgift sparas med transaktionen`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
-            vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
-            state = awaitItem()
+            state = fillValidPurchase(vm)
             vm.onEvent(TransactionFormEvent.FeeTextChange("25"))
             state = awaitItem()
             assertTrue(state.valid)
 
             vm.onEvent(TransactionFormEvent.Save)
-            state = awaitItem()
-            while (!state.saved) state = awaitItem()
+            state = awaitItemSkipping { !it.saved }
 
             assertEquals(25.0, addedTransactions.first().fee, 1e-9)
             cancelAndIgnoreRemainingEvents()
@@ -391,15 +365,9 @@ class TransactionFormViewModelTest {
     fun `negativ avgift gor formularet ogiltigt`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (!state.loaded()) state = awaitItem()
+            var state = awaitItemSkipping { !it.loaded() }
 
-            vm.onEvent(TransactionFormEvent.FundSelected(fund))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.SharesTextChange("2"))
-            state = awaitItem()
-            vm.onEvent(TransactionFormEvent.PriceTextChange("150"))
-            state = awaitItem()
+            state = fillValidPurchase(vm)
             assertTrue(state.valid)
 
             vm.onEvent(TransactionFormEvent.FeeTextChange("-10"))
@@ -415,11 +383,7 @@ class TransactionFormViewModelTest {
     private val held = Fund(fundId = "SHB_HELD", name = "Sverige Småbolag", isin = "SE_HELD")
     private val other = Fund(fundId = "SHB_OTHER", name = "Global Index", isin = "SE_OTHER")
 
-    private fun meta(isin: String, name: String, risk: Int) = FundMetadata(
-        isin = isin, name = name, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
-        category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-    )
+    private fun meta(isin: String, name: String, risk: Int) = testFundMetadata(isin = isin, name = name, totalFee = 0.5, managementFee = 0.5, risk = risk)
 
     /** En inspelad plan med ett byte Sverige Småbolag → Kandidat, som Beslut visar det (HEM-8). */
     private suspend fun setUpPlan() {
@@ -455,8 +419,7 @@ class TransactionFormViewModelTest {
     )
 
     private suspend fun ReceiveTurbine<TransactionFormUiState>.awaitUntil(predicate: (TransactionFormUiState) -> Boolean): TransactionFormUiState {
-        var state = awaitItem()
-        while (!predicate(state)) state = awaitItem()
+        var state = awaitItemSkipping { !predicate(it) }
         return state
     }
 

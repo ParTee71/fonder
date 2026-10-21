@@ -23,6 +23,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -38,7 +41,14 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
+import se.partee71.fonder.testing.buy
+import se.partee71.fonder.testing.holdFundAWorth1200
+import se.partee71.fonder.testing.holdOnly
+import se.partee71.fonder.testing.price
+import se.partee71.fonder.testing.quoteOnly
+import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
@@ -53,62 +63,38 @@ class PortfoljViewModelTest {
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = transactions
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactions
-        override suspend fun upsertFund(fund: Fund) {}
-        override suspend fun addTransaction(tx: Transaction): Long = 0
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
-    }
+    private val fakeTransactionRepo = FakeTransactionRepository(funds, transactions)
 
-    private val latestPrices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
-    private var priceHistoryByFundId: Map<String, List<FundPrice>> = emptyMap()
+    private val cachedPrices = FakeCachedPriceRepository()
+    private val latestPrices = cachedPrices.latestPrices
+    private var priceHistoryByFundId: Map<String, List<FundPrice>> by cachedPrices::priceHistoryByFundId
     private val refreshedFundIds = mutableListOf<String>()
     private val refreshSinceCalls = mutableListOf<Triple<String, String, java.time.LocalDate>>()
 
-    private val fakeFundPriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = latestPrices.value[fundId]
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = latestPrices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = priceHistoryByFundId[fundId].orEmpty().filter { it.epochDay in fromEpochDay..toEpochDay }
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
+    private val fakeFundPriceRepo = object : FundPriceRepository by cachedPrices {
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundIds.add(fundId)
             return true
         }
-        override suspend fun refreshSince(fundId: String, isin: String, since: java.time.LocalDate): Boolean {
+        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
             refreshSinceCalls.add(Triple(fundId, isin, since))
             return true
         }
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
-
-    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
 
     /** Låter metadata-uppslaget hänga, som ett sekventiellt nätverksanrop utan svar. */
     private var metadataForBlocks = false
 
-    private val fakeFundMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
-        override suspend fun knownRiskLevels(): List<Int> = emptyList()
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
-        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+    private val fakeFundMetadataRepo = object : FakeFundMetadataRepository() {
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
             // Simulerar det sekventiella nätverksuppslaget som aldrig svarar (offline/hängande).
             if (metadataForBlocks) awaitCancellation()
-            return metadataByIsin.filterKeys { it in isins }
+            return super.metadataFor(isins)
         }
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
     }
+    private var metadataByIsin: Map<String, FundMetadata> by fakeFundMetadataRepo::metadataByIsin
+
+    private fun viewModel() = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
@@ -116,7 +102,7 @@ class PortfoljViewModelTest {
 
     @Test
     fun `tomt tillstand nar inga transaktioner finns`() = runTest(dispatcher) {
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
             // Initialt: laddar
             assertTrue(awaitItem().loading)
@@ -135,8 +121,7 @@ class PortfoljViewModelTest {
         }
         val vm = PortfoljViewModel(failingRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertTrue(state.holdings.isEmpty())
@@ -161,15 +146,11 @@ class PortfoljViewModelTest {
     @Test
     fun `holdings utan kand kurs visar netInvested och null gainLoss`() = runTest(dispatcher) {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, LocalDate.ofEpochDay(1), 2.0, 150.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(1, state.holdings.size)
             assertEquals(300.0, state.totalInvested, 1e-9)
             assertEquals(0.0, state.totalValue, 1e-9)
@@ -184,14 +165,13 @@ class PortfoljViewModelTest {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         funds.value = listOf(fond)
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0),
+            buy(fond, LocalDate.ofEpochDay(1), 2.0, 150.0),
             Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = 2, shares = 2.0, pricePerShare = 160.0)
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
@@ -200,15 +180,11 @@ class PortfoljViewModelTest {
     @Test
     fun `holdings uppdateras reaktivt nar en ny kurs blir kand`() = runTest(dispatcher) {
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = 1, shares = 2.0, pricePerShare = 150.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, LocalDate.ofEpochDay(1), 2.0, 150.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertNull(state.holdings.first().currentValue)
 
             latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = 5, nav = 200.0))
@@ -216,8 +192,7 @@ class PortfoljViewModelTest {
             // Vänta på den emission som faktiskt bär kursen, inte på "nästa": tillståndet
             // emitterar också när kortens körstatus ändras (NAV-6), och `awaitItem()` ensamt
             // hade då läst av en emission som råkade komma före kursen.
-            var updated = awaitItem()
-            while (updated.holdings.first().currentValue == null) updated = awaitItem()
+            var updated = awaitItemSkipping { it.holdings.first().currentValue == null }
             assertEquals(400.0, updated.totalValue, 1e-9)
             assertEquals(100.0, updated.totalGainLoss, 1e-9)
             assertEquals(5L, updated.navEpochDay) // POR-7, issue #27
@@ -229,22 +204,18 @@ class PortfoljViewModelTest {
     fun `performance per innehav rakans ut fran kurshistorik (POR-5)`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1))
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+                price(fond, today.minusDays(1), 110.0),
+                price(fond, today, 120.0)
             )
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        cachedPrices.quoteOnly(fond, today, 120.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             val performance = state.performance[fond.fundId]!!
             val day = performance.day as se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc.PeriodResult.Available
@@ -261,23 +232,19 @@ class PortfoljViewModelTest {
     fun `analys berknas per innehav och flaggar en fond under 200-dagars snitt (POR-8)`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(2))
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under 200-dagarssnittet
         // (samma fixturprincip som FundAnalysisCalcTest/HemViewModelTest).
         priceHistoryByFundId = mapOf(
             fond.fundId to (0..730L step 5).map { daysAgo ->
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
+                price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05)
             }
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        cachedPrices.quoteOnly(fond, today, 100.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             val analysis = state.analysis[fond.fundId]!!
             assertEquals(se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel.GUL, analysis.trend!!.level)
@@ -289,19 +256,15 @@ class PortfoljViewModelTest {
     fun `analys innehaller vinstsignal vid plus 50 procent mot GAV, aven utan risksignaler (ANA-8)`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 80.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1), 10.0, 80.0)
         // Kort historik (en enda punkt) — S1/S2/S3 blir otillräcklig data (null), men
         // vinstsignalen (S4) beror bara på GAV mot nuvarande NAV, inte historikens längd.
-        priceHistoryByFundId = mapOf(fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)))
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        priceHistoryByFundId = mapOf(fond.fundId to listOf(price(fond, today, 120.0)))
+        cachedPrices.quoteOnly(fond, today, 120.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             val analysis = state.analysis[fond.fundId]!!
             assertNull(analysis.status) // ingen risksignal kunde beräknas
@@ -318,11 +281,11 @@ class PortfoljViewModelTest {
         val since = java.time.LocalDate.of(2020, 1, 1)
         val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = since.toEpochDay(), shares = 1.0, pricePerShare = 100.0)
+            buy(fond, since, 1.0, 100.0)
         )
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        viewModel()
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -336,12 +299,12 @@ class PortfoljViewModelTest {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0)
+            buy(fond, today.minusYears(1), 1.0, 100.0)
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        cachedPrices.quoteOnly(fond, today, 120.0)
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        viewModel()
         advanceUntilIdle()
 
         assertTrue(refreshedFundIds.isEmpty())
@@ -358,12 +321,12 @@ class PortfoljViewModelTest {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 1.0, pricePerShare = 100.0)
+            buy(fond, today.minusYears(1), 1.0, 100.0)
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(10).toEpochDay(), nav = 110.0))
+        cachedPrices.quoteOnly(fond, today.minusDays(10), 110.0)
         funds.value = listOf(fond)
 
-        PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        viewModel()
         advanceUntilIdle()
 
         assertEquals(1, refreshedFundIds.size)
@@ -375,25 +338,14 @@ class PortfoljViewModelTest {
     @Test
     fun `exposure anropar metadataFor med innehavens isin och rapporterar fondtyp`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, cachedPrices, today)
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null,
-                tags = listOf(FundTag(title = "Aktiefond", category = "TYPE"))
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, indexFund = true, tags = listOf(FundTag(title = "Aktiefond", category = "TYPE")))
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             // Metadata hämtas i ett eget flöde (issue #75) — innehav och värden ritas direkt,
             // exponeringskartan fylls i när uppslaget landar.
             assertEquals(1200.0, state.totalValue, 1e-9)
@@ -417,18 +369,12 @@ class PortfoljViewModelTest {
         // låg inne i tillståndets map — hela vyn blockerades på nätverket och visade "0,00 kr ·
         // Kurs saknas" så länge uppkopplingen hängde, trots att värdena fanns lokalt.
         val today = java.time.LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, cachedPrices, today)
         metadataForBlocks = true
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             // Uppslaget hänger fortfarande — men innehavet är redan ritat.
             assertEquals(1, state.holdings.size)
@@ -442,7 +388,7 @@ class PortfoljViewModelTest {
     fun `refresh ber schemalaggaren om en forcerad kursuppdatering (UI-11)`() = runTest(dispatcher) {
         // Samma körning och samma unika arbetsnamn som Hems dragning, så en dragning på var
         // sin skärm aldrig blir två parallella uppdateringar.
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
 
         vm.onEvent(PortfoljEvent.Refresh)
 
@@ -455,18 +401,12 @@ class PortfoljViewModelTest {
         // ska inte se ut som en portfölj källan inte kan klassificera. Snurran (NAV-6) är det som
         // skiljer "vet inte än" från "vet inte" (ANA-4-principen).
         val today = java.time.LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, cachedPrices, today)
         metadataForBlocks = true
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.metadataWorking) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.metadataWorking }
             assertTrue(state.exposureWorking)
             cancelAndIgnoreRemainingEvents()
         }
@@ -475,18 +415,12 @@ class PortfoljViewModelTest {
     @Test
     fun `en kursuppdatering snurrar totalkortet och varje innehavsrad`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, cachedPrices, today)
         fakeScheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.pricesWorking) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.pricesWorking }
             assertTrue(state.totalWorking)
             assertTrue(state.holdingWorking(fond.fundId))
             cancelAndIgnoreRemainingEvents()
@@ -497,16 +431,12 @@ class PortfoljViewModelTest {
     fun `exposure exkluderar innehav utan isin, aldrig gissar en kategori`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = null)
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1))
+        cachedPrices.quoteOnly(fond, today, 120.0)
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(1, state.exposure.excludedCount)
             assertEquals(0.0, state.exposure.includedValueKr, 1e-9)
             cancelAndIgnoreRemainingEvents()
@@ -522,25 +452,20 @@ class PortfoljViewModelTest {
         val utanIsin = Fund(fundId = "SHB0000627", name = "Fond B", isin = null)
         funds.value = listOf(medRisk, utanIsin)
         transactions.value = listOf(
-            Transaction(fundId = medRisk.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = utanIsin.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+            buy(medRisk, today.minusYears(1), 10.0, 100.0),
+            buy(utanIsin, today.minusYears(1), 10.0, 100.0)
         )
         latestPrices.value = mapOf(
-            medRisk.fundId to FundPrice(fundId = medRisk.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-            utanIsin.fundId to FundPrice(fundId = utanIsin.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+            medRisk.fundId to price(medRisk, today, 120.0),
+            utanIsin.fundId to price(utanIsin, today, 120.0)
         )
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = 5, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, risk = 5, indexFund = true)
         )
 
-        val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
+        val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.riskLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.riskLevels.isEmpty() }
 
             assertEquals(5, state.riskLevels[medRisk.fundId])
             assertNull("Fond utan ISIN har ingen känd risk och ska inte gissas", state.riskLevels[utanIsin.fundId])

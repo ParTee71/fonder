@@ -31,6 +31,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.datastore.PreferencesRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.domain.model.DownturnReaction
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -43,6 +44,7 @@ import se.partee71.fonder.domain.model.TimeHorizon
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.RiskProfileCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,22 +56,11 @@ class RiskProfilViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var preferencesRepository: PreferencesRepository
-    private var knownLevels: List<Int> = listOf(1, 2, 3, 4, 5, 6)
 
     /** Räknar bl.a. begärda omräkningar av bytesplanen (HEM-8, issue #88). */
     private val fakeScheduler = FakeFundPriceRefreshScheduler()
 
-    private val fakeFundMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
-        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
-        override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = emptyMap()
-        override suspend fun knownRiskLevels(): List<Int> = knownLevels
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
-    }
+    private val fakeFundMetadataRepo = FakeFundMetadataRepository().apply { riskLevels = listOf(1, 2, 3, 4, 5, 6) }
 
     @Before
     fun setUp() {
@@ -96,8 +87,7 @@ class RiskProfilViewModelTest {
     fun `initialt tillstand har ingen egen andring och en tom enkat`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
             assertNull(state.horizon)
             assertNull(state.suggestedAllocation)
             assertFalse(state.hasManualEdit)
@@ -111,8 +101,7 @@ class RiskProfilViewModelTest {
     fun `forslag berknas forst nar alla tre fragor ar besvarade`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
 
             vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             state = awaitItem()
@@ -133,8 +122,7 @@ class RiskProfilViewModelTest {
     fun `ett eget varde i ett falt vinner over forslaget i sin helhet`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
 
             vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             awaitItem()
@@ -159,8 +147,7 @@ class RiskProfilViewModelTest {
     fun `en fordelning kan sattas direkt utan att besvara enkaten`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
 
             vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
@@ -181,8 +168,7 @@ class RiskProfilViewModelTest {
     fun `en summa skild fran 100 spargar sparande`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
 
             vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "50"))
             state = awaitItem()
@@ -198,8 +184,7 @@ class RiskProfilViewModelTest {
     fun `save gor ingenting nar summan inte ar 100`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
             vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "50"))
             awaitItem()
             cancelAndIgnoreRemainingEvents()
@@ -212,36 +197,41 @@ class RiskProfilViewModelTest {
         assertNull(preferencesRepository.riskProfile.first())
     }
 
-    @Test
-    fun `save persisterar bade fordelning och svar nar enkaten ar fullstandig`() = runTest(dispatcher) {
+    /**
+     * Besvarar enkäten (3–7 år, gör inget, balanserad) på en ny vy och sparar. Enkätens förslag
+     * summerar redan till 100 %, så sparandet är möjligt utan att röra fördelningen.
+     */
+    private suspend fun answerSurveyAndSave() {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
             vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.TRE_TILL_7_AR))
             awaitItem()
             vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.GOR_INGET))
             awaitItem()
             vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.BALANSERAD))
-            state = awaitItem()
-            assertTrue(state.editor.canSave) // enkätens förslag summerar redan till 100 %
+            assertTrue(awaitItem().editor.canSave)
             cancelAndIgnoreRemainingEvents()
         }
 
         vm.onEvent(RiskProfilEvent.Save)
         dispatcher.scheduler.advanceUntilIdle()
+    }
+
+    @Test
+    fun `save persisterar bade fordelning och svar nar enkaten ar fullstandig`() = runTest(dispatcher) {
+        answerSurveyAndSave()
 
         val saved = preferencesRepository.riskProfile.first()
         assertEquals(RiskProfileAnswers(TimeHorizon.TRE_TILL_7_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD), saved?.answers)
-        assertEquals(RiskProfileCalc.suggest(saved!!.answers!!, knownLevels), saved.targetAllocation)
+        assertEquals(RiskProfileCalc.suggest(saved!!.answers!!, fakeFundMetadataRepo.riskLevels), saved.targetAllocation)
     }
 
     @Test
     fun `sparat kvitteras och kommer inte tillbaka`() = runTest(dispatcher) {
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
             vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
             assertTrue(state.editor.canSave)
@@ -269,8 +259,7 @@ class RiskProfilViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.allocationSumPercent != 100) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.allocationSumPercent != 100 }
             assertEquals(TimeHorizon.OVER_15_AR, state.horizon)
             assertEquals(mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25), state.effectiveAllocation)
             cancelAndIgnoreRemainingEvents()
@@ -279,7 +268,7 @@ class RiskProfilViewModelTest {
 
     @Test
     fun `tom skala fran kallan ger ingen niva och kraschar inte`() = runTest(dispatcher) {
-        knownLevels = emptyList()
+        fakeFundMetadataRepo.riskLevels = emptyList()
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItem() // initialValue innan enkäten besvarats
@@ -302,22 +291,7 @@ class RiskProfilViewModelTest {
 
     @Test
     fun `sparad andrad malfordelning ber om en omrakning av bytesplanen`() = runTest(dispatcher) {
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
-            vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.TRE_TILL_7_AR))
-            awaitItem()
-            vm.onEvent(RiskProfilEvent.ReactionSelected(DownturnReaction.GOR_INGET))
-            awaitItem()
-            vm.onEvent(RiskProfilEvent.GoalSelected(PrimaryGoal.BALANSERAD))
-            state = awaitItem()
-            assertTrue(state.editor.canSave)
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        vm.onEvent(RiskProfilEvent.Save)
-        dispatcher.scheduler.advanceUntilIdle()
+        answerSurveyAndSave()
 
         assertEquals(1, fakeScheduler.switchPlanScans)
     }
@@ -329,8 +303,7 @@ class RiskProfilViewModelTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() || !it.hasManualEdit }
             vm.onEvent(RiskProfilEvent.HorizonSelected(TimeHorizon.OVER_15_AR))
             state = awaitItem()
             assertTrue(state.editor.canSave)
@@ -351,8 +324,7 @@ class RiskProfilViewModelTest {
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty() || !state.hasManualEdit) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() || !it.hasManualEdit }
             assertTrue(state.valid)
             assertFalse(state.editor.isDirty)
             assertFalse(state.editor.canSave)
@@ -371,8 +343,7 @@ class RiskProfilViewModelTest {
     fun `en sparad profil som inte gar att lasa visas som fel i stallet for en tom enkat`() = runTest(dispatcher) {
         val vm = viewModel(PreferencesRepository(FailingDataStore(failRead = true)))
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading }
             assertEquals(DataError.Unknown, state.editor.loadError?.cause)
             assertFalse(state.editor.canSave)
             cancelAndIgnoreRemainingEvents()
@@ -383,8 +354,7 @@ class RiskProfilViewModelTest {
     fun `ett sparfel sags och formularet star kvar`() = runTest(dispatcher) {
         val vm = viewModel(PreferencesRepository(FailingDataStore(failRead = false)))
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading || state.availableLevels.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading || it.availableLevels.isEmpty() }
             vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
             state = awaitItem()
             assertTrue(state.editor.canSave)
@@ -413,8 +383,7 @@ class RiskProfilViewModelTest {
         }
         val vm = viewModel(PreferencesRepository(flaky))
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.editor.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.editor.loading }
             assertEquals(DataError.Unknown, state.editor.loadError?.cause)
 
             failRead = false

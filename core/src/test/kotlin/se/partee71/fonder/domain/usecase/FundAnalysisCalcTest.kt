@@ -327,6 +327,46 @@ class FundAnalysisCalcTest {
         assertNull(FundAnalysisCalc.averageThreeMonthReturn(today, mapOf("A" to emptyList())))
     }
 
+    @Test
+    fun `analyzeAll analyserar varje innehav mot ovriga fonders snitt och utelamnar fonder utan kopdag`() {
+        val fondB = Fund(fundId = "B", name = "Fond B")
+        val fondC = Fund(fundId = "C", name = "Fond C")
+        val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1100.0)
+        val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 900.0, currentValue = 900.0)
+        val holdingC = Holding(fund = fondC, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
+        val historyA = listOf(price(100, 100.0), price(0, 110.0))
+        val historyB = listOf(price(100, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
+        val histories = mapOf(fond.fundId to historyA, "B" to historyB, "C" to historyB.map { it.copy(fundId = "C") })
+        val firstPurchase = today.minusYears(1)
+
+        val result = FundAnalysisCalc.analyzeAll(
+            today = today,
+            holdings = listOf(holdingA, holdingB, holdingC),
+            historyByFundId = histories,
+            firstPurchaseByFund = mapOf(fond.fundId to firstPurchase, "B" to firstPurchase)
+        )
+
+        assertEquals(listOf(fond.fundId, "B"), result.keys.toList())
+        val expectedA = FundAnalysisCalc.analyze(
+            today,
+            holdingA,
+            historyA,
+            firstPurchase,
+            3000.0,
+            FundAnalysisCalc.averageThreeMonthReturn(today, histories - fond.fundId)
+        )
+        assertEquals(expectedA, result[fond.fundId])
+        val expectedB = FundAnalysisCalc.analyze(
+            today,
+            holdingB,
+            historyB,
+            firstPurchase,
+            3000.0,
+            FundAnalysisCalc.averageThreeMonthReturn(today, histories - "B")
+        )
+        assertEquals(expectedB, result["B"])
+    }
+
     // --- Volatilitet och Sharpe (ANA-7, issue #24) ---
 
     private val riskHolding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1200.0)

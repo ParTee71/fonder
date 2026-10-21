@@ -26,9 +26,11 @@ import org.junit.Test
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.imports.FakeImportFileReader
 import se.partee71.fonder.data.imports.ImportFileReader
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -55,10 +57,7 @@ class ImportHoldingsViewModelTest {
     private val handelsbankenFund = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige (A1 SEK)")
     private val catalog = FundCatalog(companies = emptyList(), funds = listOf(handelsbankenFund))
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = MutableStateFlow(emptyList())
-        override fun observeTransactions(): Flow<List<Transaction>> = MutableStateFlow(emptyList())
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = MutableStateFlow(emptyList())
+    private val fakeTransactionRepo = object : TransactionRepository by FakeTransactionRepository() {
         override suspend fun upsertFund(fund: Fund) {
             addedFunds.add(fund)
         }
@@ -66,15 +65,10 @@ class ImportHoldingsViewModelTest {
             addedTransactions.add(tx)
             return 1
         }
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
     }
 
-    private val fakePriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = null
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
+    private val fakePriceRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = listOf(FundPrice(fundId = fundId, epochDay = fromEpochDay, nav = 950.0, currency = "SEK"))
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundId = fundId
             return true
@@ -83,11 +77,7 @@ class ImportHoldingsViewModelTest {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
         }
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = findFundByIsinResult
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 

@@ -163,7 +163,7 @@ SDK-nivåer uppdaterar TP-1 i samma PR.
   eftersom Robolectric kräver 21 för SDK 36.
 - KSP för Room (`room.schemaLocation` = `app/schemas`, även som `androidTest`-assets för
   migreringstesterna) och Hilt.
-- `cpdCheck` (PMD CPD via CLI som `JavaExec`, 80 tokens, baslinjen `config/cpd-baseline.txt`)
+- `cpdCheck` (PMD CPD via CLI som `JavaExec`, 80 tokens, ingen baslinje)
   över `core/src`, `app/src/main`, `app/src/test`, `app/src/androidTest`, kopplad till `check`.
 - Kodstil: ktlint 1.8 (stil `android_studio`) med compose-rules via Spotless, bara lokalt och inte i CI (regel 5). Kör `./gradlew spotlessApply` före push; `spotlessCheck` kontrollerar. Reglerna står i `ktlintRules` i rotens `build.gradle.kts`; nya CompositionLocals läggs i `compose_allowed_composition_locals`.
 - `gradle.properties`: `org.gradle.caching` och `org.gradle.parallel` påslagna;
@@ -325,8 +325,8 @@ Release här; GUI → avsnittet Mockup här och `ui-style`.
 - **Regel 4:** avvikelse från nordisk blå/koppar, Space Grotesk eller tabulära siffror för
   belopp; en egen listrad i stället för `ItemRow`; en tredje kopia av en känd dubblett
   (`TotalCard`, `ComparisonChart`, importens laddningsdialoger) i stället för att slå ihop den;
-  baslinjerna (`ui-allowlist.txt` ur `tools/regel4-baseline.mjs`, `config/cpd-baseline.txt`) får
-  bara krympa.
+  baslinjen (`ui-allowlist.txt` ur `tools/regel4-baseline.mjs`) får bara krympa, och `cpdCheck`
+  har ingen.
 - **Regel 5:** emulatorn i fler jobb än `instrumented-tests`.
 - **Integritet:** innehav, belopp, transaktioner eller tokens i loggar. Fonder har ingen
   Firestore, så `android:firebase-security-rules-auditor` gäller inte.

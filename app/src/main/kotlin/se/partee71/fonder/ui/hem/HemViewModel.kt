@@ -399,27 +399,14 @@ class HemViewModel @Inject constructor(
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
-        val portfolioTotalValue = PortfolioCalc.totalValue(enriched)
-
         val historyByFundId = enriched.associate { holding ->
             val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
             holding.fund.fundId to fullHistoryByFundId[holding.fund.fundId].orEmpty()
                 .filter { it.epochDay >= since.toEpochDay() }
         }
 
-        val analyses = enriched.mapNotNull { holding ->
-            val firstPurchase = firstPurchaseByFund[holding.fund.fundId] ?: return@mapNotNull null
-            val otherHistories = historyByFundId.filterKeys { it != holding.fund.fundId }
-            val analysis = FundAnalysisCalc.analyze(
-                today = today,
-                holding = holding,
-                priceHistory = historyByFundId[holding.fund.fundId].orEmpty(),
-                firstPurchaseDate = firstPurchase,
-                portfolioTotalValue = portfolioTotalValue,
-                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
-            ) ?: return@mapNotNull null
-            FlaggedHolding(holding.fund, analysis)
-        }
+        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId, firstPurchaseByFund)
+        val analyses = enriched.mapNotNull { holding -> byFundId[holding.fund.fundId]?.let { FlaggedHolding(holding.fund, it) } }
 
         return AnalysisSummary(
             gronCount = analyses.count { it.analysis.status == FundAnalysisCalc.SignalLevel.GRON },

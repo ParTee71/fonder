@@ -114,7 +114,7 @@ oftast att CI på master inte var klart eller grönt. Utöver pluginens generell
 | Fel | Vad du tar reda på |
 |---|---|
 | Roborazzi | referensbilderna i `app/src/test/screenshots/`, diffarna i artifacten `screenshot-diffs` |
-| `cpdCheck` | CPD-rapporten i `test-results`; ingen ny rad i `config/cpd-baseline.txt` |
+| `cpdCheck` | CPD-rapporten i `test-results`; ingen kopia alls (ingen baslinje) |
 | Migreringstest | vilken `MigrationXYTest`, vilken kolumn eller vilket värde som inte överlevde; schemat i `AppDatabase` mot migreringen |
 | Rundtur (`BackupRoundTripTest`) | vilket fält som tappas i `BackupPayload`/`BackupSerializer` |
 | Signeringsgrind | vilken nyckelfil som hamnat i repot |

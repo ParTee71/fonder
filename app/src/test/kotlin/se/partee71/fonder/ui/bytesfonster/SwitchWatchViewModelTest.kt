@@ -23,8 +23,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
@@ -60,28 +62,15 @@ class SwitchWatchViewModelTest {
         listOf(Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SALJ"))
     )
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = flowOf(emptyList())
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flowOf(emptyList())
-        override suspend fun upsertFund(fund: Fund) {}
-        override suspend fun addTransaction(tx: Transaction): Long = 0
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
-    }
+    private val fakeTransactionRepo = FakeTransactionRepository(funds)
 
     /** Kurshistorik per ISIN för [FundPriceRepository.historyForIsin] — kandidaterna appen aldrig ägt. */
     private var historyByIsin: Map<String, List<Pair<Long, Double>>> = emptyMap()
     private var suggestedIsin: String? = null
     private val historyCalls = mutableListOf<String>()
 
-    private val fakePriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = null
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
+    private val fakePriceRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = historyByIsin[fundId].orEmpty().map { (day, nav) -> FundPrice(fundId, day, nav, "SEK") }
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
         override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> {
             historyCalls += isin
             return historyByIsin[isin].orEmpty()
@@ -89,10 +78,6 @@ class SwitchWatchViewModelTest {
                 .map { (day, nav) -> FundPrice(isin, day, nav, "SEK") }
         }
         override suspend fun suggestIsin(fundName: String): String? = suggestedIsin
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog = FundCatalog(emptyList(), emptyList())
     }
 
     private val switchWatchRepo = FakeSwitchWatchRepository()

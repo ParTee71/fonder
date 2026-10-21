@@ -24,6 +24,7 @@ import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
@@ -52,16 +53,10 @@ class TransaktionerViewModelTest {
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
     private val deletedIds = mutableListOf<Long>()
 
-    private val fakeRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = transactions
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactions
-        override suspend fun upsertFund(fund: Fund) {}
-        override suspend fun addTransaction(tx: Transaction): Long = 0
+    private val fakeRepo = object : TransactionRepository by FakeTransactionRepository(funds, transactions) {
         override suspend fun deleteTransaction(id: Long) {
             deletedIds.add(id)
         }
-        override suspend fun clearAll() {}
     }
 
     private val fakeSwitchWatchRepo = FakeSwitchWatchRepository()

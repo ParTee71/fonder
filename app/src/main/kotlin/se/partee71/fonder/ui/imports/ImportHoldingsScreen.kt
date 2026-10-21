@@ -29,13 +29,10 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
-import se.partee71.fonder.ui.components.CheckRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.LoadingDialog
-import se.partee71.fonder.ui.components.SelectField
-import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.labelRes
 import se.partee71.ui.components.AppButton
 import se.partee71.ui.components.AppCard
@@ -145,42 +142,18 @@ private fun ImportRowCard(
 ) {
     val row = rowState.row
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp)) {
-        CheckRow(
-            checked = rowState.included,
-            onCheckedChange = onIncludedChange,
-            label = row.fundName,
+        ImportRowHeader(
+            included = rowState.included,
+            onIncludedChange = onIncludedChange,
+            fundName = row.fundName,
             supportingText = stringResource(R.string.format_import_row_isin, row.isin),
-            labelStyle = MaterialTheme.typography.titleSmall
+            detail = stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
+            catalogFunds = catalogFunds,
+            matchedFund = rowState.matchedFund,
+            matchConfidence = rowState.matchConfidence,
+            priceFetchFailed = rowState.priceFetchFailed,
+            onFundOverride = onFundOverride
         )
-        Text(
-            stringResource(R.string.format_transaktion_rad, row.shares.toString(), MoneyFormat.kr(row.averageCostPerShare)),
-            style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-            modifier = Modifier.padding(top = Spacing.s)
-        )
-
-        SelectField(
-            label = stringResource(R.string.import_match_label),
-            options = catalogFunds,
-            selected = rowState.matchedFund,
-            optionLabel = { it.name },
-            onSelect = onFundOverride,
-            placeholder = stringResource(R.string.import_match_none),
-            modifier = Modifier.padding(top = Spacing.s)
-        )
-        if (rowState.matchConfidence != null && rowState.matchConfidence < 0.75) {
-            Text(
-                stringResource(R.string.import_match_uncertain),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-        if (rowState.priceFetchFailed) {
-            Text(
-                stringResource(R.string.import_price_fetch_failed),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
 
         Text(
             stringResource(R.string.import_occasions_label),

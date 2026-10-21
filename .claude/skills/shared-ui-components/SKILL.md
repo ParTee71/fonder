@@ -86,12 +86,10 @@ raden här. Bygg aldrig en tredje kopia.
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
 | Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | android-ui:s `ItemRow` (används i Beslut, Fondsök och Händelser; `trailing` för belopp, `navigates` för pil) |
 | Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) – Sålda fonders kopia försvann med vyn i 0.62.0 | `ExpandableInfoRow` i ett `AppCard` |
-| Analysera innehaven | `FundAnalysisCalc.analyze`-slingan i `hem/HemViewModel.kt` och `portfolj/PortfoljViewModel.kt` | en funktion i `domain/usecase/` som tar innehav + historik |
-| Testuppställning | ~40 testfiler med kopierade fakes och fixturer – flest `HemViewModelTest`/`PortfoljViewModelTest`, sedan `SettingsViewModelTest`, `FacitViewModelTest`, migreringstesterna | delade fakes och fixturer (skill `testing-strategy` → DRY i tester) |
-
-Alla kopior som fanns när `cpdCheck` infördes står i `config/cpd-baseline.txt` (en rad per
-uppsättning filer som delar en kopia; 66 rader, varav 5 i `app/src/main`, när kontrollen infördes – 54 respektive 3 sedan 0.62.0). Raderna ovan är
-produktionskoden bland dem. Baslinjen ska bara krympa – se *Kontroller*.
+`cpdCheck` har ingen baslinje: kopiorna som fanns när kontrollen infördes (66 filuppsättningar)
+slogs ihop i 0.78.3 (issue #175) – analysslingan till `FundAnalysisCalc.analyzeAll`, importradernas
+huvud till `ImportRowHeader`, testuppställningen till de delade fakes och fixturerna (skill
+`testing-strategy` → DRY i tester). Raderna ovan är dubbletter i beteende som CPD inte ser.
 
 ## Planerade delade delar
 
@@ -160,16 +158,14 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 |---|---|---|
 | Hooken `regel4-check` (`.claude/hooks/regel4-check.mjs`) | direkt efter varje `Edit`/`Write` av en `.kt`-fil i `app/src/main` | samma mönster och undantag som testet; exit 2 med rad, träff och ersättning. Kontrollerar bara Fonder (ett grannrepo i samma session har sin egen hook) |
 | `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hooktestet, så att hook och bygge tolkar lika; dessutom (bara här) att UiState-typerna är `@Immutable`/`@Stable` |
-| `./gradlew cpdCheck` (PMD CPD, 80 tokens) | `build-and-test` | kopierad Kotlin i `app/src/{main,test,androidTest}`; fäller en kopia vars filuppsättning inte står i `config/cpd-baseline.txt` |
+| `./gradlew cpdCheck` (PMD CPD, 80 tokens) | `build-and-test` | kopierad Kotlin i `core/src` och `app/src/{main,test,androidTest}`; varje kopia fäller bygget (ingen baslinje) |
 
-**Baslinjerna** (skuld från före kontrollerna, får bara krympa):
+**Baslinjen** (skuld från före kontrollerna, får bara krympa):
 
 - `ui-allowlist.txt`: rader med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" (19 när kontrollen infördes, 0 sedan M3 Expressive steg 2b)
   genereras av `node tools/regel4-baseline.mjs` – kör det när en skärm rättats. Ett undantag gäller
   fil + symbol, så en baslinjerad för `Card(` i `HemScreen.kt` släpper igenom *alla* `Card(` i den
   filen tills den rättats. Hooktestet fäller en inaktuell baslinje. Handskrivna undantag står kvar.
-- `config/cpd-baseline.txt`: skriv om med `./gradlew cpdCheck -PcpdWriteBaseline` efter en
-  sammanslagning; `cpdCheck` varnar för rader som inte längre gäller. Aldrig för att få in en ny kopia.
 
 ## Arbetsflöde
 

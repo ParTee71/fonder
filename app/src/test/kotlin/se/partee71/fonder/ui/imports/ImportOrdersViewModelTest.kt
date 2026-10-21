@@ -28,6 +28,7 @@ import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.imports.FakeImportFileReader
 import se.partee71.fonder.data.imports.ImportFileReader
 import se.partee71.fonder.data.imports.PdfTextExtractor
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
@@ -46,6 +47,8 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
+import se.partee71.fonder.testing.awaitItemSkipping
+import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testSwitchChoicesSource
 import se.partee71.fonder.testing.testTargetLevelPreselection
@@ -68,6 +71,9 @@ class ImportOrdersViewModelTest {
     private val addedFunds: List<Fund> get() = fakeTransactionRepo.funds.value
     private val addedTransactions: List<Transaction> get() = fakeTransactionRepo.transactions.value
     private val handelsbankenFund = Fund(fundId = "SHB0000442", name = "Handelsbanken Sverige (A1 SEK)")
+
+    /** Fonden i [NORDEA_TEXT]-notan, som källan hittar på ISIN. */
+    private val nordeaFund = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
     private val catalog = FundCatalog(companies = emptyList(), funds = listOf(handelsbankenFund))
     private var findFundByIsinResult: Fund? = null
     private var refreshedFundId: String? = null
@@ -78,11 +84,7 @@ class ImportOrdersViewModelTest {
     /** Den delade fake:n — bevakade fonder och skrivna transaktioner (med id 1, 2, … i skrivordning). */
     private val fakeTransactionRepo = FakeTransactionRepository()
 
-    private val fakePriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = null
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = flowOf(emptyMap())
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
+    private val fakePriceRepo = object : FundPriceRepository by FakeCachedPriceRepository() {
         override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
             refreshedFundId = fundId
             return true
@@ -91,11 +93,7 @@ class ImportOrdersViewModelTest {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
         }
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
         override suspend fun findFundByIsin(isin: String): Fund? = fundsByIsin[isin] ?: findFundByIsinResult
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
         override suspend fun fetchFundCatalog(): FundCatalog = catalog
     }
 
@@ -139,14 +137,13 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `parsar och matchar fond via ISIN fran en PDF`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
             assertTrue(awaitItem().rows.isEmpty())
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(1, state.rows.size)
             val row = state.rows.first()
@@ -173,8 +170,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(handelsbankenFund, state.rows.first().matchedFund)
             cancelAndIgnoreRemainingEvents()
@@ -183,7 +179,7 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `valda filer lases via filelasaren och de som inte gar att oppna hoppas over`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val readable = mockk<Uri>()
         val unreadable = mockk<Uri>()
         val vm = viewModel(
@@ -194,8 +190,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onEvent(ImportOrdersEvent.FilesSelected(listOf(unreadable, readable)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertTrue(state.filesSelected)
             assertEquals("SE0003653302", state.rows.single().transaction.isin)
@@ -209,8 +204,7 @@ class ImportOrdersViewModelTest {
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
-            var initial = awaitItem()
-            while (!initial.switchReady) initial = awaitItem()
+            var initial = awaitItemSkipping { !it.switchReady }
             vm.onEvent(ImportOrdersEvent.FilesSelected(listOf(mockk<Uri>())))
             advanceUntilIdle()
             expectNoEvents()
@@ -226,8 +220,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("skrap.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(DataError.ImportNoTransactions, state.error?.cause)
             assertTrue(state.rows.isEmpty())
@@ -237,7 +230,7 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `flera filer samtidigt ger en rad per parsad transaktion`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val extractorPerFile: (String) -> String = { fileName ->
             if (fileName == "unparsable.pdf") "ingen avräkningsnota" else NORDEA_TEXT
         }
@@ -252,8 +245,7 @@ class ImportOrdersViewModelTest {
                     "unparsable.pdf" to "unparsable.pdf".toByteArray()
                 )
             )
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(2, state.rows.size)
             assertEquals(listOf("unparsable.pdf"), state.unparsedFileNames)
@@ -267,14 +259,13 @@ class ImportOrdersViewModelTest {
         // Regression: fälten redigeras med KeyboardType.Decimal, som på ett svenskt
         // tangentbord ofta bara erbjuder komma — en rättelse med komma ska inte tyst göra
         // raden ej importerbar.
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             val transaction = state.rows.first().transaction
             vm.onEvent(ImportOrdersEvent.SharesTextChange(transaction, "16,9862"))
@@ -292,14 +283,13 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `import skapar fond och transaktion fran bekraftade rader`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             vm.onEvent(ImportOrdersEvent.Import)
             state = awaitItem()
@@ -323,14 +313,13 @@ class ImportOrdersViewModelTest {
         // här flödet tidigare aldrig någon kurs alls — en importerad fond fick ingen cachad
         // kurs förrän något annat råkade hämta den. fakePriceRepo.latestPrice returnerar
         // null som standard, dvs. fonden har ingen kurs sedan tidigare.
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(Triple("SE0003653302", "SE0003653302", LocalDate.of(2020, 3, 13)), refreshSinceCall)
             assertNull(refreshedFundId)
@@ -353,8 +342,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertEquals(handelsbankenFund.fundId, refreshedFundId)
             assertNull(refreshSinceCall)
@@ -364,7 +352,7 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `hoppar over kursuppdatering nar fonden redan har en aktuell cachad kurs`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val priceRepoMedFarskKurs = object : FundPriceRepository by fakePriceRepo {
             override suspend fun latestPrice(fundId: String): FundPrice = FundPrice(fundId = fundId, epochDay = LocalDate.now().toEpochDay(), nav = 294.36, currency = "SEK")
         }
@@ -373,8 +361,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertNull(refreshedFundId)
             assertNull(refreshSinceCall)
@@ -384,7 +371,7 @@ class ImportOrdersViewModelTest {
 
     @Test
     fun `misslyckad kurshamtning markerar raden`() = runTest(dispatcher) {
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val priceRepoMedMisslyckadHamtning = object : FundPriceRepository by fakePriceRepo {
             override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
                 refreshSinceCall = Triple(fundId, isin, since)
@@ -396,8 +383,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
 
             assertTrue(state.rows.first().priceFetchFailed)
             cancelAndIgnoreRemainingEvents()
@@ -408,14 +394,13 @@ class ImportOrdersViewModelTest {
     fun `importen raknar om bytesplanen en gang, inte per rad`() = runTest(dispatcher) {
         // Varje skanning kostar en forcerad kursuppdatering plus källfrågor — en import med många
         // rader ska koalesceras till en (BYT-2).
-        findFundByIsinResult = Fund(fundId = "SE0003653302", name = "Nordea Småbolagsfond Sverige", currency = "SEK", isin = "SE0003653302")
+        findFundByIsinResult = nordeaFund
         val vm = viewModel(PdfTextExtractor { NORDEA_TEXT })
 
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(listOf("nota1.pdf" to ByteArray(0), "nota2.pdf" to ByteArray(0), "nota3.pdf" to ByteArray(0)))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady }
             assertEquals(3, state.rows.size)
 
             vm.onEvent(ImportOrdersEvent.Import)
@@ -441,11 +426,7 @@ class ImportOrdersViewModelTest {
     private val buyNota = nota("Global Indexnära", "SE0000581434", "In Självbetjäning 2026-10-13 18 400.00 438.46 41.9649 41.9649")
     private val otherBuyNota = nota("Annan fond", "SE0000000018", "In Självbetjäning 2026-10-13 5 000.00 100.00 50.0000 50.0000")
 
-    private fun meta(isin: String, name: String, risk: Int) = FundMetadata(
-        isin = isin, name = name, orderbookId = isin, totalFee = 0.5, managementFee = 0.5,
-        category = null, fundType = null, companyName = null, risk = risk, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-    )
+    private fun meta(isin: String, name: String, risk: Int) = testFundMetadata(isin = isin, name = name, totalFee = 0.5, managementFee = 0.5, risk = risk)
 
     private suspend fun setUpPlanAndFunds() {
         listOf(
@@ -484,8 +465,7 @@ class ImportOrdersViewModelTest {
             awaitItem()
             // Köpet först i filordningen — importen visar och skriver ändå sälj före köp.
             vm.onFilesRead(files(buyNota, saleNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
 
             assertEquals(listOf(TransactionType.SALJ, TransactionType.KOP), state.rows.map { it.transaction.type })
             assertEquals(SwitchOption.Decide(SwitchDecision.ForSuggestion(42, 3)), state.rows[0].switchField?.option)
@@ -522,8 +502,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(files(saleNota, otherBuyNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
 
             // Säljet utan planrad: "Inget byte" förvalt, köpet har inget att koppla till.
             assertEquals(SwitchOption.Decide(SwitchDecision.None), state.rows[0].switchField?.option)
@@ -569,8 +548,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(files(saleNota, buyNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
 
             assertTrue(state.rows[0].switchField!!.unanswered)
             vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId)))
@@ -604,8 +582,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(files(saleNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
             vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId)))
             state = awaitItem()
 
@@ -627,8 +604,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(files(saleNota, buyNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
 
             vm.onEvent(ImportOrdersEvent.IncludedChange(state.rows[0].transaction, false))
             state = awaitItem()
@@ -654,8 +630,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onFilesRead(files(saleNota, buyNota))
-            var state = awaitItem()
-            while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.switchReady || it.rows.any { it.switchField == null } }
             val sale = state.rows[0].transaction
             assertEquals(SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(0)), state.rows[1].switchField?.option)
 

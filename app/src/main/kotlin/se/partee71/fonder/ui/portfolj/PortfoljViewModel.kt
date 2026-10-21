@@ -267,26 +267,12 @@ class PortfoljViewModel @Inject constructor(
         val firstPurchaseByFund = transactions
             .groupBy { it.fundId }
             .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
-        val portfolioTotalValue = PortfolioCalc.totalValue(enriched)
-
         val historyByFundId = enriched.associate { holding ->
             val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
             holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since.toEpochDay(), today.toEpochDay())
         }
 
-        return enriched.mapNotNull { holding ->
-            val firstPurchase = firstPurchaseByFund[holding.fund.fundId] ?: return@mapNotNull null
-            val otherHistories = historyByFundId.filterKeys { it != holding.fund.fundId }
-            val analysis = FundAnalysisCalc.analyze(
-                today = today,
-                holding = holding,
-                priceHistory = historyByFundId[holding.fund.fundId].orEmpty(),
-                firstPurchaseDate = firstPurchase,
-                portfolioTotalValue = portfolioTotalValue,
-                otherHoldingsAverageThreeMonthReturn = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
-            ) ?: return@mapNotNull null
-            holding.fund.fundId to analysis
-        }.toMap()
+        return FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId, firstPurchaseByFund)
     }
 
     fun onEvent(event: PortfoljEvent) {

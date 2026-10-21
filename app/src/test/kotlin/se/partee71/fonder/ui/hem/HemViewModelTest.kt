@@ -38,9 +38,11 @@ import se.partee71.fonder.data.repository.BackupSerializer
 import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.FakeBackupRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
 import se.partee71.fonder.data.repository.FakeSuggestionDismissalRepository
 import se.partee71.fonder.data.repository.FakeSuggestionRecordRepository
 import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.AccountType
@@ -65,7 +67,14 @@ import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
+import se.partee71.fonder.testing.buy
+import se.partee71.fonder.testing.holdFundAWorth1200
+import se.partee71.fonder.testing.holdOnly
+import se.partee71.fonder.testing.price
+import se.partee71.fonder.testing.quoteOnly
+import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
@@ -82,15 +91,7 @@ class HemViewModelTest {
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = transactions
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = transactions
-        override suspend fun upsertFund(fund: Fund) {}
-        override suspend fun addTransaction(tx: Transaction): Long = 0
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
-    }
+    private val fakeTransactionRepo = FakeTransactionRepository(funds, transactions)
 
     private val fakeFundPriceRepo = FakeCachedPriceRepository()
     private val latestPrices = fakeFundPriceRepo.latestPrices
@@ -99,23 +100,15 @@ class HemViewModelTest {
     /** Varje `priceHistory`-anrop, i ordning — driver testet att hämtningen sker en gång per fond och emission. */
     private val priceHistoryCalls = fakeFundPriceRepo.priceHistoryCalls
 
-    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
     private var metadataForCall: List<String>? = null
 
-    private val fakeFundMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
-        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+    private val fakeFundMetadataRepo = object : FakeFundMetadataRepository() {
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
             metadataForCall = isins
-            return metadataByIsin.filterKeys { it in isins }
+            return super.metadataFor(isins)
         }
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
-        override suspend fun knownRiskLevels(): List<Int> = emptyList()
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
+    private var metadataByIsin: Map<String, FundMetadata> by fakeFundMetadataRepo::metadataByIsin
 
     private val fakeSuggestionRecordRepo = FakeSuggestionRecordRepository()
 
@@ -185,8 +178,7 @@ class HemViewModelTest {
         }
         val vm = viewModel(failingRepo)
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(DataError.Database, state.error?.cause)
             assertFalse(state.isEmpty)
             assertFalse(state.content.hasHoldings)
@@ -212,28 +204,24 @@ class HemViewModelTest {
     fun `visar total varde vinst och dag vecka manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1))
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
-                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 110.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(7).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 80.0)
+                price(fond, today, 120.0),
+                price(fond, today.minusDays(1), 110.0),
+                price(fond, today.minusDays(7), 100.0),
+                price(fond, today.minusDays(30), 80.0)
             )
         )
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertFalse(state.isEmpty) // innehavet finns, bara kursen saknas ännu (samma fallback som POR-3)
             // ingen kand kurs an -> ingen periodberakning möjlig för portföljen
             assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.day)
 
-            latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+            fakeFundPriceRepo.quoteOnly(fond, today, 120.0)
 
             val updated = awaitItem()
             assertFalse(updated.isEmpty)
@@ -254,16 +242,12 @@ class HemViewModelTest {
     fun `navEpochDay speglar prisets NAV-datum (POR-7)`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.minusDays(1).toEpochDay(), nav = 120.0))
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1))
+        fakeFundPriceRepo.quoteOnly(fond, today.minusDays(1), 120.0)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             assertEquals(today.minusDays(1).toEpochDay(), state.content.navEpochDay)
             cancelAndIgnoreRemainingEvents()
@@ -274,19 +258,15 @@ class HemViewModelTest {
     fun `nyligen tillagd fond utan tillrackligt historik ger InsufficientHistory for vecka och manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusDays(2))
         priceHistoryByFundId = mapOf(
-            fond.fundId to listOf(FundPrice(fundId = fond.fundId, epochDay = today.minusDays(2).toEpochDay(), nav = 100.0))
+            fond.fundId to listOf(price(fond, today.minusDays(2), 100.0))
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 105.0))
+        fakeFundPriceRepo.quoteOnly(fond, today, 105.0)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.week)
             assertEquals(PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory, state.content.performance.month)
@@ -298,20 +278,16 @@ class HemViewModelTest {
     fun `analysis-summering ar tom nar inga fonder ar flaggade`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(2))
         // Flat kurshistorik — inga signaler triggade.
         priceHistoryByFundId = mapOf(
-            fond.fundId to (0..730L step 14).map { daysAgo -> FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0) }
+            fond.fundId to (0..730L step 14).map { daysAgo -> price(fond, today.minusDays(daysAgo), 100.0) }
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        fakeFundPriceRepo.quoteOnly(fond, today, 100.0)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(1, state.content.analysisSummary.gronCount)
             assertTrue(state.content.analysisSummary.flagged.isEmpty())
             cancelAndIgnoreRemainingEvents()
@@ -322,23 +298,19 @@ class HemViewModelTest {
     fun `flaggar en fond som ligger under 200-dagars snitt`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(2).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(2))
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under både
         // 52-veckorstoppen och 200-dagarssnittet (samma fixturprincip som FundAnalysisCalcTest).
         priceHistoryByFundId = mapOf(
             fond.fundId to (0..730L step 5).map { daysAgo ->
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(daysAgo).toEpochDay(), nav = 100.0 + daysAgo * 0.05)
+                price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05)
             }
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 100.0))
+        fakeFundPriceRepo.quoteOnly(fond, today, 100.0)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(1, state.content.analysisSummary.flagged.size)
             assertEquals(fond.fundId, state.content.analysisSummary.flagged.first().fund.fundId)
             cancelAndIgnoreRemainingEvents()
@@ -350,25 +322,15 @@ class HemViewModelTest {
     @Test
     fun `feeSummary anropar metadataFor med innehavens isin och rapporterar totalen`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, indexFund = true)
         )
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
             // Metadata hämtas i ett eget flöde (issue #75) — vänta in dess emission.
-            while (state.loading || state.content.feeSummary.comparableCount == 0) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.feeSummary.comparableCount == 0 }
             // 10 andelar × 120 kr = 1200 kr innehavsvärde; 0,73 % av 1200 = 8,76 kr/år.
             assertEquals(8.76, state.content.feeSummary.totalAnnualFeeKr, 0.01)
             assertEquals(0, state.content.feeSummary.unknownFeeCount)
@@ -381,16 +343,12 @@ class HemViewModelTest {
     fun `feeSummary raknar ett innehav utan isin som okand avgift, aldrig som noll`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A") // inget ISIN
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        fakeTransactionRepo.holdOnly(fond, today.minusYears(1))
+        fakeFundPriceRepo.quoteOnly(fond, today, 120.0)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(0.0, state.content.feeSummary.totalAnnualFeeKr, 1e-9)
             assertEquals(1, state.content.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
@@ -404,18 +362,12 @@ class HemViewModelTest {
     @Test
     fun `feeSummary raknar ett innehav utan metadatatraff som okand avgift`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today, isin = "SE_OKAND")
         metadataByIsin = emptyMap() // källan känner inte till ISIN:et
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertEquals(0.0, state.content.feeSummary.totalAnnualFeeKr, 1e-9)
             assertEquals(1, state.content.feeSummary.unknownFeeCount)
             cancelAndIgnoreRemainingEvents()
@@ -427,26 +379,14 @@ class HemViewModelTest {
     @Test
     fun `feeSummary visar besparing fran ett farskt persisterat jamforelseresultat`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = null, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
-                cheapestAlternativeIsin = "SE_ALT", cheapestAlternativeFee = 0.21,
-                comparisonResolvedAtEpochDay = today.toEpochDay()
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, indexFund = true, cheapestAlternativeIsin = "SE_ALT", cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.feeSummary.comparedCount == 0) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.feeSummary.comparedCount == 0 }
             // 1200 kr innehavsvärde × (0,73−0,21)% = 6,24 kr/år.
             assertEquals(6.24, state.content.feeSummary.totalAnnualSavingsKr, 0.01)
             assertEquals(1, state.content.feeSummary.comparedCount)
@@ -460,17 +400,11 @@ class HemViewModelTest {
     @Test
     fun `riskProfile ar null och portfolioRisk saknar varde utan sparad profil`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertNull(state.content.riskProfile)
             assertNull(state.content.portfolioRisk.weightedAverageRisk)
             cancelAndIgnoreRemainingEvents()
@@ -480,25 +414,15 @@ class HemViewModelTest {
     @Test
     fun `riskProfile speglar sparad malniva och portfolioRisk raknar det vardeviktade snittet`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, risk = 4, indexFund = true)
         )
         preferencesRepository.setRiskProfile(RiskProfile(targetRiskLevel = 5))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.riskProfile == null || state.content.portfolioRisk.weightedAverageRisk == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.riskProfile == null || it.content.portfolioRisk.weightedAverageRisk == null }
             assertEquals(5, state.content.riskProfile?.targetRiskLevel)
             // Ett enda innehav -> det värdeviktade snittet är exakt fondens egen risknivå.
             assertEquals(4.0, state.content.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
@@ -510,19 +434,13 @@ class HemViewModelTest {
     @Test
     fun `portfolioRisk exkluderar innehav utan kand risk och rapporterar det`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_OKAND")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today, isin = "SE_OKAND")
         metadataByIsin = emptyMap()
         preferencesRepository.setRiskProfile(RiskProfile(targetRiskLevel = 3))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.riskProfile == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.riskProfile == null }
             assertNull(state.content.portfolioRisk.weightedAverageRisk)
             assertEquals(1, state.content.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
@@ -532,27 +450,17 @@ class HemViewModelTest {
     @Test
     fun `riskLevelDeviations jamfor malfordelningen mot innehavens faktiska niva-fordelning`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
-            "SE0001466368" to FundMetadata(
-                isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65,
-                category = null, fundType = null, companyName = null, risk = 4, indexFund = true,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            )
+            "SE0001466368" to testFundMetadata(isin = "SE0001466368", name = "Fond A", orderbookId = "X", totalFee = 0.73, managementFee = 0.65, risk = 4, indexFund = true)
         )
         // Ett enda innehav på nivå 4 -> hela portföljvärdet är den faktiska fördelningen {4: 100 %}.
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 0.5, 4 to 0.5)))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
             // Vänta tills metadatan landat — den faktiska fördelningen är tom innan dess.
-            while (state.loading || state.content.riskLevelDeviations.none { it.actualFraction > 0.0 }) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.riskLevelDeviations.none { it.actualFraction > 0.0 } }
             val byLevel = state.content.riskLevelDeviations.associateBy { it.level }
             assertEquals(0.5, byLevel.getValue(3).targetFraction, 1e-9)
             assertEquals(0.0, byLevel.getValue(3).actualFraction, 1e-9)
@@ -565,17 +473,11 @@ class HemViewModelTest {
     @Test
     fun `riskLevelDeviations ar tom utan en sparad profil`() = runTest(dispatcher) {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0001466368")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
             assertTrue(state.content.riskLevelDeviations.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
@@ -585,23 +487,10 @@ class HemViewModelTest {
 
     private fun setUpHoldingWithMetadataForSwitchPlan() {
         val today = LocalDate.now()
-        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE_HELD")
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today, isin = "SE_HELD")
         metadataByIsin = mapOf(
-            "SE_HELD" to FundMetadata(
-                isin = "SE_HELD", name = "Innehav", orderbookId = "X", totalFee = 1.0, managementFee = 1.0,
-                category = null, fundType = null, companyName = null, risk = 5, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            ),
-            "SE_CAND" to FundMetadata(
-                isin = "SE_CAND", name = "Kandidat", orderbookId = "Y", totalFee = 0.3, managementFee = 0.3,
-                category = null, fundType = null, companyName = null, risk = 3, indexFund = false,
-                startDateEpochDay = null, minimumBuy = null, tags = emptyList()
-            )
+            "SE_HELD" to testFundMetadata(isin = "SE_HELD", name = "Innehav", orderbookId = "X", totalFee = 1.0, managementFee = 1.0, risk = 5),
+            "SE_CAND" to testFundMetadata(isin = "SE_CAND", name = "Kandidat", orderbookId = "Y", totalFee = 0.3, managementFee = 0.3, risk = 3)
         )
         fakeSuggestionRecordRepo.records.value = listOf(
             SuggestionRecord(
@@ -624,8 +513,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.pricesWorking) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.pricesWorking }
             assertTrue(state.totalWorking)
             assertTrue(state.performanceWorking)
             assertTrue(state.returnChartWorking)
@@ -645,8 +533,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || !state.benchmarkWorking) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || !it.benchmarkWorking }
             assertTrue(state.returnChartWorking)
             assertFalse(state.pricesWorking)
             while (state.metadataWorking) state = awaitItem()
@@ -663,8 +550,7 @@ class HemViewModelTest {
         fakeScheduler.runningWork.value = setOf(BackgroundWork.SWITCH_PLAN_SCAN)
 
         viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.metadataWorking) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.metadataWorking }
             assertFalse(state.riskWorking)
             assertFalse(state.pricesWorking)
             cancelAndIgnoreRemainingEvents()
@@ -680,8 +566,7 @@ class HemViewModelTest {
         )
 
         viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.decisions.count < 2) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.decisions.count < 2 }
             assertEquals(1, state.decisions.openSwitchCount)
             assertEquals(1, state.decisions.soldCount)
             assertEquals(2, state.decisions.count)
@@ -698,8 +583,7 @@ class HemViewModelTest {
         fakeSuggestionRecordRepo.records.value += fakeSuggestionRecordRepo.records.value.single().copy(id = 43, kind = SuggestionKind.FEE)
 
         viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.decisions.count < 2) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.decisions.count < 2 }
             assertEquals(1, state.decisions.openSwitchCount)
             assertEquals(1, state.decisions.openCheaperAlternativeCount)
             assertEquals(2, state.decisions.count)
@@ -723,18 +607,24 @@ class HemViewModelTest {
     /** Ett innehav köpt för 30 dagar sedan med en kurshistorik som räcker till en kurva. */
     private fun setUpHoldingForReturnSeries(fond: Fund = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0000000001")) {
         val today = LocalDate.now()
-        funds.value = listOf(fond)
-        transactions.value = listOf(
-            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
-        )
+        fakeTransactionRepo.holdOnly(fond, today.minusDays(30))
         priceHistoryByFundId = mapOf(
             fond.fundId to listOf(
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.minusDays(15).toEpochDay(), nav = 110.0),
-                FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+                price(fond, today.minusDays(30), 100.0),
+                price(fond, today.minusDays(15), 110.0),
+                price(fond, today, 120.0)
             )
         )
-        latestPrices.value = mapOf(fond.fundId to FundPrice(fundId = fond.fundId, epochDay = today.toEpochDay(), nav = 120.0))
+        fakeFundPriceRepo.quoteOnly(fond, today, 120.0)
+    }
+
+    /** Referensfondens kurshistorik: [start] för 30 dagar sedan och [end] idag (samma dagar som innehavet). */
+    private fun monthOfPrices(isin: String, start: Double, end: Double): Pair<String, List<FundPrice>> {
+        val today = LocalDate.now()
+        return isin to listOf(
+            FundPrice(fundId = isin, epochDay = today.minusDays(30).toEpochDay(), nav = start),
+            FundPrice(fundId = isin, epochDay = today.toEpochDay(), nav = end)
+        )
     }
 
     @Test
@@ -745,8 +635,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             assertEquals(3, state.content.returnSeries.points.size)
             assertEquals(0.0, state.content.returnSeries.points.first().second, 1e-9)
@@ -765,8 +654,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.purchaseEpochDays.isEmpty()) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.purchaseEpochDays.isEmpty() }
 
             assertEquals(listOf(today.minusDays(30).toEpochDay()), state.content.purchaseEpochDays)
             cancelAndIgnoreRemainingEvents()
@@ -780,21 +668,20 @@ class HemViewModelTest {
         val fondB = Fund(fundId = "SHB0000443", name = "Fond B")
         funds.value = listOf(fondA, fondB)
         transactions.value = listOf(
-            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0),
-            Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = today.minusDays(30).toEpochDay(), shares = 10.0, pricePerShare = 100.0)
+            buy(fondA, today.minusDays(30), 10.0, 100.0),
+            buy(fondB, today.minusDays(30), 10.0, 100.0)
         )
         // Fond B saknar historik helt — den ska utelämnas ur kurvan, inte räknas som en förlust.
         priceHistoryByFundId = mapOf(
             fondA.fundId to listOf(
-                FundPrice(fundId = fondA.fundId, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                FundPrice(fundId = fondA.fundId, epochDay = today.toEpochDay(), nav = 120.0)
+                price(fondA, today.minusDays(30), 100.0),
+                price(fondA, today, 120.0)
             )
         )
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             assertTrue(state.content.returnSeries.partial)
             assertEquals(0.20, state.content.returnSeries.points.last().second, 1e-9)
@@ -807,19 +694,13 @@ class HemViewModelTest {
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
         // Referensfonden: samma dagar, men +10 % i stället för innehavets +20 %.
-        priceHistoryByFundId = priceHistoryByFundId + (
-            BENCHMARK_ISIN to listOf(
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
-            )
-            )
+        priceHistoryByFundId = priceHistoryByFundId + monthOfPrices(BENCHMARK_ISIN, 200.0, 220.0)
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
         preferencesRepository.setBenchmark(listOf(BenchmarkComponentRef(BENCHMARK_ISIN, weight = 1.0)))
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.benchmarkSeries == null }
 
             val benchmark = state.content.benchmarkSeries!!
             assertEquals("Global Index", benchmark.fundName)
@@ -835,8 +716,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             assertNull(state.content.benchmarkSeries)
             cancelAndIgnoreRemainingEvents()
@@ -857,8 +737,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             assertNull(state.content.benchmarkSeries)
             cancelAndIgnoreRemainingEvents()
@@ -875,12 +754,11 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             priceHistoryCalls.clear()
             latestPrices.value = mapOf(
-                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0)
+                fond.fundId to price(fond, LocalDate.now(), 130.0)
             )
             awaitItem()
 
@@ -898,13 +776,12 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
             assertEquals(1, fakeScheduler.benchmarkScans)
 
             // Ny emission (kursändring) ska inte ge en till skanning.
             latestPrices.value = mapOf(
-                fond.fundId to FundPrice(fundId = fond.fundId, epochDay = LocalDate.now().toEpochDay(), nav = 130.0)
+                fond.fundId to price(fond, LocalDate.now(), 130.0)
             )
             awaitItem()
 
@@ -920,8 +797,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.returnSeries.isEmpty) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
 
             assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
@@ -933,8 +809,7 @@ class HemViewModelTest {
         // Ingen portfölj att jämföra — skanningen kostar en källfråga och ska inte gå på tomgång.
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading) state = awaitItem()
+            var state = awaitItemSkipping { it.loading }
 
             assertEquals(0, fakeScheduler.benchmarkScans)
             cancelAndIgnoreRemainingEvents()
@@ -946,18 +821,8 @@ class HemViewModelTest {
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
         priceHistoryByFundId = priceHistoryByFundId +
-            (
-                BENCHMARK_ISIN to listOf(
-                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
-                )
-                ) +
-            (
-                BOND_ISIN to listOf(
-                    FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                    FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 100.0)
-                )
-                )
+            monthOfPrices(BENCHMARK_ISIN, 200.0, 220.0) +
+            monthOfPrices(BOND_ISIN, 100.0, 100.0)
         metadataByIsin = mapOf(
             BENCHMARK_ISIN to indexFundMetadata(),
             BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Räntefond X")
@@ -971,8 +836,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.benchmarkSeries == null }
 
             val benchmark = state.content.benchmarkSeries!!
             assertTrue(benchmark.fundName.contains("Global Index"))
@@ -989,19 +853,13 @@ class HemViewModelTest {
         // tvinga fram en ny källfråga plus full backfill i onödan.
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
-        priceHistoryByFundId = priceHistoryByFundId + (
-            BENCHMARK_ISIN to listOf(
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
-            )
-            )
+        priceHistoryByFundId = priceHistoryByFundId + monthOfPrices(BENCHMARK_ISIN, 200.0, 220.0)
         metadataByIsin = mapOf(BENCHMARK_ISIN to indexFundMetadata())
         dataStore.edit { it[stringPreferencesKey("benchmark_isin")] = BENCHMARK_ISIN }
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.benchmarkSeries == null }
 
             assertEquals("Global Index", state.content.benchmarkSeries!!.fundName)
             assertEquals(0, fakeScheduler.benchmarkScans)
@@ -1014,18 +872,8 @@ class HemViewModelTest {
         val today = LocalDate.now()
         setUpHoldingForReturnSeries()
         priceHistoryByFundId = priceHistoryByFundId +
-            (
-                BENCHMARK_ISIN to listOf(
-                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 200.0),
-                    FundPrice(fundId = BENCHMARK_ISIN, epochDay = today.toEpochDay(), nav = 220.0)
-                )
-                ) +
-            (
-                BOND_ISIN to listOf(
-                    FundPrice(fundId = BOND_ISIN, epochDay = today.minusDays(30).toEpochDay(), nav = 100.0),
-                    FundPrice(fundId = BOND_ISIN, epochDay = today.toEpochDay(), nav = 130.0)
-                )
-                )
+            monthOfPrices(BENCHMARK_ISIN, 200.0, 220.0) +
+            monthOfPrices(BOND_ISIN, 100.0, 130.0)
         metadataByIsin = mapOf(
             BENCHMARK_ISIN to indexFundMetadata(),
             BOND_ISIN to indexFundMetadata(isin = BOND_ISIN, name = "Mitt val")
@@ -1036,8 +884,7 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.loading || state.content.benchmarkSeries == null) state = awaitItem()
+            var state = awaitItemSkipping { it.loading || it.content.benchmarkSeries == null }
 
             val benchmark = state.content.benchmarkSeries!!
             assertEquals("Mitt val", benchmark.fundName)
@@ -1073,8 +920,7 @@ class HemViewModelTest {
         fakeBackupRepo.payload.value = backupPayload(transactionCount = 2)
 
         viewModel().uiState.test {
-            var state = awaitItem()
-            while (state.backupReminder == null) state = awaitItem()
+            var state = awaitItemSkipping { it.backupReminder == null }
             assertEquals(BackupReminder(newTransactions = 0, lastBackupEpochMillis = null), state.backupReminder)
             cancelAndIgnoreRemainingEvents()
         }
@@ -1086,8 +932,7 @@ class HemViewModelTest {
         val vm = viewModel()
 
         vm.uiState.test {
-            var state = awaitItem()
-            while (state.backupReminder == null) state = awaitItem()
+            var state = awaitItemSkipping { it.backupReminder == null }
 
             backupStatus.recordBackup(BackupSerializer.encode(fakeBackupRepo.payload.value), BackupTarget.DRIVE, nowEpochMillis = 1_700_000_000_000L)
             while (state.backupReminder != null) state = awaitItem()
@@ -1115,21 +960,7 @@ class HemViewModelTest {
         }
     }
 
-    private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = FundMetadata(
-        isin = isin,
-        name = name,
-        orderbookId = isin,
-        totalFee = 0.2,
-        managementFee = 0.2,
-        category = null,
-        fundType = "Aktiefond",
-        companyName = null,
-        risk = 5,
-        indexFund = true,
-        startDateEpochDay = null,
-        minimumBuy = null,
-        tags = emptyList()
-    )
+    private fun indexFundMetadata(isin: String = BENCHMARK_ISIN, name: String = "Global Index") = testFundMetadata(isin = isin, name = name, totalFee = 0.2, managementFee = 0.2, fundType = "Aktiefond", risk = 5, indexFund = true)
 
     private companion object {
         const val BENCHMARK_ISIN = "SE0009999999"

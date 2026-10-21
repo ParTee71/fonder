@@ -22,10 +22,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import se.partee71.fonder.data.common.DataError
-import se.partee71.fonder.data.repository.FundMetadataRepository
-import se.partee71.fonder.data.repository.FundPriceRepository
+import se.partee71.fonder.data.repository.FakeCachedPriceRepository
+import se.partee71.fonder.data.repository.FakeFundMetadataRepository
+import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
-import se.partee71.fonder.data.repository.TransactionRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundFilterVocabulary
@@ -50,7 +50,6 @@ class FacitViewModelTest {
     private val records = MutableStateFlow<List<SuggestionRecord>>(emptyList())
     private val funds = MutableStateFlow<List<Fund>>(emptyList())
     private val prices = MutableStateFlow<Map<String, FundPrice>>(emptyMap())
-    private var metadataByIsin: Map<String, FundMetadata> = emptyMap()
     private val followedCalls = mutableListOf<Pair<Long, Boolean>>()
     private var metadataForCalled = false
 
@@ -83,44 +82,15 @@ class FacitViewModelTest {
         }
     }
 
-    private val fakeTransactionRepo = object : TransactionRepository {
-        override fun observeFunds(): Flow<List<Fund>> = funds
-        override fun observeTransactions(): Flow<List<Transaction>> = flowOf(emptyList())
-        override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flowOf(emptyList())
-        override suspend fun upsertFund(fund: Fund) {}
-        override suspend fun addTransaction(tx: Transaction): Long = 0
-        override suspend fun deleteTransaction(id: Long) {}
-        override suspend fun clearAll() {}
-    }
+    private val fakeTransactionRepo = FakeTransactionRepository(funds)
 
-    private val fakePriceRepo = object : FundPriceRepository {
-        override suspend fun latestPrice(fundId: String): FundPrice? = prices.value[fundId]
-        override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> = prices
-        override suspend fun priceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): List<FundPrice> = emptyList()
-        override fun observePriceHistory(fundId: String, fromEpochDay: Long, toEpochDay: Long): Flow<List<FundPrice>> = flowOf(emptyList())
-        override suspend fun refresh(fundId: String, since: LocalDate?) = true
-        override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate) = true
-        override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> = emptyList()
-        override suspend fun suggestIsin(fundName: String): String? = null
-        override suspend fun findFundByIsin(isin: String): Fund? = null
-        override suspend fun lookupIsin(fundId: String): String? = null
-        override suspend fun fetchFundsForCompany(companyId: String): List<Fund>? = emptyList()
-        override suspend fun fetchFundCatalog(): FundCatalog? = null
-    }
+    private val fakePriceRepo = FakeCachedPriceRepository(prices)
 
-    private val fakeMetadataRepo = object : FundMetadataRepository {
-        override suspend fun query(query: FundScreenQuery): List<FundMetadata> = emptyList()
-        override suspend fun resolveHandelsbankenAvailability(isin: String): Boolean? = null
-        override fun observeFilterVocabulary() = flowOf(FundFilterVocabulary())
-        override suspend fun suggestCheaperAlternatives(isin: String, holdingValue: Double): List<FeeComparisonCalc.Alternative>? = null
+    private val fakeMetadataRepo = object : FakeFundMetadataRepository() {
         override suspend fun metadataFor(isins: List<String>): Map<String, FundMetadata> {
             metadataForCalled = true
-            return metadataByIsin.filterKeys { it in isins }
+            return super.metadataFor(isins)
         }
-        override suspend fun cachedRiskByFundName(): Map<String, Int> = emptyMap()
-        override suspend fun cachedMetadataFor(isins: List<String>): Map<String, FundMetadata> = metadataByIsin.filterKeys { it in isins }
-        override suspend fun knownRiskLevels(): List<Int> = emptyList()
-        override suspend fun findSwitchCandidates(level: Int, excludeIsins: Set<String>): List<SwitchPlanCalc.Candidate> = emptyList()
     }
 
     /** Driver summeringskortets väntesnurra (NAV-6) — se [FakeFundPriceRefreshScheduler.runningWork]. */
@@ -167,7 +137,7 @@ class FacitViewModelTest {
     /** Säljfonden är bevakad (kurs under fondens egen fundId), köpfonden inte (kurs under ISIN:et). */
     private fun setUpPrices(sellNavNow: Double? = 105.0, buyNavNow: Double? = 224.0) {
         funds.value = listOf(Fund(fundId = "SHB1", name = "Såld fond", isin = "SE_SELL"))
-        metadataByIsin = mapOf(
+        fakeMetadataRepo.metadataByIsin = mapOf(
             "SE_SELL" to metadata("SE_SELL", "Såld fond"),
             "SE_BUY" to metadata("SE_BUY", "Köpt fond")
         )
@@ -264,7 +234,7 @@ class FacitViewModelTest {
     @Test
     fun `okant isin visas som isin i stallet for ett gissat namn`() = runTest(dispatcher) {
         setUpPrices()
-        metadataByIsin = emptyMap()
+        fakeMetadataRepo.metadataByIsin = emptyMap()
         records.value = listOf(record(id = 1))
 
         viewModel().uiState.test {

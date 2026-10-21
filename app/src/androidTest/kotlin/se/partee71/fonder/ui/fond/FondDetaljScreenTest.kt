@@ -58,6 +58,31 @@ class FondDetaljScreenTest {
         sharpeRatio = sharpeRatio
     )
 
+    /** En analys med grön status och [keyFigures] om testet inte anger annat. */
+    private fun analysis(
+        keyFigures: FundAnalysisCalc.KeyFigures = keyFigures(),
+        distanceFromHigh: FundAnalysisCalc.DistanceFromHighSignal? = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
+        trend: FundAnalysisCalc.TrendSignal? = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
+        momentum: FundAnalysisCalc.MomentumSignal? = null,
+        status: FundAnalysisCalc.SignalLevel? = FundAnalysisCalc.SignalLevel.GRON
+    ) = FundAnalysisCalc.Analysis(
+        keyFigures = keyFigures,
+        distanceFromHigh = distanceFromHigh,
+        trend = trend,
+        momentum = momentum,
+        status = status,
+        profitTake = null
+    )
+
+    /** Fonddetaljen för "Fond A" med kurserna ovan och [analysis]. */
+    private fun showFund(analysis: FundAnalysisCalc.Analysis?) {
+        composeRule.setContent {
+            FonderTheme {
+                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
+            }
+        }
+    }
+
     /** Analysens nyckeltal ligger hopfällda (ANA-10) — fäll ut sektionen innan raderna söks. */
     private fun expandAnalysis() {
         composeRule.onNodeWithText("Analys").performScrollTo().performClick()
@@ -65,11 +90,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_ingen_analys_sektion_utan_beraknat_resultat() {
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))))
-            }
-        }
+        showFund(analysis = null)
 
         composeRule.onNodeWithText("Fond A").assertExists() // huvudinnehållet renderas
         composeRule.onNodeWithText("Analys").assertDoesNotExist()
@@ -77,19 +98,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_gron_status_utan_triggertexter_nar_inga_signaler_ar_aktiva() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis())
 
         composeRule.onNodeWithText("Analys").assertExists()
         composeRule.onNodeWithText("Inga signaler").assertExists()
@@ -97,19 +106,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_rod_status_med_triggertexter_for_avstand_och_trend() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.ROD, -0.25),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.ROD,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.ROD, -0.25), trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL), status = FundAnalysisCalc.SignalLevel.ROD))
 
         composeRule.onNodeWithText("Bör ses över").assertExists()
         composeRule.onNodeWithText("från toppen (52 veckor)", substring = true).assertExists()
@@ -118,19 +115,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_otillrackligt_data_i_banner_nar_ingen_signal_kunde_beraknas() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = null,
-            trend = null,
-            momentum = null,
-            status = null,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(distanceFromHigh = null, trend = null, status = null))
 
         composeRule.onNodeWithText("Otillräcklig kurshistorik för säljsignal ännu").assertExists()
     }
@@ -138,19 +123,7 @@ class FondDetaljScreenTest {
     @Test
     fun visar_otillrackligt_data_for_ett_enskilt_nyckeltal_i_stallet_for_gissat_varde() {
         // CAGR null (innehav < 1 år) — ANA-1/ANA-4: markeras, gissas aldrig.
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(cagr = null),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(keyFigures = keyFigures(cagr = null)))
 
         expandAnalysis()
         composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").performScrollTo().assertExists()
@@ -208,11 +181,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_ingen_forsta_kop_rad_utan_kvarvarande_innehav() {
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = null))))
-            }
-        }
+        showFund(analysis = null)
 
         composeRule.onNodeWithText("Första köp", substring = true).assertDoesNotExist()
     }
@@ -222,38 +191,14 @@ class FondDetaljScreenTest {
     @Test
     fun visar_kontextkort_nar_under_toppen_men_plus_mot_gav() {
         // Gul avståndssignal men fortfarande plus mot GAV → uppmuntrande kontext (ANA-6).
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures().copy(gavFraction = 0.06),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GUL, -0.12),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GUL,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(keyFigures = keyFigures().copy(gavFraction = 0.06), distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GUL, -0.12), status = FundAnalysisCalc.SignalLevel.GUL))
 
         composeRule.onNodeWithText("fortfarande i plus mot ditt snittpris", substring = true).assertExists()
     }
 
     @Test
     fun kan_falla_ut_forklaring_for_en_signal() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = null,
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GUL,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(distanceFromHigh = null, trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL), status = FundAnalysisCalc.SignalLevel.GUL))
 
         // Förklaringen är dold tills raden fälls ut.
         composeRule.onNodeWithText("svaghetstecken på medellång sikt", substring = true).assertDoesNotExist()
@@ -264,19 +209,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_ordlista_och_kan_falla_ut_en_term() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis())
 
         composeRule.onNodeWithText("Så funkar analysen").assertExists()
         composeRule.onNodeWithText("ränta-på-ränta", substring = true).assertDoesNotExist()
@@ -290,19 +223,7 @@ class FondDetaljScreenTest {
     @Test
     fun kontexttexterna_ger_aldrig_ett_direkt_saljbud() {
         // ANA-3-vakt: språket är neutralt/förklarande, aldrig en imperativ "sälj nu"/"köp mer nu".
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures().copy(gavFraction = -0.1),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.ROD, -0.25),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL),
-            momentum = FundAnalysisCalc.MomentumSignal(FundAnalysisCalc.SignalLevel.GUL, -7.0),
-            status = FundAnalysisCalc.SignalLevel.ROD,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(keyFigures = keyFigures().copy(gavFraction = -0.1), distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.ROD, -0.25), trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GUL), momentum = FundAnalysisCalc.MomentumSignal(FundAnalysisCalc.SignalLevel.GUL, -7.0), status = FundAnalysisCalc.SignalLevel.ROD))
 
         composeRule.onNodeWithText("Sälj nu", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText("Köp mer nu", substring = true).assertDoesNotExist()
@@ -312,19 +233,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun sedan_kop_har_egen_forklaring_som_skiljer_fondkurs_fran_egen_avkastning() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis())
 
         // Förklaringen är dold tills raden fälls ut, och förtydligar att talet inte är den egna avkastningen.
         composeRule.onNodeWithText("inte din egen avkastning", substring = true).assertDoesNotExist()
@@ -337,19 +246,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_volatilitet_och_sharpe_nar_historiken_racker() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = 0.18, sharpeRatio = 0.8)))
 
         expandAnalysis()
         composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
@@ -359,19 +256,7 @@ class FondDetaljScreenTest {
 
     @Test
     fun visar_otillrackligt_data_for_riskmatt_utan_tillracklig_historik() {
-        val analysis = FundAnalysisCalc.Analysis(
-            keyFigures = keyFigures(annualizedVolatility = null, sharpeRatio = null),
-            distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-            trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-            momentum = null,
-            status = FundAnalysisCalc.SignalLevel.GRON,
-            profitTake = null
-        )
-        composeRule.setContent {
-            FonderTheme {
-                FondDetaljContent(state = FondDetaljUiState(fund = DetailUiState.Content(FundDetail(fundName = "Fond A", prices = prices.toImmutableList(), analysis = analysis))))
-            }
-        }
+        showFund(analysis(keyFigures = keyFigures(annualizedVolatility = null, sharpeRatio = null)))
 
         expandAnalysis()
         composeRule.onNodeWithText("Volatilitet (årlig)").performScrollTo().assertExists()
@@ -536,20 +421,11 @@ class FondDetaljScreenTest {
         recordedFeeSwitches = recordedFeeSwitches.toImmutableMap()
     )
 
-    private fun greenAnalysis() = FundAnalysisCalc.Analysis(
-        keyFigures = keyFigures(),
-        distanceFromHigh = FundAnalysisCalc.DistanceFromHighSignal(FundAnalysisCalc.SignalLevel.GRON, 0.0),
-        trend = FundAnalysisCalc.TrendSignal(FundAnalysisCalc.SignalLevel.GRON),
-        momentum = null,
-        status = FundAnalysisCalc.SignalLevel.GRON,
-        profitTake = null
-    )
-
     @Test
     fun visar_ingen_kurstabell_langre() {
         // NAV-2: den radvisa kurstabellen (datum + kurs) är borttagen — diagrammet visar samma sak.
         composeRule.setContent {
-            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis())) }
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = analysis())) }
         }
 
         composeRule.onNodeWithText("1970-04-11").assertDoesNotExist()
@@ -559,7 +435,7 @@ class FondDetaljScreenTest {
     @Test
     fun visar_bytesavsnittet_med_risknniva_i_rubriken() {
         composeRule.setContent {
-            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = 5)) }
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = analysis(), riskLevel = 5)) }
         }
 
         composeRule.onNodeWithText("Ska du byta?").assertExists()
@@ -569,7 +445,7 @@ class FondDetaljScreenTest {
     @Test
     fun visar_okand_risk_i_stallet_for_ingen_markning() {
         composeRule.setContent {
-            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = null)) }
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = analysis(), riskLevel = null)) }
         }
 
         composeRule.onNodeWithText("Risk okänd").assertExists()
@@ -579,7 +455,7 @@ class FondDetaljScreenTest {
     fun visar_bytesplanens_forslag_med_riktning_och_riskdelta() {
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), riskLevel = 5, switchPlan = listOf(planSuggestion)))
+                FondDetaljContent(state = holdingState(analysis = analysis(), riskLevel = 5, switchPlan = listOf(planSuggestion)))
             }
         }
 
@@ -603,7 +479,7 @@ class FondDetaljScreenTest {
         )
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(incoming)))
+                FondDetaljContent(state = holdingState(analysis = analysis(), switchPlan = listOf(incoming)))
             }
         }
 
@@ -615,7 +491,7 @@ class FondDetaljScreenTest {
     fun bytesforslagets_belopp_ar_dolt_tills_raden_falls_ut() {
         composeRule.setContent {
             FonderTheme {
-                FondDetaljContent(state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)))
+                FondDetaljContent(state = holdingState(analysis = analysis(), switchPlan = listOf(planSuggestion)))
             }
         }
 
@@ -631,7 +507,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
+                    state = holdingState(analysis = analysis(), switchPlan = listOf(planSuggestion)),
                     onSuggestionExpand = { expanded += it }
                 )
             }
@@ -649,7 +525,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         switchPlan = listOf(planSuggestion),
                         comparisons = mapOf("SE0000581434" to comparison)
                     )
@@ -668,7 +544,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         switchPlan = listOf(planSuggestion),
                         comparisons = mapOf("SE0000581434" to ComparisonUiState.Unavailable)
                     )
@@ -685,7 +561,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), feeComparison = FeeComparisonUiState.NoCheaperAlternative)
+                    state = holdingState(analysis = analysis(), feeComparison = FeeComparisonUiState.NoCheaperAlternative)
                 )
             }
         }
@@ -701,7 +577,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf())
                     ).copy(dismissedPlanCount = 1, dismissedFeeCount = 1)
                 )
@@ -724,7 +600,7 @@ class FondDetaljScreenTest {
     @Test
     fun analysens_nyckeltal_ligger_hopfallda_tills_sektionen_falls_ut() {
         composeRule.setContent {
-            FonderTheme { FondDetaljContent(state = holdingState(analysis = greenAnalysis())) }
+            FonderTheme { FondDetaljContent(state = holdingState(analysis = analysis())) }
         }
 
         composeRule.onNodeWithText("Årlig snittavkastning (CAGR)").assertDoesNotExist()
@@ -739,7 +615,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion)),
+                    state = holdingState(analysis = analysis(), switchPlan = listOf(planSuggestion)),
                     onFollow = { followed = it.recordId }
                 )
             }
@@ -755,7 +631,7 @@ class FondDetaljScreenTest {
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
-                    state = holdingState(analysis = greenAnalysis(), switchPlan = listOf(planSuggestion.copy(followed = true)))
+                    state = holdingState(analysis = analysis(), switchPlan = listOf(planSuggestion.copy(followed = true)))
                 )
             }
         }
@@ -775,7 +651,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative))
                     )
                 )
@@ -793,7 +669,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
                         recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = false))
                     ),
@@ -814,7 +690,7 @@ class FondDetaljScreenTest {
             FonderTheme {
                 FondDetaljContent(
                     state = holdingState(
-                        analysis = greenAnalysis(),
+                        analysis = analysis(),
                         feeComparison = FeeComparisonUiState.Found(persistentListOf(alternative)),
                         recordedFeeSwitches = mapOf("SE0000581434" to RecordedFeeSwitch(recordId = 42, followed = true))
                     )

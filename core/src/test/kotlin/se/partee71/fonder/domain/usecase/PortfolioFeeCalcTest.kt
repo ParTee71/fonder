@@ -6,27 +6,19 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import se.partee71.fonder.domain.model.Fund
-import se.partee71.fonder.domain.model.FundMetadata
-import se.partee71.fonder.domain.model.Holding
 
 class PortfolioFeeCalcTest {
 
     private val today = LocalDate.of(2026, 7, 31)
-
-    private fun fund(fundId: String, isin: String? = "SE$fundId") = Fund(fundId = fundId, name = fundId, isin = isin)
-
-    private fun holding(fundId: String, currentValue: Double?, isin: String? = "SE$fundId") = Holding(fund = fund(fundId, isin), netShares = 1.0, netInvested = 0.0, currentValue = currentValue)
 
     private fun metadata(
         isin: String,
         totalFee: Double?,
         cheapestAlternativeFee: Double? = null,
         comparisonResolvedAtEpochDay: Long? = null
-    ) = FundMetadata(
-        isin = isin, name = isin, orderbookId = isin, totalFee = totalFee, managementFee = totalFee,
-        category = null, fundType = null, companyName = null, risk = null, indexFund = false,
-        startDateEpochDay = null, minimumBuy = null, tags = emptyList(),
+    ) = fundMetadata(
+        isin = isin,
+        totalFee = totalFee,
         cheapestAlternativeIsin = if (cheapestAlternativeFee != null) "SE_ALT" else null,
         cheapestAlternativeFee = cheapestAlternativeFee,
         comparisonResolvedAtEpochDay = comparisonResolvedAtEpochDay
@@ -46,7 +38,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `handraknat fall, 300000 kr gange 0,73 procent ger 2190 kr per ar`() {
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", totalFee = 0.73))
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -58,8 +50,8 @@ class PortfolioFeeCalcTest {
     @Test
     fun `summerar over flera innehav`() {
         val holdings = listOf(
-            holding("A", currentValue = 100_000.0),
-            holding("B", currentValue = 200_000.0)
+            portfolioHolding("A", currentValue = 100_000.0),
+            portfolioHolding("B", currentValue = 200_000.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.5),
@@ -75,7 +67,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `innehav utan isin exkluderas ur totalen och rakas som okand avgift`() {
-        val holdings = listOf(holding("A", currentValue = 100_000.0, isin = null))
+        val holdings = listOf(portfolioHolding("A", currentValue = 100_000.0, isin = null))
 
         val result = PortfolioFeeCalc.compute(holdings, emptyMap(), today)
 
@@ -86,7 +78,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `innehav utan metadatatraff rakas som okand avgift`() {
-        val holdings = listOf(holding("A", currentValue = 100_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 100_000.0))
 
         val result = PortfolioFeeCalc.compute(holdings, emptyMap(), today)
 
@@ -96,7 +88,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `innehav med metadata men okand totalFee rakas som okand avgift, aldrig noll`() {
-        val holdings = listOf(holding("A", currentValue = 100_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 100_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", totalFee = null))
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -107,7 +99,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `innehav utan kand kurs hoppas over helt, rakas varken som kant eller okant`() {
-        val holdings = listOf(holding("A", currentValue = null))
+        val holdings = listOf(portfolioHolding("A", currentValue = null))
 
         val result = PortfolioFeeCalc.compute(holdings, emptyMap(), today)
 
@@ -120,8 +112,8 @@ class PortfolioFeeCalcTest {
     @Test
     fun `nedbrytning sorterad pa storst avgift forst`() {
         val holdings = listOf(
-            holding("Liten", currentValue = 10_000.0),
-            holding("Stor", currentValue = 500_000.0)
+            portfolioHolding("Liten", currentValue = 10_000.0),
+            portfolioHolding("Stor", currentValue = 500_000.0)
         )
         val metadataByIsin = mapOf(
             "SELiten" to metadata("SELiten", totalFee = 1.0),
@@ -137,7 +129,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `farsk jamforelse med billigare alternativ ger besparing per rad och i aggregatet`() {
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
@@ -153,7 +145,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `farsk jamforelse utan billigare alternativ ger ingen besparing men rakas som genomsokt`() {
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = null, comparisonResolvedAtEpochDay = today.toEpochDay())
         )
@@ -169,7 +161,7 @@ class PortfolioFeeCalcTest {
 
     @Test
     fun `aldrig genomsokt innehav rakas inte som genomsokt och visar ingen besparing`() {
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf("SEA" to metadata("SEA", totalFee = 0.73)) // comparisonResolvedAtEpochDay null
 
         val result = PortfolioFeeCalc.compute(holdings, metadataByIsin, today)
@@ -183,7 +175,7 @@ class PortfolioFeeCalcTest {
     @Test
     fun `utgangen jamforelse behandlas som osokt, ingen besparing och rakas inte som genomsokt`() {
         val staleDay = today.minusDays(FundMetadataFreshness.COMPARISON_TTL_DAYS + 1).toEpochDay()
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = staleDay)
         )
@@ -198,8 +190,8 @@ class PortfolioFeeCalcTest {
     @Test
     fun `besparing summeras over flera farskt genomsokta innehav`() {
         val holdings = listOf(
-            holding("A", currentValue = 300_000.0),
-            holding("B", currentValue = 100_000.0)
+            portfolioHolding("A", currentValue = 300_000.0),
+            portfolioHolding("B", currentValue = 100_000.0)
         )
         val metadataByIsin = mapOf(
             "SEA" to metadata("SEA", totalFee = 0.73, cheapestAlternativeFee = 0.21, comparisonResolvedAtEpochDay = today.toEpochDay()),
@@ -219,7 +211,7 @@ class PortfolioFeeCalcTest {
         // Regression (issue #75): cheapestAlternativeFee är en ögonblicksbild som bevaras i
         // COMPARISON_TTL_DAYS. Sjunker fondens egen avgift under den inom fönstret blev
         // differensen negativ, och HEM-6 skrev ut "du kan spara -180,00 kr per år".
-        val holdings = listOf(holding("A", currentValue = 300_000.0))
+        val holdings = listOf(portfolioHolding("A", currentValue = 300_000.0))
         val metadataByIsin = mapOf(
             "SEA" to metadata(
                 "SEA",

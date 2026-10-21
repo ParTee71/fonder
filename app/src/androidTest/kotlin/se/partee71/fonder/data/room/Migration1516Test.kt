@@ -1,7 +1,6 @@
 package se.partee71.fonder.data.room
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -40,11 +39,7 @@ class Migration1516Test {
 
     @Test
     fun migration_15_16_lagger_till_avstaendena_utan_att_rora_befintlig_data() = runTest {
-        context.deleteDatabase(dbName)
-        val dbFile = context.getDatabasePath(dbName)
-
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            exportedSchemaStatements(15).forEach(db::execSQL)
+        context.createLegacyDatabase(dbName, version = 15, schema = exportedSchemaStatements(15)) { db ->
             db.execSQL(
                 "INSERT INTO funds (fundId, name, currency, isin, fondlistaFundId) " +
                     "VALUES ('SHB0000442', 'Fond A', 'SEK', 'SE0000582033', 'SHB0000442')"
@@ -67,14 +62,9 @@ class Migration1516Test {
                 "INSERT INTO switch_watch_candidates (id, watchId, isin, name, navAtStart, navAtStartEpochDay, source, position) " +
                     "VALUES (8, 5, 'SE0001466368', 'Kandidat A', 95.25, 19900, 'MANUELL', 2)"
             )
-            db.version = 15
         }
 
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
-
-        db.openHelper.writableDatabase
+        val db = context.openMigratedDatabase(dbName)
 
         // Befintlig användardata är orörd, med icke-defaultvärden i varje kolumn som kan ha ett.
         assertEquals("SE0000582033", db.fundDao().getAll().single().isin)

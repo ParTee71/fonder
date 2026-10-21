@@ -1,7 +1,6 @@
 package se.partee71.fonder.data.room
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -32,39 +31,14 @@ class Migration23Test {
 
     @Test
     fun migration_2_3_lagger_till_nullable_isin_utan_dataforlust() = runTest {
-        context.deleteDatabase(dbName)
-        val dbFile = context.getDatabasePath(dbName)
-
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL(
-                "CREATE TABLE `funds` (`fundId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
-                    "`currency` TEXT NOT NULL, PRIMARY KEY(`fundId`))"
-            )
-            db.execSQL(
-                "CREATE TABLE `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "`fundId` TEXT NOT NULL, `type` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`shares` REAL NOT NULL, `pricePerShare` REAL NOT NULL)"
-            )
-            db.execSQL("CREATE INDEX `index_transactions_fundId` ON `transactions` (`fundId`)")
-            db.execSQL(
-                "CREATE TABLE `fund_prices` (`fundId` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, " +
-                    "`nav` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`fundId`, `epochDay`))"
-            )
+        context.createLegacyDatabase(dbName, version = 2) { db ->
             db.execSQL("INSERT INTO funds (fundId, name, currency) VALUES ('SHB0000442', 'Fond A', 'SEK')")
-            db.version = 2
         }
 
         // Appens kompilerade schema är nu v4 (se AppDatabase.MIGRATIONS) — 2→3→4 måste
         // registreras, annars saknar Room en migreringsväg vid öppning.
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            // Hela kedjan: Room kräver en väg ända fram till den aktuella databasversionen, och
-            // bara de steg som behövs körs. Att lista stegen för hand gjorde att varje
-            // versionshöjning bröt de äldre migreringstesterna (issue #39).
-            .addMigrations(*AppDatabase.MIGRATIONS)
-            .build()
-
         // Öppnar (och migrerar) — kastar om det resulterande schemat inte matchar entiteterna.
-        db.openHelper.writableDatabase
+        val db = context.openMigratedDatabase(dbName)
 
         val fund = db.fundDao().getByFundId("SHB0000442")
         assertEquals("Fond A", fund?.name)
