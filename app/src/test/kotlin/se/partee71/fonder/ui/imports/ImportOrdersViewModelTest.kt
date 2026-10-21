@@ -193,7 +193,7 @@ class ImportOrdersViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.onFilesSelected(listOf(unreadable, readable))
+            vm.onEvent(ImportOrdersEvent.FilesSelected(listOf(unreadable, readable)))
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
@@ -211,7 +211,7 @@ class ImportOrdersViewModelTest {
         vm.uiState.test {
             var initial = awaitItem()
             while (!initial.switchReady) initial = awaitItem()
-            vm.onFilesSelected(listOf(mockk<Uri>()))
+            vm.onEvent(ImportOrdersEvent.FilesSelected(listOf(mockk<Uri>())))
             advanceUntilIdle()
             expectNoEvents()
             assertFalse(initial.filesSelected)
@@ -277,11 +277,11 @@ class ImportOrdersViewModelTest {
             while (state.loading || !state.switchReady) state = awaitItem()
 
             val transaction = state.rows.first().transaction
-            vm.onSharesTextChange(transaction, "16,9862")
+            vm.onEvent(ImportOrdersEvent.SharesTextChange(transaction, "16,9862"))
             state = awaitItem()
             assertTrue(state.rows.first().readyToImport)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -301,7 +301,7 @@ class ImportOrdersViewModelTest {
             var state = awaitItem()
             while (state.loading || !state.switchReady) state = awaitItem()
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -418,7 +418,7 @@ class ImportOrdersViewModelTest {
             while (state.loading || !state.switchReady) state = awaitItem()
             assertEquals(3, state.rows.size)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -497,7 +497,7 @@ class ImportOrdersViewModelTest {
             assertTrue(state.hasSwitchQuestions)
             assertTrue(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             while (!state.imported) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
@@ -529,16 +529,16 @@ class ImportOrdersViewModelTest {
             assertEquals(SwitchOption.Decide(SwitchDecision.None), state.rows[0].switchField?.option)
             assertTrue(state.rows[1].switchField!!.hidden)
 
-            vm.onSwitchSelected(state.rows[0].transaction, SwitchOption.Decide(SwitchDecision.Standalone))
+            vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[0].transaction, SwitchOption.Decide(SwitchDecision.Standalone)))
             state = awaitItem()
             assertTrue(state.rows[1].switchField!!.unanswered)
             assertFalse(state.canImport)
 
-            vm.onSwitchSelected(state.rows[1].transaction, SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(0)))
+            vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[1].transaction, SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(0))))
             state = awaitItem()
             assertTrue(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             while (!state.imported) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
@@ -573,12 +573,12 @@ class ImportOrdersViewModelTest {
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
             assertTrue(state.rows[0].switchField!!.unanswered)
-            vm.onSwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId))
+            vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId)))
             state = awaitItem()
             assertEquals(SwitchOption.Decide(SwitchDecision.ClosesWatch(watchId)), state.rows[1].switchField?.option)
             assertTrue(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             while (!state.imported) state = awaitItem()
             assertEquals(0, state.linkFailedCount)
             cancelAndIgnoreRemainingEvents()
@@ -606,10 +606,10 @@ class ImportOrdersViewModelTest {
             vm.onFilesRead(files(saleNota))
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
-            vm.onSwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId))
+            vm.onEvent(ImportOrdersEvent.SwitchSelected(state.rows[0].transaction, SwitchOption.LinkOtherDay(watchId)))
             state = awaitItem()
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             while (!state.imported) state = awaitItem()
             assertEquals(1, state.linkFailedCount)
             cancelAndIgnoreRemainingEvents()
@@ -630,12 +630,12 @@ class ImportOrdersViewModelTest {
             var state = awaitItem()
             while (state.loading || !state.switchReady || state.rows.any { it.switchField == null }) state = awaitItem()
 
-            vm.onIncludedChange(state.rows[0].transaction, false)
+            vm.onEvent(ImportOrdersEvent.IncludedChange(state.rows[0].transaction, false))
             state = awaitItem()
             assertNull(state.rows[0].switchField)
             assertTrue(state.rows[1].switchField!!.hidden)
 
-            vm.import()
+            vm.onEvent(ImportOrdersEvent.Import)
             while (!state.imported) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
@@ -659,12 +659,12 @@ class ImportOrdersViewModelTest {
             val sale = state.rows[0].transaction
             assertEquals(SwitchOption.Decide(SwitchDecision.ClosesWatchOfEntry(0)), state.rows[1].switchField?.option)
 
-            vm.onSharesTextChange(sale, "")
+            vm.onEvent(ImportOrdersEvent.SharesTextChange(sale, ""))
             state = awaitItem()
             assertFalse(state.canImport)
             assertTrue(state.switchSaleRowSkipped(state.rows[1]))
 
-            vm.onSharesTextChange(sale, "22,716")
+            vm.onEvent(ImportOrdersEvent.SharesTextChange(sale, "22,716"))
             state = awaitItem()
             assertTrue(state.canImport)
             assertFalse(state.switchSaleRowSkipped(state.rows[1]))

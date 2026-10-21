@@ -34,6 +34,7 @@ import androidx.navigation3.ui.NavDisplay
 import se.partee71.fonder.BuildConfig
 import se.partee71.fonder.R
 import se.partee71.fonder.ui.beslut.BeslutScreen
+import se.partee71.fonder.ui.bytesfonster.SwitchWatchEvent
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchScreen
 import se.partee71.fonder.ui.bytesfonster.SwitchWatchViewModel
 import se.partee71.fonder.ui.components.AppFabMenu
@@ -53,6 +54,7 @@ import se.partee71.fonder.ui.imports.ImportHoldingsScreen
 import se.partee71.fonder.ui.imports.ImportOrdersScreen
 import se.partee71.fonder.ui.portfolj.PortfoljScreen
 import se.partee71.fonder.ui.riskprofil.RiskProfilScreen
+import se.partee71.fonder.ui.settings.SettingsEvent
 import se.partee71.fonder.ui.settings.SettingsScreen
 import se.partee71.fonder.ui.settings.SettingsViewModel
 import se.partee71.fonder.ui.theme.NeutralPrimary
@@ -69,10 +71,12 @@ import se.partee71.ui.theme.Tone
  * för chromets bakgrundsindikator (NAV-6) hämtas här, så att skalet går att testa utan Hilt.
  */
 @Composable
-fun AppNavigation() {
-    val workerStatusViewModel: WorkerStatusViewModel = hiltViewModel()
+fun AppNavigation(
+    modifier: Modifier = Modifier,
+    workerStatusViewModel: WorkerStatusViewModel = hiltViewModel(),
+    decisionBadgeViewModel: DecisionBadgeViewModel = hiltViewModel()
+) {
     val isRunning by workerStatusViewModel.isRunning.collectAsStateWithLifecycle()
-    val decisionBadgeViewModel: DecisionBadgeViewModel = hiltViewModel()
     val beslutBadgeCount by decisionBadgeViewModel.count.collectAsStateWithLifecycle()
 
     // Engångsbegäran från Översiktens påminnelse: Inställningar skrollar fram säkerhetskopieringen
@@ -85,6 +89,7 @@ fun AppNavigation() {
         isWorkerRunning = isRunning,
         beslutBadgeCount = beslutBadgeCount,
         backStack = backStack,
+        modifier = modifier,
         entryProvider = entries
     )
 }
@@ -108,6 +113,7 @@ fun AppNavigation() {
 @Composable
 fun AppNavigationShell(
     isWorkerRunning: Boolean,
+    modifier: Modifier = Modifier,
     beslutBadgeCount: Int = 0,
     backStack: AppBackStack = rememberAppBackStack(),
     entryProvider: (AppKey) -> NavEntry<AppKey>
@@ -135,7 +141,7 @@ fun AppNavigationShell(
         .filter { it == Screen.START || it == backStack.currentTab }
         .flatMap { decoratedStacks.getValue(it) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
                 when {
@@ -357,7 +363,7 @@ fun fonderEntries(
             title = stringResource(R.string.settings_benchmark_section),
             onBack = { backStack.popIfTop(key) },
             onPickFund = { fund ->
-                settingsViewModel.chooseBenchmark(fund)
+                settingsViewModel.onEvent(SettingsEvent.ChooseBenchmark(fund))
                 backStack.popIfTop(key)
             }
         )
@@ -366,8 +372,8 @@ fun fonderEntries(
         SwitchWatchScreen(
             watchId = key.watchId,
             onAddCandidate = { backStack.push(SwitchWatchPickerKey(key.watchId)) },
-            onBought = { isin -> backStack.push(TransactionFormKey.bought(key.watchId, isin)) },
-            onClosed = { backStack.popIfTop(key) }
+            onBuy = { isin -> backStack.push(TransactionFormKey.bought(key.watchId, isin)) },
+            onClose = { backStack.popIfTop(key) }
         )
     }
     // Fondsök i valläge (ANA-13): samma skärm som HEM-10:s referensval, men träffen
@@ -381,7 +387,7 @@ fun fonderEntries(
             title = stringResource(R.string.switch_watch_add_candidate),
             onBack = { backStack.popIfTop(key) },
             onPickFund = { fund ->
-                switchWatchViewModel.onAddCandidate(fund)
+                switchWatchViewModel.onEvent(SwitchWatchEvent.AddCandidate(fund))
                 backStack.popIfTop(key)
             }
         )

@@ -196,6 +196,39 @@ private data class SwitchContext(
     val linkFailed: Boolean
 )
 
+/** Användarens handlingar på transaktionsformuläret, till [TransactionFormViewModel.onEvent]. */
+sealed interface TransactionFormEvent {
+    /** Byter fond och förifyller kursen. */
+    data class FundSelected(val fund: Fund) : TransactionFormEvent
+
+    /** Transaktionstypen. */
+    data class TypeChange(val type: TransactionType) : TransactionFormEvent
+
+    /** Datumet. */
+    data class DateChange(val date: LocalDate) : TransactionFormEvent
+
+    /** Antal andelar. */
+    data class SharesTextChange(val text: String) : TransactionFormEvent
+
+    /** Kursen. */
+    data class PriceTextChange(val text: String) : TransactionFormEvent
+
+    /** Avgiften. */
+    data class FeeTextChange(val text: String) : TransactionFormEvent
+
+    /** Svaret på bytesfrågan. */
+    data class SwitchSelected(val option: SwitchOption) : TransactionFormEvent
+
+    /** "Sälj alla andelar" (TRX-5). */
+    data object SellAll : TransactionFormEvent
+
+    /** Sparar transaktionen. */
+    data object Save : TransactionFormEvent
+
+    /** "Försök igen" efter ett läsfel. */
+    data object Retry : TransactionFormEvent
+}
+
 /**
  * Formulär för att registrera en fondtransaktion (NAV-4, issue #4). Sparar via [RecordTransaction]
  * (BYT-2) med svaret på **bytesväljaren**: alternativ och förval ur [SwitchQuestions] (samma
@@ -370,6 +403,21 @@ class TransactionFormViewModel @AssistedInject constructor(
         return owned[fund.fundId] ?: 0.0
     }
 
+    fun onEvent(event: TransactionFormEvent) {
+        when (event) {
+            is TransactionFormEvent.FundSelected -> onFundSelected(event.fund)
+            is TransactionFormEvent.TypeChange -> onTypeChange(event.type)
+            is TransactionFormEvent.DateChange -> onDateChange(event.date)
+            is TransactionFormEvent.SharesTextChange -> onSharesTextChange(event.text)
+            is TransactionFormEvent.PriceTextChange -> onPriceTextChange(event.text)
+            is TransactionFormEvent.FeeTextChange -> onFeeTextChange(event.text)
+            is TransactionFormEvent.SwitchSelected -> onSwitchSelected(event.option)
+            TransactionFormEvent.SellAll -> onSellAll()
+            TransactionFormEvent.Save -> save()
+            TransactionFormEvent.Retry -> retry()
+        }
+    }
+
     /**
      * Byter fond och förifyller kursen. Fältet **nollas först**, och ett pågående uppslag
      * avbryts: annars stod föregående fonds NAV kvar när den nya fonden saknar cachad kurs
@@ -377,7 +425,7 @@ class TransactionFormViewModel @AssistedInject constructor(
      * kunde sparas på fel fonds kurs — ett tyst fel i GAV, realiserat resultat och analys.
      * Bytesvalet nollas också: det gällde den förra fonden.
      */
-    fun onFundSelected(fund: Fund) {
+    private fun onFundSelected(fund: Fund) {
         if (prefill.value.fundLocked) return
         priceLookupJob?.cancel()
         editor.update(TRANSACTION_FUND) { it.copy(fund = fund, chosenSwitch = null, priceText = "") }
@@ -388,23 +436,23 @@ class TransactionFormViewModel @AssistedInject constructor(
         }
     }
 
-    fun onTypeChange(newType: TransactionType) {
+    private fun onTypeChange(newType: TransactionType) {
         if (key.type != null || newType == editor.value.type) return
         editor.update(TRANSACTION_TYPE) { it.copy(type = newType, chosenSwitch = null) }
     }
 
-    fun onDateChange(newDate: LocalDate) = editor.update(TRANSACTION_DATE) { it.copy(date = newDate) }
+    private fun onDateChange(newDate: LocalDate) = editor.update(TRANSACTION_DATE) { it.copy(date = newDate) }
 
-    fun onSharesTextChange(text: String) = editor.update(TRANSACTION_SHARES) { it.copy(sharesText = text) }
+    private fun onSharesTextChange(text: String) = editor.update(TRANSACTION_SHARES) { it.copy(sharesText = text) }
 
-    fun onPriceTextChange(text: String) = editor.update(TRANSACTION_PRICE) { it.copy(priceText = text) }
+    private fun onPriceTextChange(text: String) = editor.update(TRANSACTION_PRICE) { it.copy(priceText = text) }
 
-    fun onFeeTextChange(text: String) = editor.update(TRANSACTION_FEE) { it.copy(feeText = text) }
+    private fun onFeeTextChange(text: String) = editor.update(TRANSACTION_FEE) { it.copy(feeText = text) }
 
-    fun onSwitchSelected(option: SwitchOption) = editor.update(TRANSACTION_SWITCH) { it.copy(chosenSwitch = option) }
+    private fun onSwitchSelected(option: SwitchOption) = editor.update(TRANSACTION_SWITCH) { it.copy(chosenSwitch = option) }
 
     /** "Sälj alla andelar" (TRX-5): hela innehavet i vald fond, med alla decimaler, i antalsfältet. */
-    fun onSellAll() {
+    private fun onSellAll() {
         val owned = ownedShares(editor.value, ownedByFund.value)?.takeIf { it > 0.0 } ?: return
         editor.update(TRANSACTION_SHARES) { it.copy(sharesText = SwedishNumberFormat.formatShares(owned)) }
     }
@@ -418,7 +466,7 @@ class TransactionFormViewModel @AssistedInject constructor(
      * snackbar (NFR-6) och formuläret står kvar med inmatningen; ett avbrott släpps igenom och är
      * inget fel.
      */
-    fun save() {
+    private fun save() {
         viewModelScope.launch {
             // Sparningen är lokal (Room): ett skrivfel är aldrig "kunde inte nå källan" eller
             // "gick inte att läsa" — samma val som Riskprofilen.
@@ -449,7 +497,7 @@ class TransactionFormViewModel @AssistedInject constructor(
     }
 
     /** "Försök igen" efter ett läsfel: läser fonderna (och förifyllningen) på nytt. */
-    fun retry() = loader.retry()
+    private fun retry() = loader.retry()
 
     /** Skapar ViewModeln för en given nyckel (assisted injection, `hiltViewModel` med `creationCallback`). */
     @AssistedFactory

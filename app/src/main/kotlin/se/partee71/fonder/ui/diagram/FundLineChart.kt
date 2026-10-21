@@ -150,13 +150,13 @@ const val CHART_PERIOD_ROW_TEST_TAG = "chart_period_row"
 @Composable
 fun FundLineChart(
     points: List<Pair<Long, Double>>,
+    modifier: Modifier = Modifier,
     purchaseEpochDays: List<Long> = emptyList(),
     primaryLabel: String? = null,
     comparisonSeries: List<ChartSeries> = emptyList(),
     valueAxis: ChartValueAxis = ChartValueAxis.KRONOR,
     movingAverage: List<Pair<Long, Double>>? = null,
-    working: Boolean = false,
-    modifier: Modifier = Modifier
+    working: Boolean = false
 ) {
     // rememberSaveable: vald period ska överleva rotation, annars hoppar diagrammet
     // tillbaka till 1 månad mitt i en jämförelse (issue #78).

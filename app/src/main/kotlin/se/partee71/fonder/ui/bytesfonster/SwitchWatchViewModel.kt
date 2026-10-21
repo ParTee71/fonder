@@ -194,6 +194,33 @@ data class SwitchWatchUiState(
     val chartWorking: Boolean get() = loading || fillingCandidates || content.rows.any { it.historyLoading }
 }
 
+/** Användarens handlingar på bevakningen, till [SwitchWatchViewModel.onEvent]. */
+sealed interface SwitchWatchEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : SwitchWatchEvent
+
+    /** "Försök igen" efter ett misslyckat uppslag av alternativ. */
+    data object RetryAutoFill : SwitchWatchEvent
+
+    /** Risknivån att köpa på (ANA-13). */
+    data class SelectTargetLevel(val level: Int) : SwitchWatchEvent
+
+    /** Filtret "bara indexfonder". */
+    data class IndexOnlyChanged(val indexOnly: Boolean) : SwitchWatchEvent
+
+    /** Avbryter bevakningen utan köp (ANA-12). */
+    data object Cancel : SwitchWatchEvent
+
+    /** Tar bort ett alternativ. */
+    data class RemoveCandidate(val candidateId: Long) : SwitchWatchEvent
+
+    /** Lägger till en handplockad kandidat (ANA-13). */
+    data class AddCandidate(val fund: Fund) : SwitchWatchEvent
+
+    /** Kvitterar att meddelandet visats. */
+    data object MessageShown : SwitchWatchEvent
+}
+
 /**
  * Skärmen **Pågående byte** (ANA-12, issue #114) — perioden mellan att en fond sålts och att
  * likviden köpt nästa, med de alternativ användaren bevakar under tiden.
@@ -351,6 +378,19 @@ class SwitchWatchViewModel @AssistedInject constructor(
         }
     }
 
+    fun onEvent(event: SwitchWatchEvent) {
+        when (event) {
+            SwitchWatchEvent.Refresh -> refresh()
+            SwitchWatchEvent.RetryAutoFill -> onRetryAutoFill()
+            is SwitchWatchEvent.SelectTargetLevel -> onSelectTargetLevel(event.level)
+            is SwitchWatchEvent.IndexOnlyChanged -> onIndexOnlyChanged(event.indexOnly)
+            SwitchWatchEvent.Cancel -> onCancel()
+            is SwitchWatchEvent.RemoveCandidate -> onRemoveCandidate(event.candidateId)
+            is SwitchWatchEvent.AddCandidate -> onAddCandidate(event.fund)
+            SwitchWatchEvent.MessageShown -> onMessageShown()
+        }
+    }
+
     /**
      * Dra ned för att uppdatera (UI-11) — hämtar om kandidaternas historik och säljfondens
      * kurva. Kandidaterna ligger per definition inte i kurscachen (ANA-11), så det som visas är
@@ -364,7 +404,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * ([onSelectTargetLevel]), och att byta ut alternativen mitt under en pågående jämförelse vore
      * ett annat svar på en fråga användaren redan ställt.
      */
-    fun refresh() {
+    private fun refresh() {
         viewModelScope.launch {
             val current = watch.first() ?: return@launch
             requestedHistories.clear()
@@ -547,7 +587,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * "Försök igen" efter [SwitchWatchEmptyReason.LOOKUP_FAILED] — samma påfyllning som vid
      * skärmöppning, i samma jobb som alla andra ([launchFill]).
      */
-    fun onRetryAutoFill() {
+    private fun onRetryAutoFill() {
         // Ett dubbeltryck ska inte starta två autofyllningar som båda lägger till kandidater.
         if (fillJob?.isActive == true) return
         launchFill {
@@ -563,12 +603,12 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * nivån tas bort, de handplockade ligger kvar, och förslag på den nya nivån hämtas — en gång
      * per val. Bytesplanen räknas om: likviden räknas på målnivån (BYT-3). Samma nivå igen gör ingenting.
      */
-    fun onSelectTargetLevel(level: Int) {
+    private fun onSelectTargetLevel(level: Int) {
         changeSelection(Selection(level = level)) { it.level == level }
     }
 
     /** Filtret "bara indexfonder" (issue #150) — samma flöde som [onSelectTargetLevel]. */
-    fun onIndexOnlyChanged(indexOnly: Boolean) {
+    private fun onIndexOnlyChanged(indexOnly: Boolean) {
         changeSelection(Selection(indexOnly = indexOnly)) { it.indexOnly == indexOnly }
     }
 
@@ -712,13 +752,13 @@ class SwitchWatchViewModel @AssistedInject constructor(
     }
 
     /** Avbryter bevakningen utan köp — raden ligger kvar, den är användardata (ANA-12). */
-    fun onCancel() {
+    private fun onCancel() {
         viewModelScope.launch {
             switchWatchRepository.close(watchId, SwitchWatchCloseReason.AVBRUTEN, LocalDate.now())
         }
     }
 
-    fun onRemoveCandidate(candidateId: Long) {
+    private fun onRemoveCandidate(candidateId: Long) {
         viewModelScope.launch { switchWatchRepository.removeCandidate(candidateId) }
     }
 
@@ -727,7 +767,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
      * (TP-21), och utan ISIN går fonden varken att hämta kurser för eller att jämföra — då säger
      * skärmen det i stället för att lägga till en rad som aldrig kan visa någon utveckling.
      */
-    fun onAddCandidate(fund: Fund) {
+    private fun onAddCandidate(fund: Fund) {
         viewModelScope.launch {
             val isin = fund.isin ?: fundPriceRepository.suggestIsin(fund.name)
             if (isin == null) {
@@ -749,7 +789,7 @@ class SwitchWatchViewModel @AssistedInject constructor(
         }
     }
 
-    fun onMessageShown() {
+    private fun onMessageShown() {
         message.value = null
     }
 

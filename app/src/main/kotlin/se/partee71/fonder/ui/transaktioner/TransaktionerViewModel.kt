@@ -93,6 +93,24 @@ data class TransaktionerUiState(
     }
 }
 
+/** Användarens handlingar på Händelser, till [TransaktionerViewModel.onEvent]. */
+sealed interface TransaktionerEvent {
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : TransaktionerEvent
+
+    /** Filtret Alla/Köp/Sälj (TRX-3). */
+    data class FilterSelected(val filter: HandelseFilter) : TransaktionerEvent
+
+    /** Tar bort transaktionen (TRX-2). */
+    data class DeleteTransaction(val id: Long) : TransaktionerEvent
+
+    /** Startar en fristående bevakning för säljet (SLD-5). */
+    data class StartSwitchWatch(val row: TransaktionRad) : TransaktionerEvent
+
+    /** Kvitterar navigeringen till en nystartad bevakning. */
+    data object SwitchWatchOpened : TransaktionerEvent
+}
+
 /**
  * Fliken Händelser (NAV-1): alla transaktioner i en lista med filtret Alla/Köp/Sälj (TRX-3), årets
  * realiserade resultat (TRX-4) och, per sälj, det realiserade resultatet ur
@@ -157,17 +175,27 @@ class TransaktionerViewModel internal constructor(
             initialValue = TransaktionerUiState()
         )
 
+    fun onEvent(event: TransaktionerEvent) {
+        when (event) {
+            TransaktionerEvent.Retry -> retry()
+            is TransaktionerEvent.FilterSelected -> onFilterSelected(event.filter)
+            is TransaktionerEvent.DeleteTransaction -> deleteTransaction(event.id)
+            is TransaktionerEvent.StartSwitchWatch -> startSwitchWatch(event.row)
+            TransaktionerEvent.SwitchWatchOpened -> onSwitchWatchOpened()
+        }
+    }
+
     /** "Försök igen" efter ett läsfel (NFR-6): läser om transaktionerna från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
-    fun onFilterSelected(selected: HandelseFilter) {
+    private fun onFilterSelected(selected: HandelseFilter) {
         filter.value = selected
     }
 
     /** Tar bort transaktionen (TRX-2) via [RecordTransaction.delete]; bytets länk nollas, bevakningen ligger kvar. */
-    fun deleteTransaction(id: Long) {
+    private fun deleteTransaction(id: Long) {
         viewModelScope.launch { recordTransaction.delete(id) }
     }
 
@@ -177,7 +205,7 @@ class TransaktionerViewModel internal constructor(
      * [RecordTransaction.startWatchForSale] (BYT-2): säljdag och likvid ur transaktionen, målnivå
      * ur säljfondens egen risknivå, och en bevakning per säljtransaktion.
      */
-    fun startSwitchWatch(row: TransaktionRad) {
+    private fun startSwitchWatch(row: TransaktionRad) {
         if (row.fundIsin == null || row.sale == null) return
         viewModelScope.launch {
             recordTransaction.startWatchForSale(row.transaction, today())
@@ -196,7 +224,7 @@ class TransaktionerViewModel internal constructor(
         (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today()))
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
-    fun onSwitchWatchOpened() {
+    private fun onSwitchWatchOpened() {
         startedSwitchWatchId.value = null
     }
 }

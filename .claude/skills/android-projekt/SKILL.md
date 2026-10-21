@@ -44,8 +44,14 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   pluginen säger – `FondDetaljViewModel`, `TransactionFormViewModel`, `SwitchWatchViewModel`.
 - Tester: JUnit, MockK, Turbine, Robolectric + Roborazzi i JVM, Konsist (`UiConsistencyTest`);
   Room- och Compose-tester även i `androidTest/` (skill `testing-strategy`).
-- **Nuvarande läge, avviker från pluginen:** inga sealed events och ingen `onEvent()` – skärmar
-  anropar ViewModelns publika funktioner (`viewModel::signOut`, `onMessageShown`); sex compose-rules-regler som kräver API-ändringar i befintliga komponenter är avstängda i ktlint (`parameter-naming`, `lambda-param-event-trailing`, `multiple-emitters-check`, `modifier-naming`, `modifier-missing-check`, `param-order-check`) och `vm-injection-check` för att dess autorättning bryter `AppNavigation` (två `hiltViewModel()`); ingen Renovate eller Dependabot;
+- Användarens handlingar går som pluginen säger: en `sealed interface XxxEvent` per skärm bredvid
+  ViewModeln och en enda publik `fun onEvent(event: XxxEvent)`; åtgärdsfunktionerna är privata.
+  Skärmen (`XScreen`) översätter `XContent`s callbacks till händelser
+  (`onRetry = { viewModel.onEvent(HemEvent.Retry) }`), så att `XContent` och dess tester inte känner
+  till ViewModeln. Enda undantagen är filimporternas interna testsömmar (`onFileRead`,
+  `onFilesRead`), som tar filens innehåll i stället för en `Uri`. Alla compose-rules-regler är
+  påslagna i ktlint; ViewModels till `AppNavigation` är parametrar med `hiltViewModel()` som förval.
+- **Nuvarande läge, avviker från pluginen:** ingen Renovate eller Dependabot;
   ingen Baseline Profile. `material3` står på `1.5.0-beta01` utanför Compose BOM, vilket följer
   pluginen (beta); skälet står i katalogen och i ARKITEKTUR.md → Verifierade API:er. Tas i egna PR:er senare; ny kod
   följer pluginen där det går utan att bryta mot grannkodens mönster.
@@ -71,17 +77,17 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 - Room-DAO:ernas `observe…(): Flow<List<…>>` är dataflödena; repositories exponerar dem.
 - ViewModels: `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), …)`.
 - Händelser från en ViewModel är fält i tillståndet som skärmen kvitterar (pluginen, Googles råd):
-  meddelanden (`SwitchWatchViewModel.onMessageShown()`, `backupProgress.message = null` i
+  meddelanden (`SwitchWatchEvent.MessageShown`, `backupProgress.message = null` i
   `SettingsViewModel`), navigering efter sparat (`saved` + `onSavedHandled()` i `RiskProfilViewModel`
   och `TransactionFormViewModel`) och en nystartad bevakning (`startedSwitchWatchId` +
-  `onSwitchWatchOpened()` på Beslut, Händelser och Fonddetalj). Skärmen agerar i en `LaunchedEffect`
+  `XxxEvent.SwitchWatchOpened` på Beslut, Händelser och Fonddetalj). Skärmen agerar i en `LaunchedEffect`
   nyckelad på värdet och kvitterar efteråt, så att inget upprepas vid rotation eller tappas när
   skärmen inte visas. Ingen `Channel` eller `receiveAsFlow` i `ui/` – scopet `[events]` i
   `ui-forbidden.txt` kontrollerar det; inget `SharedFlow` heller. Formulärmönstret
   (`EditorState`, `EditorLoader` i android-ui:s `ui-common`) används inte än. `SwitchWatchUiState.closed` är ett bestående tillstånd, ingen
   händelse: skärmen lämnas med `popIfTop`, som inte gör något om skärmen redan lämnats.
 - **Nuvarande läge, avviker från pluginen:** Drive-auktoriseringens `PendingIntent` lämnas via en
-  callback-parameter (`backupToDrive(onNeedsAuthorization)`), inte via state – medvetet, så att den
+  callback i händelsen (`SettingsEvent.BackupToDrive(onNeedsAuthorization)`), inte via state – medvetet, så att den
   inte spelas upp igen vid rotation. Om den ska bli state med kvittens avgörs i en egen PR senare.
 
 ## Compose (android:compose-expert)
@@ -257,8 +263,8 @@ Stegen står i pluginen; det här är Fonders delar.
   repositories eller ViewModels.
 - **Beräkningar** ligger i `domain/usecase/`, aldrig i ViewModel eller composable.
 - **Lagerkedjan:** `Compose → ViewModel(StateFlow<UiState>) → Repository → Room/DataStore`, Hilt,
-  fel mappas i repository-lagret. Skärmarna anropar ViewModelns publika funktioner – Fonder har
-  inga sealed events (Baslinje ovan), så pluginens anti-mönster om publik `fun` gäller inte här.
+  fel mappas i repository-lagret. Skärmarna skickar händelser till ViewModelns `onEvent()` – sealed
+  `XxxEvent` per skärm (Baslinje ovan), inga publika åtgärdsfunktioner.
 - **Datakedjan** för ett persisterat fält eller en entitet, i samma ändring: `@Entity`, höjd
   `version`, `MIGRATION_N_N+1` i `MIGRATIONS` och `MigrationXYTest` (skill `room-migrations`);
   fältet i `BackupPayload` med default, i `export()`/`restore()`, fältvakten i

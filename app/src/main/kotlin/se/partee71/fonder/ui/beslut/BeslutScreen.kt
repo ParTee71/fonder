@@ -2,6 +2,7 @@ package se.partee71.fonder.ui.beslut
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -85,7 +86,7 @@ fun BeslutScreen(
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
             openSwitchWatch(watchId)
-            viewModel.onSwitchWatchOpened()
+            viewModel.onEvent(BeslutEvent.SwitchWatchOpened)
         }
     }
 
@@ -94,12 +95,12 @@ fun BeslutScreen(
         onOpenRiskProfile = onOpenRiskProfile,
         onOpenSwitchWatch = onOpenSwitchWatch,
         onFollow = onFollow,
-        onStartSwitchWatch = viewModel::startSwitchWatch,
-        onDismissSuggestion = viewModel::dismissSuggestion,
-        onUndoDismissal = viewModel::undoDismissal,
-        onRecomputeSwitchPlan = viewModel::recomputeSwitchPlan,
+        onStartSwitchWatch = { viewModel.onEvent(BeslutEvent.StartSwitchWatch(it)) },
+        onDismissSuggestion = { viewModel.onEvent(BeslutEvent.DismissSuggestion(it)) },
+        onUndoDismissal = { viewModel.onEvent(BeslutEvent.UndoDismissal(it)) },
+        onRecomputeSwitchPlan = { viewModel.onEvent(BeslutEvent.RecomputeSwitchPlan) },
         onOpenFacit = onOpenFacit,
-        onRetry = viewModel::retry,
+        onRetry = { viewModel.onEvent(BeslutEvent.Retry) },
         modifier = modifier
     )
 }
@@ -355,7 +356,7 @@ private fun SwitchRowActions(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SuggestedRow(
+private fun ColumnScope.SuggestedRow(
     row: SwitchRow.Suggested,
     onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
     onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit,
@@ -420,7 +421,7 @@ private fun SuggestedRow(
 }
 
 @Composable
-private fun SoldRow(row: SwitchRow.Sold, onOpen: (Long) -> Unit) {
+private fun ColumnScope.SoldRow(row: SwitchRow.Sold, onOpen: (Long) -> Unit) {
     val watch = row.watch
     SwitchRowText(
         row = row,

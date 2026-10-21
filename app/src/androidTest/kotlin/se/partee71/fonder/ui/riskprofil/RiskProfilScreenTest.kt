@@ -49,9 +49,9 @@ class RiskProfilScreenTest {
     @Composable
     private fun Content(
         state: RiskProfilUiState,
-        onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
+        onAllocationPercentChange: (Int, String) -> Unit = { _, _ -> },
         onSave: () -> Unit = {}
-    ) = RiskProfilContent(state, EditorEvents.None, onClose = {}, onAllocationPercentChanged = onAllocationPercentChanged, onSave = onSave)
+    ) = RiskProfilContent(state, EditorEvents.None, onClose = {}, onAllocationPercentChange = onAllocationPercentChange, onSave = onSave)
 
     @Test
     fun visar_forslag_nar_ingen_egen_andring_har_gjorts() {
@@ -81,7 +81,7 @@ class RiskProfilScreenTest {
         val state = formState()
 
         composeRule.setContent {
-            FonderTheme { Content(state, onAllocationPercentChanged = { level, text -> changed = level to text }) }
+            FonderTheme { Content(state, onAllocationPercentChange = { level, text -> changed = level to text }) }
         }
 
         composeRule.onNodeWithTag(allocationFieldTestTag(4)).performTextReplacement("100")

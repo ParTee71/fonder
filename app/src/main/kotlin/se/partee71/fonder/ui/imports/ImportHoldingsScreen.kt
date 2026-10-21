@@ -58,15 +58,15 @@ private val IMPORT_MIME_TYPES = arrayOf(
 /** Importera befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export (issue #8). */
 @Composable
 fun ImportHoldingsScreen(
-    onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onDone: () -> Unit = {},
     viewModel: ImportHoldingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        viewModel.onFileSelected(uri)
+        viewModel.onEvent(ImportHoldingsEvent.FileSelected(uri))
     }
 
     if (state.imported) {
@@ -102,19 +102,19 @@ fun ImportHoldingsScreen(
                     ImportRowCard(
                         rowState = rowState,
                         catalogFunds = state.catalogFunds,
-                        onFundOverride = { fund -> viewModel.onFundOverride(rowState.row, fund) },
-                        onIncludedChange = { included -> viewModel.onIncludedChange(rowState.row, included) },
-                        onOccasionDateChange = { index, date -> viewModel.onOccasionDateChange(rowState.row, index, date) },
-                        onOccasionSharesChange = { index, text -> viewModel.onOccasionSharesChange(rowState.row, index, text) },
-                        onOccasionTypeChange = { index, type -> viewModel.onOccasionTypeChange(rowState.row, index, type) },
-                        onAddOccasion = { viewModel.onAddOccasion(rowState.row) },
-                        onRemoveOccasion = { index -> viewModel.onRemoveOccasion(rowState.row, index) }
+                        onFundOverride = { fund -> viewModel.onEvent(ImportHoldingsEvent.FundOverride(rowState.row, fund)) },
+                        onIncludedChange = { included -> viewModel.onEvent(ImportHoldingsEvent.IncludedChange(rowState.row, included)) },
+                        onOccasionDateChange = { index, date -> viewModel.onEvent(ImportHoldingsEvent.OccasionDateChange(rowState.row, index, date)) },
+                        onOccasionSharesChange = { index, text -> viewModel.onEvent(ImportHoldingsEvent.OccasionSharesChange(rowState.row, index, text)) },
+                        onOccasionTypeChange = { index, type -> viewModel.onEvent(ImportHoldingsEvent.OccasionTypeChange(rowState.row, index, type)) },
+                        onAddOccasion = { viewModel.onEvent(ImportHoldingsEvent.AddOccasion(rowState.row)) },
+                        onRemoveOccasion = { index -> viewModel.onEvent(ImportHoldingsEvent.RemoveOccasion(rowState.row, index)) }
                     )
                 }
             }
             AppButton(
                 text = stringResource(R.string.import_commit_button, state.rows.count { it.readyToImport }),
-                onClick = viewModel::import,
+                onClick = { viewModel.onEvent(ImportHoldingsEvent.Import) },
                 enabled = state.canImport,
                 modifier = Modifier.fillMaxWidth().padding(Spacing.l)
             )

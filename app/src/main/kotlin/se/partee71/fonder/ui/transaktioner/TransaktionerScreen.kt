@@ -72,16 +72,16 @@ fun TransaktionerScreen(
     LaunchedEffect(state.startedSwitchWatchId) {
         state.startedSwitchWatchId?.let { watchId ->
             openSwitchWatch(watchId)
-            viewModel.onSwitchWatchOpened()
+            viewModel.onEvent(TransaktionerEvent.SwitchWatchOpened)
         }
     }
 
     TransaktionerContent(
         state = state,
-        onFilterSelected = viewModel::onFilterSelected,
-        onDeleteTransaction = viewModel::deleteTransaction,
-        onStartSwitchWatch = viewModel::startSwitchWatch,
-        onRetry = viewModel::retry,
+        onFilterSelect = { viewModel.onEvent(TransaktionerEvent.FilterSelected(it)) },
+        onDeleteTransaction = { viewModel.onEvent(TransaktionerEvent.DeleteTransaction(it)) },
+        onStartSwitchWatch = { viewModel.onEvent(TransaktionerEvent.StartSwitchWatch(it)) },
+        onRetry = { viewModel.onEvent(TransaktionerEvent.Retry) },
         onNewTransaction = onNewTransaction,
         onImportOrders = onImportOrders,
         modifier = modifier
@@ -93,7 +93,7 @@ fun TransaktionerScreen(
 fun TransaktionerContent(
     state: TransaktionerUiState,
     modifier: Modifier = Modifier,
-    onFilterSelected: (HandelseFilter) -> Unit = {},
+    onFilterSelect: (HandelseFilter) -> Unit = {},
     onDeleteTransaction: (Long) -> Unit = {},
     onStartSwitchWatch: (TransaktionRad) -> Unit = {},
     onRetry: () -> Unit = {},
@@ -119,7 +119,7 @@ fun TransaktionerContent(
                     options = HandelseFilter.entries,
                     selected = state.filter,
                     optionLabel = { stringResource(it.labelRes()) },
-                    onSelect = onFilterSelected
+                    onSelect = onFilterSelect
                 )
             },
             header = if (state.showRealizedCard) {

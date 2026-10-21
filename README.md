@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.78.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.78.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.78.2 | Skärmarna skickar händelser till sina ViewModels (sealed events och `onEvent()`), och alla compose-rules-regler är påslagna i kodstilen (#176). Appen ser ut och fungerar som förut. |
 | 0.78.1 | Domänen i en egen ren Kotlin-modul, `:core` (#171): modellerna och de rena beräkningarna med sina tester. Appen fungerar som förut. |
 | 0.78.0 | Fonddetalj på android-ui:s detaljram (#174): fondens namn står i den lilla toppraden, laddningen visas mitt på skärmen och ett läsfel har "Försök igen"; en fond som inte finns längre sägs ut. Avsnitten står 12 dp isär, "Ska du byta?" är en avsnittsrubrik i 20 sp och grupprubrikerna i versaler. |
 | 0.77.0 | Knappar, kort, rader och avsnittsrubriker från android-ui 0.8.0 (#174): Fonders egna AppButton, AppCard, ItemRow och StateChip är borta. Besluts rader har rubriken i 16 sp och chipet med ursprunget ovanför, profilraden står på två rader, avsnittsrubrikerna är 20 sp med antalet i en pill och Facit-raden har en pil; Inställningars kortrubriker är 16 sp. Översiktens kugghjul är 48 dp. |

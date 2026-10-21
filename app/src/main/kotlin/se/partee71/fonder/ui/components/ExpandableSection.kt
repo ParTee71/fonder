@@ -43,10 +43,10 @@ import se.partee71.fonder.R
  */
 @Composable
 fun ExpandableSection(
+    header: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     initiallyExpanded: Boolean = false,
     onExpand: () -> Unit = {},
-    header: @Composable () -> Unit,
     content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }

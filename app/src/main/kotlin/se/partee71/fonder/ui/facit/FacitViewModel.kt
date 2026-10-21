@@ -60,6 +60,18 @@ data class FacitUiState(
     fun withFacit(snapshot: FacitSnapshot): FacitUiState = copy(list = snapshot.rows.toListUiState(), facit = snapshot)
 }
 
+/** Användarens handlingar på Facit, till [FacitViewModel.onEvent]. */
+sealed interface FacitEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : FacitEvent
+
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : FacitEvent
+
+    /** Förslaget markeras som genomfört eller ej (HEM-8/SET-5). */
+    data class SetFollowed(val recordId: Long, val followed: Boolean) : FacitEvent
+}
+
 /**
  * Facit för bytesplanen (SET-5, issue #80) — redovisar utfallet av HEM-8:s inspelade förslag
  * mot att ha behållit innehavet, se [SwitchOutcomeCalc].
@@ -92,23 +104,31 @@ class FacitViewModel @Inject constructor(
             initialValue = FacitUiState()
         )
 
+    fun onEvent(event: FacitEvent) {
+        when (event) {
+            FacitEvent.Refresh -> refresh()
+            FacitEvent.Retry -> retry()
+            is FacitEvent.SetFollowed -> setFollowed(event.recordId, event.followed)
+        }
+    }
+
     /**
      * Dra ned för att uppdatera (UI-11) — startar bytesplansskanningen, den körning som spelar
      * in nya rader och fyller på utfallens NAV. Facit läser bara cachen; utan skanningen finns
      * det ingenting nytt att räkna om. Eget unikt arbetsnamn med `KEEP`, så upprepade
      * dragningar aldrig ger två parallella (dyra) skanningar.
      */
-    fun refresh() {
+    private fun refresh() {
         fundPriceRefreshScheduler.triggerSwitchPlanScan(force = true)
     }
 
     /** "Försök igen" efter ett läsfel (NFR-6): läser om facit ur cachen från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
     /** Markerar ett förslag som genomfört eller ej (HEM-8/SET-5) — flödet ovan speglar ändringen. */
-    fun setFollowed(recordId: Long, followed: Boolean) {
+    private fun setFollowed(recordId: Long, followed: Boolean) {
         viewModelScope.launch { suggestionRecordRepository.setFollowed(recordId, followed) }
     }
 }

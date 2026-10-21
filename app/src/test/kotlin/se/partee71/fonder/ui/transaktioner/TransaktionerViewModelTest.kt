@@ -135,7 +135,7 @@ class TransaktionerViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        vm.deleteTransaction(42)
+        vm.onEvent(TransaktionerEvent.DeleteTransaction(42))
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(42L in deletedIds)
     }
@@ -164,7 +164,7 @@ class TransaktionerViewModelTest {
         }
         val vm = viewModel(flakyRepo)
         vm.uiState.test {
-            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            val state = awaitRecoveryAfterRetry(source, { vm.onEvent(TransaktionerEvent.Retry) }, { it.loading }, { it.error })
             assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
@@ -196,13 +196,13 @@ class TransaktionerViewModelTest {
         vm.uiState.test {
             assertEquals(listOf(3L, 2L, 1L), awaitLoaded().rows.map { it.transaction.id })
 
-            vm.onFilterSelected(HandelseFilter.KOP)
+            vm.onEvent(TransaktionerEvent.FilterSelected(HandelseFilter.KOP))
             val kop = awaitItem()
             assertEquals(HandelseFilter.KOP, kop.filter)
             assertEquals(listOf(2L, 1L), kop.rows.map { it.transaction.id })
             assertFalse("Köp visar inget realiserat resultat", kop.showRealizedCard)
 
-            vm.onFilterSelected(HandelseFilter.SALJ)
+            vm.onEvent(TransaktionerEvent.FilterSelected(HandelseFilter.SALJ))
             val salj = awaitItem()
             assertEquals(listOf(3L), salj.rows.map { it.transaction.id })
             assertTrue(salj.showRealizedCard)
@@ -348,10 +348,10 @@ class TransaktionerViewModelTest {
 
         vm.uiState.test {
             val state = awaitLoaded()
-            vm.startSwitchWatch(state.rows.first { it.sale != null })
+            vm.onEvent(TransaktionerEvent.StartSwitchWatch(state.rows.first { it.sale != null }))
             advanceUntilIdle()
             assertEquals(fakeSwitchWatchRepo.watches.value.single().id, expectMostRecentItem().startedSwitchWatchId)
-            vm.onSwitchWatchOpened()
+            vm.onEvent(TransaktionerEvent.SwitchWatchOpened)
             advanceUntilIdle()
             assertNull(expectMostRecentItem().startedSwitchWatchId)
             cancelAndIgnoreRemainingEvents()
@@ -377,9 +377,9 @@ class TransaktionerViewModelTest {
 
         vm.uiState.test {
             val row = awaitLoaded().rows.first { it.sale != null }
-            vm.startSwitchWatch(row)
+            vm.onEvent(TransaktionerEvent.StartSwitchWatch(row))
             advanceUntilIdle()
-            vm.startSwitchWatch(row)
+            vm.onEvent(TransaktionerEvent.StartSwitchWatch(row))
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
@@ -436,7 +436,7 @@ class TransaktionerViewModelTest {
         vm.uiState.test {
             val row = awaitLoaded().rows.first { it.sale != null }
             assertTrue(row.canStartSwitchWatch)
-            vm.startSwitchWatch(row)
+            vm.onEvent(TransaktionerEvent.StartSwitchWatch(row))
             advanceUntilIdle()
             val state = expectMostRecentItem()
             assertEquals(existing, state.startedSwitchWatchId)

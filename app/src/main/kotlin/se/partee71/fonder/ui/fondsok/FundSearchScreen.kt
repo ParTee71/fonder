@@ -45,11 +45,11 @@ fun FundSearchScreen(
         state = state,
         title = title,
         onBack = onBack,
-        onQueryChange = viewModel::onQueryChange,
-        onCompanySelected = viewModel::onCompanySelected,
-        onAddFund = viewModel::addFund,
-        onRefresh = viewModel::refresh,
-        onRetry = viewModel::retry,
+        onQueryChange = { viewModel.onEvent(FundSearchEvent.QueryChange(it)) },
+        onCompanySelect = { viewModel.onEvent(FundSearchEvent.CompanySelected(it)) },
+        onAddFund = { viewModel.onEvent(FundSearchEvent.AddFund(it)) },
+        onRefresh = { viewModel.onEvent(FundSearchEvent.Refresh) },
+        onRetry = { viewModel.onEvent(FundSearchEvent.Retry) },
         onPickFund = onPickFund,
         modifier = modifier
     )
@@ -68,7 +68,7 @@ fun FundSearchContent(
     title: String = stringResource(R.string.fondsok_title),
     onBack: () -> Unit = {},
     onQueryChange: (String) -> Unit = {},
-    onCompanySelected: (FundCompany?) -> Unit = {},
+    onCompanySelect: (FundCompany?) -> Unit = {},
     onAddFund: (Fund) -> Unit = {},
     /**
      * Satt = skärmen är en **väljare** (HEM-10, issue #102): raden erbjuder "Välj" i stället för
@@ -95,7 +95,7 @@ fun FundSearchContent(
             modifier = modifier,
             onRetry = onRetry,
             onBack = onBack,
-            filter = { SearchFields(state, onCompanySelected, onQueryChange) },
+            filter = { SearchFields(state, onCompanySelect, onQueryChange) },
             topBarSize = TopBarSize.Small,
             refreshing = state.refreshing,
             onRefresh = onRefresh,
@@ -115,7 +115,7 @@ fun FundSearchContent(
 
 /** Fondbolag och sökord – ramens `filter`, fast i alla lägen. */
 @Composable
-private fun SearchFields(state: FundSearchUiState, onCompanySelected: (FundCompany?) -> Unit, onQueryChange: (String) -> Unit) {
+private fun SearchFields(state: FundSearchUiState, onCompanySelect: (FundCompany?) -> Unit, onQueryChange: (String) -> Unit) {
     val allaFondbolag = stringResource(R.string.fondsok_company_all)
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         SelectField(
@@ -123,7 +123,7 @@ private fun SearchFields(state: FundSearchUiState, onCompanySelected: (FundCompa
             options = state.companies,
             selected = state.selectedCompany,
             optionLabel = { it.name },
-            onSelect = onCompanySelected,
+            onSelect = onCompanySelect,
             placeholder = allaFondbolag,
             clearOptionLabel = allaFondbolag
         )

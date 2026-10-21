@@ -152,7 +152,7 @@ class PortfoljViewModelTest {
         }
         val vm = PortfoljViewModel(flakyRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
         vm.uiState.test {
-            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            val state = awaitRecoveryAfterRetry(source, { vm.onEvent(PortfoljEvent.Retry) }, { it.loading }, { it.error })
             assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
@@ -444,7 +444,7 @@ class PortfoljViewModelTest {
         // sin skärm aldrig blir två parallella uppdateringar.
         val vm = PortfoljViewModel(fakeTransactionRepo, fakeFundPriceRepo, fakeFundMetadataRepo, fakeScheduler)
 
-        vm.refresh()
+        vm.onEvent(PortfoljEvent.Refresh)
 
         assertEquals(1, fakeScheduler.manualRefreshes)
     }

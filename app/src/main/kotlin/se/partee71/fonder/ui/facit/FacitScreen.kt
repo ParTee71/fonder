@@ -66,9 +66,9 @@ fun FacitScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     FacitContent(
         state = state,
-        onFollowedChange = viewModel::setFollowed,
-        onRefresh = viewModel::refresh,
-        onRetry = viewModel::retry,
+        onFollowedChange = { recordId, followed -> viewModel.onEvent(FacitEvent.SetFollowed(recordId, followed)) },
+        onRefresh = { viewModel.onEvent(FacitEvent.Refresh) },
+        onRetry = { viewModel.onEvent(FacitEvent.Retry) },
         modifier = modifier
     )
 }
@@ -77,9 +77,9 @@ fun FacitScreen(
 @Composable
 fun FacitContent(
     state: FacitUiState,
+    modifier: Modifier = Modifier,
     onFollowedChange: (Long, Boolean) -> Unit = { _, _ -> },
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier,
     onRetry: () -> Unit = {}
 ) {
     val error = state.error

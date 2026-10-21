@@ -131,7 +131,7 @@ class TransactionFormScreenTest {
         ownedShares = 37.5214
     )
 
-    private fun show(state: TransactionFormUiState, onClose: () -> Unit = {}, onWatchFund: () -> Unit = {}, onSellAll: () -> Unit = {}, onRetry: () -> Unit = {}, onSwitchSelected: (SwitchOption) -> Unit = {}) {
+    private fun show(state: TransactionFormUiState, onClose: () -> Unit = {}, onWatchFund: () -> Unit = {}, onSellAll: () -> Unit = {}, onRetry: () -> Unit = {}, onSwitchSelect: (SwitchOption) -> Unit = {}) {
         composeRule.setContent {
             FonderTheme {
                 TransactionFormContent(
@@ -141,7 +141,7 @@ class TransactionFormScreenTest {
                     onWatchFund = onWatchFund,
                     onSellAll = onSellAll,
                     onRetry = onRetry,
-                    onSwitchSelected = onSwitchSelected
+                    onSwitchSelect = onSwitchSelect
                 )
             }
         }
@@ -211,7 +211,7 @@ class TransactionFormScreenTest {
     @Test
     fun `en fraga utan forval slacker Spara med en forklaring och ett val rapporteras`() {
         var picked: SwitchOption? = null
-        show(buyRequired, onSwitchSelected = { picked = it })
+        show(buyRequired, onSwitchSelect = { picked = it })
 
         composeRule.onNode(hasText("Hör till byte") and hasText("Välj ett svar")).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText(

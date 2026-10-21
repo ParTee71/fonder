@@ -87,6 +87,27 @@ data class BeslutUiState(
     fun withDecisions(decisions: PendingDecisions): BeslutUiState = copy(list = decisions.switches.active.toListUiState(), decisions = decisions)
 }
 
+/** Användarens handlingar på Beslut, till [BeslutViewModel.onEvent]. */
+sealed interface BeslutEvent {
+    /** Avstår från ett förslag (HEM-14). */
+    data class DismissSuggestion(val suggestion: SwitchPlanResolver.Suggestion) : BeslutEvent
+
+    /** Ångrar ett avstående (HEM-14). */
+    data class UndoDismissal(val suggestion: SwitchPlanResolver.Suggestion) : BeslutEvent
+
+    /** Startar en bevakning ur ett kvitterat förslag (ANA-12). */
+    data class StartSwitchWatch(val suggestion: SwitchPlanResolver.Suggestion) : BeslutEvent
+
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : BeslutEvent
+
+    /** Kvitterar navigeringen till en nystartad bevakning. */
+    data object SwitchWatchOpened : BeslutEvent
+
+    /** Ber om en omräkning av bytesplanen (HEM-8). */
+    data object RecomputeSwitchPlan : BeslutEvent
+}
+
 /**
  * Fliken **Beslut** (NAV-9) — listan "Byten" (BYT-4): sålda byten (ANA-12), bytesplanen (HEM-8) och
  * de billigare alternativen (ANA-9), ett byte per rad, med Registrera säljet och Avstå (HEM-14) — Registrera säljet navigerar till
@@ -142,6 +163,17 @@ class BeslutViewModel @Inject constructor(
         initialValue = BeslutUiState()
     )
 
+    fun onEvent(event: BeslutEvent) {
+        when (event) {
+            is BeslutEvent.DismissSuggestion -> dismissSuggestion(event.suggestion)
+            is BeslutEvent.UndoDismissal -> undoDismissal(event.suggestion)
+            is BeslutEvent.StartSwitchWatch -> startSwitchWatch(event.suggestion)
+            BeslutEvent.Retry -> retry()
+            BeslutEvent.SwitchWatchOpened -> onSwitchWatchOpened()
+            BeslutEvent.RecomputeSwitchPlan -> recomputeSwitchPlan()
+        }
+    }
+
     /**
      * Avstår från ett förslag (HEM-14) — ett byte i planen eller ett billigare alternativ (ANA-9),
      * efter förslagets egen sort: fondparet döljs på Beslut och i Fonddetalj och räknas inte i märket
@@ -152,7 +184,7 @@ class BeslutViewModel @Inject constructor(
      * steg inte längre bygger på ett byte som inte ska göras och listan blir 1..n utan lucka. Ett
      * avgiftsbyte (ANA-9) ingår inte i planen och utlöser ingen omräkning.
      */
-    fun dismissSuggestion(suggestion: SwitchPlanResolver.Suggestion) {
+    private fun dismissSuggestion(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             suggestionDismissalRepository.dismiss(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
             if (suggestion.kind == SuggestionKind.RISK_PLAN) fundPriceRefreshScheduler.triggerSwitchPlanScan()
@@ -160,7 +192,7 @@ class BeslutViewModel @Inject constructor(
     }
 
     /** Ångrar ett avstående (HEM-14) — förslaget visas igen, och planen räknas om med paret tillbaka i kandidatmängden. */
-    fun undoDismissal(suggestion: SwitchPlanResolver.Suggestion) {
+    private fun undoDismissal(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             suggestionDismissalRepository.undoDismissal(suggestion.sellIsin, suggestion.buyIsin, suggestion.kind)
             if (suggestion.kind == SuggestionKind.RISK_PLAN) fundPriceRefreshScheduler.triggerSwitchPlanScan()
@@ -168,19 +200,19 @@ class BeslutViewModel @Inject constructor(
     }
 
     /** Startar en bevakning ur ett kvitterat förslag (ANA-12) — se [RecordTransaction.startWatchFromSuggestion]. */
-    fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
+    private fun startSwitchWatch(suggestion: SwitchPlanResolver.Suggestion) {
         viewModelScope.launch {
             recordTransaction.startWatchFromSuggestion(suggestion)?.let { startedSwitchWatchId.value = it }
         }
     }
 
     /** "Försök igen" efter ett läsfel (NFR-6): läser om förslagen, profilen och facit från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
-    fun onSwitchWatchOpened() {
+    private fun onSwitchWatchOpened() {
         startedSwitchWatchId.value = null
     }
 
@@ -188,7 +220,7 @@ class BeslutViewModel @Inject constructor(
      * Ber om en omräkning av bytesplanen (HEM-8, issue #88). Kör inte själv: skanningen hör hemma
      * i WorkManager, med nätverksvillkor och koalescering, precis som backstopens egen körning.
      */
-    fun recomputeSwitchPlan() {
+    private fun recomputeSwitchPlan() {
         fundPriceRefreshScheduler.triggerSwitchPlanScan(force = true)
     }
 }

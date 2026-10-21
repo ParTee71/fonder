@@ -23,17 +23,7 @@ val ktlintRules = mapOf(
     "max_line_length" to "off",
     "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
     "compose_allowed_composition_locals" to
-        "LocalFonderColors",
-    // Befintliga avvikelser som kräver API-ändringar i komponenter – rättas i egna PR:er
-    // (skill android-projekt → Nuvarande läge). Ta bort raden när regeln är rättad.
-    "ktlint_compose_parameter-naming" to "disabled",
-    "ktlint_compose_lambda-param-event-trailing" to "disabled",
-    "ktlint_compose_multiple-emitters-check" to "disabled",
-    "ktlint_compose_modifier-naming" to "disabled",
-    "ktlint_compose_modifier-missing-check" to "disabled",
-    "ktlint_compose_param-order-check" to "disabled",
-    // Autorättningen flyttar bara den sista av två hiltViewModel() till en parameter och bryter koden.
-    "ktlint_compose_vm-injection-check" to "disabled"
+        "LocalFonderColors"
 )
 spotless {
     kotlin {

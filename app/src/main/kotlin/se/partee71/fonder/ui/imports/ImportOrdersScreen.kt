@@ -45,15 +45,15 @@ import se.partee71.ui.theme.Spacing
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
 @Composable
 fun ImportOrdersScreen(
-    onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onDone: () -> Unit = {},
     viewModel: ImportOrdersViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        viewModel.onFilesSelected(uris)
+        viewModel.onEvent(ImportOrdersEvent.FilesSelected(uris))
     }
 
     if (state.imported) {
@@ -89,13 +89,13 @@ fun ImportOrdersScreen(
 
         else -> ImportOrdersReview(
             state = state,
-            onFundOverride = viewModel::onFundOverride,
-            onIncludedChange = viewModel::onIncludedChange,
-            onDateChange = viewModel::onDateChange,
-            onSharesTextChange = viewModel::onSharesTextChange,
-            onPriceTextChange = viewModel::onPriceTextChange,
-            onSwitchSelected = viewModel::onSwitchSelected,
-            onImport = viewModel::import,
+            onFundOverride = { transaction, fund -> viewModel.onEvent(ImportOrdersEvent.FundOverride(transaction, fund)) },
+            onIncludedChange = { transaction, included -> viewModel.onEvent(ImportOrdersEvent.IncludedChange(transaction, included)) },
+            onDateChange = { transaction, date -> viewModel.onEvent(ImportOrdersEvent.DateChange(transaction, date)) },
+            onSharesTextChange = { transaction, text -> viewModel.onEvent(ImportOrdersEvent.SharesTextChange(transaction, text)) },
+            onPriceTextChange = { transaction, text -> viewModel.onEvent(ImportOrdersEvent.PriceTextChange(transaction, text)) },
+            onSwitchSelect = { transaction, option -> viewModel.onEvent(ImportOrdersEvent.SwitchSelected(transaction, option)) },
+            onImport = { viewModel.onEvent(ImportOrdersEvent.Import) },
             modifier = modifier
         )
     }
@@ -122,7 +122,7 @@ fun ImportOrdersReview(
     onDateChange: (ImportedOrderTransaction, java.time.LocalDate) -> Unit,
     onSharesTextChange: (ImportedOrderTransaction, String) -> Unit,
     onPriceTextChange: (ImportedOrderTransaction, String) -> Unit,
-    onSwitchSelected: (ImportedOrderTransaction, SwitchOption) -> Unit,
+    onSwitchSelect: (ImportedOrderTransaction, SwitchOption) -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -160,7 +160,7 @@ fun ImportOrdersReview(
                     onDateChange = { date -> onDateChange(rowState.transaction, date) },
                     onSharesTextChange = { text -> onSharesTextChange(rowState.transaction, text) },
                     onPriceTextChange = { text -> onPriceTextChange(rowState.transaction, text) },
-                    onSwitchSelected = { option -> onSwitchSelected(rowState.transaction, option) },
+                    onSwitchSelect = { option -> onSwitchSelect(rowState.transaction, option) },
                     switchSaleRowSkipped = state.switchSaleRowSkipped(rowState)
                 )
             }
@@ -183,7 +183,7 @@ private fun ImportOrderRowCard(
     onDateChange: (java.time.LocalDate) -> Unit,
     onSharesTextChange: (String) -> Unit,
     onPriceTextChange: (String) -> Unit,
-    onSwitchSelected: (SwitchOption) -> Unit,
+    onSwitchSelect: (SwitchOption) -> Unit,
     switchSaleRowSkipped: Boolean
 ) {
     val tx = rowState.transaction
@@ -250,7 +250,7 @@ private fun ImportOrderRowCard(
             SwitchDecisionField(
                 field = field,
                 fundName = rowState.matchedFund?.name ?: tx.fundName,
-                onSelect = onSwitchSelected,
+                onSelect = onSwitchSelect,
                 modifier = Modifier.padding(top = Spacing.s)
             )
         }

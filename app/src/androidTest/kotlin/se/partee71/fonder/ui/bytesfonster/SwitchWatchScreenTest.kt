@@ -165,7 +165,7 @@ class SwitchWatchScreenTest {
         var bought: String? = null
 
         composeRule.setContent {
-            FonderTheme { SwitchWatchContent(state = state(), onBought = { bought = it }) }
+            FonderTheme { SwitchWatchContent(state = state(), onBuy = { bought = it }) }
         }
         composeRule.onNodeWithText("Köpte den här").performClick()
 
@@ -340,7 +340,7 @@ class SwitchWatchScreenTest {
             FonderTheme {
                 SwitchWatchContent(
                     state = state().withDetail { copy(targetLevel = 4, indexOnly = true) },
-                    onIndexOnlyChanged = { indexOnly = it }
+                    onIndexOnlyChange = { indexOnly = it }
                 )
             }
         }

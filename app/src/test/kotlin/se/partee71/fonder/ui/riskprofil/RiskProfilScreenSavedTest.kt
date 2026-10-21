@@ -65,10 +65,10 @@ class RiskProfilScreenSavedTest {
         restoration.setContent { FonderTheme { RiskProfilScreen(onClose = { backs++ }, viewModel = vm) } }
         settle()
 
-        vm.onAllocationPercentChanged(3, "100")
+        vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
         settle()
         assertTrue(vm.uiState.value.editor.canSave)
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         settle()
         assertEquals(1, backs)
         assertFalse(vm.uiState.value.editor.done)
@@ -88,12 +88,12 @@ class RiskProfilScreenSavedTest {
             FonderTheme { if (shown) RiskProfilScreen(onClose = { backs++ }, viewModel = vm) }
         }
         settle()
-        vm.onAllocationPercentChanged(3, "100")
+        vm.onEvent(RiskProfilEvent.AllocationPercentChanged(3, "100"))
         settle()
         assertTrue(vm.uiState.value.editor.canSave)
 
         // Sparningen startas, och skärmen försvinner innan den hunnit skrivas klart.
-        vm.save()
+        vm.onEvent(RiskProfilEvent.Save)
         shown = false
         composeRule.waitForIdle()
         settle()

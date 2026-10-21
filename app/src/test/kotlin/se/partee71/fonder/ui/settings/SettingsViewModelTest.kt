@@ -189,7 +189,7 @@ class SettingsViewModelTest {
         vm.uiState.test {
             assertFalse(awaitItem().databaseCleared)
 
-            vm.clearDatabase()
+            vm.onEvent(SettingsEvent.ClearDatabase)
             var state = awaitItem()
             while (!state.databaseCleared) state = awaitItem()
 
@@ -208,11 +208,11 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.clearDatabase()
+            vm.onEvent(SettingsEvent.ClearDatabase)
             var state = awaitItem()
             while (!state.databaseCleared) state = awaitItem()
 
-            vm.onClearedMessageDismissed()
+            vm.onEvent(SettingsEvent.ClearedMessageDismissed)
             state = awaitItem()
             while (state.databaseCleared) state = awaitItem()
 
@@ -277,7 +277,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.setAccountType(AccountType.ISK_KF)
+            vm.onEvent(SettingsEvent.SetAccountType(AccountType.ISK_KF))
             var state = awaitItem()
             while (state.accountType == null) state = awaitItem()
 
@@ -296,7 +296,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.export { written = it }
+            vm.onEvent(SettingsEvent.Export { written = it })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -313,7 +313,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.export { throw java.io.IOException("ingen skrivrätt") }
+            vm.onEvent(SettingsEvent.Export { throw java.io.IOException("ingen skrivrätt") })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -329,7 +329,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { """{"formatVersion":1}""" }
+            vm.onEvent(SettingsEvent.Restore { """{"formatVersion":1}""" })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -345,7 +345,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { null }
+            vm.onEvent(SettingsEvent.Restore { null })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -364,7 +364,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { """{"formatVersion":99}""" }
+            vm.onEvent(SettingsEvent.Restore { """{"formatVersion":99}""" })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -379,11 +379,11 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.export {}
+            vm.onEvent(SettingsEvent.Export {})
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
-            vm.onBackupMessageDismissed()
+            vm.onEvent(SettingsEvent.BackupMessageDismissed)
             state = awaitItem()
             while (state.backupMessage != null) state = awaitItem()
 
@@ -400,14 +400,18 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore {
-                reads++
-                """{"formatVersion":1}"""
-            }
-            vm.restore {
-                reads++
-                """{"formatVersion":1}"""
-            }
+            vm.onEvent(
+                SettingsEvent.Restore {
+                    reads++
+                    """{"formatVersion":1}"""
+                }
+            )
+            vm.onEvent(
+                SettingsEvent.Restore {
+                    reads++
+                    """{"formatVersion":1}"""
+                }
+            )
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -422,7 +426,7 @@ class SettingsViewModelTest {
     fun `byte till ISK eller KF ber om en omrakning av bytesplanen`() = runTest(dispatcher) {
         val vm = viewModel()
 
-        vm.setAccountType(AccountType.ISK_KF)
+        vm.onEvent(SettingsEvent.SetAccountType(AccountType.ISK_KF))
         advanceUntilIdle()
 
         assertEquals(1, fakeScheduler.switchPlanScans)
@@ -434,9 +438,9 @@ class SettingsViewModelTest {
         // nivå — den ska följa faktiska byten, inte antalet tryck.
         val vm = viewModel()
 
-        vm.setAccountType(AccountType.ISK_KF)
+        vm.onEvent(SettingsEvent.SetAccountType(AccountType.ISK_KF))
         advanceUntilIdle()
-        vm.setAccountType(AccountType.ISK_KF)
+        vm.onEvent(SettingsEvent.SetAccountType(AccountType.ISK_KF))
         advanceUntilIdle()
 
         assertEquals(1, fakeScheduler.switchPlanScans)
@@ -447,7 +451,7 @@ class SettingsViewModelTest {
         // SET-4-gaten ger ingen plan alls i depå/AF — det finns inget att räkna om.
         val vm = viewModel()
 
-        vm.setAccountType(AccountType.DEPA_AF)
+        vm.onEvent(SettingsEvent.SetAccountType(AccountType.DEPA_AF))
         advanceUntilIdle()
 
         assertEquals(0, fakeScheduler.switchPlanScans)
@@ -461,7 +465,7 @@ class SettingsViewModelTest {
         metadataByIsin = mapOf("SE0011527613" to benchmarkMetadata())
         val vm = viewModel(preferences)
 
-        vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613"))
+        vm.onEvent(SettingsEvent.ChooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = "SE0011527613")))
         advanceUntilIdle()
 
         assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
@@ -476,7 +480,7 @@ class SettingsViewModelTest {
         isinByFundId = mapOf("SHB1" to "SE0011527613")
         val vm = viewModel(preferences)
 
-        vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null))
+        vm.onEvent(SettingsEvent.ChooseBenchmark(Fund(fundId = "SHB1", name = "Global Index", isin = null)))
         advanceUntilIdle()
 
         assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
@@ -491,7 +495,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.chooseBenchmark(Fund(fundId = "SHB1", name = "Fond utan ISIN", isin = null))
+            vm.onEvent(SettingsEvent.ChooseBenchmark(Fund(fundId = "SHB1", name = "Fond utan ISIN", isin = null)))
             advanceUntilIdle()
             var state = awaitItem()
             while (!state.benchmarkPickFailed) state = awaitItem()
@@ -509,7 +513,7 @@ class SettingsViewModelTest {
         preferences.setChosenBenchmarkIsin("SE0011527613")
         val vm = viewModel(preferences)
 
-        vm.clearBenchmark()
+        vm.onEvent(SettingsEvent.ClearBenchmark)
         advanceUntilIdle()
 
         assertNull(preferences.chosenBenchmarkIsin.first())
@@ -563,7 +567,7 @@ class SettingsViewModelTest {
         vm.uiState.test {
             assertNull(awaitItem().googleUser)
 
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             var state = awaitItem()
             while (state.googleUser == null) state = awaitItem()
 
@@ -582,7 +586,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             advanceUntilIdle()
 
             // Läser StateFlow:ens värde i stället för att vänta på en emission: utebliven
@@ -602,7 +606,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             var state = awaitItem()
             while (state.signInError == null) state = awaitItem()
 
@@ -621,7 +625,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             var state = awaitItem()
             while (state.signInError == null) state = awaitItem()
 
@@ -639,11 +643,11 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             var state = awaitItem()
             while (state.signInError == null) state = awaitItem()
 
-            vm.onSignInErrorDismissed()
+            vm.onEvent(SettingsEvent.SignInErrorDismissed)
             state = awaitItem()
             while (state.signInError != null) state = awaitItem()
 
@@ -657,11 +661,11 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             var state = awaitItem()
             while (state.googleUser == null) state = awaitItem()
 
-            vm.signOut()
+            vm.onEvent(SettingsEvent.SignOut)
             state = awaitItem()
             while (state.googleUser != null) state = awaitItem()
 
@@ -691,8 +695,8 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.signIn(activityContext)
-            vm.signIn(activityContext)
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
+            vm.onEvent(SettingsEvent.SignIn(activityContext))
             advanceUntilIdle()
 
             assertEquals(1, calls)
@@ -711,7 +715,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -730,7 +734,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -747,7 +751,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -764,7 +768,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             advanceUntilIdle()
 
             assertEquals(1, authorizationRequests.size)
@@ -781,11 +785,11 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             var state = awaitItem()
             while (!state.driveBackupNeedsAuth) state = awaitItem()
 
-            vm.onDriveAuthorizationResolved()
+            vm.onEvent(SettingsEvent.DriveAuthorizationResolved)
             state = awaitItem()
             while (state.driveBackupNeedsAuth) state = awaitItem()
 
@@ -801,7 +805,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restoreFromDrive(collectAuth())
+            vm.onEvent(SettingsEvent.RestoreFromDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -818,7 +822,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restoreFromDrive(collectAuth())
+            vm.onEvent(SettingsEvent.RestoreFromDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -836,7 +840,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restoreFromDrive(collectAuth())
+            vm.onEvent(SettingsEvent.RestoreFromDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -867,8 +871,8 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             advanceUntilIdle()
 
             assertEquals(1, uploads)
@@ -901,7 +905,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             val record = awaitLastBackup().lastBackup!!
 
             assertEquals(BackupTarget.DRIVE, record.target)
@@ -918,7 +922,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.export { }
+            vm.onEvent(SettingsEvent.Export { })
             assertEquals(BackupTarget.FILE, awaitLastBackup().lastBackup?.target)
             cancelAndIgnoreRemainingEvents()
         }
@@ -933,7 +937,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             val record = awaitLastBackup().lastBackup!!
 
             assertEquals(BackupFingerprint.of(payloadWithTransactions(2)), record.fingerprint)
@@ -949,7 +953,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.backupToDrive(collectAuth())
+            vm.onEvent(SettingsEvent.BackupToDrive(collectAuth()))
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 
@@ -966,7 +970,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { BackupSerializer.encode(payloadWithTransactions(2)) }
+            vm.onEvent(SettingsEvent.Restore { BackupSerializer.encode(payloadWithTransactions(2)) })
             val record = awaitLastBackup().lastBackup!!
 
             assertEquals(BackupTarget.FILE, record.target)
@@ -982,7 +986,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restoreFromDrive(collectAuth())
+            vm.onEvent(SettingsEvent.RestoreFromDrive(collectAuth()))
             assertEquals(BackupTarget.DRIVE, awaitLastBackup().lastBackup?.target)
             cancelAndIgnoreRemainingEvents()
         }
@@ -995,7 +999,7 @@ class SettingsViewModelTest {
 
         vm.uiState.test {
             awaitItem()
-            vm.restore { "trasig" }
+            vm.onEvent(SettingsEvent.Restore { "trasig" })
             var state = awaitItem()
             while (state.backupMessage == null) state = awaitItem()
 

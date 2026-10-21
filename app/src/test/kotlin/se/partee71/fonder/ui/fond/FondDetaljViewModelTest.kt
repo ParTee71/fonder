@@ -247,7 +247,7 @@ class FondDetaljViewModelTest {
         }
         val vm = viewModel(flakyRepo)
         vm.uiState.test {
-            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            val state = awaitRecoveryAfterRetry(source, { vm.onEvent(FondDetaljEvent.Retry) }, { it.loading }, { it.error })
             assertEquals("Fond A", state.content.fundName)
             cancelAndIgnoreRemainingEvents()
         }
@@ -271,7 +271,7 @@ class FondDetaljViewModelTest {
             while (state.error == null) state = awaitItem()
 
             failing = false
-            vm.retry()
+            vm.onEvent(FondDetaljEvent.Retry)
             assertTrue("ramen ska visa laddningen, inte det gamla felet", awaitItem().loading)
 
             released.value = true
@@ -448,7 +448,7 @@ class FondDetaljViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.onIsinConfirmed(" se0004297927 ")
+        vm.onEvent(FondDetaljEvent.IsinConfirmed(" se0004297927 "))
         advanceUntilIdle()
 
         assertEquals("SE0004297927", upsertedFund?.isin)
@@ -460,7 +460,7 @@ class FondDetaljViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.onIsinConfirmed("   ")
+        vm.onEvent(FondDetaljEvent.IsinConfirmed("   "))
         advanceUntilIdle()
 
         assertNull(upsertedFund)
@@ -831,9 +831,9 @@ class FondDetaljViewModelTest {
             advanceUntilIdle()
             assertTrue("Ingen hämtning innan något fällts ut", historyForIsinCalls.isEmpty())
 
-            vm.onSuggestionExpanded("SE0000581434")
+            vm.onEvent(FondDetaljEvent.SuggestionExpanded("SE0000581434"))
             advanceUntilIdle()
-            vm.onSuggestionExpanded("SE0000581434")
+            vm.onEvent(FondDetaljEvent.SuggestionExpanded("SE0000581434"))
             advanceUntilIdle()
 
             assertEquals(listOf("SE0000581434"), historyForIsinCalls)
@@ -854,7 +854,7 @@ class FondDetaljViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            vm.onSuggestionExpanded("SE0000581434")
+            vm.onEvent(FondDetaljEvent.SuggestionExpanded("SE0000581434"))
             advanceUntilIdle()
 
             assertEquals(ComparisonUiState.Unavailable, vm.uiState.value.comparisons["SE0000581434"])

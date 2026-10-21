@@ -166,6 +166,15 @@ data class HemUiState(
 /** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #16) om inget köp finns (bör inte hända för ett verkligt innehav, men skyddar mot en tom historik-hämtning). */
 private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
 
+/** Användarens handlingar på Översikt, till [HemViewModel.onEvent]. */
+sealed interface HemEvent {
+    /** Dra ned för att uppdatera (UI-11). */
+    data object Refresh : HemEvent
+
+    /** "Försök igen" efter ett läsfel (NFR-6). */
+    data object Retry : HemEvent
+}
+
 /**
  * Hem — ny startskärm (issue #14) med portföljens totala värde/vinst/procent (samma
  * beräkning som Portfölj, [PortfolioCalc]) plus dag/vecka/månads-förändring
@@ -482,8 +491,15 @@ class HemViewModel @Inject constructor(
         return BenchmarkSeries(fundName = label, points = series.points.toImmutableList(), unclassifiedFraction = unclassifiedFraction)
     }
 
+    fun onEvent(event: HemEvent) {
+        when (event) {
+            HemEvent.Refresh -> refresh()
+            HemEvent.Retry -> retry()
+        }
+    }
+
     /** "Försök igen" efter ett läsfel (NFR-6): läser om portföljen, förslagen och påminnelsen från början. */
-    fun retry() {
+    private fun retry() {
         retrySignal.retry()
     }
 
@@ -493,7 +509,7 @@ class HemViewModel @Inject constructor(
      * hemma i WorkManager med nätverksvillkor, och `REPLACE` under det unika arbetsnamnet gör
      * att upprepade dragningar aldrig ger två parallella körningar.
      */
-    fun refresh() {
+    private fun refresh() {
         fundPriceRefreshScheduler.triggerManualRefresh()
     }
 

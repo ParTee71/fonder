@@ -202,7 +202,7 @@ class HemViewModelTest {
         }
         val vm = viewModel(flakyRepo)
         vm.uiState.test {
-            val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
+            val state = awaitRecoveryAfterRetry(source, { vm.onEvent(HemEvent.Retry) }, { it.loading }, { it.error })
             assertTrue(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
@@ -713,7 +713,7 @@ class HemViewModelTest {
         // och gör det via WorkManager — inte med en egen hämtning vid sidan av.
         val vm = viewModel()
 
-        vm.refresh()
+        vm.onEvent(HemEvent.Refresh)
 
         assertEquals(1, fakeScheduler.manualRefreshes)
     }

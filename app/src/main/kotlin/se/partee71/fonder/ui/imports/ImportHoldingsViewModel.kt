@@ -104,6 +104,36 @@ data class ImportHoldingsUiState(
     val canImport: Boolean get() = rows.any { it.readyToImport } && !importing
 }
 
+/** Användarens handlingar på Importera innehav, till [ImportHoldingsViewModel.onEvent]. */
+sealed interface ImportHoldingsEvent {
+    /** Filen användaren valt i filväljaren. */
+    data class FileSelected(val uri: Uri) : ImportHoldingsEvent
+
+    /** Användaren väljer fond för raden själv. */
+    data class FundOverride(val row: ImportedHoldingRow, val fund: Fund?) : ImportHoldingsEvent
+
+    /** Raden tas med i importen eller inte. */
+    data class IncludedChange(val row: ImportedHoldingRow, val included: Boolean) : ImportHoldingsEvent
+
+    /** Datumet för ett inköpstillfälle. */
+    data class OccasionDateChange(val row: ImportedHoldingRow, val index: Int, val date: LocalDate) : ImportHoldingsEvent
+
+    /** Andelarna för ett inköpstillfälle. */
+    data class OccasionSharesChange(val row: ImportedHoldingRow, val index: Int, val sharesText: String) : ImportHoldingsEvent
+
+    /** Transaktionstypen för ett inköpstillfälle. */
+    data class OccasionTypeChange(val row: ImportedHoldingRow, val index: Int, val type: TransactionType) : ImportHoldingsEvent
+
+    /** Delar upp raden i ytterligare ett inköpstillfälle. */
+    data class AddOccasion(val row: ImportedHoldingRow) : ImportHoldingsEvent
+
+    /** Tar bort ett inköpstillfälle. */
+    data class RemoveOccasion(val row: ImportedHoldingRow, val index: Int) : ImportHoldingsEvent
+
+    /** Skriver de importklara raderna. */
+    data object Import : ImportHoldingsEvent
+}
+
 /**
  * Importerar befintliga innehav från Handelsbankens "Innehav Fonder"-Excel-export
  * (issue #8). Föreslår automatiskt fondmatchning ([FundNameMatcher]) och inköpsdatum
@@ -124,16 +154,30 @@ class ImportHoldingsViewModel @Inject constructor(
     /** Pågående import — se [import]. */
     private var importJob: Job? = null
 
+    fun onEvent(event: ImportHoldingsEvent) {
+        when (event) {
+            is ImportHoldingsEvent.FileSelected -> onFileSelected(event.uri)
+            is ImportHoldingsEvent.FundOverride -> onFundOverride(event.row, event.fund)
+            is ImportHoldingsEvent.IncludedChange -> onIncludedChange(event.row, event.included)
+            is ImportHoldingsEvent.OccasionDateChange -> onOccasionDateChange(event.row, event.index, event.date)
+            is ImportHoldingsEvent.OccasionSharesChange -> onOccasionSharesChange(event.row, event.index, event.sharesText)
+            is ImportHoldingsEvent.OccasionTypeChange -> onOccasionTypeChange(event.row, event.index, event.type)
+            is ImportHoldingsEvent.AddOccasion -> onAddOccasion(event.row)
+            is ImportHoldingsEvent.RemoveOccasion -> onRemoveOccasion(event.row, event.index)
+            ImportHoldingsEvent.Import -> import()
+        }
+    }
+
     /** Filen användaren valt i filväljaren (Storage Access Framework). Går den inte att öppna händer inget. */
-    fun onFileSelected(uri: Uri) {
+    private fun onFileSelected(uri: Uri) {
         viewModelScope.launch {
             val bytes = fileReader.readBytes(uri) ?: return@launch
-            onFileSelected(bytes)
+            onFileRead(bytes)
         }
     }
 
     /** [bytes] är hela filens innehåll, läst av [onFileSelected] med en [Uri]. */
-    internal fun onFileSelected(bytes: ByteArray) {
+    internal fun onFileRead(bytes: ByteArray) {
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, fileSelected = true, error = null, rows = persistentListOf()) }
 
@@ -205,32 +249,32 @@ class ImportHoldingsViewModel @Inject constructor(
         )
     }
 
-    fun onFundOverride(row: ImportedHoldingRow, fund: Fund?) {
+    private fun onFundOverride(row: ImportedHoldingRow, fund: Fund?) {
         updateRow(row) { it.copy(matchedFund = fund, matchConfidence = null) }
     }
 
-    fun onIncludedChange(row: ImportedHoldingRow, included: Boolean) {
+    private fun onIncludedChange(row: ImportedHoldingRow, included: Boolean) {
         updateRow(row) { it.copy(included = included) }
     }
 
-    fun onOccasionDateChange(row: ImportedHoldingRow, index: Int, date: LocalDate) {
+    private fun onOccasionDateChange(row: ImportedHoldingRow, index: Int, date: LocalDate) {
         updateOccasion(row, index) { it.copy(date = date, dateConfident = true) }
     }
 
-    fun onOccasionSharesChange(row: ImportedHoldingRow, index: Int, sharesText: String) {
+    private fun onOccasionSharesChange(row: ImportedHoldingRow, index: Int, sharesText: String) {
         updateOccasion(row, index) { it.copy(sharesText = sharesText) }
     }
 
-    fun onOccasionTypeChange(row: ImportedHoldingRow, index: Int, type: TransactionType) {
+    private fun onOccasionTypeChange(row: ImportedHoldingRow, index: Int, type: TransactionType) {
         updateOccasion(row, index) { it.copy(type = type) }
     }
 
     /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
-    fun onAddOccasion(row: ImportedHoldingRow) {
+    private fun onAddOccasion(row: ImportedHoldingRow) {
         updateRow(row) { it.copy(occasions = (it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")).toImmutableList()) }
     }
 
-    fun onRemoveOccasion(row: ImportedHoldingRow, index: Int) {
+    private fun onRemoveOccasion(row: ImportedHoldingRow, index: Int) {
         updateRow(row) { state ->
             if (state.occasions.size <= 1) return@updateRow state
             state.copy(occasions = state.occasions.filterIndexed { i, _ -> i != index }.toImmutableList())
@@ -259,7 +303,7 @@ class ImportHoldingsViewModel @Inject constructor(
      * Raderna går via [RecordTransaction] (BYT-2) utan bytesväljare: exporten är en historisk
      * ögonblicksbild, inte ett byte.
      */
-    fun import() {
+    private fun import() {
         if (importJob?.isActive == true) return
         _uiState.update { it.copy(importing = true) }
         importJob = viewModelScope.launch {

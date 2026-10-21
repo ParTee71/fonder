@@ -88,17 +88,21 @@ fun SettingsScreen(
     // precis som BackupRepository (SET-6, issue #82).
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        viewModel.export { json ->
-            val stream = context.contentResolver.openOutputStream(uri)
-                ?: error("Kunde inte öppna $uri för skrivning")
-            stream.use { it.write(json.toByteArray()) }
-        }
+        viewModel.onEvent(
+            SettingsEvent.Export { json ->
+                val stream = context.contentResolver.openOutputStream(uri)
+                    ?: error("Kunde inte öppna $uri för skrivning")
+                stream.use { it.write(json.toByteArray()) }
+            }
+        )
     }
     val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        viewModel.restore {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-        }
+        viewModel.onEvent(
+            SettingsEvent.Restore {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            }
+        )
     }
 
     // Drive-scopet begärs skilt från inloggningen och kan kräva att användaren godkänner det i
@@ -110,7 +114,7 @@ fun SettingsScreen(
         // Utfallet rapporteras inte tillförlitligt av Identity-API:t. Flaggan rensas och nästa
         // körning får avgöra — ett kvarliggande "behöver tillåtelse" efter ett beviljande är
         // värre än ett som dyker upp igen.
-        viewModel.onDriveAuthorizationResolved()
+        viewModel.onEvent(SettingsEvent.DriveAuthorizationResolved)
     }
     val launchDriveAuth: (android.app.PendingIntent) -> Unit = { pendingIntent ->
         driveAuthLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
@@ -118,25 +122,25 @@ fun SettingsScreen(
 
     SettingsContent(
         state = state,
-        onThemeSelected = viewModel::setThemeMode,
+        onThemeSelect = { viewModel.onEvent(SettingsEvent.SetThemeMode(it)) },
         onImportHoldings = onImportHoldings,
         onImportOrders = onImportOrders,
         onOpenRiskProfile = onOpenRiskProfile,
         onOpenFacit = onOpenFacit,
         onOpenBenchmarkPicker = onOpenBenchmarkPicker,
         onOpenGallery = onOpenGallery,
-        onClearBenchmark = viewModel::clearBenchmark,
-        onAccountTypeSelected = viewModel::setAccountType,
+        onClearBenchmark = { viewModel.onEvent(SettingsEvent.ClearBenchmark) },
+        onAccountTypeSelect = { viewModel.onEvent(SettingsEvent.SetAccountType(it)) },
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
         onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
-        onBackupMessageDismissed = viewModel::onBackupMessageDismissed,
-        onBackupToDrive = { viewModel.backupToDrive(launchDriveAuth) },
-        onRestoreFromDrive = { viewModel.restoreFromDrive(launchDriveAuth) },
-        onSignIn = { viewModel.signIn(context) },
-        onSignOut = viewModel::signOut,
-        onSignInErrorDismissed = viewModel::onSignInErrorDismissed,
-        onClearDatabase = viewModel::clearDatabase,
-        onClearedMessageDismissed = viewModel::onClearedMessageDismissed,
+        onBackupMessageDismiss = { viewModel.onEvent(SettingsEvent.BackupMessageDismissed) },
+        onBackupToDrive = { viewModel.onEvent(SettingsEvent.BackupToDrive(launchDriveAuth)) },
+        onRestoreFromDrive = { viewModel.onEvent(SettingsEvent.RestoreFromDrive(launchDriveAuth)) },
+        onSignIn = { viewModel.onEvent(SettingsEvent.SignIn(context)) },
+        onSignOut = { viewModel.onEvent(SettingsEvent.SignOut) },
+        onSignInErrorDismiss = { viewModel.onEvent(SettingsEvent.SignInErrorDismissed) },
+        onClearDatabase = { viewModel.onEvent(SettingsEvent.ClearDatabase) },
+        onClearedMessageDismiss = { viewModel.onEvent(SettingsEvent.ClearedMessageDismissed) },
         scrollToBackup = scrollToBackup,
         onScrolledToBackup = onScrolledToBackup,
         modifier = modifier
@@ -151,7 +155,7 @@ fun SettingsScreen(
 @Composable
 fun SettingsContent(
     state: SettingsUiState,
-    onThemeSelected: (ThemeMode) -> Unit = {},
+    onThemeSelect: (ThemeMode) -> Unit = {},
     onImportHoldings: () -> Unit = {},
     onImportOrders: () -> Unit = {},
     onOpenRiskProfile: () -> Unit = {},
@@ -159,17 +163,17 @@ fun SettingsContent(
     onOpenBenchmarkPicker: () -> Unit = {},
     onOpenGallery: (() -> Unit)? = null,
     onClearBenchmark: () -> Unit = {},
-    onAccountTypeSelected: (AccountType) -> Unit = {},
+    onAccountTypeSelect: (AccountType) -> Unit = {},
     onExportBackup: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
-    onBackupMessageDismissed: () -> Unit = {},
+    onBackupMessageDismiss: () -> Unit = {},
     onBackupToDrive: () -> Unit = {},
     onRestoreFromDrive: () -> Unit = {},
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
-    onSignInErrorDismissed: () -> Unit = {},
+    onSignInErrorDismiss: () -> Unit = {},
     onClearDatabase: () -> Unit = {},
-    onClearedMessageDismissed: () -> Unit = {},
+    onClearedMessageDismiss: () -> Unit = {},
     scrollToBackup: Boolean = false,
     onScrolledToBackup: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -201,7 +205,7 @@ fun SettingsContent(
             options = ThemeMode.entries,
             selected = state.themeMode,
             optionLabel = { mode -> stringResource(themeModeLabelRes(mode)) },
-            onSelect = onThemeSelected
+            onSelect = onThemeSelect
         )
 
         AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.xl)) {
@@ -215,7 +219,7 @@ fun SettingsContent(
                 options = AccountType.entries,
                 selected = state.accountType,
                 optionLabel = { type -> stringResource(type.labelRes()) },
-                onSelect = onAccountTypeSelected
+                onSelect = onAccountTypeSelect
             )
         }
 
@@ -291,7 +295,7 @@ fun SettingsContent(
                 FieldError(stringResource(error.message), modifier = Modifier.padding(bottom = Spacing.xs))
                 AppButton(
                     text = stringResource(R.string.close),
-                    onClick = onSignInErrorDismissed,
+                    onClick = onSignInErrorDismiss,
                     modifier = Modifier.padding(bottom = Spacing.xs),
                     variant = ButtonVariant.Text
                 )
@@ -349,7 +353,7 @@ fun SettingsContent(
                 )
                 AppButton(
                     text = stringResource(R.string.close),
-                    onClick = onBackupMessageDismissed,
+                    onClick = onBackupMessageDismiss,
                     modifier = Modifier.padding(bottom = Spacing.xs),
                     variant = ButtonVariant.Text
                 )
@@ -430,7 +434,7 @@ fun SettingsContent(
                 )
                 AppButton(
                     text = stringResource(R.string.close),
-                    onClick = onClearedMessageDismissed,
+                    onClick = onClearedMessageDismiss,
                     modifier = Modifier.padding(bottom = Spacing.xs),
                     variant = ButtonVariant.Text
                 )

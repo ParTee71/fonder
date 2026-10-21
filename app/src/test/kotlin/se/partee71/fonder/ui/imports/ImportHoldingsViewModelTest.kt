@@ -136,7 +136,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             assertFalse(awaitItem().fileSelected)
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -155,7 +155,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(fileReader = FakeImportFileReader(mapOf(uri to ("innehav.xlsx" to xlsxBytes(sampleSheetXml)))))
         vm.uiState.test {
             assertFalse(awaitItem().fileSelected)
-            vm.onFileSelected(uri)
+            vm.onEvent(ImportHoldingsEvent.FileSelected(uri))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -170,7 +170,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             val initial = awaitItem()
-            vm.onFileSelected(mockk<Uri>())
+            vm.onEvent(ImportHoldingsEvent.FileSelected(mockk<Uri>()))
             advanceUntilIdle()
             expectNoEvents()
             assertEquals(ImportHoldingsUiState(), initial)
@@ -190,7 +190,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(transactionRepo = transactionRepoMedBevakadFond)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -220,7 +220,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(franklinSheetXml))
+            vm.onFileRead(xlsxBytes(franklinSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -246,7 +246,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoMedFarskKurs)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -263,7 +263,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -282,7 +282,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoMedInaktuellKurs)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -302,7 +302,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoMedMisslyckadHamtning)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -325,7 +325,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoMedFangst)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
@@ -346,7 +346,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoUtanHistorik)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -386,7 +386,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel(priceRepoMedTvetydigKatalog)
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(ambiguousSheetXml))
+            vm.onFileRead(xlsxBytes(ambiguousSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -402,7 +402,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(byteArrayOf(1, 2, 3))
+            vm.onFileRead(byteArrayOf(1, 2, 3))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -423,7 +423,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xmlUtanHeader.toByteArray(Charsets.UTF_8))
+            vm.onFileRead(xmlUtanHeader.toByteArray(Charsets.UTF_8))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -437,7 +437,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes("<worksheet><sheetData><row>"))
+            vm.onFileRead(xlsxBytes("<worksheet><sheetData><row>"))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -453,7 +453,7 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(sampleSheetXml.toByteArray(Charsets.UTF_8))
+            vm.onFileRead(sampleSheetXml.toByteArray(Charsets.UTF_8))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
@@ -469,21 +469,21 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
 
-            vm.onFundOverride(row, null)
+            vm.onEvent(ImportHoldingsEvent.FundOverride(row, null))
             state = awaitItem()
             assertNull(state.rows.first().matchedFund)
 
-            vm.onFundOverride(row, handelsbankenFund)
+            vm.onEvent(ImportHoldingsEvent.FundOverride(row, handelsbankenFund))
             state = awaitItem()
             assertEquals(handelsbankenFund, state.rows.first().matchedFund)
 
             val newDate = LocalDate.of(2025, 1, 1)
-            vm.onOccasionDateChange(row, 0, newDate)
+            vm.onEvent(ImportHoldingsEvent.OccasionDateChange(row, 0, newDate))
             state = awaitItem()
             assertEquals(newDate, state.rows.first().occasions.first().date)
             assertTrue(state.rows.first().occasions.first().dateConfident)
@@ -496,32 +496,32 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
 
-            vm.onAddOccasion(row)
+            vm.onEvent(ImportHoldingsEvent.AddOccasion(row))
             state = awaitItem()
             assertEquals(2, state.rows.first().occasions.size)
             // Nya tillfället saknar andelar tills användaren fyller i — blockerar import trots att
             // summan (0 + ursprungliga andelarna) råkar matcha totalt.
             assertFalse(state.rows.first().readyToImport)
 
-            vm.onOccasionSharesChange(row, 0, "1")
+            vm.onEvent(ImportHoldingsEvent.OccasionSharesChange(row, 0, "1"))
             state = awaitItem()
             // Nu är summan (1) för låg jämfört med totalt (1,9378) — riktig avvikelse.
             assertTrue(state.rows.first().sharesMismatch)
 
-            vm.onOccasionSharesChange(row, 1, "0,9378")
+            vm.onEvent(ImportHoldingsEvent.OccasionSharesChange(row, 1, "0,9378"))
             state = awaitItem()
             assertFalse(state.rows.first().sharesMismatch)
             assertTrue(state.rows.first().readyToImport)
 
-            vm.onOccasionDateChange(row, 1, LocalDate.of(2024, 6, 1))
+            vm.onEvent(ImportHoldingsEvent.OccasionDateChange(row, 1, LocalDate.of(2024, 6, 1)))
             state = awaitItem()
 
-            vm.onRemoveOccasion(row, 1)
+            vm.onEvent(ImportHoldingsEvent.RemoveOccasion(row, 1))
             state = awaitItem()
             assertEquals(1, state.rows.first().occasions.size)
             assertTrue(state.rows.first().sharesMismatch)
@@ -534,11 +534,11 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -558,15 +558,15 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             assertTrue(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             // Knappen är släckt medan importen pågår, och ett andra tryck är verkningslöst.
             assertFalse(vm.uiState.value.canImport)
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
 
             state = awaitItem()
             while (!state.imported) state = awaitItem()
@@ -584,11 +584,11 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -602,23 +602,23 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
             val expectedPrice = state.rows.first().row.averageCostPerShare
 
-            vm.onAddOccasion(row)
+            vm.onEvent(ImportHoldingsEvent.AddOccasion(row))
             state = awaitItem()
-            vm.onOccasionSharesChange(row, 0, "1")
+            vm.onEvent(ImportHoldingsEvent.OccasionSharesChange(row, 0, "1"))
             state = awaitItem()
-            vm.onOccasionSharesChange(row, 1, "0,9378")
+            vm.onEvent(ImportHoldingsEvent.OccasionSharesChange(row, 1, "0,9378"))
             state = awaitItem()
             val secondDate = LocalDate.of(2024, 6, 1)
-            vm.onOccasionDateChange(row, 1, secondDate)
+            vm.onEvent(ImportHoldingsEvent.OccasionDateChange(row, 1, secondDate))
             state = awaitItem()
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -637,17 +637,17 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
 
-            vm.onAddOccasion(row)
+            vm.onEvent(ImportHoldingsEvent.AddOccasion(row))
             state = awaitItem()
             assertFalse(state.rows.first().readyToImport)
             assertFalse(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             advanceUntilIdle()
 
             assertEquals(0, addedTransactions.size)
@@ -660,16 +660,16 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
 
-            vm.onOccasionTypeChange(row, 0, TransactionType.SALJ)
+            vm.onEvent(ImportHoldingsEvent.OccasionTypeChange(row, 0, TransactionType.SALJ))
             state = awaitItem()
             assertEquals(TransactionType.SALJ, state.rows.first().occasions.first().type)
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             state = awaitItem()
             while (!state.imported) state = awaitItem()
 
@@ -688,16 +688,16 @@ class ImportHoldingsViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             awaitItem()
-            vm.onFileSelected(xlsxBytes(sampleSheetXml))
+            vm.onFileRead(xlsxBytes(sampleSheetXml))
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
 
-            vm.onIncludedChange(row, false)
+            vm.onEvent(ImportHoldingsEvent.IncludedChange(row, false))
             state = awaitItem()
             assertFalse(state.canImport)
 
-            vm.import()
+            vm.onEvent(ImportHoldingsEvent.Import)
             advanceUntilIdle()
 
             assertEquals(0, addedTransactions.size)

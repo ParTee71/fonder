@@ -41,12 +41,12 @@ fun RiskProfilScreen(
         state = state,
         events = viewModel.events,
         onClose = onClose,
-        onHorizonSelected = viewModel::onHorizonSelected,
-        onReactionSelected = viewModel::onReactionSelected,
-        onGoalSelected = viewModel::onGoalSelected,
-        onAllocationPercentChanged = viewModel::onAllocationPercentChanged,
-        onSave = viewModel::save,
-        onRetry = viewModel::retry,
+        onHorizonSelect = { viewModel.onEvent(RiskProfilEvent.HorizonSelected(it)) },
+        onReactionSelect = { viewModel.onEvent(RiskProfilEvent.ReactionSelected(it)) },
+        onGoalSelect = { viewModel.onEvent(RiskProfilEvent.GoalSelected(it)) },
+        onAllocationPercentChange = { level, percentText -> viewModel.onEvent(RiskProfilEvent.AllocationPercentChanged(level, percentText)) },
+        onSave = { viewModel.onEvent(RiskProfilEvent.Save) },
+        onRetry = { viewModel.onEvent(RiskProfilEvent.Retry) },
         modifier = modifier
     )
 }
@@ -68,10 +68,10 @@ fun RiskProfilContent(
     events: EditorEvents,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    onHorizonSelected: (TimeHorizon) -> Unit = {},
-    onReactionSelected: (DownturnReaction) -> Unit = {},
-    onGoalSelected: (PrimaryGoal) -> Unit = {},
-    onAllocationPercentChanged: (Int, String) -> Unit = { _, _ -> },
+    onHorizonSelect: (TimeHorizon) -> Unit = {},
+    onReactionSelect: (DownturnReaction) -> Unit = {},
+    onGoalSelect: (PrimaryGoal) -> Unit = {},
+    onAllocationPercentChange: (Int, String) -> Unit = { _, _ -> },
     onSave: () -> Unit = {},
     onRetry: () -> Unit = {}
 ) {
@@ -96,7 +96,7 @@ fun RiskProfilContent(
                 options = TimeHorizon.entries,
                 selected = state.horizon,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onHorizonSelected
+                onSelect = onHorizonSelect
             )
         }
         QuestionSection(stringResource(R.string.riskprofile_q_reaction)) {
@@ -104,7 +104,7 @@ fun RiskProfilContent(
                 options = DownturnReaction.entries,
                 selected = state.reaction,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onReactionSelected
+                onSelect = onReactionSelect
             )
         }
         QuestionSection(stringResource(R.string.riskprofile_q_goal)) {
@@ -112,7 +112,7 @@ fun RiskProfilContent(
                 options = PrimaryGoal.entries,
                 selected = state.goal,
                 optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onGoalSelected
+                onSelect = onGoalSelect
             )
         }
 
@@ -120,7 +120,7 @@ fun RiskProfilContent(
             Text(stringResource(R.string.riskprofile_suggestion_hint), style = MaterialTheme.typography.bodyMedium)
         }
 
-        AllocationSection(state, onAllocationPercentChanged)
+        AllocationSection(state, onAllocationPercentChange)
     }
 }
 
@@ -134,7 +134,7 @@ private fun QuestionSection(title: String, content: @Composable () -> Unit) {
 
 /** Målfördelningen: rubrik, förbehållet, en rad per nivå och summan med sitt fel. */
 @Composable
-private fun AllocationSection(state: RiskProfilUiState, onAllocationPercentChanged: (Int, String) -> Unit) {
+private fun AllocationSection(state: RiskProfilUiState, onAllocationPercentChange: (Int, String) -> Unit) {
     Column {
         Text(
             stringResource(R.string.riskprofile_allocation_title),
@@ -158,7 +158,7 @@ private fun AllocationSection(state: RiskProfilUiState, onAllocationPercentChang
                 AllocationRow(
                     level = level,
                     percentText = state.allocationText[level].orEmpty(),
-                    onPercentChange = { onAllocationPercentChanged(level, it) }
+                    onPercentChange = { onAllocationPercentChange(level, it) }
                 )
             }
             Text(

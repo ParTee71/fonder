@@ -135,7 +135,7 @@ class FundSearchViewModelTest {
             assertEquals(DataError.Network, state.error?.cause)
 
             fail = false
-            vm.refresh()
+            vm.onEvent(FundSearchEvent.Refresh)
             // Listan är laddning tills både katalogen och förvalt bolag hämtats (NFR-6).
             while (state.loading || state.error != null) state = awaitItem()
 
@@ -161,7 +161,7 @@ class FundSearchViewModelTest {
             assertEquals(DataError.Network, state.error?.cause)
 
             fail = false
-            vm.retry()
+            vm.onEvent(FundSearchEvent.Retry)
             state = awaitItem()
             assertTrue("felet ersätts av laddning medan katalogen hämtas", state.loading)
             assertNull(state.error)
@@ -196,7 +196,7 @@ class FundSearchViewModelTest {
             var state = awaitItem()
             while (state.loading || state.selectedCompany == null) state = awaitItem()
 
-            vm.onCompanySelected(aberdeen)
+            vm.onEvent(FundSearchEvent.CompanySelected(aberdeen))
             state = awaitItem()
             while (state.loading || state.selectedCompany != aberdeen) state = awaitItem()
             assertTrue(aberdeen.id in fakePriceRepo.companyCalls)
@@ -214,7 +214,7 @@ class FundSearchViewModelTest {
             while (state.loading || state.selectedCompany == null) state = awaitItem()
             val callsBefore = fakePriceRepo.companyCalls.size
 
-            vm.onCompanySelected(null)
+            vm.onEvent(FundSearchEvent.CompanySelected(null))
             state = awaitItem()
             while (state.selectedCompany != null) state = awaitItem()
 
@@ -236,7 +236,7 @@ class FundSearchViewModelTest {
             while (state.loading || state.selectedCompany == null) state = awaitItem()
             assertEquals(2, state.results.size)
 
-            vm.onCompanySelected(aberdeen)
+            vm.onEvent(FundSearchEvent.CompanySelected(aberdeen))
             state = awaitItem()
             while (state.loading || state.selectedCompany != aberdeen) state = awaitItem()
 
@@ -253,7 +253,7 @@ class FundSearchViewModelTest {
             var state = awaitItem()
             while (state.loading || state.selectedCompany == null) state = awaitItem()
 
-            vm.onQueryChange("Amerika")
+            vm.onEvent(FundSearchEvent.QueryChange("Amerika"))
             state = awaitItem()
             while (state.query != "Amerika") state = awaitItem()
             assertEquals(1, state.results.size)
@@ -269,7 +269,7 @@ class FundSearchViewModelTest {
             var state = awaitItem()
             while (state.loading || state.selectedCompany == null) state = awaitItem()
 
-            vm.addFund(handelsbankenFond)
+            vm.onEvent(FundSearchEvent.AddFund(handelsbankenFond))
             state = awaitItem()
             while (handelsbankenFond.fundId !in state.addedFundIds) state = awaitItem()
 

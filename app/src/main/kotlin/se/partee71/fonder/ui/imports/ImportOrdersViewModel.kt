@@ -115,6 +115,33 @@ data class ImportOrdersUiState(
     val hasSwitchQuestions: Boolean get() = rows.any { it.switchField?.hidden == false }
 }
 
+/** Användarens handlingar på Importera transaktioner, till [ImportOrdersViewModel.onEvent]. */
+sealed interface ImportOrdersEvent {
+    /** PDF-filerna användaren valt i filväljaren. */
+    data class FilesSelected(val uris: List<Uri>) : ImportOrdersEvent
+
+    /** Användaren väljer fond för raden själv. */
+    data class FundOverride(val transaction: ImportedOrderTransaction, val fund: Fund?) : ImportOrdersEvent
+
+    /** Raden tas med i importen eller inte. */
+    data class IncludedChange(val transaction: ImportedOrderTransaction, val included: Boolean) : ImportOrdersEvent
+
+    /** Radens datum. */
+    data class DateChange(val transaction: ImportedOrderTransaction, val date: LocalDate) : ImportOrdersEvent
+
+    /** Radens andelar. */
+    data class SharesTextChange(val transaction: ImportedOrderTransaction, val text: String) : ImportOrdersEvent
+
+    /** Radens kurs. */
+    data class PriceTextChange(val transaction: ImportedOrderTransaction, val text: String) : ImportOrdersEvent
+
+    /** Svaret på radens bytesfråga. */
+    data class SwitchSelected(val transaction: ImportedOrderTransaction, val option: SwitchOption) : ImportOrdersEvent
+
+    /** Skriver de importklara raderna. */
+    data object Import : ImportOrdersEvent
+}
+
 /**
  * Importerar exakta fondtransaktioner från Handelsbankens PDF-avräkningsnotor (order-
  * bekräftelser), en eller flera samtidigt (issue #8-uppföljning). Till skillnad från
@@ -150,8 +177,21 @@ class ImportOrdersViewModel @Inject constructor(
     /** Pågående import — se [import]. */
     private var importJob: Job? = null
 
+    fun onEvent(event: ImportOrdersEvent) {
+        when (event) {
+            is ImportOrdersEvent.FilesSelected -> onFilesSelected(event.uris)
+            is ImportOrdersEvent.FundOverride -> onFundOverride(event.transaction, event.fund)
+            is ImportOrdersEvent.IncludedChange -> onIncludedChange(event.transaction, event.included)
+            is ImportOrdersEvent.DateChange -> onDateChange(event.transaction, event.date)
+            is ImportOrdersEvent.SharesTextChange -> onSharesTextChange(event.transaction, event.text)
+            is ImportOrdersEvent.PriceTextChange -> onPriceTextChange(event.transaction, event.text)
+            is ImportOrdersEvent.SwitchSelected -> onSwitchSelected(event.transaction, event.option)
+            ImportOrdersEvent.Import -> import()
+        }
+    }
+
     /** PDF-filerna användaren valt i filväljaren (SAF). Filer som inte går att öppna hoppas över; går ingen att öppna händer inget. */
-    fun onFilesSelected(uris: List<Uri>) {
+    private fun onFilesSelected(uris: List<Uri>) {
         viewModelScope.launch {
             val files = uris.mapNotNull { uri -> fileReader.readNamed(uri) }
             if (files.isNotEmpty()) onFilesRead(files)
@@ -229,29 +269,29 @@ class ImportOrdersViewModel @Inject constructor(
         )
     }
 
-    fun onFundOverride(transaction: ImportedOrderTransaction, fund: Fund?) {
+    private fun onFundOverride(transaction: ImportedOrderTransaction, fund: Fund?) {
         updateRow(transaction) { it.copy(matchedFund = fund, matchConfidence = null) }
     }
 
-    fun onIncludedChange(transaction: ImportedOrderTransaction, included: Boolean) {
+    private fun onIncludedChange(transaction: ImportedOrderTransaction, included: Boolean) {
         updateRow(transaction) { it.copy(included = included) }
     }
 
-    fun onDateChange(transaction: ImportedOrderTransaction, date: LocalDate) {
+    private fun onDateChange(transaction: ImportedOrderTransaction, date: LocalDate) {
         updateRow(transaction) { it.copy(date = date) }
     }
 
     // Andelar och kurs påverkar inte bytesfrågorna — de räknas inte om vid varje tangenttryck.
-    fun onSharesTextChange(transaction: ImportedOrderTransaction, text: String) {
+    private fun onSharesTextChange(transaction: ImportedOrderTransaction, text: String) {
         updateRow(transaction, recomputeSwitch = false) { it.copy(sharesText = text) }
     }
 
-    fun onPriceTextChange(transaction: ImportedOrderTransaction, text: String) {
+    private fun onPriceTextChange(transaction: ImportedOrderTransaction, text: String) {
         updateRow(transaction, recomputeSwitch = false) { it.copy(priceText = text) }
     }
 
     /** Svaret på radens bytesfråga. Ett köp som avslutar en säljrads bevakning sparas som en pekare på säljraden. */
-    fun onSwitchSelected(transaction: ImportedOrderTransaction, option: SwitchOption) {
+    private fun onSwitchSelected(transaction: ImportedOrderTransaction, option: SwitchOption) {
         val candidates = _uiState.value.rows.filter { it.switchCandidate }
         val saleRow = ((option as? SwitchOption.Decide)?.decision as? SwitchDecision.ClosesWatchOfEntry)
             ?.let { candidates.getOrNull(it.entryIndex)?.transaction }
@@ -318,7 +358,7 @@ class ImportOrdersViewModel @Inject constructor(
      * okopplad bevakning ([SwitchDecision.LinksWatch]) skrivs i samma pass, så ett köp efter raden ser
      * länken; en koppling som inte gjordes räknas i [ImportOrdersUiState.linkFailedCount].
      */
-    fun import() {
+    private fun import() {
         if (importJob?.isActive == true || !_uiState.value.canImport) return
         val inputs = switchInputs ?: return
         _uiState.update { it.copy(importing = true) }
