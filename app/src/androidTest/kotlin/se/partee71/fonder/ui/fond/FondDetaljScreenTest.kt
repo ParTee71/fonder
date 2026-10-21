@@ -158,7 +158,9 @@ class FondDetaljScreenTest {
     @Test
     fun visar_200_dagarssnittet_i_kursdiagrammet_nar_historiken_racker() {
         // ANA-14: snittet räknas ur hela historiken, så också förvalda 1 mån har en snittlinje.
-        val history = (0L..250L).map { FundPrice(fundId = "SHB0000442", epochDay = 20_000 + it, nav = 100.0 + it) }
+        // Längre än fönstret (MovingAverageCalc.WINDOW_DAYS = 290) så att snittserien inte är tom.
+        val history = (0L..320L).map { FundPrice(fundId = "SHB0000442", epochDay = 20_000 + it, nav = 100.0 + it) }
+        assertTrue(MovingAverageCalc.series(history.map { it.epochDay to it.nav }).isNotEmpty())
         composeRule.setContent {
             FonderTheme {
                 FondDetaljContent(
