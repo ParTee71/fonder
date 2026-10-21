@@ -278,6 +278,35 @@ class PortfoljViewModelTest {
     }
 
     @Test
+    fun `analysen raknar sedan kop och CAGR fran positionens start, inte fondens forsta transaktion (issue 194)`() = runTest(dispatcher) {
+        val today = java.time.LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        // Köpt för två år sedan, helt såld för ett år sedan, köpt igen för 100 dagar sedan.
+        transactions.value = listOf(
+            buy(fond, today.minusYears(2), 10.0, 136.5),
+            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 118.25),
+            buy(fond, today.minusDays(100), 10.0, 105.0)
+        )
+        priceHistoryByFundId = mapOf(
+            fond.fundId to (0..730L step 5).map { daysAgo -> price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05) }
+        )
+        cachedPrices.quoteOnly(fond, today, 100.0)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading }
+
+            val keyFigures = state.analysis[fond.fundId]!!.keyFigures
+            // Sedan köp: 105 → 100 sedan återköpet, inte 136,5 → 100 sedan första köpet för två år sedan.
+            val sedanKop = keyFigures.periodReturns.first { it.period == se.partee71.fonder.domain.usecase.FundAnalysisCalc.Period.SEDAN_KOP }
+            assertEquals(100.0 / 105.0 - 1.0, sedanKop.fraction!!, 1e-9)
+            assertNull(keyFigures.cagr) // positionen är 100 dagar gammal — ingen årstakt
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `analys innehaller vinstsignal vid plus 50 procent mot GAV, aven utan risksignaler (ANA-8)`() = runTest(dispatcher) {
         val today = java.time.LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")

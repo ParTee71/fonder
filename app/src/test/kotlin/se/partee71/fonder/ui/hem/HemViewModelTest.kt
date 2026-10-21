@@ -297,6 +297,35 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `flaggad fond analyseras fran positionens start, samma som Portfolj och Fonddetalj (issue 194)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        // Köpt för två år sedan, helt såld för ett år sedan, köpt igen för 100 dagar sedan.
+        transactions.value = listOf(
+            buy(fond, today.minusYears(2), 10.0, 136.5),
+            Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 118.25),
+            buy(fond, today.minusDays(100), 10.0, 105.0)
+        )
+        // Fallande kurs → under 200-dagarssnittet → flaggad, så analysen syns i summeringen.
+        priceHistoryByFundId = mapOf(
+            fond.fundId to (0..730L step 5).map { daysAgo -> price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05) }
+        )
+        fakeFundPriceRepo.quoteOnly(fond, today, 100.0)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading }
+
+            val keyFigures = state.content.analysisSummary.flagged.single().analysis.keyFigures
+            val sedanKop = keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.SEDAN_KOP }
+            assertEquals(100.0 / 105.0 - 1.0, sedanKop.fraction!!, 1e-9)
+            assertNull(keyFigures.cagr)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `flaggar en fond som ligger under 200-dagars snitt`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")

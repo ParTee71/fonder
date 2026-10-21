@@ -188,22 +188,26 @@ object FundAnalysisCalc {
      * Portfölj. Momentum-signalen (S3) jämför varje fond mot snittet av **övriga** fonders
      * tremånadersutveckling, och portföljandelen räknas mot hela [holdings].
      *
+     * "Sedan köp", CAGR och signalerna utgår från **positionens** startdatum,
+     * [Holding.firstPurchaseEpochDay] (första köpet efter att innehavet senast var noll, POR-6)
+     * — samma datum som Fonddetalj använder, så att en fond som sålts av helt och köpts igen
+     * visar samma nyckeltal och samma signalnivå på alla tre skärmar (issue #194; tidigare
+     * räknade Hem och Portfölj från fondens första transaktion någonsin).
+     *
      * @param historyByFundId kurshistorik per fond, redan klippt till den räckvidd anroparen vill
-     *   analysera (sedan första köpet).
-     * @param firstPurchaseByFund första köpdag per fond; innehav utan köpdag utelämnas.
-     * @return analysen per fundId i [holdings] ordning; fonder som [analyze] inte kan analysera
-     *   utelämnas.
+     *   analysera (sedan fondens första transaktion, som Fonddetalj).
+     * @return analysen per fundId i [holdings] ordning; innehav utan [Holding.firstPurchaseEpochDay]
+     *   och fonder som [analyze] inte kan analysera utelämnas.
      */
     fun analyzeAll(
         today: LocalDate,
         holdings: List<Holding>,
-        historyByFundId: Map<String, List<FundPrice>>,
-        firstPurchaseByFund: Map<String, LocalDate>
+        historyByFundId: Map<String, List<FundPrice>>
     ): Map<String, Analysis> {
         val portfolioTotalValue = PortfolioCalc.totalValue(holdings)
         return holdings.mapNotNull { holding ->
             val fundId = holding.fund.fundId
-            val firstPurchase = firstPurchaseByFund[fundId] ?: return@mapNotNull null
+            val firstPurchase = holding.firstPurchaseEpochDay?.let(LocalDate::ofEpochDay) ?: return@mapNotNull null
             val analysis = analyze(
                 today = today,
                 holding = holding,

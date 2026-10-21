@@ -297,7 +297,7 @@ class HemViewModel @Inject constructor(
             ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
-                val firstPurchaseByFund = transactions
+                val firstTransactionByFund = transactions
                     .groupBy { it.fundId }
                     .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
                 // **En** hämtning per fond, inte en per läsare: fönstret är det vidaste någon av
@@ -306,7 +306,7 @@ class HemViewModel @Inject constructor(
                 // Var och en klipper sedan till sitt eget fönster i minnet — analysen räknar
                 // volatilitet på hela listan den får (ANA-7) och måste därför få exakt sitt.
                 val historyByFundId = funds.associate { fund ->
-                    val since = firstPurchaseByFund[fund.fundId]
+                    val since = firstTransactionByFund[fund.fundId]
                         ?.let { minOf(it, today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS)) }
                         ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
                     fund.fundId to fundPriceRepository.priceHistory(
@@ -328,7 +328,7 @@ class HemViewModel @Inject constructor(
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
-                    analysisSummary = buildAnalysisSummary(enriched, firstPurchaseByFund, historyByFundId, today),
+                    analysisSummary = buildAnalysisSummary(enriched, firstTransactionByFund, historyByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
                     benchmarkSeries = buildBenchmark(
                         refs = currentSettings.benchmark,
@@ -398,19 +398,20 @@ class HemViewModel @Inject constructor(
      */
     private fun buildAnalysisSummary(
         enriched: List<Holding>,
-        firstPurchaseByFund: Map<String, LocalDate>,
+        firstTransactionByFund: Map<String, LocalDate>,
         fullHistoryByFundId: Map<String, List<FundPrice>>,
         today: LocalDate
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
         val historyByFundId = enriched.associate { holding ->
-            val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
+            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
             holding.fund.fundId to fullHistoryByFundId[holding.fund.fundId].orEmpty()
                 .filter { it.epochDay >= since.toEpochDay() }
         }
 
-        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId, firstPurchaseByFund)
+        // Positionens startdatum ("sedan köp", CAGR) tas ur Holding inne i analyzeAll (issue #194).
+        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId)
         val analyses = enriched.mapNotNull { holding -> byFundId[holding.fund.fundId]?.let { FlaggedHolding(holding.fund, it) } }
 
         return AnalysisSummary(
