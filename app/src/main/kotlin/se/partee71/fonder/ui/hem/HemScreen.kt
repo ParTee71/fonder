@@ -28,8 +28,6 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
-import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExposureBar
@@ -43,14 +41,18 @@ import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.ChartValueAxis
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.fonder.ui.theme.Filled
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
+import se.partee71.fonder.ui.theme.nestedCardStyle
+import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyState
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.components.R as UiR
 import se.partee71.ui.theme.Spacing
+import se.partee71.ui.theme.Tone
 
 @Composable
 fun HemScreen(
@@ -434,8 +436,8 @@ private fun FeeCard(summary: PortfolioFeeCalc.Result, working: Boolean, onFundCl
 private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -> Unit) {
     AppCard(
         onClick = onClick,
-        variant = AppCardVariant.Filled,
-        contentPadding = PaddingValues(Spacing.m),
+        tone = Tone.Filled,
+        style = nestedCardStyle,
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)
     ) {
         PeriodRow(
@@ -471,8 +473,8 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
 private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
     AppCard(
         onClick = onClick,
-        variant = AppCardVariant.Filled,
-        contentPadding = PaddingValues(Spacing.m),
+        tone = Tone.Filled,
+        style = nestedCardStyle,
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)
     ) {
         Row(

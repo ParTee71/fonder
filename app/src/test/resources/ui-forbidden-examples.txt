@@ -51,10 +51,11 @@ Modifier.size(24.dp)
 Spacer(Modifier.width(8.dp))
 LazyColumn(modifier = Modifier.testTag("hem")) { }
 AppCard(modifier = Modifier.fillMaxWidth()) { }
-AppCard(onClick = {}, variant = AppCardVariant.Filled) { }
+AppCard(onClick = {}, tone = Tone.Filled) { }
+AppCard(style = flushCardStyle) { }
 AppButton(text = "Spara", onClick = {})
-AppButton(text = "Avbryt", onClick = {}, variant = AppButtonVariant.Text)
-AppIconButton(icon = Icons.Filled.Close, contentDescription = "Ta bort", onClick = {})
+AppButton(text = "Avbryt", onClick = {}, variant = ButtonVariant.Text)
+AppIconButton(icon = UiR.drawable.ic_close, contentDescription = "Ta bort", onClick = {})
 AppTextField(value = text, onValueChange = {}, label = "Belopp")
 ConfirmDialog(title = "Ta bort?", message = "", confirmLabel = "Ta bort", onConfirm = {}, onDismiss = {})
 ConfirmDialog(title = "Klart", message = "", confirmLabel = "Stäng", onConfirm = {}, onDismiss = {}, dismissLabel = null)
@@ -63,7 +64,10 @@ CheckRow(checked = true, onCheckedChange = {}, label = "Ta med")
 SwitchRow(title = "Bara indexfonder", checked = true, onCheckedChange = {})
 RiskLevelPicker(selected = 4, onSelect = {}, marked = 6)
 ProgressBar()
-ItemRow(headline = "Global Indexfond A")
+ItemRow(title = "Global Indexfond A", navigates = true, onClick = {})
+InfoPill(text = "Sålt", tone = Tone.Copper, shape = AppTheme.shapes.smallTile)
+SectionHeader(title = "Byten", count = "2 väntar på dig", working = true)
+AppDivider()
 AppFloatingToolbar(tabs = tabs, selectedIndex = 0, onSelect = {})
 AppFabMenu(expanded = false, onExpandedChange = {}, items = items)
 AppTopBar(title = "Fond", onBack = {})

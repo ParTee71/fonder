@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,14 +37,16 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.FacitRad
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchOutcomeCalc
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.FollowedToggleRow
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.PullToRefreshContainer
+import se.partee71.fonder.ui.theme.flushCardStyle
+import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.EmptyState
 import se.partee71.ui.components.LoadErrorState
+import se.partee71.ui.theme.AppTheme
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -249,12 +252,13 @@ private fun FacitRadCard(row: FacitRad, onFollowedChange: (Long, Boolean) -> Uni
     AppCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = 6.dp),
         // Hela kortet fäller ut: klickytan går ända ut i kanten och marginalen ligger innanför den.
-        contentPadding = PaddingValues(0.dp)
+        style = flushCardStyle
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
+                .clip(AppTheme.shapes.card)
                 .clickable { expanded = !expanded }
                 .padding(Spacing.l)
         ) {

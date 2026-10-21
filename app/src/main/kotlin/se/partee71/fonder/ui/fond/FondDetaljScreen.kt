@@ -36,8 +36,6 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
@@ -49,7 +47,9 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.components.AppButton
 import se.partee71.ui.components.AppTextField
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyState
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
@@ -460,7 +460,7 @@ private fun SwitchPlanRow(
             AppButton(
                 text = stringResource(R.string.beslut_follow),
                 onClick = { onFollow(suggestion) },
-                variant = AppButtonVariant.Outlined,
+                variant = ButtonVariant.Outlined,
                 contentDescription = stringResource(R.string.format_beslut_follow_a11y, suggestion.sellFundName, suggestion.buyFundName)
             )
         }
@@ -471,7 +471,7 @@ private fun SwitchPlanRow(
             AppButton(
                 text = stringResource(R.string.switch_watch_start),
                 onClick = { onStartSwitchWatch(suggestion) },
-                variant = AppButtonVariant.Text
+                variant = ButtonVariant.Text
             )
         }
     }
@@ -527,7 +527,7 @@ private fun FeeAlternativeRow(
             AppButton(
                 text = stringResource(R.string.beslut_follow),
                 onClick = { onFollowFee(recorded.recordId) },
-                variant = AppButtonVariant.Outlined,
+                variant = ButtonVariant.Outlined,
                 contentDescription = stringResource(R.string.format_fee_follow_a11y, alternative.candidate.name)
             )
         }

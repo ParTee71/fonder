@@ -29,7 +29,7 @@ val GainDark = Color(0xFF5FD39B)
 val LossLight = Color(0xFFA9453C)
 val LossDark = Color(0xFFE58C82)
 
-// Tonad vinstbehållare med text i samma kulör — StateChip "Köpt" (BYT-4); skiljer sig i ljushet från koppar och blått.
+// Tonad vinstbehållare med text i samma kulör — InfoPill "Köpt" (BYT-4); skiljer sig i ljushet från koppar och blått.
 val GainContainerLight = Color(0xFFD3F2E1)
 val OnGainContainerLight = Color(0xFF0B3D24)
 val GainContainerDark = Color(0xFF0F3D28)
@@ -133,11 +133,26 @@ val FonderDarkColorScheme = darkColorScheme(
 
 // ─── android-ui: ExtendedColors och toner ─────────────────────────────────────
 
-/** Vinstton – tonad behållare med text i vinstens kulör (StateChip "Köpt", BYT-4). */
+/** Vinstton – tonad behållare med text i vinstens kulör (InfoPill "Köpt", BYT-4). */
 val Tone.Companion.Gain: Tone get() = Tone("gain")
 
 /** Kopparton – sekundärbehållaren (sparsam accent). Primärtonen är bibliotekets [Tone.Primary]. */
 val Tone.Companion.Copper: Tone get() = Tone("copper")
+
+/** Tertiärton – tertiärbehållaren (Besluts "Avgift", BYT-4). */
+val Tone.Companion.Tertiary: Tone get() = Tone("tertiary")
+
+/** Neutral ton – ytvarianten med dämpad text (Avstått, Avbrutet, Utgånget och risknivån, UI-10). */
+val Tone.Companion.Neutral: Tone get() = Tone("neutral")
+
+/** Neutral platta med primärfärgat innehåll – Översiktens tonade ikonknapp Inställningar (NAV-7). */
+val Tone.Companion.NeutralPrimary: Tone get() = Tone("neutral-primary")
+
+/** Fylld ton – kort inne i ett kort (Hems avgifts- och analysrader, transaktionsformulärets förklaring). */
+val Tone.Companion.Filled: Tone get() = Tone("filled")
+
+/** Felton – felbehållaren, farozonens kort i Inställningar. */
+val Tone.Companion.Error: Tone get() = Tone("error")
 
 /**
  * Bibliotekets [ExtendedColors] ur Fonders färgschema: kort och flikrad på `surface`, tonad rad på
@@ -155,7 +170,12 @@ private fun extendedColors(
     tones = mapOf(
         Tone.Primary to ToneColors(container = scheme.primaryContainer, content = scheme.onPrimaryContainer),
         Tone.Copper to ToneColors(container = scheme.secondaryContainer, content = scheme.onSecondaryContainer),
-        Tone.Gain to ToneColors(container = gainContainer, content = onGainContainer)
+        Tone.Gain to ToneColors(container = gainContainer, content = onGainContainer),
+        Tone.Tertiary to ToneColors(container = scheme.tertiaryContainer, content = scheme.onTertiaryContainer),
+        Tone.Neutral to ToneColors(container = scheme.surfaceVariant, content = scheme.onSurfaceVariant),
+        Tone.NeutralPrimary to ToneColors(container = scheme.surfaceVariant, content = scheme.primary),
+        Tone.Filled to ToneColors(container = scheme.surfaceContainerHigh, content = scheme.onSurface),
+        Tone.Error to ToneColors(container = scheme.errorContainer, content = scheme.onErrorContainer)
     ),
     accents = listOf(scheme.primary, scheme.secondary)
 )

@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import kotlinx.collections.immutable.persistentListOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -12,9 +13,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
 import se.partee71.ui.common.ListUiState
+import se.partee71.ui.common.toListUiState
 
 /**
  * Innehav utan innehav och med läsfel i JVM med Robolectric: det tomma lägets "Ny transaktion" och
@@ -61,6 +65,19 @@ class PortfoljContentTest {
     @Test
     fun `skärmdump av Innehav utan innehav`() = composeRule.captureLightAndDark("PortfoljScreen_tom") {
         PortfoljContent(state = empty, onFundClick = {})
+    }
+
+    @Test
+    fun `skärmdump av Innehav med innehav`() = composeRule.captureLightAndDark("PortfoljScreen_innehav") {
+        PortfoljContent(
+            state = PortfoljUiState(
+                list = persistentListOf(
+                    Holding(fund = Fund(fundId = "SE_GLOBAL", name = "Global Indexfond A"), netShares = 120.0, netInvested = 30_000.0, currentValue = 34_250.0),
+                    Holding(fund = Fund(fundId = "SE_SMB", name = "Sverige Småbolag"), netShares = 40.0, netInvested = 12_000.0, currentValue = 11_380.0)
+                ).toListUiState()
+            ),
+            onFundClick = {}
+        )
     }
 
     @Test

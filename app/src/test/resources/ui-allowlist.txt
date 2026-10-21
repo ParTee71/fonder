@@ -7,7 +7,6 @@
 # kör skriptet igen när en skärm rättats. Lägg aldrig till en baslinjerad för hand.
 
 # Baslinje
-app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitScreen.kt:PaddingValues(0.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitScreen.kt:padding(horizontal = Spacing.l, vertical = 6.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreen.kt:padding(top = 2.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt:padding(top = 2.dp – baslinje 2026-10 – rättas i skärm-PR:erna

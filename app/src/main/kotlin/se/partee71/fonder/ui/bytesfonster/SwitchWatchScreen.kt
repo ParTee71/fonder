@@ -27,9 +27,6 @@ import se.partee71.fonder.R
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.PeriodRow
@@ -39,6 +36,9 @@ import se.partee71.fonder.ui.components.RiskLevelPicker
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.SwitchRow
 import se.partee71.ui.theme.Spacing
 
@@ -203,7 +203,7 @@ fun SwitchWatchContent(
                             text = stringResource(R.string.switch_watch_retry),
                             onClick = onRetryAutoFill,
                             modifier = Modifier.padding(horizontal = Spacing.l),
-                            variant = AppButtonVariant.Text
+                            variant = ButtonVariant.Text
                         )
                     }
                 }
@@ -243,7 +243,7 @@ fun SwitchWatchContent(
                             text = stringResource(R.string.switch_watch_add_candidate),
                             onClick = onAddCandidate,
                             modifier = Modifier.padding(top = Spacing.xs),
-                            variant = AppButtonVariant.Text
+                            variant = ButtonVariant.Text
                         )
                     }
                     state.message?.let { message ->
@@ -266,7 +266,7 @@ fun SwitchWatchContent(
                         AppButton(
                             text = stringResource(R.string.switch_watch_cancel),
                             onClick = onCancel,
-                            variant = AppButtonVariant.Text
+                            variant = ButtonVariant.Text
                         )
                     }
                     if (state.canChangeSelection) {
@@ -487,7 +487,7 @@ private fun CandidateCard(
                 AppButton(
                     text = stringResource(R.string.switch_watch_bought_action),
                     onClick = { onBought(row.isin) },
-                    variant = AppButtonVariant.Text
+                    variant = ButtonVariant.Text
                 )
                 // Bara handplockade alternativ går att ta bort: de automatiska är appens
                 // förslag för nivån, och att plocka bort ett av dem hade sett ut som ett val
@@ -496,7 +496,7 @@ private fun CandidateCard(
                     AppButton(
                         text = stringResource(R.string.switch_watch_remove_candidate),
                         onClick = { onRemoveCandidate(row.candidateId) },
-                        variant = AppButtonVariant.Text
+                        variant = ButtonVariant.Text
                     )
                 }
             }

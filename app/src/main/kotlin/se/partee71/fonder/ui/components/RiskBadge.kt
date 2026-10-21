@@ -4,6 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import se.partee71.fonder.R
+import se.partee71.fonder.ui.theme.Neutral
+import se.partee71.ui.components.InfoPill
+import se.partee71.ui.theme.AppTheme
+import se.partee71.ui.theme.Tone
 
 /** Källans riskskala (TP-21) går 1–7 — visas alltid ut, så en femma inte läses som "5 av 5". */
 const val RISK_SCALE_MAX = 7
@@ -39,5 +43,5 @@ fun RiskBadge(level: Int?, modifier: Modifier = Modifier, toLevel: Int? = null) 
         else -> stringResource(R.string.format_risk_level_description, level, RISK_SCALE_MAX)
     }
     // Samma märke som bytesradernas tillstånd (BYT-4), i den neutrala tonen: siffran ska inte betyda något utöver sig själv.
-    StateChip(text = label, tone = StateChipTone.Neutral, modifier = modifier, contentDescription = description)
+    InfoPill(text = label, modifier = modifier, tone = Tone.Neutral, shape = AppTheme.shapes.smallTile, contentDescription = description)
 }

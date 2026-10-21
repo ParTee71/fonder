@@ -25,24 +25,24 @@
 \bCutCornerShape\(	MaterialTheme.shapes (FonderShapes)
 \bTextStyle\(	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
 \b(fontSize|lineHeight|letterSpacing)\s*=	MaterialTheme.typography (FonderTypography) / MonoAmountStyle
-\.shadow\(	AppCard
+\.shadow\(	AppCard (android-ui)
 \.(height|requiredHeight|heightIn)\(\s*[0-9]+(\.[0-9]+)?\.dp	komponentens parametrar (ingen literal höjd i feature-kod)
 \bpadding\([^)]*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
 \bPaddingValues\([^)]*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
 \bspacedBy\(\s*[0-9]+(\.[0-9]+)?\.dp	Spacing (se.partee71.ui.theme, xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32)
-\bSurface\s*[({]	AppCard
-\b(Elevated|Outlined)?Card\s*[({]	AppCard (AppCardVariant)
-\bListItem\s*[({]	ItemRow
+\bSurface\s*[({]	AppCard (android-ui)
+\b(Elevated|Outlined)?Card\s*[({]	AppCard (android-ui; tone, style = flushCardStyle)
+\bListItem\s*[({]	ItemRow (android-ui)
 \b(Basic)?AlertDialog\s*[({]	ConfirmDialog (android-ui, dismissLabel = null för en knapp) / ImportCompleteDialog
 \b[A-Za-z]*DatePicker[A-Za-z]*\s*[({]	DateField (android-ui)
 \bDropdownMenu(Item)?\s*[({]	SelectField
-\b(Filter|Assist|Suggestion|Input)Chip\s*[({]	ChoiceChipRow
+\b(Filter|Assist|Suggestion|Input)Chip\s*[({]	ChoiceChipRow / InfoPill (android-ui)
 \b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow / ProgressBar / LoadingDialog
-\bBadge\s*[({]	RiskBadge / ProfitTakeBadge / StatusDot
+\bBadge\s*[({]	InfoPill (android-ui) / RiskBadge / ProfitTakeBadge / StatusDot
 \bCheckbox\s*[({]	CheckRow / FollowedToggleRow
 \bSwitch\s*[({]	SwitchRow (android-ui)
-\b(Text|Outlined|Elevated|Filled|FilledTonal)?Button\s*[({]	AppButton (AppButtonVariant)
-\b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton
+\b(Text|Outlined|Elevated|Filled|FilledTonal)?Button\s*[({]	AppButton (android-ui, ButtonVariant)
+\b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton (android-ui)
 \b(Outlined|Basic)?TextField\s*[({]	AppTextField (android-ui)
 \bDialog\s*[({]	ConfirmDialog (android-ui) / LoadingDialog
 \b(Short|Flexible)?NavigationBar(Item)?\s*[({]	AppFloatingToolbar

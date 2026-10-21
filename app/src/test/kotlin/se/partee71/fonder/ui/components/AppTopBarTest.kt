@@ -2,8 +2,6 @@ package se.partee71.fonder.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -19,8 +17,13 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import se.partee71.fonder.R
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.fonder.ui.theme.NeutralPrimary
+import se.partee71.ui.components.AppIconButton
+import se.partee71.ui.components.IconButtonVariant
+import se.partee71.ui.theme.Tone
 
 /**
  * Den delade [AppTopBar] och [AppTabHeading] (UI-8, NAV-7, UI-14) i JVM: toppraden har rubrik och
@@ -51,10 +54,11 @@ class AppTopBarTest {
             FonderTheme {
                 AppTabHeading(title = "Översikt") {
                     AppIconButton(
-                        icon = Icons.Outlined.Settings,
+                        icon = R.drawable.ic_settings,
                         contentDescription = "Inställningar",
                         onClick = { clicks++ },
-                        variant = AppIconButtonVariant.Tonal
+                        variant = IconButtonVariant.Tonal,
+                        tone = Tone.NeutralPrimary
                     )
                 }
             }
@@ -72,10 +76,11 @@ class AppTopBarTest {
             AppTopBar(title = "Fonddetalj", onBack = {})
             AppTabHeading(title = "Översikt") {
                 AppIconButton(
-                    icon = Icons.Outlined.Settings,
+                    icon = R.drawable.ic_settings,
                     contentDescription = "Inställningar",
                     onClick = {},
-                    variant = AppIconButtonVariant.Tonal
+                    variant = IconButtonVariant.Tonal,
+                    tone = Tone.NeutralPrimary
                 )
             }
         }

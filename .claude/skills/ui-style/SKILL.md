@@ -11,8 +11,8 @@ siffror radar upp sig i kolumner. Krav: UI-1 (identitet, fast palett, ljust + m�
 
 **Var saker står (enda källor):** temats API kommer från biblioteket android-ui (`se.partee71.ui.theme`:
 `AppTheme`, `ExtendedColors`/`Tone`, `AppShapes`, `AppTypography`, `Spacing`); Fonders egna värden står i
-`ui/theme/` – `Color.kt` (paletten, färgscheman, `FonderLight/DarkExtendedColors`, tonerna `Tone.Gain` och
-`Tone.Copper`, `FonderColors`), `Theme.kt` (`FonderTheme`, `ReturnColors`, `StatusColors`, `ChartSeriesColors`),
+`ui/theme/` – `Color.kt` (paletten, färgscheman, `FonderLight/DarkExtendedColors`, tonerna `Tone.Gain`,
+`Tone.Copper`, `Tone.Tertiary`, `Tone.Neutral`, `Tone.NeutralPrimary`, `Tone.Filled`, `Tone.Error`, `FonderColors`), `Theme.kt` (`FonderTheme`, kortstilarna `flushCardStyle`/`nestedCardStyle`/`ListFrameCards`, `ReturnColors`, `StatusColors`, `ChartSeriesColors`),
 `Type.kt` (`FonderTypography`, `MonoAmountStyle`), `Shape.kt` (`FonderShapes`, `FonderAppShapes`). Vilken
 komponent som används för vad → skill `shared-ui-components`. Koden är facit; tabellerna nedan speglar den.
 
@@ -39,6 +39,12 @@ komponent som används för vad → skill `shared-ui-components`. Koden är faci
 | `Tone.Primary` | `primaryContainer` + `onPrimaryContainer` |
 | `Tone.Copper` (Fonders) | `secondaryContainer` + `onSecondaryContainer` |
 | `Tone.Gain` (Fonders) | `GainContainer*` + `OnGainContainer*` (= `ReturnColors.gainContainer`/`onGainContainer`) |
+| `Tone.Tertiary` (Fonders) | `tertiaryContainer` + `onTertiaryContainer` (Besluts "Avgift") |
+| `Tone.Neutral` (Fonders) | `surfaceVariant` + `onSurfaceVariant` (risknivån, Avstått/Avbrutet/Utgånget) |
+| `Tone.NeutralPrimary` (Fonders) | `surfaceVariant` + `primary` (Översiktens kugghjul, `AppIconButton` Tonal) |
+| `Tone.Filled` (Fonders) | `surfaceContainerHigh` + `onSurface` (kort inne i ett kort, `AppCard(tone = Tone.Filled)`) |
+| `Tone.Error` (Fonders) | `errorContainer` + `onErrorContainer` (farozonen i Inställningar) |
+| `LocalAppButtonStyle` / `LocalAppCardStyle` | 40 dp, morf, tonad = `Tone.Primary` / 1 dp `outlineVariant`-kontur, 16 dp luft, 0 dp innehållsmellanrum (`FonderTheme`) |
 | `ExtendedColors.accents` | `primary`, `secondary` (diagramseriernas kulörer) |
 | `AppShapes` | kort och rad 18 dp, fält och meny 12 dp, `smallTile` 8 dp, `iconTile` 18 dp, sheet 28 dp upptill, pill rund |
 | `AppTypography` | `AppTypography.from(FonderTypography)` (bibliotekets standardindelning) |

@@ -28,15 +28,16 @@ import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.RealizedSale
-import se.partee71.fonder.ui.components.AppButton
-import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.components.PeriodRow
+import se.partee71.fonder.ui.theme.ListFrameCards
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import se.partee71.ui.common.ListUiState
 import se.partee71.ui.common.toListUiState
+import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppCard
+import se.partee71.ui.components.AppCardStyle
 import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.ConfirmDialog
 import se.partee71.ui.components.EmptyAction
@@ -104,33 +105,35 @@ fun TransaktionerContent(
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     val pendingDelete = pendingDeleteId?.let { id -> state.allRows.firstOrNull { it.transaction.id == id } }
 
-    EntityListScreen(
-        title = stringResource(R.string.nav_handelser),
-        state = state.shownList(),
-        empty = emptyContent(state, onNewTransaction, onImportOrders),
-        add = null,
-        key = { it.transaction.id },
-        modifier = modifier,
-        onRetry = onRetry,
-        filter = {
-            ChoiceChipRow(
-                options = HandelseFilter.entries,
-                selected = state.filter,
-                optionLabel = { stringResource(it.labelRes()) },
-                onSelect = onFilterSelected
+    ListFrameCards { cardStyle ->
+        EntityListScreen(
+            title = stringResource(R.string.nav_handelser),
+            state = state.shownList(),
+            empty = emptyContent(state, onNewTransaction, onImportOrders),
+            add = null,
+            key = { it.transaction.id },
+            modifier = modifier,
+            onRetry = onRetry,
+            filter = {
+                ChoiceChipRow(
+                    options = HandelseFilter.entries,
+                    selected = state.filter,
+                    optionLabel = { stringResource(it.labelRes()) },
+                    onSelect = onFilterSelected
+                )
+            },
+            header = if (state.showRealizedCard) {
+                { RealizedCard(state, cardStyle) }
+            } else {
+                null
+            }
+        ) { row ->
+            HandelseRow(
+                row = row,
+                onLongPress = { pendingDeleteId = row.transaction.id },
+                onStartSwitchWatch = onStartSwitchWatch
             )
-        },
-        header = if (state.showRealizedCard) {
-            { RealizedCard(state) }
-        } else {
-            null
         }
-    ) { row ->
-        HandelseRow(
-            row = row,
-            onLongPress = { pendingDeleteId = row.transaction.id },
-            onStartSwitchWatch = onStartSwitchWatch
-        )
     }
 
     pendingDelete?.let { row ->
@@ -204,9 +207,9 @@ private fun HandelseFilter.labelRes(): Int = when (this) {
  * resultat (SLD-2) sägs ut i text under raderna, aldrig bara med färg.
  */
 @Composable
-private fun RealizedCard(state: TransaktionerUiState, modifier: Modifier = Modifier) {
+private fun RealizedCard(state: TransaktionerUiState, cardStyle: AppCardStyle, modifier: Modifier = Modifier) {
     val showTotal = state.filter == HandelseFilter.SALJ
-    AppCard(modifier = modifier.fillMaxWidth()) {
+    AppCard(modifier = modifier.fillMaxWidth(), style = cardStyle) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             PeriodRow(
                 label = stringResource(R.string.handelser_realized_year),
@@ -349,7 +352,7 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
             AppButton(
                 text = stringResource(R.string.switch_watch_start),
                 onClick = { onStartSwitchWatch(row) },
-                variant = AppButtonVariant.Text
+                variant = ButtonVariant.Text
             )
         }
     }

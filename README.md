@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.76.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.77.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.77.0 | Knappar, kort, rader och avsnittsrubriker från android-ui 0.8.0 (#174): Fonders egna AppButton, AppCard, ItemRow och StateChip är borta. Besluts rader har rubriken i 16 sp och chipet med ursprunget ovanför, profilraden står på två rader, avsnittsrubrikerna är 20 sp med antalet i en pill och Facit-raden har en pil; Inställningars kortrubriker är 16 sp. Översiktens kugghjul är 48 dp. |
 | 0.76.0 | Fälten och dialogerna från android-ui 0.7.0 (#174): textfälten har kortets yta och ljusare kontur, datum visas som "tis 20 okt 2026" och väljs i Material 3-datumväljaren, dialogerna har 18 dp hörn och ljusare yta, och strömbrytaren *Bara indexfonder* har bibliotekets rad. Riskprofilens andelsfält har etiketten "Andel" (UI-13). |
 | 0.75.0 | Listorna på android-ui 0.7.0 (#174): Händelser och Fondsök står på listramen – Händelser med stor rubrik som fälls ihop, filtret och resultatkortet kvar, Fondsök med fälten fasta och träffarna i ett kort. Läsfel på Händelser, Innehav, Beslut, Facit, Fondsök, Fonddetalj och Översikt har "Försök igen". Tomma Översikten, Innehav och Händelser har knappar till fondsöken, transaktionsformuläret, importerna och säkerhetskopian. Bakåtpilen följer temat. |
 | 0.74.0 | Transaktionsformuläret har Spara uppe i toppraden, aktiv först när något ändrats (ett förifyllt sälj från Följ direkt); bakåt med osparade ändringar frågar "Släng ändringar?", fel visas under fältet, ett sparfel som snackbar och ett läsfel med "Försök igen". Vid sälj står innehavet med "Sälj alla andelar", och fler andelar än innehavet går inte att spara. Utan bevakade fonder leder "Bevaka en fond" till fondsök. Påminnelsen om säkerhetskopia på Hem blinkar inte längre bort när en ändring kommer medan den räknas om (NAV-4, TRX-5, TRX-6, UI-15, NFR-6, HEM-12, #174). |

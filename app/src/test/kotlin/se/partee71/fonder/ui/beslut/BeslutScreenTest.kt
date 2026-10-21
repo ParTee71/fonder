@@ -149,7 +149,8 @@ class BeslutScreenTest {
         var opened = 0
         composeRule.setContent { FonderTheme { BeslutContent(state = full, onOpenRiskProfile = { opened++ }) } }
 
-        composeRule.onNodeWithText("Mot riskprofil 4,00 · Balanserad tillväxt · ISK/KF").assertIsDisplayed()
+        composeRule.onNodeWithText("Mot riskprofil 4,00").assertIsDisplayed()
+        composeRule.onNodeWithText("Balanserad tillväxt · ISK/KF").assertIsDisplayed()
         composeRule.onNodeWithText("Ändra").performClick()
 
         assertEquals(1, opened)

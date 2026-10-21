@@ -13,6 +13,7 @@ import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.components.AppButton
 
 /**
  * Den delade [EmptyState] i JVM med Robolectric – första Compose-testet utanför emulatorn
