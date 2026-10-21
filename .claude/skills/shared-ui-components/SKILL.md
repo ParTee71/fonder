@@ -45,11 +45,12 @@ från android-ui:s `Spacing` (`xs` 4 · `s` 8 · `m` 12 · `l` 16 · `xl` 24 · 
 | Risknivåväljare | `RiskLevelPicker` | Pågående byte (ANA-13, köpnivån). Sju lika breda knappar 1–7 utan skroll, samma färger som `ChoiceChipRow` (`choiceButtonColors`); vald = fylld och helt rund, `marked` = ram (säljfondens nivå) med `markedDescription` för skärmläsaren; läses "Risknivå 4 av 7" som radioval, 48 dp tryckyta; `enabled = false` låser. |
 | Dropdown | `SelectField` | Fondsök, transaktionsformuläret, importerna och bytesväljaren (`SwitchDecisionField` i `ui/transaktioner`, BYT-2). `clearOptionLabel` ger ett "alla/inget"-val överst; `supportingText` en förklaring under fältet; `enabled = false` låser fältet med valet synligt. |
 | Datumfält | android-ui:s `DateField` | Transaktionsformuläret, importerna. Visar "tis 20 okt 2026" och öppnar Material 3-datumväljaren på kortytan (OK/Avbryt), öppet läge i `rememberSaveable` (UI-9); läses som **en** knapp med etikett och värde. Datumet är `kotlinx.datetime.LocalDate` – ViewModels har `java.time`, så anroparen konverterar med `toKotlinLocalDate()`/`toJavaLocalDate()`. |
-| Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster, Händelser (realiserat resultat). kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4). |
-| "Värde per <datum>" | `ValueAsOfRow` | Hem och Portfölj. Renderar ingenting utan datum (POR-7). |
+| Värde per period / nyckeltal | `PeriodRow` | Hem, Portfölj, Fonddetalj, Facit, Bytesfönster, Händelser (realiserat resultat). kr + %, eller bara % (`amount = null`); `stackValue` för mått som inte ska färgkodas som vinst/förlust; `null` = otillräcklig data, aldrig 0 (ANA-4); `insufficientText` när orsaken är känd ("Visas efter ett år", "Kurs saknas ännu"); `muted` för en underordnad rad utan vinst/förlust-färg (totalkortets "Varav orealiserat"). |
+| Portföljens totalkort | `TotalCard` | Hem och Portfölj (HEM-1/POR-3). `AppCard` med `CardTitleRow`, huvudtal, `PeriodRow`-rader (totalresultat, årsavkastning, varav orealiserat), `ValueAsOfRow` och `ExpandableInfoRow`; tar primitiver och `PortfolioTotalCalc.Result`, aldrig en skärms `UiState`. |
+| "Värde per <datum>" | `ValueAsOfRow` | Hem och Portfölj (i `TotalCard`). Renderar ingenting utan datum (POR-7). |
 | Andel per kategori | `ExposureBar` | Portfölj (fondtyp, region, index/aktivt) och Hem. Restposter får `outline`-färg (POR-9). 10 dp stapel med runda ändar. |
 | Ihopfällbar sektion | `ExpandableSection` | Fonddetaljs Analys och ordlista. Hela rubrikraden klickbar ≥ 48 dp, `rememberSaveable` (UI-3, UI-9); `onExpand` för innehåll som är dyrt att hämta. |
-| Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit. Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
+| Utfällbar rad med förklaring | `ExpandableInfoRow` | Fonddetalj, Facit, totalkortet ("Vad räknas in?"). Skal på `ExpandableSection`; `extraContent` för t.ex. jämförelsediagrammet (ANA-11). |
 | Strömbrytarrad | android-ui:s `SwitchRow` | Pågående byte (*Bara indexfonder*, ANA-13). `SwitchRow(title, checked, onCheckedChange)`; `toggleable` på hela raden, en nod med rollen strömbrytare, ≥ 56 dp; `subtitle`, `enabled` (låst reglage med läget synligt). `CheckRow` för en markering i en lista, `SwitchRow` för ett läge som gäller direkt. |
 | "Genomförd"-kvittering | `FollowedToggleRow` | Bara Facit (SET-5) sedan 0.68.0 — Följ på Beslut och Fonddetalj öppnar säljformuläret (BYT-2). En `CheckRow` med kvitteringens etikett; skriver mot det inspelade förslaget (SET-5). |
 | Tillståndsmärke | android-ui:s `InfoPill(shape = AppTheme.shapes.smallTile)` | Beslut (BYT-4), `RiskBadge`, `ProfitTakeBadge` (sedan 0.77.0; `StateChip` är borta). Text i `labelMedium` på tonad behållare: `Tone.Primary` (Föreslaget), `Tone.Copper` (Sålt), `Tone.Gain` (Köpt), `Tone.Tertiary` (Avgift), `Tone.Neutral` (ytvariant – Avstått/Avbrutet/Utgånget, risknivån); tonerna i `ui/theme/Color.kt`. Tillståndet alltid i text (UI-3); `contentDescription` för förkortad text. Inte klickbart. |
@@ -82,7 +83,6 @@ raden här. Bygg aldrig en tredje kopia.
 
 | Dubblett | Var | Mål |
 |---|---|---|
-| `TotalCard` | `hem/HemScreen.kt` och `portfolj/PortfoljScreen.kt` – identisk kod, olika `UiState` | en delad komponent som tar primitiver (värde, vinst, andel, `working`) |
 | `ComparisonChart` | `fond/FondDetaljScreen.kt` och `bytesfonster/SwitchWatchScreen.kt` | ett delat jämförelsekort ovanpå `FundLineChart` (laddar/ej tillgänglig/diagram) |
 | Egna listrader | `FundResultRow` (Fondsök), `HoldingRow`, `FirstPurchaseRow` (Portfölj), `FeeHoldingRow`, `FlaggedFundRow` (Hem), `SwitchPlanRow`, `FeeAlternativeRow`, `SignalRow` (Fonddetalj), `SummaryRow` (Facit) | android-ui:s `ItemRow` (används i Beslut, Fondsök och Händelser; `trailing` för belopp, `navigates` för pil) |
 | Utfällbart rad-kort | `FacitRadCard` (`facit/FacitScreen.kt`) – Sålda fonders kopia försvann med vyn i 0.62.0 | `ExpandableInfoRow` i ett `AppCard` |
@@ -187,7 +187,7 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 
 ## Anti-mönster
 
-- Lokal `Card { }` med egen padding "bara här" – eller en tredje `TotalCard`.
+- Lokal `Card { }` med egen padding "bara här" – eller en egen kopia av `TotalCard`.
 - Egen tom-vy i stället för `EmptyState`; egen `Canvas`-graf vid sidan av `FundLineChart`.
 - Kopierad "Genomförd"-kryssruta i stället för `FollowedToggleRow` – en kopia som inte skriver
   mot det inspelade förslaget ser ut att fungera utan att göra något.

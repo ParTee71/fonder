@@ -15,6 +15,7 @@ import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
 import se.partee71.ui.common.ListUiState
@@ -74,7 +75,13 @@ class PortfoljContentTest {
                 list = persistentListOf(
                     Holding(fund = Fund(fundId = "SE_GLOBAL", name = "Global Indexfond A"), netShares = 120.0, netInvested = 30_000.0, currentValue = 34_250.0),
                     Holding(fund = Fund(fundId = "SE_SMB", name = "Sverige Småbolag"), netShares = 40.0, netInvested = 12_000.0, currentValue = 11_380.0)
-                ).toListUiState()
+                ).toListUiState(),
+                totalValue = 45_630.0,
+                totalInvested = 42_000.0,
+                totalGainLoss = 3_630.0,
+                totalGainLossFraction = 0.0864,
+                total = PortfolioTotalCalc.Result(netDepositsKr = 43_200.0, totalGainKr = 2_430.0, totalGainFraction = 0.0563, moneyWeightedAnnualReturn = null, partial = false, ageDays = 210),
+                navEpochDay = 20_742
             ),
             onFundClick = {}
         )

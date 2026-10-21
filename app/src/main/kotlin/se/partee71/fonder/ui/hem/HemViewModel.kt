@@ -46,6 +46,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
 import se.partee71.fonder.ui.common.errorOrNull
@@ -95,6 +96,8 @@ data class HemPortfolio(
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
     val totalGainLossFraction: Double? = null,
+    /** Totalresultat och pengaviktad avkastning över alla transaktioner, även helt sålda fonder (HEM-1, issue #191). */
+    val total: PortfolioTotalCalc.Result = PortfolioTotalCalc.Result.EMPTY,
     val performance: PortfolioPerformanceCalc.PortfolioPerformance = PortfolioPerformanceCalc.PortfolioPerformance(
         day = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
         week = PortfolioPerformanceCalc.PortfolioPeriodResult.InsufficientHistory,
@@ -316,12 +319,14 @@ class HemViewModel @Inject constructor(
                 requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
+                val navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched)
                 HemPortfolio(
                     hasHoldings = enriched.isNotEmpty(),
                     totalInvested = PortfolioCalc.totalInvested(enriched),
                     totalValue = PortfolioCalc.totalValue(enriched),
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
+                    total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
                     analysisSummary = buildAnalysisSummary(enriched, firstPurchaseByFund, historyByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
@@ -337,7 +342,7 @@ class HemViewModel @Inject constructor(
                         .distinct()
                         .sorted()
                         .toImmutableList(),
-                    navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
+                    navEpochDay = navEpochDay,
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
                     riskProfile = riskProfile,
                     portfolioRisk = PortfolioRiskCalc.compute(enriched, metadataByIsin),

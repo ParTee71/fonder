@@ -23,6 +23,7 @@ import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
@@ -158,6 +159,7 @@ class HemScreenshotTest {
                         totalValue = 412_860.0,
                         totalGainLoss = 38_214.0,
                         totalGainLossFraction = 0.102,
+                        total = PortfolioTotalCalc.Result(netDepositsKr = 380_000.0, totalGainKr = 32_860.0, totalGainFraction = 0.0865, moneyWeightedAnnualReturn = 0.058, partial = false, ageDays = 790),
                         navEpochDay = start + 59,
                         returnSeries = PortfolioReturnSeriesCalc.Result(points = curve(0.002), partial = false),
                         benchmarkSeries = BenchmarkSeries(fundName = "Global Index", points = curve(0.0015).toImmutableList()),

@@ -38,6 +38,7 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.PortfolioCalc
 import se.partee71.fonder.domain.usecase.PortfolioExposureCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsListError
 import se.partee71.fonder.ui.common.errorOrNull
@@ -57,6 +58,8 @@ data class PortfoljUiState(
     val totalValue: Double = 0.0,
     val totalGainLoss: Double = 0.0,
     val totalGainLossFraction: Double? = null,
+    /** Totalresultat och pengaviktad avkastning över alla transaktioner, även helt sålda fonder (POR-3, issue #191). */
+    val total: PortfolioTotalCalc.Result = PortfolioTotalCalc.Result.EMPTY,
     /** Dag/vecka/månads-förändring per fond, se issue #14 (POR-5). Nyckel: `Fund.fundId`. */
     val performance: ImmutableMap<String, PortfolioPerformanceCalc.HoldingPerformance> = persistentMapOf(),
     /** Äldsta NAV-datumet bland innehav med känt värde, för "per <datum>" bredvid totalen (POR-7, issue #27). */
@@ -209,6 +212,7 @@ class PortfoljViewModel @Inject constructor(
             val fundIds = holdings.map { it.fund.fundId }
             combine(fundPriceRepository.observeLatestPrices(fundIds), metadata) { prices, metadataByIsin ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
+                val navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched)
                 val today = LocalDate.now()
                 val performance = enriched.associate { holding ->
                     val history = fundPriceRepository.priceHistory(
@@ -225,8 +229,9 @@ class PortfoljViewModel @Inject constructor(
                     totalValue = PortfolioCalc.totalValue(enriched),
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
+                    total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
                     performance = performance.toImmutableMap(),
-                    navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched),
+                    navEpochDay = navEpochDay,
                     analysis = buildAnalysis(enriched, transactions, today).toImmutableMap(),
                     exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin),
                     riskLevels = enriched.mapNotNull { holding ->
