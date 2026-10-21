@@ -401,7 +401,7 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Billigare alternativ").assertDoesNotExist()
+        composeRule.onNodeWithText("Billigare alternativ", ignoreCase = true).assertDoesNotExist()
     }
 
     @Test
@@ -414,7 +414,7 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Billigare alternativ").assertExists()
+        composeRule.onNodeWithText("Billigare alternativ", ignoreCase = true).assertExists()
         composeRule.onNodeWithText("Letar efter billigare alternativ", substring = true).assertExists()
     }
 
