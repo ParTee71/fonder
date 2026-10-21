@@ -33,18 +33,18 @@
 \bSurface\s*[({]	AppCard
 \b(Elevated|Outlined)?Card\s*[({]	AppCard (AppCardVariant)
 \bListItem\s*[({]	ItemRow
-\b(Basic)?AlertDialog\s*[({]	ConfirmDialog / AppDialog / ImportCompleteDialog
-\b[A-Za-z]*DatePicker[A-Za-z]*\s*[({]	DateField
+\b(Basic)?AlertDialog\s*[({]	ConfirmDialog (android-ui, dismissLabel = null för en knapp) / ImportCompleteDialog
+\b[A-Za-z]*DatePicker[A-Za-z]*\s*[({]	DateField (android-ui)
 \bDropdownMenu(Item)?\s*[({]	SelectField
 \b(Filter|Assist|Suggestion|Input)Chip\s*[({]	ChoiceChipRow
 \b[A-Za-z]*ProgressIndicator\s*[({]	WorkingIndicator / CardTitleRow / ProgressBar / LoadingDialog
 \bBadge\s*[({]	RiskBadge / ProfitTakeBadge / StatusDot
 \bCheckbox\s*[({]	CheckRow / FollowedToggleRow
-\bSwitch\s*[({]	SwitchRow
+\bSwitch\s*[({]	SwitchRow (android-ui)
 \b(Text|Outlined|Elevated|Filled|FilledTonal)?Button\s*[({]	AppButton (AppButtonVariant)
 \b(Outlined|Filled|FilledTonal)?IconButton\s*[({]	AppIconButton
-\b(Outlined|Basic)?TextField\s*[({]	AppTextField
-\bDialog\s*[({]	AppDialog / ConfirmDialog / LoadingDialog
+\b(Outlined|Basic)?TextField\s*[({]	AppTextField (android-ui)
+\bDialog\s*[({]	ConfirmDialog (android-ui) / LoadingDialog
 \b(Short|Flexible)?NavigationBar(Item)?\s*[({]	AppFloatingToolbar
 \b(Horizontal|Vertical)FloatingToolbar\s*[({]	AppFloatingToolbar
 \b[A-Za-z]*FloatingActionButton(Menu|MenuItem)?\s*[({]	AppFabMenu

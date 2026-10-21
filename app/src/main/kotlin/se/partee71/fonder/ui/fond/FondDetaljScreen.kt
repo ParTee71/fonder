@@ -3,9 +3,9 @@ package se.partee71.fonder.ui.fond
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -36,7 +38,6 @@ import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
@@ -48,6 +49,7 @@ import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
+import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.EmptyState
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.theme.Spacing
@@ -740,7 +742,13 @@ private fun IsinInput(
             value = text,
             onValueChange = { text = it },
             label = stringResource(R.string.fond_isin_label),
-            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s)
+            // ISIN är versaler och siffror (SE0000…) – inga autokorrigerade ord.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii
+            ),
+            modifier = Modifier.padding(top = Spacing.s)
         )
         AppButton(
             text = stringResource(R.string.save),

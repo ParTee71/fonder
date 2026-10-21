@@ -32,13 +32,13 @@ import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.ChoiceChipRow
-import se.partee71.fonder.ui.components.ConfirmDialog
 import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import se.partee71.ui.common.ListUiState
 import se.partee71.ui.common.toListUiState
 import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.ConfirmDialog
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyContent
 import se.partee71.ui.components.EntityListScreen
@@ -136,7 +136,7 @@ fun TransaktionerContent(
     pendingDelete?.let { row ->
         ConfirmDialog(
             title = stringResource(R.string.transaktion_delete_title),
-            body = stringResource(R.string.format_transaktion_delete_confirm, row.fundName),
+            message = stringResource(R.string.format_transaktion_delete_confirm, row.fundName),
             confirmLabel = stringResource(R.string.delete),
             onConfirm = {
                 onDeleteTransaction(row.transaction.id)

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import kotlin.math.cos
 import kotlinx.coroutines.delay
+import kotlinx.datetime.LocalDate as KotlinLocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
@@ -47,13 +48,17 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
+import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.AppTopBar as LibraryTopBar
 import se.partee71.ui.components.ButtonVariant
+import se.partee71.ui.components.ConfirmDialog
+import se.partee71.ui.components.DateField
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyState as LibraryEmptyState
 import se.partee71.ui.components.LoadErrorState
 import se.partee71.ui.components.LocalTopBarStatus
 import se.partee71.ui.components.R as UiR
+import se.partee71.ui.components.SwitchRow
 import se.partee71.ui.components.TopBarSize
 import se.partee71.ui.theme.Spacing
 
@@ -225,17 +230,17 @@ private fun CardsAndRows() {
 @Composable
 private fun Fields() {
     var amount by remember { mutableStateOf("12 000") }
-    var date by remember { mutableStateOf<LocalDate?>(LocalDate.of(2026, 9, 3)) }
+    var date by remember { mutableStateOf<KotlinLocalDate?>(KotlinLocalDate(2026, 9, 3)) }
     var type by remember { mutableStateOf<String?>("Sälj") }
     var mode by remember { mutableStateOf("Mörkt") }
     var level by remember { mutableIntStateOf(4) }
     var checked by remember { mutableStateOf(true) }
     var indexOnly by remember { mutableStateOf(false) }
     var followed by remember { mutableStateOf(false) }
-    Label("AppTextField")
-    AppTextField(amount, { amount = it }, label = "Belopp", suffix = "kr", supportingText = "Courtage ingår")
-    AppTextField("SE00", {}, label = "ISIN", supportingText = "ISIN har 12 tecken", isError = true)
-    Label("DateField · SelectField")
+    Label("AppTextField (android-ui)")
+    AppTextField(amount, { amount = it }, label = "Belopp", suffix = "kr", helper = "Courtage ingår")
+    AppTextField("SE00", {}, label = "ISIN", error = "ISIN har 12 tecken")
+    Label("DateField (android-ui) · SelectField")
     DateField(label = "Affärsdag", date = date, onDateChange = { date = it })
     SelectField(
         label = "Typ",
@@ -248,10 +253,10 @@ private fun Fields() {
     Label("ChoiceChipRow · RiskLevelPicker")
     ChoiceChipRow(options = listOf("Ljust", "Mörkt", "Auto"), selected = mode, optionLabel = { it }, onSelect = { mode = it })
     RiskLevelPicker(selected = level, onSelect = { level = it }, marked = 5, markedDescription = "Säljfondens nivå")
-    Label("CheckRow · SwitchRow · FollowedToggleRow")
+    Label("CheckRow · SwitchRow (android-ui) · FollowedToggleRow")
     CheckRow(checked, { checked = it }, label = "Global Indexfond A", supportingText = "120,5 andelar")
-    SwitchRow(indexOnly, { indexOnly = it }, label = "Bara indexfonder", supportingText = "Föreslå bara indexfonder")
-    SwitchRow(true, {}, label = "Låst reglage", enabled = false)
+    SwitchRow("Bara indexfonder", indexOnly, { indexOnly = it }, subtitle = "Föreslå bara indexfonder")
+    SwitchRow("Låst reglage", true, {}, enabled = false)
     FollowedToggleRow(followed = followed, onFollowedChange = { followed = it })
 }
 
@@ -343,19 +348,20 @@ private fun Dialogs() {
     when (shown) {
         GalleryDialog.Confirm -> ConfirmDialog(
             title = "Ta bort transaktionen?",
-            body = "Köpet av Global Indexfond A den 14 okt tas bort. Det går inte att ångra.",
+            message = "Köpet av Global Indexfond A den 14 okt tas bort. Det går inte att ångra.",
             confirmLabel = stringResource(R.string.delete),
             onConfirm = close,
             onDismiss = close,
             destructive = true
         )
 
-        GalleryDialog.Single -> AppDialog(
+        GalleryDialog.Single -> ConfirmDialog(
             title = "Kopian är sparad",
-            body = "Säkerhetskopian ligger i Drive.",
-            onDismissRequest = close,
+            message = "Säkerhetskopian ligger i Drive.",
             confirmLabel = stringResource(R.string.ok),
-            onConfirm = close
+            onConfirm = close,
+            onDismiss = close,
+            dismissLabel = null
         )
 
         GalleryDialog.Loading -> {
@@ -376,7 +382,7 @@ private fun Dialogs() {
 /** Dialogerna galleriet kan öppna; [label] är komponentens namn. */
 private enum class GalleryDialog(val label: String) {
     Confirm("Confirm"),
-    Single("AppDialog"),
+    Single("En knapp"),
     Loading("Loading"),
     Import("Import")
 }

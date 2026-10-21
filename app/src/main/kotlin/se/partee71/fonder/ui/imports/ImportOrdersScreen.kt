@@ -22,15 +22,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.usecase.SwitchOption
 import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppCard
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.CheckRow
-import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.LoadingDialog
@@ -38,6 +38,8 @@ import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.SwitchDecisionField
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.components.AppTextField
+import se.partee71.ui.components.DateField
 import se.partee71.ui.theme.Spacing
 
 /** Importera exakta transaktioner från en eller flera Handelsbanken-avräkningsnotor (PDF), issue #8-uppföljning. */
@@ -225,8 +227,8 @@ private fun ImportOrderRowCard(
 
         DateField(
             label = stringResource(R.string.import_date_label),
-            date = rowState.date,
-            onDateChange = onDateChange,
+            date = rowState.date.toKotlinLocalDate(),
+            onDateChange = { onDateChange(it.toJavaLocalDate()) },
             modifier = Modifier.padding(top = Spacing.s)
         )
         AppTextField(

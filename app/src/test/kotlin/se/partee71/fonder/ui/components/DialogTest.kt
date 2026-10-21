@@ -12,14 +12,15 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.ui.theme.FonderTheme
+import se.partee71.ui.components.ConfirmDialog
 
 /**
- * Den delade [ConfirmDialog]/[AppDialog] och [LoadingDialog] (UI-13) i JVM: bekräfta och avbryt går
- * till var sin callback, och dialogerna fotograferas i ljust och mörkt (den destruktiva med
- * bekräftelseknappen i felfärgen).
+ * android-ui:s [ConfirmDialog] i Fonders tema och Fonders [LoadingDialog] (UI-13) i JVM: bekräfta och
+ * avbryt går till var sin callback, en dialog med en knapp (`dismissLabel = null`) har ingen Avbryt, och
+ * dialogerna fotograferas i ljust och mörkt (den destruktiva med bekräftelseknappen i felfärgen).
  */
 @RunWith(RobolectricTestRunner::class)
-class AppDialogTest {
+class DialogTest {
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -30,7 +31,7 @@ class AppDialogTest {
         FonderTheme {
             ConfirmDialog(
                 title = "Ta bort transaktionen?",
-                body = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
+                message = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
                 confirmLabel = "Ta bort",
                 onConfirm = { events += "bekräfta" },
                 onDismiss = { events += "avbryt" },
@@ -59,6 +60,27 @@ class AppDialogTest {
     }
 
     @Test
+    fun `en dialog med en knapp har ingen avbryt och knappen stänger`() {
+        composeRule.setContent {
+            FonderTheme {
+                ConfirmDialog(
+                    title = "Kopian är sparad",
+                    message = "Säkerhetskopian ligger i Drive.",
+                    confirmLabel = "OK",
+                    onConfirm = { events += "ok" },
+                    onDismiss = { events += "stäng" },
+                    dismissLabel = null
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Avbryt").assertDoesNotExist()
+        composeRule.onNodeWithText("OK").performClick()
+
+        assertEquals(listOf("ok"), events)
+    }
+
+    @Test
     fun `väntedialogen visar rubrik och text`() {
         composeRule.setContent {
             FonderTheme { LoadingDialog(title = "Importerar", body = "Matchar fonder och hämtar kurser …") }
@@ -72,7 +94,7 @@ class AppDialogTest {
     fun `skärmdump av destruktiv bekräftelse`() = composeRule.captureLightAndDark("ConfirmDialog_destructive", screen = true) {
         ConfirmDialog(
             title = "Ta bort transaktionen?",
-            body = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
+            message = "Köp av Räntefond Kort 12 aug, 10 000 kr. Det går inte att ångra.",
             confirmLabel = "Ta bort",
             onConfirm = {},
             onDismiss = {},

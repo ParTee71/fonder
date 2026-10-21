@@ -47,7 +47,7 @@ import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppCardVariant
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
-import se.partee71.fonder.ui.components.ConfirmDialog
+import se.partee71.ui.components.ConfirmDialog
 import se.partee71.ui.theme.Spacing
 
 /** Säkerhetskopieringskortet — målet för Hems påminnelse (HEM-12), adresserbart i tester. */
@@ -533,7 +533,7 @@ fun SettingsContent(
     if (showClearConfirm) {
         ConfirmDialog(
             title = stringResource(R.string.clear_database_confirm_title),
-            body = stringResource(R.string.clear_database_confirm_body),
+            message = stringResource(R.string.clear_database_confirm_body),
             confirmLabel = stringResource(R.string.settings_clear_database_button),
             onConfirm = {
                 onClearDatabase()
@@ -549,7 +549,7 @@ fun SettingsContent(
     if (showDriveRestoreConfirm) {
         ConfirmDialog(
             title = stringResource(R.string.backup_restore_confirm_title),
-            body = stringResource(R.string.backup_restore_confirm_body),
+            message = stringResource(R.string.backup_restore_confirm_body),
             confirmLabel = stringResource(R.string.backup_restore_confirm_button),
             onConfirm = {
                 showDriveRestoreConfirm = false
@@ -564,7 +564,7 @@ fun SettingsContent(
     if (showRestoreConfirm) {
         ConfirmDialog(
             title = stringResource(R.string.backup_restore_confirm_title),
-            body = stringResource(R.string.backup_restore_confirm_body),
+            message = stringResource(R.string.backup_restore_confirm_body),
             confirmLabel = stringResource(R.string.backup_restore_confirm_button),
             onConfirm = {
                 showRestoreConfirm = false

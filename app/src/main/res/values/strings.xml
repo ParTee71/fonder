@@ -132,9 +132,6 @@
     <string name="format_handelse_uncertain">%1$s · osäkert</string>
     <string name="transaktion_delete_title">Ta bort transaktion?</string>
     <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
-    <string name="date_field_not_set">inget datum valt</string>
-    <string name="date_field_open_picker">Välj datum</string>
-    <string name="format_date_field_description">%1$s: %2$s</string>
     <string name="transaktionsform_title">Ny transaktion</string>
     <string name="transaktionsform_fund_label">Fond</string>
     <string name="transaktionsform_date_label">Datum</string>
@@ -472,6 +469,7 @@
     <string name="riskprofile_allocation_title">Målfördelning</string>
     <string name="riskprofile_allocation_disclaimer">Fördelningarna är utgångspunkter, inte optima — ett verkligt optimum kräver uppgifter om ålder, övriga tillgångar och inkomst som appen varken har eller frågar om.</string>
     <string name="format_riskprofile_level_label">Nivå %1$d</string>
+    <string name="riskprofile_allocation_field_label">Andel</string>
     <string name="format_riskprofile_allocation_sum">Summa: %1$d %%</string>
     <string name="riskprofile_allocation_sum_error" formatted="false">Summan måste bli 100 % för att kunna sparas.</string>
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>

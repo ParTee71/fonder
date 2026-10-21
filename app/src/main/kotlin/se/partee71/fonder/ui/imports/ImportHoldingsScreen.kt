@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.TransactionType
@@ -33,16 +35,16 @@ import se.partee71.fonder.ui.components.AppButton
 import se.partee71.fonder.ui.components.AppButtonVariant
 import se.partee71.fonder.ui.components.AppCard
 import se.partee71.fonder.ui.components.AppIconButton
-import se.partee71.fonder.ui.components.AppTextField
 import se.partee71.fonder.ui.components.CheckRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
-import se.partee71.fonder.ui.components.DateField
 import se.partee71.fonder.ui.components.EmptyState
 import se.partee71.fonder.ui.components.ImportCompleteDialog
 import se.partee71.fonder.ui.components.LoadingDialog
 import se.partee71.fonder.ui.components.SelectField
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.transaktioner.labelRes
+import se.partee71.ui.components.AppTextField
+import se.partee71.ui.components.DateField
 import se.partee71.ui.theme.Spacing
 
 // Exporten är i praktiken inte en riktig zip-baserad .xlsx utan kalkylbladets råa XML
@@ -200,8 +202,8 @@ private fun ImportRowCard(
                     )
                     DateField(
                         label = stringResource(R.string.import_date_label),
-                        date = occasion.date,
-                        onDateChange = { date -> onOccasionDateChange(index, date) },
+                        date = occasion.date.toKotlinLocalDate(),
+                        onDateChange = { date -> onOccasionDateChange(index, date.toJavaLocalDate()) },
                         modifier = Modifier.padding(top = Spacing.s)
                     )
                     AppTextField(
@@ -209,7 +211,7 @@ private fun ImportRowCard(
                         onValueChange = { text -> onOccasionSharesChange(index, text) },
                         label = stringResource(R.string.import_occasion_shares_label),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs)
+                        modifier = Modifier.padding(top = Spacing.xs)
                     )
                     if (!occasion.dateConfident) {
                         Text(
