@@ -27,4 +27,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Fonder"
-include(":app")
+include(":core", ":app")

@@ -14,10 +14,11 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
 
 ## Baslinje (android:android-dev)
 
-- En modul, `:app`. Paket under `app/src/main/kotlin/se/partee71/fonder/`: `data/` (auth,
-  datastore, imports, network, repository, room) · `di/` · `domain/` (model, usecase – ren
-  Kotlin utan Android-importer) · `ui/<feature>/` + `ui/components/` + `ui/diagram/` +
-  `ui/theme/` · `worker/`.
+- Två moduler: `:core` (ren Kotlin/JVM: `domain/model` och de rena use casen i `domain/usecase`,
+  #171) och `:app`. Paket under `se/partee71/fonder/`: `data/` (auth, datastore, imports, network,
+  repository, room) · `di/` · `domain/` (model, usecase – ren Kotlin utan Android-importer; use
+  case som läser repositories ligger kvar i `:app` i samma paket) · `ui/<feature>/` +
+  `ui/components/` + `ui/diagram/` + `ui/theme/` · `worker/`.
 - MVVM med `StateFlow<UiState>` (TP-3) – byt inte till MVI. `@HiltViewModel` på alla
   ViewModels; state som `MutableStateFlow` + `asStateFlow()`/`stateIn`, ändrat med `update {}`.
 - Lagring: **Room** (`fonder.db`, `exportSchema = true`, schemat i `app/schemas/`, TP-4, skill
@@ -144,17 +145,20 @@ SDK-nivåer uppdaterar TP-1 i samma PR.
   `GPR_USER`/`GPR_TOKEN` (session-start-hooken säger om token saknas). I CI sätter
   `.github/actions/setup-android` dem från `secrets.GPR_TOKEN || github.token` och stoppar direkt om
   token inte når paketen. Detaljer i ARKITEKTUR.md → Byggkonfiguration och pluginens skill.
-- En modul (`:app`), ingen `build-logic` och inga convention plugins – rotens `build.gradle.kts`
-  har bara `apply false`-deklarationerna, Spotless och `cpdCheck`.
+- Två moduler (`:core`, `:app`), ingen `build-logic` och inga convention plugins – rotens
+  `build.gradle.kts` har `apply false`-deklarationerna, det gemensamma Java-målet (`subprojects {}`
+  med `plugins.withId {}`, som ReseApoteket), Spotless och `cpdCheck`.
+- Plugins i `:core`: `kotlin.jvm` och `kotlin.serialization` – inga Android-, Room- eller
+  Hilt-beroenden; `:app` har `implementation(project(":core"))`.
 - Plugins i `:app`: `android.application` (AGP 9, inbyggd Kotlin), `kotlin.compose`, `ksp`,
   `hilt`, `kotlin.serialization`, `google-services`, `roborazzi`.
-- Java 17 utan toolchain: `sourceCompatibility`/`targetCompatibility` 17 och `jvmTarget` 17 i
-  `app/build.gradle.kts`. JDK 21 kör bygget lokalt och i alla CI-jobb (`.github/actions/setup-android`),
+- Java 17 utan toolchain: `sourceCompatibility`/`targetCompatibility` 17 och `jvmTarget` 17 för
+  alla moduler i rotens `build.gradle.kts`. JDK 21 kör bygget lokalt och i alla CI-jobb (`.github/actions/setup-android`),
   eftersom Robolectric kräver 21 för SDK 36.
 - KSP för Room (`room.schemaLocation` = `app/schemas`, även som `androidTest`-assets för
   migreringstesterna) och Hilt.
 - `cpdCheck` (PMD CPD via CLI som `JavaExec`, 80 tokens, baslinjen `config/cpd-baseline.txt`)
-  över `app/src/main`, `app/src/test`, `app/src/androidTest`, kopplad till `check`.
+  över `core/src`, `app/src/main`, `app/src/test`, `app/src/androidTest`, kopplad till `check`.
 - Kodstil: ktlint 1.8 (stil `android_studio`) med compose-rules via Spotless, bara lokalt och inte i CI (regel 5). Kör `./gradlew spotlessApply` före push; `spotlessCheck` kontrollerar. Reglerna står i `ktlintRules` i rotens `build.gradle.kts`; nya CompositionLocals läggs i `compose_allowed_composition_locals`.
 - `gradle.properties`: `org.gradle.caching` och `org.gradle.parallel` påslagna;
   configuration cache är inte påslagen (skill `ci-budget`).

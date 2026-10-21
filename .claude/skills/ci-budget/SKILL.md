@@ -21,7 +21,7 @@ att inte skriva det (regel 2).
 |---|---|---|
 | PR som bara rör dokument, `.claude/` eller andra workflows | `changes` (med hooktestet) + `ci-ok` | ~2 |
 | PR som rör kod eller byggfiler | `changes` + `build-and-test` + `ci-ok` | ~6–7 |
-| … och `app/src/main/**`, `app/src/androidTest/**` eller byggfiler | dessutom `instrumented-tests` | +~10–15 |
+| … och `core/src/main/**`, `app/src/main/**`, `app/src/androidTest/**` eller byggfiler | dessutom `instrumented-tests` | +~10–15 |
 | Push till `master` | `changes` + `build-and-test` + `ci-ok` | ~6–7 |
 | Veckovis `quality.yml` (bara om `master` ändrats) | `quality` | ~8–12 |
 | Release (`release.yml`) | `gate` + `release` (signerat R8-bygge och `lintDebug`) | ~9–12 (före grindarna ~6–8) |
@@ -33,6 +33,12 @@ ersätt dem med uppmätta värden när de finns.
 
 **Skärmdumpsjämförelsen** (`verifyRoborazziDebug` i stället för `testDebugUnitTest`) lade
 inget jobb till och uppskattas till **+0–10 s** per kod-PR (se "När du lägger till något").
+
+**`:core`-modulen (#171)** lade inget jobb till: `:core:test` körs i samma Gradle-anrop i
+`build-and-test`, och domänens tester flyttade dit från `testDebugUnitTest` – samma antal tester.
+Uppskattat **±0–15 s** per kod-PR (en modul till att konfigurera och kompilera, i gengäld rena
+JVM-tester utan Android-klassväg och build cache som hoppar över `:core` när bara `:app` ändrats).
+Ersätt med uppmätt värde efter första körningen.
 
 **Verkstads-PR:en** lade till regel 4-kontrollerna och JVM-UI-testerna i de befintliga jobben –
 inga nya jobb. Uppskattat tillägg (varm cache): hooktestet ~2 s i `changes`; i `build-and-test`
@@ -50,8 +56,8 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 <!-- ci-table:start -->
 | Workflow · jobb | Trigger | Villkor | Steg |
 |---|---|---|---|
-| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); hooktest `node --test .claude/hooks/test/*.test.mjs` (regel4-hooken, baslinjen i `ui-allowlist.txt`, hookkommandona); i PR `dorny/paths-filter@v3` med filtren `app` (`app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
-| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-android` (provar att token når android-ui och sätter `GPR_USER`/`GPR_TOKEN`, JDK 21 och `setup-gradle`, cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `verifyRoborazziDebug` kör `testDebugUnitTest` (alla enhetstester, Robolectric-testerna och `UiConsistencyTest`) **en gång** med skärmdumpsjämförelsen mot `app/src/test/screenshots/` påslagen (tolerans 0,1 % pixlar i `captureLightAndDark`); testrapport och CPD-rapport som artifact (`test-results`, `if: always()`), vid fel även diffbilderna (`screenshot-diffs`: `app/build/outputs/roborazzi/`, `app/build/test-results/roborazzi/`, `app/build/reports/roborazzi/`; `if: failure()`, 7 dagar) |
+| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); hooktest `node --test .claude/hooks/test/*.test.mjs` (regel4-hooken, baslinjen i `ui-allowlist.txt`, hookkommandona); i PR `dorny/paths-filter@v3` med filtren `app` (`core/src/**`, `core/build.gradle.kts`, `app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`core/src/main/**`, `core/build.gradle.kts`, `app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
+| `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-android` (provar att token når android-ui och sätter `GPR_USER`/`GPR_TOKEN`, JDK 21 och `setup-gradle`, cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :core:test :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `:core:test` kör domänens rena JVM-tester; `verifyRoborazziDebug` kör `testDebugUnitTest` (alla enhetstester, Robolectric-testerna och `UiConsistencyTest`) **en gång** med skärmdumpsjämförelsen mot `app/src/test/screenshots/` påslagen (tolerans 0,1 % pixlar i `captureLightAndDark`); testrapporterna (`core` och `app`) och CPD-rapporten som artifact (`test-results`, `if: always()`), vid fel även diffbilderna (`screenshot-diffs`: `app/build/outputs/roborazzi/`, `app/build/test-results/roborazzi/`, `app/build/reports/roborazzi/`; `if: failure()`, 7 dagar) |
 | `android.yml` · `instrumented-tests` | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | anropar `instrumented.yml` (check-run `instrumented-tests / instrumented`) |
 | `instrumented.yml` · `instrumented` (timeout 18) | bara `workflow_call` (från `android.yml` och `release.yml`) | – | `setup-android`, KVM, `reactivecircus/android-emulator-runner@v2` (API 36, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
 | `android.yml` · `ci-ok` (timeout 2) | som ovan | alltid (`if: always()`) | grönt när alla jobb ovan blivit `success` eller `skipped` – **enda obligatoriska statuskravet** |

@@ -69,6 +69,8 @@ jobs:
         with:
           filters: |
             app:
+              - 'core/src/**'
+              - 'core/build.gradle.kts'
               - 'app/src/**'
               - 'app/build.gradle.kts'
               - 'config/**'
@@ -79,6 +81,8 @@ jobs:
               - '.github/workflows/android.yml'
               - '.github/actions/**'
             instrumented:
+              - 'core/src/main/**'
+              - 'core/build.gradle.kts'
               - 'app/src/main/**'
               - 'app/src/androidTest/**'
               - 'app/build.gradle.kts'
@@ -120,7 +124,7 @@ jobs:
             echo "|---|---|"
             echo "| nyckelgrind | true |"
             echo "| hooktest (regel 4) | true |"
-            echo "| kompilering, enhetstester, Robolectric, skärmdumpsjämförelse, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
+            echo "| kompilering, :core:test, enhetstester, Robolectric, skärmdumpsjämförelse, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
             echo "| instrumenttester på emulator (\`instrumented-tests\`) | $instrumented |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -152,13 +156,14 @@ jobs:
       # testDebugUnitTest – alla enhetstester, Robolectric-testerna och UiConsistencyTest (Konsist) –
       # med skärmdumpsjämförelsen påslagen, så testerna körs en gång och en skärmdump som skiljer
       # från referensen i app/src/test/screenshots/ fäller bygget (tolerans i testing/Screenshots.kt).
+      # :core:test kör domänens rena JVM-tester (ingen Android SDK, #171) i samma anrop.
       # cpdCheck är copy-paste-detektorn (regel 4). androidTest-koden kompileras här så att ett
       # kompileringsfel syns innan emulatorn startar.
       - name: Kompilera och kör enhetstester och skärmdumpsjämförelse
         env:
           LC_ALL: C.UTF-8
           LANG: C.UTF-8
-        run: ./gradlew --continue :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck
+        run: ./gradlew --continue :core:test :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck
 
       - name: Upload test results
         if: always()
@@ -166,6 +171,7 @@ jobs:
         with:
           name: test-results
           path: |
+            core/build/reports/tests/test/
             app/build/reports/tests/testDebugUnitTest/
             build/reports/cpd/
           if-no-files-found: ignore

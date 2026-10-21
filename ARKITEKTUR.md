@@ -48,11 +48,23 @@ delar data och databasen ska nås från en Claude-session.
 
 ## Moduler och paket
 
-En modul, `:app`. Att flytta `domain/` till en ren JVM-modul `:core` som i ReseApoteket är #171.
+Två moduler, som i ReseApoteket (#171):
 
-Paket under `app/src/main/kotlin/se/partee71/fonder/`:
+- **`:core`** (`core/src/`) – ren Kotlin/JVM utan Android-, Room- eller Hilt-beroenden:
+  `domain/model` och de rena use casen i `domain/usecase`, med sina tester (`./gradlew :core:test`).
+- **`:app`** (`app/src/`) – Android-appen, med `implementation(project(":core"))`.
 
-Paket under `app/src/main/kotlin/se/partee71/fonder/`:
+Paketnamnen är oförändrade (`se.partee71.fonder.domain.…`). De use case som läser repositories,
+DataStore eller schemaläggaren ligger kvar i `:app` i samma paket `domain/usecase`, eftersom
+repository-gränssnitten finns i `data/`: `RecordTransaction`, `SwitchPlanInputs`,
+`TargetLevelPreselection`, `DismissedPlanSource`, `InProgressSwitches`, `SwitchTransitions` +
+`SwitchChoicesSource`, `SwitchQuestions` + `FollowedSuggestionLookup`, `PendingDecisionsSource`
+(med `PendingDecisions`/`OpenSwitchWatch` i samma fil), `SwitchRows` (bygger på `PendingDecisions`)
+och `FacitSummary`. Inget i `:core` beror på Room – Room-entiteterna står i `data/room` och mappas
+till domänmodellerna i repository-lagret. Nedan visas `domain/` samlat; vilken modul en fil ligger i
+står ovan.
+
+Paket under `se/partee71/fonder/` (`app/src/main/kotlin/…`, `domain/` delvis i `core/src/main/kotlin/…`):
 
 ```
 data/
@@ -292,10 +304,10 @@ versionen i tabellen.
 | AGP | 9.4.1 | inbyggt Kotlin-stöd – `org.jetbrains.kotlin.android` används inte |
 | Kotlin | 2.4.21 | `libs.versions.toml` |
 | KSP / Hilt | 2.3.12 / 2.60.1 | KAPT används inte |
-| Java | källa och mål 17, JDK 21 kör bygget | Robolectric kräver 21 för SDK 36 (`.github/actions/setup-android`) |
+| Java | källa och mål 17 för alla moduler (rotens `build.gradle.kts`, `subprojects {}`), JDK 21 kör bygget | Robolectric kräver 21 för SDK 36 (`.github/actions/setup-android`) |
 | Compose | BOM 2026.09.00, `material3` 1.5.0-beta01 | se Verifierade API:er |
 | Kontroller | Konsist (`UiConsistencyTest`), PMD CPD (`cpdCheck`), Spotless/ktlint lokalt | skill `shared-ui-components`, `ci-budget` |
-| Moduler | `:app` | `:core` är #171 |
+| Moduler | `:core` (Kotlin/JVM, plugins `kotlin.jvm` + `kotlin.serialization`), `:app` | `settings.gradle.kts`: `include(":core", ":app")`; #171 |
 | android-ui | `se.partee71.ui` 0.5.0 (`ui-components`, med `ui-theme` och `ui-common` transitivt; i test `ui-testing`) | Mats komponentbibliotek ([ParTee71/android-ui](https://github.com/ParTee71/android-ui)), delat med ReseApoteket och Dagboken. GitHub Packages kräver inloggning även för läsning: `GPR_USER`/`GPR_TOKEN` (classic token, `read:packages`) i sessionen; i CI sätter `setup-android` dem från `secrets.GPR_TOKEN`, annars `github.token` med `packages: read`. Temat (`AppTheme`, `Spacing`) sedan #172, listtillstånd och fel (`ListUiState`, `UiError`, `ErrorMapper`) sedan #173 |
 
 Övrig Gradle-uppsättning (plugins, KSP-inställningar, cache) står i skill `android-projekt` → Gradle.

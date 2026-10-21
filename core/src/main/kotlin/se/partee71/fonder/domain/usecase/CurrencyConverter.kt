@@ -21,8 +21,11 @@ object CurrencyConverter {
      * valutamarknaden var stängd men fonden ändå satte NAV) saknar egen notering. Då används
      * närmast föregående. Marginalen täcker en lång helg — bortom det är kursen för gammal
      * för att vara ärlig, och kursen hoppas hellre över.
+     *
+     * Publik (inte `internal`) sedan `:core` blev egen modul: `FundPriceRepository` i `:app`
+     * hämtar växelkurser med samma marginal.
      */
-    internal const val MAX_RATE_AGE_DAYS = 7L
+    const val MAX_RATE_AGE_DAYS = 7L
 
     /**
      * [prices] omräknade till kronor med [ratesByEpochDay] (`1 enhet = x SEK`).

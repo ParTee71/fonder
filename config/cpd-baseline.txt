@@ -23,8 +23,8 @@ app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/imports/ImportOrdersViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/portfolj/PortfoljViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/data/repository/IsPriceStaleTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
-app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioFeeCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
-app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | app/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
+core/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | core/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioFeeCalcTest.kt | core/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
+core/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioExposureCalcTest.kt | core/src/test/kotlin/se/partee71/fonder/domain/usecase/PortfolioRiskCalcTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/bytesfonster/SwitchWatchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
 app/src/test/kotlin/se/partee71/fonder/ui/facit/FacitViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/fondsok/FundSearchViewModelTest.kt | app/src/test/kotlin/se/partee71/fonder/ui/settings/SettingsViewModelTest.kt
