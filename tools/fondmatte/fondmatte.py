@@ -30,6 +30,7 @@ DAYS_PER_YEAR = 365.2425
 XIRR_DAYS_PER_YEAR = 365  # pyxirr DayCount.ACT_365F, samma som Excels XIRR
 ANNUALIZE_MIN_DAYS = 365
 MIN_WINDOW_COVERAGE = 0.6  # FundAnalysisCalc.MIN_WINDOW_COVERAGE: andel av 252 × år
+STALE_MARGIN_DAYS = 4  # FundAnalysisCalc.STALE_MARGIN_DAYS: längsta tillåtna ålder för slutkursen mot förväntad senaste NAV-dag
 MAX_NAV_GAP_DAYS = 5  # NavCalendar.MAX_NAV_GAP_DAYS: helg + helgdag, t.ex. påsk – periodstart, dagsavkastning och ankare
 MAX_WINDOW_GAP_DAYS = 31  # FundAnalysisCalc.MAX_WINDOW_GAP_DAYS: största glapp i riskfönstret
 RISK_WINDOW_YEARS = (3, 1)  # FundAnalysisCalc.RISK_WINDOW_YEARS, längsta först
@@ -270,13 +271,25 @@ def minus_months(day: date, months: int) -> date:
     return date(year, month, min(day.day, last))
 
 
+def is_stale_end(end_day: date, today: date) -> bool:
+    """Slutkursen är inaktuell när den är äldre än senaste förväntade NAV-dagen (NavCalendar.expectedLatestNavDay
+    före kl. 18: föregående vardag) minus STALE_MARGIN_DAYS (helgdagar, t.ex. jul och påsk)."""
+    expected = today - timedelta(days=1)
+    while expected.weekday() >= 5:
+        expected -= timedelta(days=1)
+    return (expected - end_day).days > STALE_MARGIN_DAYS
+
+
 def period_rows(transactions: list[Transaction], prices: Prices, fund: str, end: date) -> dict:
     """Periodraderna för ett innehav som appen visar dem (POR-5, ANA-1): `fraction` är fondens
     kursutveckling NAV mot NAV, `amount` värdeförändringen på ägda andelar (`value_change`), och
     för `since_purchase` positionens vinst mot anskaffningsvärdet med genomsnittsmetoden. Dag,
     vecka och månad ankras i senaste NAV-dag på eller före `end` och kräver en startkurs högst
-    fem dagar före måldagen (PortfolioPerformanceCalc); i år/3 mån/1 år/3 år räknas från `end`
-    (FundAnalysisCalc). None = otillräcklig historik."""
+    fem dagar före måldagen (PortfolioPerformanceCalc); i år/3 mån/1 år/3 år/sedan köp gäller samma
+    gräns för startkursen (FundAnalysisCalc, issue #198) och slutkursen är senaste NAV på eller före
+    `end`. En rad med data har `start_day`, `end_day` och `end_is_stale` (slutkursen äldre än
+    förväntad senaste NAV-dag minus STALE_MARGIN_DAYS, `is_stale_end`); `since_purchase` har också `cagr` mellan de två NAV-dagarna
+    (årstakt från ett år). None = otillräcklig historik."""
     own = [t for t in transactions if t.fund == fund]
     series = [(d, v) for d, v in prices.series.get(fund, []) if d <= end]
     if not series:
@@ -291,7 +304,13 @@ def period_rows(transactions: list[Transaction], prices: Prices, fund: str, end:
             return {"amount": amount, "fraction": None}
         if amount is None:
             amount = value_change(transactions, prices, fund, start_point[0], reference_day)
-        return {"amount": amount, "fraction": latest_nav / start_point[1] - 1.0}
+        return {
+            "amount": amount,
+            "fraction": latest_nav / start_point[1] - 1.0,
+            "start_day": start_point[0].isoformat(),
+            "end_day": reference_day.isoformat(),
+            "end_is_stale": is_stale_end(reference_day, end),
+        }
 
     # Positionens start: första köpet efter att innehavet senast var noll (POR-6).
     held: dict[str, float] = {}
@@ -304,14 +323,17 @@ def period_rows(transactions: list[Transaction], prices: Prices, fund: str, end:
         "day": row(reference_day - timedelta(days=1), max_gap_days=MAX_NAV_GAP_DAYS),
         "week": row(reference_day - timedelta(days=7), max_gap_days=MAX_NAV_GAP_DAYS),
         "month": row(reference_day - timedelta(days=30), max_gap_days=MAX_NAV_GAP_DAYS),
-        "ytd": row(date(end.year, 1, 1)),
-        "3m": row(minus_months(end, 3)),
-        "1y": row(minus_months(end, 12)),
-        "3y": row(minus_months(end, 36)),
+        "ytd": row(date(end.year, 1, 1), max_gap_days=MAX_NAV_GAP_DAYS),
+        "3m": row(minus_months(end, 3), max_gap_days=MAX_NAV_GAP_DAYS),
+        "1y": row(minus_months(end, 12), max_gap_days=MAX_NAV_GAP_DAYS),
+        "3y": row(minus_months(end, 36), max_gap_days=MAX_NAV_GAP_DAYS),
     }
     if position_start is not None and units > EPSILON:
         gain = units * latest_nav - _average_cost(transactions)[1].get(fund, 0.0)
-        rows["since_purchase"] = row(position_start, amount=gain)
+        rows["since_purchase"] = row(position_start, max_gap_days=MAX_NAV_GAP_DAYS, amount=gain)
+        sp = rows["since_purchase"]
+        if sp.get("fraction") is not None:
+            sp["cagr"] = annualized(sp["fraction"], (reference_day - date.fromisoformat(sp["start_day"])).days)
     return rows
 
 

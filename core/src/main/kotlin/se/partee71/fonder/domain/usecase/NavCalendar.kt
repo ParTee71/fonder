@@ -3,6 +3,7 @@ package se.partee71.fonder.domain.usecase
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import se.partee71.fonder.domain.model.FundPrice
 
 /**
  * Vilket datums fond-NAV vi **borde** ha, givet att en fond-NAV sätts högst en gång per
@@ -21,6 +22,22 @@ object NavCalendar {
      * beror troligen på att kurscachen saknar data, inte på stängda börsdagar.
      */
     internal const val MAX_NAV_GAP_DAYS = 5L
+
+    /** Senaste kurspunkten på eller före [epochDay]; null om ingen finns. Den enda uppslagsregeln för periodslut och referensdag. */
+    internal fun latestOnOrBefore(history: List<FundPrice>, epochDay: Long): FundPrice? {
+        var best: FundPrice? = null
+        for (price in history) {
+            if (price.epochDay <= epochDay && (best == null || price.epochDay > best.epochDay)) best = price
+        }
+        return best
+    }
+
+    /**
+     * Startkursen för en period som börjar [targetDay]: senaste kurs på eller före dagen, men bara
+     * om den ligger högst [MAX_NAV_GAP_DAYS] före (issue #35, #198) — annars null (otillräcklig
+     * data) i stället för en månader gammal kurs. Delas av [PortfolioPerformanceCalc] och [FundAnalysisCalc].
+     */
+    internal fun startPriceOnOrBefore(history: List<FundPrice>, targetDay: Long): FundPrice? = latestOnOrBefore(history, targetDay)?.takeIf { targetDay - it.epochDay <= MAX_NAV_GAP_DAYS }
 
     /**
      * Ungefärlig klockslag på kvällen då svenska fond-NAV:er brukar vara publicerade för

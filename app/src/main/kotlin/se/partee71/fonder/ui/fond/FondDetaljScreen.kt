@@ -564,7 +564,9 @@ private fun ComparisonChart(
  * ligger därför hopfälld.
  */
 @Composable
-private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
+internal fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modifier = Modifier) {
+    // CAGR, GAV och andel räknas mot senaste NAV: är den inaktuell anges datumet som på periodraderna (issue #198).
+    val currentNavAsOf = analysis.keyFigures.currentNavEpochDay.takeIf { analysis.keyFigures.currentNavIsStale }?.let { navAsOfLabel(it) }
     Column(modifier = modifier) {
         SignalExplanations(analysis = analysis)
         Column(modifier = Modifier.padding(top = Spacing.s)) {
@@ -582,12 +584,19 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                     PeriodRow(
                         label = periodLabel(periodReturn.period),
                         amount = periodReturn.amount,
-                        fraction = periodReturn.fraction
+                        fraction = periodReturn.fraction,
+                        // Slutkursen är äldre än några dagar: säg vilket datum procenten mäter till (ANA-1, issue #198).
+                        supportingLabel = periodReturn.endEpochDay?.takeIf { periodReturn.endIsStale }?.let { navAsOfLabel(it) }
                     )
                 }
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_cagr_explain)) {
-                PeriodRow(label = stringResource(R.string.analys_cagr_label), amount = null, fraction = analysis.keyFigures.cagr)
+                PeriodRow(
+                    label = stringResource(R.string.analys_cagr_label),
+                    amount = null,
+                    fraction = analysis.keyFigures.cagr,
+                    supportingLabel = currentNavAsOf
+                )
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_gav_explain)) {
                 // GAV per andel hör hemma i **etiketten**, inte i beloppsplatsen: den platsen
@@ -601,14 +610,16 @@ private fun AnalysisSection(analysis: FundAnalysisCalc.Analysis, modifier: Modif
                         MoneyFormat.kr(analysis.keyFigures.gavPerShare)
                     ),
                     amount = null,
-                    fraction = analysis.keyFigures.gavFraction
+                    fraction = analysis.keyFigures.gavFraction,
+                    supportingLabel = currentNavAsOf
                 )
             }
             ExpandableInfoRow(explanation = stringResource(R.string.analys_portfolio_share_explain)) {
                 PeriodRow(
                     label = stringResource(R.string.analys_portfolio_share_label),
                     amount = null,
-                    fraction = analysis.keyFigures.portfolioShareFraction
+                    fraction = analysis.keyFigures.portfolioShareFraction,
+                    supportingLabel = currentNavAsOf
                 )
             }
             // Fönstret måtten räknats på (3 eller 1 år, ANA-7) står i etiketten; utan fönster är
@@ -709,6 +720,9 @@ private fun AnalysisGlossary(modifier: Modifier = Modifier) {
         }
     }
 }
+
+@Composable
+private fun navAsOfLabel(epochDay: Long): String = stringResource(R.string.format_analys_period_as_of, LocalDate.ofEpochDay(epochDay).format(dateFormatter))
 
 @Composable
 private fun periodLabel(period: FundAnalysisCalc.Period): String = when (period) {

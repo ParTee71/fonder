@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.81.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.81.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.81.1 | Analysens periodrader mäter inte längre från en månader gammal startkurs: saknas kurs inom 5 dagar före periodens start visas otillräcklig data, en äldre slutkurs anges som "per ÅÅÅÅ-MM-DD" och CAGR räknas mellan de två kursdagarna (#198). |
 | 0.81.0 | Facit jämför sälj- och köpfonden på samma dag: varje förslag sparar dagen båda kurserna gäller och mäts till den senaste dag båda fonderna har en kurs ("mätt till ÅÅÅÅ-MM-DD · N dagar", annars "Ej utvärderad ännu"). Summeringen visar träffandel ("3 av 5 bättre") med kronsumman i stället för ett snitt över förslag med olika ålder, en ny del "Per horisont" (under 1 månad, 1–6 månader med median, över 6 månader i årstakt) och median per plats i planen. Databasversion 20 (#197). |
 | 0.80.1 | Volatilitet och Sharpe-kvot i Analys räknas nu i ett fast fönster: de senaste 3 åren av fondens kurshistorik, eller det senaste året om treårsfönstret är för kort, för glest (minst 60 % av handelsdagarna måste finnas) eller har hål över en månad – oavsett hur länge du ägt fonden – och fönstret står i etiketten ("Volatilitet (3 år)"). Luckor på mer än 5 dagar i kurshistoriken räknas inte längre som en enda dag, och Sharpe-kvotens avkastning är fondens totala kursutveckling i fönstret i årstakt, så att en rörelse över en lucka inte tappas. En fond med kortare kurshistorik än ett år hos källan visar "otillräcklig data" för volatilitet och Sharpe. En fond vars kurs inte rört sig visar Sharpe som "Ej definierad (ingen kursrörelse)". Analysens kurshistorik hämtas tre år och 45 dagar bakåt (tidigare 10 dagar), så att treårsfönstret ryms även när senaste kursen är några veckor gammal. Sharpe-förklaringen säger att riskfri ränta är satt till 0 % (#195). |
 | 0.80.0 | Säljsignalerna S1/S2, 200-dagarssnittet i Fonddetaljs diagram och riskmåtten räknas på fondens kurs upp till tre år bakåt, även för en fond köpt nyligen eller bara bevakad – tidigare gav en fond köpt för mindre än ~9,5 månader sedan "otillräcklig data" för S2 och ingen snittlinje. Periodraderna i Analys visar därmed fondens kursutveckling även för perioder som börjar före köpet, medan kronorna, "sedan köp", GAV och diagrammens "Allt" fortfarande utgår från köpet. Kurshistoriken hämtas en gång tre år bakåt per fond (ca 300 kB från fondlista), därefter bara de senaste 60 dagarna; en fond yngre än tre år hämtas helt högst en gång per appstart (#214). |
