@@ -149,6 +149,20 @@ class PortfolioTotalCalcTest {
     }
 
     @Test
+    fun `kop efter senaste kanda kurs dateras inte efter slutvardet`() {
+        // Fond G:s kurs är från dag 20420, men ett köp görs dag 20430: slutvärdet flyttas till
+        // köpdagen, annars hade köpet räknats som ett uttag efter slutet och sänkt XIRR.
+        val transactions = listOf(kop(global, 19968, 100.0, 100.0), kop(global, 20430, 10.0, 121.4917))
+        val enriched = holdings(listOf(global), transactions, 20420, exempelNav)
+
+        val withStaleNav = PortfolioTotalCalc.compute(transactions, enriched, valuationEpochDay = 20420)
+        val valuedOnBuyDay = PortfolioTotalCalc.compute(transactions, enriched, valuationEpochDay = 20430)
+
+        assertEquals(462L, withStaleNav.ageDays)
+        assertEquals(valuedOnBuyDay.moneyWeightedAnnualReturn!!, withStaleNav.moneyWeightedAnnualReturn!!, 1e-12)
+    }
+
+    @Test
     fun `xirr ar tio procent for 1000 in och 1100 ut efter 365 dagar`() {
         assertEquals(0.10, PortfolioTotalCalc.xirr(listOf(0L to -1000.0, 365L to 1100.0))!!, 1e-9)
     }

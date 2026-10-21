@@ -2,8 +2,10 @@ package se.partee71.fonder.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -97,6 +99,20 @@ class TotalCardTest {
         composeRule.onNodeWithText("Totalresultatet är dagens värde", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText("Vad räknas in?").performClick()
         composeRule.onNodeWithText("Totalresultatet är dagens värde", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `saknar bara nagot innehav kurs visas Kurs saknas annu pa totalresultat och arsavkastning`() {
+        composeRule.setContent {
+            FonderTheme {
+                TotalCard(totalValue = 60_000.0, totalInvested = 110_208.0, gainLoss = 2_000.0, gainLossFraction = 0.034, total = matureTotal.copy(partial = true, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null), navEpochDay = 20_742)
+            }
+        }
+
+        composeRule.onNodeWithText("Totalresultat").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Kurs saknas ännu").assertCountEquals(2)
+        composeRule.onNodeWithText("Otillräcklig data").assertDoesNotExist()
+        composeRule.onNodeWithText("Varav orealiserat").assertIsDisplayed()
     }
 
     @Test

@@ -37,14 +37,11 @@ import se.partee71.fonder.ui.components.ReminderRow
 import se.partee71.fonder.ui.components.ReminderRowTone
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.TotalCard
-import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.ChartValueAxis
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.theme.Filled
-import se.partee71.fonder.ui.theme.MonoAmountStyle
-import se.partee71.fonder.ui.theme.ReturnColors
 import se.partee71.fonder.ui.theme.nestedCardStyle
 import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.ButtonVariant

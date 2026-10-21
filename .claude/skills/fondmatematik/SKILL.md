@@ -21,7 +21,7 @@ i UI-texten. Kraven står i KRAVLISTA; vid skillnad gäller kravlistan, och skil
 | Standardavvikelse | urval, n − 1 | `FundAnalysisCalc.annualizedVolatility` |
 | Riskfri ränta | 0 % | `FundAnalysisCalc.RISK_FREE_RATE` |
 | Minsta underlag för volatilitet och Sharpe | 60 dagsavkastningar, annars `null`; volatilitet 0 → `0.0`, Sharpe och Sortino → `null` | `FundAnalysisCalc.MIN_RETURN_SAMPLES` |
-| Dagräkning för XIRR | ACT/365F (som Excel och pyxirr) | – (XIRR saknas än) |
+| Dagräkning för XIRR | ACT/365F (som Excel och pyxirr); löses med inringning + bisektion i [−99,99 %, +1 000 %] | `PortfolioTotalCalc.XIRR_DAYS_PER_YEAR`, `PortfolioTotalCalc.xirr` |
 | Dagsavkastning | `nav_t / nav_{t−1} − 1` mellan på varandra följande kända kurser, NAV ≤ 0 hoppas över | `FundAnalysisCalc.dailyReturns` |
 | Okänt värde | `null` och en räknare för det som uteslöts – aldrig noll eller en gissning | t.ex. `PortfolioFeeCalc.Result.unknownFeeCount` |
 
@@ -32,9 +32,9 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 | Mått | Definition | Svarar på | I appen |
 |---|---|---|---|
 | **Tidsviktad (TWR)** | Kedja av dagsfaktorer där gårdagens andelar värderas till gårdagens och dagens NAV; in- och utflöden faller ur | "Hur gick fonderna?" Jämförbart med faktablad och index | `PortfolioReturnSeriesCalc.compute` (HEM-9) |
-| **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | **Saknas** |
-| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande FIFO-lotter | Totalkortet i dag – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
-| Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" | **Saknas** (golden: `total_gain`) |
+| **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | `PortfolioTotalCalc.compute` → `moneyWeightedAnnualReturn` (HEM-1, årstakt bara ≥ 365 dagar) |
+| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande FIFO-lotter | Totalkortets rad "Varav orealiserat" – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
+| Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" Totalkortets huvudtal | `PortfolioTotalCalc.compute` → `totalGainKr`/`totalGainFraction` (golden: `total_gain`) |
 | Periodförändring | NAV på referensdagen mot NAV `n` dagar före, ingen kassaflödesjustering | Dag/vecka/månad | `PortfolioPerformanceCalc` |
 | Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
 

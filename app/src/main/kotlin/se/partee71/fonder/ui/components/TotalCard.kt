@@ -24,8 +24,10 @@ import se.partee71.ui.components.AppCard
  * Årsavkastningen visas först när portföljen är minst ett år gammal ([PortfolioTotalCalc.ANNUALIZE_MIN_DAYS])
  * — dessförinnan texten "Visas efter ett år", aldrig en årstakt extrapolerad ur några månader.
  *
- * Saknar något innehav kurs visas nettoinvesterat och "Kurs saknas ännu" i stället för ett
- * felaktigt värde (POR-3) — [gainLossFraction] är då null och [total] är partiell.
+ * Saknar **alla** innehav kurs visas nettoinvesterat och "Kurs saknas ännu" i stället för ett
+ * felaktigt värde (POR-3) — [gainLossFraction] är då null. Saknar bara **något** innehav kurs
+ * räknas orealiserat på de kända (som förut), men totalresultat och årsavkastning gäller hela
+ * portföljen och visar då "Kurs saknas ännu" i stället för tal ([total] är partiell).
  *
  * @param gainLoss orealiserat resultat på kvarvarande andelar ([se.partee71.fonder.domain.usecase.PortfolioCalc.totalGainLoss]).
  * @param total totalresultat och pengaviktad avkastning över alla transaktioner, även helt sålda fonder.
@@ -47,18 +49,20 @@ fun TotalCard(
             working = working
         )
         if (gainLossFraction != null) {
+            val priceMissing = if (total.partial) stringResource(R.string.portfolj_price_missing) else null
             Text(MoneyFormat.kr(totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
             PeriodRow(
                 label = stringResource(R.string.total_result),
                 amount = total.totalGainKr,
                 fraction = total.totalGainFraction,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 4.dp),
+                insufficientText = priceMissing
             )
             PeriodRow(
                 label = stringResource(R.string.total_money_weighted_return),
                 amount = null,
                 fraction = total.moneyWeightedAnnualReturn,
-                insufficientText = if (total.youngerThanYear) stringResource(R.string.total_shown_after_a_year) else null
+                insufficientText = priceMissing ?: if (total.youngerThanYear) stringResource(R.string.total_shown_after_a_year) else null
             )
             PeriodRow(
                 label = stringResource(R.string.total_unrealized),

@@ -64,9 +64,12 @@ object PortfolioTotalCalc {
      * @param transactions alla transaktioner, även för helt avsålda fonder — deras sälj är uttag.
      * @param holdings kvarvarande innehav med [Holding.currentValue] satt där kurs finns
      *   ([PortfolioCalc.withCurrentValue]).
-     * @param valuationEpochDay dagen slutvärdet avser (XIRR:s sista kassaflöde), normalt den
-     *   senaste kända NAV-dagen bland innehaven; null när inget innehav finns (allt sålt), då
-     *   avslutas kassaflödena på sista transaktionsdagen med värdet 0.
+     * @param valuationEpochDay dagen slutvärdet avser — i appen samma dag som "Värde per"
+     *   ([PortfolioCalc.oldestKnownNavEpochDay], POR-7); null när inget innehav finns (allt sålt).
+     *   XIRR:s sista kassaflöde dateras på den senare av den dagen och sista transaktionsdagen,
+     *   så att ett köp gjort efter en fonds senaste kända kurs aldrig hamnar *efter* slutvärdet
+     *   (det vore ett uttag som värdet redan innehåller). Är inget innehav kvar avslutas
+     *   kassaflödena på sista transaktionsdagen med värdet 0.
      */
     fun compute(transactions: List<Transaction>, holdings: List<Holding>, valuationEpochDay: Long?): Result {
         if (transactions.isEmpty()) return Result.EMPTY
@@ -77,11 +80,11 @@ object PortfolioTotalCalc {
         val partial = holdings.any { it.currentValue == null }
         if (partial) return Result(netDepositsKr = netDeposits, totalGainKr = null, totalGainFraction = null, moneyWeightedAnnualReturn = null, partial = true, ageDays = ageDays)
 
-        val value = holdings.sumOf { it.currentValue ?: 0.0 }
+        val value = PortfolioCalc.totalValue(holdings)
         val gain = value - netDeposits
         val fraction = if (netDeposits > 0.0) gain / netDeposits else null
 
-        val flows = transactions.map { it.epochDay to it.signedCashFlow() } + ((valuationEpochDay ?: lastDay) to value)
+        val flows = transactions.map { it.epochDay to it.signedCashFlow() } + (lastDay to value)
         return Result(
             netDepositsKr = netDeposits,
             totalGainKr = gain,
@@ -106,7 +109,9 @@ object PortfolioTotalCalc {
      * Löses med inringning och bisektion i stället för Newton: extrema flöden kan ge flera eller
      * inga lösningar, och en ren Newton kan då divergera eller hitta en rot utanför det rimliga
      * (skill `fondmatematik`). Bisektionen är deterministisk och konvergerar till under 1e-12 på
-     * de iterationer som görs här.
+     * de iterationer som görs här. Har ekvationen flera rötter i intervallet (kräver flera
+     * teckenbyten i flödena *och* extrema belopp) returneras den som inringningen råkar fånga —
+     * samma beteende som Excel och pyxirr, och ingen verklig fondportfölj har uppvisat det.
      */
     fun xirr(flows: List<Pair<Long, Double>>): Double? {
         if (flows.isEmpty()) return null
