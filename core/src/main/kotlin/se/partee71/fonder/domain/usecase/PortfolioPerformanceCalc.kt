@@ -3,6 +3,7 @@ package se.partee71.fonder.domain.usecase
 import java.time.LocalDate
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.Transaction
 
 /**
  * Beräknar hur portföljens värde förändrats över korta perioder (dag/vecka/månad), utöver
@@ -12,9 +13,12 @@ import se.partee71.fonder.domain.model.Holding
  * beräkningsbar även innan dagens NAV publicerats eller för fonder vars NAV släpar (t.ex.
  * utländska fonder som rapporterar med några dagars fördröjning) — då visas den senaste
  * faktiska dagsrörelsen i stället för en tom "Kurs ej uppdaterad"-rad. Hur färsk referensdagen
- * är kommuniceras separat via "Värde per \<datum\>" (POR-7). Det är ett enkelt marknadsvärde-mått,
- * inte en kassaflödesjusterad avkastning (TWR/MWR) — köp/sälj inom perioden påverkar inte
- * beräkningen, bara prisrörelsen gör.
+ * är kommuniceras separat via "Värde per \<datum\>" (POR-7).
+ *
+ * Procenten är fondens kursutveckling under perioden (NAV mot NAV) och påverkas inte av köp/sälj.
+ * Kronorna är värdeförändringen på de andelar som faktiskt ägts, dag för dag
+ * ([PositionValueChangeCalc], issue #193) — tidigare räknades de som kursrörelsen × dagens
+ * andelar, så andelar köpta mitt i perioden fick "avkastning" från dagar innan de köptes.
  */
 object PortfolioPerformanceCalc {
 
@@ -41,6 +45,7 @@ object PortfolioPerformanceCalc {
      *   (t.ex. en nyligen tillagd fond), eller ingen kurs finns alls. Vi gissar då aldrig ett `0`.
      */
     sealed interface PeriodResult {
+        /** [amount] = värdeförändring på de andelar som ägts (kr), [fraction] = fondens kursutveckling. */
         data class Available(val amount: Double, val fraction: Double?) : PeriodResult
         data object InsufficientHistory : PeriodResult
     }
@@ -57,43 +62,71 @@ object PortfolioPerformanceCalc {
     /** Dag/vecka/månad-förändring för hela portföljen, se [totalChange]. */
     data class PortfolioPerformance(val day: PortfolioPeriodResult, val week: PortfolioPeriodResult, val month: PortfolioPeriodResult)
 
+    /** Periodens fönster: referensdagen (senaste NAV på eller före idag) och kursen vid periodens start. */
+    private data class Window(val referenceDay: Long, val historicalPrice: FundPrice)
+
+    /**
+     * Referensdagen är den senaste NAV-dagen på eller före [today] i [history] (så en hypotetisk
+     * framtida punkt aldrig råkar bli referens). Null om historiken inte når [Period.days] dagar
+     * före referensdagen, om närmaste kurs ligger mer än [MAX_PRICE_GAP_DAYS] före måldagen, eller
+     * om ingen kurs finns alls.
+     */
+    private fun window(period: Period, today: LocalDate, history: List<FundPrice>): Window? {
+        val todayEpochDay = today.toEpochDay()
+        val referenceDay = history.filter { it.epochDay <= todayEpochDay }.maxOfOrNull { it.epochDay } ?: return null
+        val targetDay = referenceDay - period.days
+        val historicalPrice = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay } ?: return null
+        if (targetDay - historicalPrice.epochDay > MAX_PRICE_GAP_DAYS) return null
+        return Window(referenceDay, historicalPrice)
+    }
+
     /**
      * Förändring för ett innehav över perioden, förankrad i den senaste kända NAV-dagen.
      *
      * Null bara om innehavet helt saknar känd kurs ([Holding.currentValue] null) — samma
      * "kurs saknas ännu"-markering äger den vyn redan (POR-3), perioden ska inte dubblera den.
      *
-     * Referensdagen är den senaste NAV-dagen på eller före [today] i [history] (så en hypotetisk
-     * framtida punkt aldrig råkar bli referens). "En dag" blir då den senaste faktiska
-     * dagsrörelsen (referensdagen mot dagen före), oberoende av klockslag eller om fondens NAV
-     * släpar — inte tomt tills dagens NAV publicerats (tidigare krävdes en kurs daterad *idag*,
-     * vilket gjorde raden tom hela dagen och för eftersläpande utländska fonder). [PeriodResult.InsufficientHistory]
-     * om historiken inte når [Period.days] dagar före referensdagen, eller om ingen kurs finns alls
-     * — aldrig ett gissat `0` (issue #18).
+     * "En dag" blir den senaste faktiska dagsrörelsen (referensdagen mot dagen före), oberoende
+     * av klockslag eller om fondens NAV släpar — inte tomt tills dagens NAV publicerats (tidigare
+     * krävdes en kurs daterad *idag*, vilket gjorde raden tom hela dagen och för eftersläpande
+     * utländska fonder). [PeriodResult.InsufficientHistory] om historiken inte når [Period.days]
+     * dagar före referensdagen, eller om ingen kurs finns alls — aldrig ett gissat `0` (issue #18).
+     *
+     * @param transactions fondens transaktioner — avgör hur många andelar som ägts varje dag i
+     *   perioden ([PositionValueChangeCalc]); procenten behöver dem inte.
      */
-    fun holdingChange(holding: Holding, period: Period, today: LocalDate, history: List<FundPrice>): PeriodResult? {
+    fun holdingChange(holding: Holding, transactions: List<Transaction>, period: Period, today: LocalDate, history: List<FundPrice>): PeriodResult? {
         val currentValue = holding.currentValue ?: return null
-        val todayEpochDay = today.toEpochDay()
+        val computed = compute(currentValue, holding, transactions, period, today, history) ?: return PeriodResult.InsufficientHistory
+        return PeriodResult.Available(amount = computed.amount, fraction = computed.fraction)
+    }
 
-        // Senaste kända NAV-dag på eller före idag — periodens slutpunkt (referensdag).
-        val referenceDay = history.filter { it.epochDay <= todayEpochDay }.maxOfOrNull { it.epochDay }
-            ?: return PeriodResult.InsufficientHistory
-        val targetDay = referenceDay - period.days
+    /** Ett innehavs periodsiffror: [amount] i kr på ägda andelar, kursutvecklingen som [priceChange] mot [historicalValue] (dagens andelar × startkurs). */
+    private class Computed(val amount: Double, val priceChange: Double, val historicalValue: Double) {
+        val fraction: Double get() = priceChange / historicalValue
+    }
 
-        val historicalPrice = history.filter { it.epochDay <= targetDay }.maxByOrNull { it.epochDay }
-            ?: return PeriodResult.InsufficientHistory
-        if (targetDay - historicalPrice.epochDay > MAX_PRICE_GAP_DAYS) return PeriodResult.InsufficientHistory
-        val historicalValue = holding.netShares * historicalPrice.nav
-        if (historicalValue == 0.0) return PeriodResult.InsufficientHistory
-        val amount = currentValue - historicalValue
-        return PeriodResult.Available(amount = amount, fraction = amount / historicalValue)
+    /** Null = otillräcklig historik för perioden (se [window]), eller ett startvärde på 0 som inget går att mäta mot. */
+    private fun compute(
+        currentValue: Double,
+        holding: Holding,
+        transactions: List<Transaction>,
+        period: Period,
+        today: LocalDate,
+        history: List<FundPrice>
+    ): Computed? {
+        val window = window(period, today, history) ?: return null
+        val historicalValue = holding.netShares * window.historicalPrice.nav
+        if (historicalValue == 0.0) return null
+        val amount = PositionValueChangeCalc.valueChange(transactions, history, window.historicalPrice.epochDay, window.referenceDay) ?: return null
+        return Computed(amount = amount, priceChange = currentValue - historicalValue, historicalValue = historicalValue)
     }
 
     /** [holdingChange] för dag/vecka/månad i ett svep. */
-    fun holdingPerformance(holding: Holding, today: LocalDate, history: List<FundPrice>): HoldingPerformance = HoldingPerformance(
-        day = holdingChange(holding, Period.DAG, today, history),
-        week = holdingChange(holding, Period.VECKA, today, history),
-        month = holdingChange(holding, Period.MANAD, today, history)
+    fun holdingPerformance(holding: Holding, transactions: List<Transaction>, today: LocalDate, history: List<FundPrice>): HoldingPerformance = HoldingPerformance(
+        day = holdingChange(holding, transactions, Period.DAG, today, history),
+        week = holdingChange(holding, transactions, Period.VECKA, today, history),
+        month = holdingChange(holding, transactions, Period.MANAD, today, history)
     )
 
     /**
@@ -103,48 +136,53 @@ object PortfolioPerformanceCalc {
      * hela totalen eller låtsas att alla fonder är med. Innehav utan känd kurs alls hoppas tyst
      * över precis som i [PortfolioCalc] (POR-3 har redan en egen "kurs saknas"-markering för dem).
      *
+     * Kronorna är summan av innehavens värdeförändring på ägda andelar; procenten är fondernas
+     * kursutveckling vägd med värdet vid periodens start (dagens andelar × startkurs) — ett köp
+     * inom perioden ändrar alltså kronorna men inte procenten.
+     *
      * Om *inget* innehav kunde beräknas returneras [PortfolioPeriodResult.InsufficientHistory].
      */
     fun totalChange(
         holdings: List<Holding>,
+        transactionsByFundId: Map<String, List<Transaction>>,
         period: Period,
         today: LocalDate,
         historyByFundId: Map<String, List<FundPrice>>
     ): PortfolioPeriodResult {
         var sumAmount = 0.0
+        var sumPriceChange = 0.0
         var sumHistoricalValue = 0.0
         var partial = false
         var anyComputed = false
 
         for (holding in holdings) {
             val currentValue = holding.currentValue ?: continue
-            val history = historyByFundId[holding.fund.fundId].orEmpty()
-            when (val change = holdingChange(holding, period, today, history)) {
-                is PeriodResult.Available -> {
-                    anyComputed = true
-                    sumAmount += change.amount
-                    sumHistoricalValue += currentValue - change.amount
-                }
-
-                PeriodResult.InsufficientHistory -> partial = true
-
-                null -> Unit // ovnåbart — currentValue != null redan säkerställt ovan.
+            val fundId = holding.fund.fundId
+            val computed = compute(currentValue, holding, transactionsByFundId[fundId].orEmpty(), period, today, historyByFundId[fundId].orEmpty())
+            if (computed == null) {
+                partial = true
+                continue
             }
+            anyComputed = true
+            sumAmount += computed.amount
+            sumPriceChange += computed.priceChange
+            sumHistoricalValue += computed.historicalValue
         }
 
         if (!anyComputed) return PortfolioPeriodResult.InsufficientHistory
-        val fraction = if (sumHistoricalValue != 0.0) sumAmount / sumHistoricalValue else null
+        val fraction = if (sumHistoricalValue != 0.0) sumPriceChange / sumHistoricalValue else null
         return PortfolioPeriodResult.Available(amount = sumAmount, fraction = fraction, partial = partial)
     }
 
     /** [totalChange] för dag/vecka/månad i ett svep. */
     fun totalPerformance(
         holdings: List<Holding>,
+        transactionsByFundId: Map<String, List<Transaction>>,
         today: LocalDate,
         historyByFundId: Map<String, List<FundPrice>>
     ): PortfolioPerformance = PortfolioPerformance(
-        day = totalChange(holdings, Period.DAG, today, historyByFundId),
-        week = totalChange(holdings, Period.VECKA, today, historyByFundId),
-        month = totalChange(holdings, Period.MANAD, today, historyByFundId)
+        day = totalChange(holdings, transactionsByFundId, Period.DAG, today, historyByFundId),
+        week = totalChange(holdings, transactionsByFundId, Period.VECKA, today, historyByFundId),
+        month = totalChange(holdings, transactionsByFundId, Period.MANAD, today, historyByFundId)
     )
 }

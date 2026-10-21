@@ -214,13 +214,14 @@ class PortfoljViewModel @Inject constructor(
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched)
                 val today = LocalDate.now()
+                val transactionsByFundId = transactions.groupBy { it.fundId }
                 val performance = enriched.associate { holding ->
                     val history = fundPriceRepository.priceHistory(
                         fundId = holding.fund.fundId,
                         fromEpochDay = today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS).toEpochDay(),
                         toEpochDay = today.toEpochDay()
                     )
-                    holding.fund.fundId to PortfolioPerformanceCalc.holdingPerformance(holding, today, history)
+                    holding.fund.fundId to PortfolioPerformanceCalc.holdingPerformance(holding, transactionsByFundId[holding.fund.fundId].orEmpty(), today, history)
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 PortfoljUiState(
@@ -277,7 +278,7 @@ class PortfoljViewModel @Inject constructor(
             holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since, today.toEpochDay())
         }
 
-        return FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId)
+        return FundAnalysisCalc.analyzeAll(today, enriched, transactions.groupBy { it.fundId }, historyByFundId)
     }
 
     fun onEvent(event: PortfoljEvent) {
