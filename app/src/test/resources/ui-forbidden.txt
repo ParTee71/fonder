@@ -49,6 +49,7 @@
 \b(Horizontal|Vertical)FloatingToolbar\s*[({]	AppFloatingToolbar
 \b[A-Za-z]*FloatingActionButton(Menu|MenuItem)?\s*[({]	AppFabMenu
 \b(CenterAligned|Medium|Large)?(Flexible)?TopAppBar\s*[({]	AppTopBar / AppTabHeading
+\b(Horizontal|Vertical)?Divider\s*[({]	AppDivider (android-ui)
 
 [component-only]
 \bPullToRefreshBox\b	PullToRefreshContainer

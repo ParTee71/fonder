@@ -243,7 +243,8 @@ class AppNavigationShellTest {
         composeRule.onNodeWithText("öppna fond").performClick()
 
         assertOnScreen("fond/$FUND_ID")
-        composeRule.onNodeWithText("Fond").assertIsDisplayed()
+        // Fonddetalj är en ramskärm: namnet står i detaljramens topprad, skalet ritar ingen rubrik (NAV-2).
+        composeRule.onAllNodesWithText("Fond").assertCountEquals(0)
         assertTabChrome(visible = false)
         pressBack()
         assertOnScreen("portfolj")

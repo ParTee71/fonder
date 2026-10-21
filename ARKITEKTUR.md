@@ -119,7 +119,7 @@ ui/
 ├── portfolj/     PortfoljScreen + ViewModel (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66)
 ├── transaktioner/TransaktionerScreen + ViewModel (fliken Händelser: filter Alla/Köp/Sälj, årets realiserade
 │                 resultat, sälj med realiserat resultat per rad, #10) · TransactionFormScreen (EntityEditScreen) + ViewModel (registrera köp/sälj, avgift, sälj alla, UI-15)
-├── fond/         FondDetaljScreen + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
+├── fond/         FondDetaljScreen (EntityDetailScreen) + ViewModel (bytesbeslut överst: bytesplan + billigare alternativ med
 │                 jämförelsediagram, ANA-10/ANA-11/#85 · kurshistorik i diagram sedan första köpet, #7, med 200-dagarssnitt, ANA-14 ·
 │                 hopfälld Analys-sektion med nyckeltal/säljsignaler, #16 · billigare alternativ, ANA-9/#59)
 ├── fondsok/      FundSearchScreen + ViewModel (sök hela plattformens katalog, filtrera per fondbolag via källan, lägg till fond)
@@ -177,7 +177,10 @@ ViewModelns `RetrySignal` och `restartOn` efter felfångsten, #174) – Händels
 Detaljskärmarna (Översikt, Fonddetalj, Pågående byte) har det lästa som ett `DetailUiState<T>`-fält
 (`HemPortfolio`, `FundDetail`, `SwitchWatchDetail`) bredvid körstatus, förslag och engångshändelser;
 `catchAsDetailError` sist i flödet gör ett fel i källan till `DetailUiState.Error`, och skärmen visar
-felet (`LoadErrorState` med Försök igen på Översikt och Fonddetalj) före allt annat. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
+felet (`LoadErrorState` med Försök igen på Översikt) före allt annat. Fonddetalj står på android-ui:s detaljram
+`EntityDetailScreen` (`FondDetaljKey` är en `FrameKey`): fältet `fund` är ramens tillstånd – laddning, läsfel med
+Försök igen och en fond som inte finns längre (`DataError.NotFound`, utan knapp) – och fondnamnet står i ramens
+lilla topprad. Getters (`content`, `loading`, `error`) håller skärmkoden enkel;
 `content` är ett standardvärde bara för de grenar som aldrig nås vid fel. En bevakning som inte finns
 blir `DataError.NotFound` med Pågående bytes egen text. Riskprofilen och transaktionsformuläret går via `EditorState` +
 `EditorLoader` och visas i android-ui:s `EntityEditScreen` (läsfel med Försök igen, sparfel som snackbar, "Släng ändringar?", UI-15). Inloggningens, backupens och Drive-svarens fel (`SignInException.Reason`,

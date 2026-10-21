@@ -104,12 +104,13 @@ class AppNavigationTest {
             composeRule.onNodeWithTag(PORTFOLJ_LIST_TEST_TAG).performScrollToNode(hasText(FUND_NAME))
             composeRule.onAllNodesWithText(FUND_NAME).onFirst().performClick()
 
-            // Fonddetalj med topprad och bakåtpil. När övergången är klar är Innehav borta, så
-            // fondens namn kommer från FondDetaljViewModel – som fick fundId ur nyckeln.
+            // Fonddetalj på detaljramen: liten topprad med bakåtpil och fondens namn (NAV-2). När
+            // övergången är klar är Innehav borta, så namnet i toppraden kommer från
+            // FondDetaljViewModel – som fick fundId ur nyckeln.
             waitFor(hasContentDescription("Tillbaka"))
             composeRule.waitForIdle()
-            composeRule.onNodeWithText("Fond").assertExists()
             waitFor(hasText(FUND_NAME))
+            composeRule.onNodeWithText("Fond").assertDoesNotExist()
             composeRule.onNodeWithContentDescription("Tillbaka").performClick()
 
             waitFor(hasContentDescription("Innehav"))

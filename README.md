@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.77.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.78.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.78.0 | Fonddetalj på android-ui:s detaljram (#174): fondens namn står i den lilla toppraden, laddningen visas mitt på skärmen och ett läsfel har "Försök igen"; en fond som inte finns längre sägs ut. Avsnitten står 12 dp isär, "Ska du byta?" är en avsnittsrubrik i 20 sp och grupprubrikerna i versaler. |
 | 0.77.0 | Knappar, kort, rader och avsnittsrubriker från android-ui 0.8.0 (#174): Fonders egna AppButton, AppCard, ItemRow och StateChip är borta. Besluts rader har rubriken i 16 sp och chipet med ursprunget ovanför, profilraden står på två rader, avsnittsrubrikerna är 20 sp med antalet i en pill och Facit-raden har en pil; Inställningars kortrubriker är 16 sp. Översiktens kugghjul är 48 dp. |
 | 0.76.0 | Fälten och dialogerna från android-ui 0.7.0 (#174): textfälten har kortets yta och ljusare kontur, datum visas som "tis 20 okt 2026" och väljs i Material 3-datumväljaren, dialogerna har 18 dp hörn och ljusare yta, och strömbrytaren *Bara indexfonder* har bibliotekets rad. Riskprofilens andelsfält har etiketten "Andel" (UI-13). |
 | 0.75.0 | Listorna på android-ui 0.7.0 (#174): Händelser och Fondsök står på listramen – Händelser med stor rubrik som fälls ihop, filtret och resultatkortet kvar, Fondsök med fälten fasta och träffarna i ett kort. Läsfel på Händelser, Innehav, Beslut, Facit, Fondsök, Fonddetalj och Översikt har "Försök igen". Tomma Översikten, Innehav och Händelser har knappar till fondsöken, transaktionsformuläret, importerna och säkerhetskopian. Bakåtpilen följer temat. |

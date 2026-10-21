@@ -1,14 +1,11 @@
 package se.partee71.fonder.ui.fond
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,8 +20,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -36,11 +31,9 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.components.AnalysisGuidanceCard
 import se.partee71.fonder.ui.components.AnalysisStatusBanner
-import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableInfoRow
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.PeriodRow
-import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.WorkingIndicator
@@ -48,10 +41,14 @@ import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.ui.components.AppButton
+import se.partee71.ui.components.AppDivider
 import se.partee71.ui.components.AppTextField
 import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.EmptyState
-import se.partee71.ui.components.LoadErrorState
+import se.partee71.ui.components.EntityDetailScreen
+import se.partee71.ui.components.GroupLabel
+import se.partee71.ui.components.ItemRowText
+import se.partee71.ui.components.SectionHeader
 import se.partee71.ui.theme.Spacing
 
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -68,10 +65,15 @@ private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
  * och ordlistan (ANA-6) — ligger i hopfällda sektioner: det är underlag man slår upp, inte det
  * man öppnar kortet för. Saknar fonden ISIN visas fältet för att ange/bekräfta det (förifyllt
  * med ett namnbaserat förslag om ett hittades), se KRAVLISTA TP-14.
+ *
+ * Skärmen står på android-ui:s detaljram (`EntityDetailScreen`, nyckeln är en `FrameKey`): liten
+ * topprad med fondens namn och bakåtpil; laddning, läsfel med "Försök igen" och "finns inte längre"
+ * är ramens lägen (NFR-6), och dra ned hämtar om kursen (UI-11).
  */
 @Composable
 fun FondDetaljScreen(
     fundId: String,
+    onBack: () -> Unit,
     onOpenSwitchWatch: (Long) -> Unit,
     onOpenTransactionForm: (TransactionFormKey) -> Unit,
     modifier: Modifier = Modifier,
@@ -91,6 +93,7 @@ fun FondDetaljScreen(
 
     FondDetaljContent(
         state = state,
+        onBack = onBack,
         onRefresh = viewModel::refresh,
         onIsinConfirmed = viewModel::onIsinConfirmed,
         onSuggestionExpanded = viewModel::onSuggestionExpanded,
@@ -102,10 +105,15 @@ fun FondDetaljScreen(
     )
 }
 
-/** Tillståndsdriven, testbar del av [FondDetaljScreen] — inget ViewModel/Hilt-beroende (issue #16). */
+/**
+ * Tillståndsdriven, testbar del av [FondDetaljScreen] — inget ViewModel/Hilt-beroende (issue #16).
+ * Detaljramen ritar toppraden (fondens namn, "Fond" tills det lästs) och lägena laddning, läsfel och
+ * "finns inte längre" ur [FondDetaljUiState.fund] (NFR-6); innehållet är sektioner 12 dp isär.
+ */
 @Composable
 fun FondDetaljContent(
     state: FondDetaljUiState,
+    onBack: () -> Unit = {},
     onRefresh: () -> Unit = {},
     onIsinConfirmed: (String) -> Unit = {},
     onSuggestionExpanded: (String) -> Unit = {},
@@ -115,132 +123,130 @@ fun FondDetaljContent(
     modifier: Modifier = Modifier,
     onRetry: () -> Unit = {}
 ) {
-    val error = state.error
-    val content = state.content
-    when {
-        // Ett läsfel visas i stället för fonden, aldrig en tom fond – med "Försök igen" (NFR-6).
-        error != null -> CenteredState(modifier) { LoadErrorState(stringResource(R.string.error_load_title), error, onRetry) }
-
-        state.isEmpty -> CenteredState(modifier) {
+    EntityDetailScreen(
+        state = state.fund,
+        // Inget centrerat huvud: namnet står i den lilla toppraden, och märkningarna (status,
+        // risknivå, väntesnurra) vänsterställda överst i innehållet.
+        header = null,
+        onBack = onBack,
+        title = state.content.fundName ?: stringResource(R.string.fond_title),
+        onRetry = onRetry,
+        sectionGap = Spacing.m,
+        // Dra ned hämtar om fondens kurs och historik (UI-11) — samma kodväg som skärmöppningen,
+        // se FondDetaljViewModel.refresh.
+        refreshing = state.priceRefreshing,
+        onRefresh = onRefresh,
+        // Skalet lägger ingen imePadding runt en ramskärm, och detaljramen (till skillnad från
+        // redigeringsramen) har ingen egen – utan den hamnade tangentbordet över ISIN-fältet (issue #78).
+        modifier = modifier.imePadding()
+    ) { fund ->
+        if (fund.prices.isEmpty()) {
             EmptyState(
                 icon = R.drawable.ic_chart,
-                title = content.fundName ?: stringResource(R.string.fond_title),
+                // Egen rubrik – fondens namn står redan i toppraden.
+                title = stringResource(R.string.fond_history_empty_title),
                 message = stringResource(R.string.fond_history_empty_body)
             )
-        }
-
-        // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här är en ren
-        // omvändning + mappning — men utan remember kördes den vid varje recomposition, och
-        // eftersom listans identitet då ändrades triggades hela Vico-kedjan (periodfilter,
-        // LaunchedEffect, ny transaktion) på nytt vid varje kurstick. En backfillad fond har
-        // flera tusen punkter (issue #78).
-        else -> {
-            val chartPoints = remember(content.prices) {
-                content.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
-            }
-            // Ett enda `item`, inte ett per sektion: utan kurstabellen finns inga lazy rader kvar
-            // att vinna något på, och en icke-komponerad sektion hade gjort resten av kortet
-            // onåbart för `performScrollTo` i instrumenttesterna. LazyColumn behålls för att vyn
-            // ska vara skrollbar (UI-5).
-            // Dra ned hämtar om fondens kurs och historik (UI-11) — samma kodväg som
-            // skärmöppningen använder, se FondDetaljViewModel.refresh.
-            PullToRefreshContainer(
-                refreshing = state.priceRefreshing,
-                onRefresh = onRefresh,
-                modifier = modifier
-            ) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    item {
-                        Column(modifier = Modifier.padding(horizontal = Spacing.l)) {
-                            FundHeader(state = state, modifier = Modifier.padding(top = Spacing.l))
-                            if (content.analysis != null) {
-                                AnalysisStatusBanner(analysis = content.analysis, modifier = Modifier.padding(top = Spacing.m))
-                                AnalysisGuidanceCard(analysis = content.analysis, modifier = Modifier.padding(top = Spacing.s))
-                            }
-                            SwitchDecisionSection(
-                                state = state,
-                                chartPoints = chartPoints,
-                                onSuggestionExpanded = onSuggestionExpanded,
-                                onFollow = onFollow,
-                                onFollowFee = onFollowFee,
-                                onStartSwitchWatch = onStartSwitchWatch,
-                                modifier = Modifier.padding(vertical = Spacing.l)
-                            )
-                            HorizontalDivider()
-                            FundLineChart(
-                                points = chartPoints,
-                                purchaseEpochDays = content.purchaseEpochDays,
-                                movingAverage = content.movingAverage,
-                                working = state.chartWorking,
-                                modifier = Modifier.padding(top = Spacing.l)
-                            )
-                            // Allt förklarande material ligger hopfällt (ANA-10): analysen och
-                            // ordlistan är referens man slår upp, inte det man öppnar kortet för.
-                            if (content.analysis != null) {
-                                ExpandableSection(
-                                    title = stringResource(R.string.analys_section_title),
-                                    modifier = Modifier.padding(top = Spacing.s)
-                                ) {
-                                    AnalysisSection(analysis = content.analysis)
-                                }
-                            }
-                            ExpandableSection(
-                                title = stringResource(R.string.analys_glossary_title),
-                                modifier = Modifier.padding(top = Spacing.s)
-                            ) {
-                                AnalysisGlossary()
-                            }
-                            if (content.isin == null) {
-                                IsinInput(
-                                    suggestedIsin = content.suggestedIsin,
-                                    onConfirm = onIsinConfirmed,
-                                    modifier = Modifier.padding(vertical = Spacing.l)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+        } else {
+            FondDetaljSections(
+                state = state,
+                fund = fund,
+                onIsinConfirmed = onIsinConfirmed,
+                onSuggestionExpanded = onSuggestionExpanded,
+                onFollow = onFollow,
+                onFollowFee = onFollowFee,
+                onStartSwitchWatch = onStartSwitchWatch
+            )
         }
     }
 }
 
-/** Fondens rubrikrad: namn, säljsignal-status (ANA-3), risknivå (UI-10) och innehavets utgångsläge (POR-6). */
+/** Fonddetaljens sektioner i ramens kolumn, i den ordning ANA-10 anger. */
+@Composable
+private fun FondDetaljSections(
+    state: FondDetaljUiState,
+    fund: FundDetail,
+    onIsinConfirmed: (String) -> Unit,
+    onSuggestionExpanded: (String) -> Unit,
+    onFollow: (SwitchPlanResolver.Suggestion) -> Unit,
+    onFollowFee: (Long) -> Unit,
+    onStartSwitchWatch: (SwitchPlanResolver.Suggestion) -> Unit
+) {
+    // remember: listan är redan sorterad (fallande) av ViewModel:en, så det här är en ren
+    // omvändning + mappning — men utan remember kördes den vid varje recomposition, och
+    // eftersom listans identitet då ändrades triggades hela Vico-kedjan (periodfilter,
+    // LaunchedEffect, ny transaktion) på nytt vid varje kurstick. En backfillad fond har
+    // flera tusen punkter (issue #78).
+    val chartPoints = remember(fund.prices) {
+        fund.prices.sortedBy { it.epochDay }.map { it.epochDay to it.nav }
+    }
+    FundHeader(state = state)
+    if (fund.analysis != null) {
+        AnalysisStatusBanner(analysis = fund.analysis)
+        AnalysisGuidanceCard(analysis = fund.analysis)
+    }
+    SwitchDecisionSection(
+        state = state,
+        chartPoints = chartPoints,
+        onSuggestionExpanded = onSuggestionExpanded,
+        onFollow = onFollow,
+        onFollowFee = onFollowFee,
+        onStartSwitchWatch = onStartSwitchWatch
+    )
+    AppDivider()
+    FundLineChart(
+        points = chartPoints,
+        purchaseEpochDays = fund.purchaseEpochDays,
+        movingAverage = fund.movingAverage,
+        working = state.chartWorking
+    )
+    // Allt förklarande material ligger hopfällt (ANA-10): analysen och ordlistan är referens man
+    // slår upp, inte det man öppnar kortet för.
+    if (fund.analysis != null) {
+        ExpandableSection(title = stringResource(R.string.analys_section_title)) {
+            AnalysisSection(analysis = fund.analysis)
+        }
+    }
+    ExpandableSection(title = stringResource(R.string.analys_glossary_title)) {
+        AnalysisGlossary()
+    }
+    if (fund.isin == null) {
+        IsinInput(
+            suggestedIsin = fund.suggestedIsin,
+            onConfirm = onIsinConfirmed,
+            modifier = Modifier.padding(bottom = Spacing.s)
+        )
+    }
+}
+
+/**
+ * Märkningarna överst i innehållet: säljsignal-status (ANA-3), risknivå (UI-10), väntesnurran
+ * (NAV-6) och innehavets utgångsläge (POR-6). Fondens namn står i ramens topprad.
+ */
 @Composable
 private fun FundHeader(state: FondDetaljUiState, modifier: Modifier = Modifier) {
     val content = state.content
-    Column(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // UI-6: fondnamnet är det som kapas, aldrig märkningarna till höger.
-            Text(
-                content.fundName ?: "",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            content.analysis?.status?.let { status -> StatusDot(status, modifier = Modifier.padding(start = Spacing.s)) }
-            RiskBadge(level = state.riskLevel, modifier = Modifier.padding(start = Spacing.s))
-            // Rubrikens väntesnurra (NAV-6): fondens kurs och historik hämtas när skärmen
-            // öppnas, och nyckeltalen under rubriken räknas på det som hunnit landa.
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            content.analysis?.status?.let { status -> StatusDot(status) }
+            RiskBadge(level = state.riskLevel)
+            // Väntesnurran (NAV-6): fondens kurs och historik hämtas när skärmen öppnas, och
+            // nyckeltalen under räknas på det som hunnit landa.
             WorkingIndicator(
                 working = state.chartWorking,
-                contentDescription = stringResource(R.string.format_card_working, content.fundName ?: ""),
-                modifier = Modifier.padding(start = Spacing.s)
+                contentDescription = stringResource(R.string.format_card_working, content.fundName ?: "")
             )
         }
         val firstPurchaseEpochDay = content.firstPurchaseEpochDay
         val netInvested = content.netInvested
         if (firstPurchaseEpochDay != null && netInvested != null) {
-            Text(
-                stringResource(
+            ItemRowText(
+                title = null,
+                subtitle = stringResource(
                     R.string.format_holding_first_purchase,
                     LocalDate.ofEpochDay(firstPurchaseEpochDay).format(dateFormatter),
                     MoneyFormat.kr(netInvested)
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
+                )
             )
         }
     }
@@ -272,12 +278,11 @@ private fun SwitchDecisionSection(
 ) {
     val content = state.content
     Column(modifier = modifier) {
-        Text(stringResource(R.string.switch_section_title), style = MaterialTheme.typography.titleMedium)
-        Text(
-            stringResource(R.string.switch_section_explain),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.s)
+        SectionHeader(title = stringResource(R.string.switch_section_title))
+        ItemRowText(
+            title = null,
+            subtitle = stringResource(R.string.switch_section_explain),
+            modifier = Modifier.padding(bottom = Spacing.s)
         )
 
         if (state.switchPlan.isNotEmpty()) {
@@ -301,10 +306,9 @@ private fun SwitchDecisionSection(
         // flytta portföljen mot målfördelningen — och de två råden ska inte se ut som ett.
         if (state.feeComparison != null) {
             SwitchGroupLabel(stringResource(R.string.fee_comparison_title))
-            Text(
-                stringResource(R.string.fee_comparison_explain),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ItemRowText(
+                title = null,
+                subtitle = stringResource(R.string.fee_comparison_explain),
                 modifier = Modifier.padding(bottom = Spacing.xs)
             )
         }
@@ -357,11 +361,7 @@ private fun SwitchPlanResolver.Suggestion.counterpartIsin(fundIsin: String?): St
 /** Liten grupprubrik inne i bytesavsnittet — skiljer bytesplanen (HEM-8) från avgiftsjämförelsen (ANA-9). */
 @Composable
 private fun SwitchGroupLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        modifier = Modifier.padding(top = Spacing.s, bottom = Spacing.xs)
-    )
+    GroupLabel(text, modifier = Modifier.padding(top = Spacing.s, bottom = Spacing.xs))
 }
 
 /**
@@ -386,12 +386,7 @@ private fun SwitchWorkingMessage(text: String) {
 
 @Composable
 private fun SwitchMessage(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = Spacing.s)
-    )
+    ItemRowText(title = null, subtitle = text, modifier = Modifier.padding(top = Spacing.s))
 }
 
 /**
@@ -433,13 +428,13 @@ private fun SwitchPlanRow(
             }
         ) {
             Column {
-                Text(
-                    stringResource(
+                ItemRowText(
+                    title = stringResource(
                         if (sellingThisFund) R.string.format_switch_plan_to else R.string.format_switch_plan_from,
                         suggestion.planIndex + 1,
                         counterpartName
                     ),
-                    style = MaterialTheme.typography.bodyMedium
+                    subtitle = null
                 )
                 // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
                 // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
@@ -551,11 +546,7 @@ private fun ComparisonChart(
 
         ComparisonUiState.Loading -> SwitchWorkingMessage(stringResource(R.string.switch_comparison_loading))
 
-        ComparisonUiState.Unavailable -> Text(
-            stringResource(R.string.switch_comparison_unavailable),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        ComparisonUiState.Unavailable -> ItemRowText(title = null, subtitle = stringResource(R.string.switch_comparison_unavailable))
 
         is ComparisonUiState.Ready -> FundLineChart(
             points = holdingPoints,
@@ -675,7 +666,7 @@ private fun SignalRow(level: FundAnalysisCalc.SignalLevel, label: String, explan
     ExpandableInfoRow(explanation = explanation) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(level, modifier = Modifier.padding(end = Spacing.s))
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+            ItemRowText(title = label, subtitle = null)
         }
     }
 }
@@ -700,7 +691,7 @@ private fun AnalysisGlossary(modifier: Modifier = Modifier) {
         )
         terms.forEach { (termRes, defRes) ->
             ExpandableInfoRow(explanation = stringResource(defRes)) {
-                Text(stringResource(termRes), style = MaterialTheme.typography.bodyMedium)
+                ItemRowText(title = stringResource(termRes), subtitle = null)
             }
         }
     }
@@ -731,12 +722,11 @@ private fun IsinInput(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = stringResource(
+        ItemRowText(
+            title = null,
+            subtitle = stringResource(
                 if (suggestedIsin != null) R.string.fond_isin_suggested_body else R.string.fond_isin_missing_body
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         )
         AppTextField(
             value = text,
