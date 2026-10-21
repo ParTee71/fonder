@@ -42,6 +42,9 @@ import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.RECENT_PURCHASE_DAYS
+import se.partee71.fonder.testing.TestDays
+import se.partee71.fonder.testing.assertRecentWithLongHistoryAnalysis
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.buy
@@ -49,6 +52,7 @@ import se.partee71.fonder.testing.decliningPriceHistory
 import se.partee71.fonder.testing.holdFundAWorth1200
 import se.partee71.fonder.testing.holdOnly
 import se.partee71.fonder.testing.holdRebought
+import se.partee71.fonder.testing.holdRecentWithLongHistory
 import se.partee71.fonder.testing.price
 import se.partee71.fonder.testing.quoteOnly
 import se.partee71.fonder.testing.testFundMetadata
@@ -321,6 +325,43 @@ class PortfoljViewModelTest {
             assertTrue(analysis.profitTake!!.triggered) // (120-80)/80 = 0.5
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `fond kopt for tre manader sedan analyseras pa lang historik men kronor och sedan kop utgar fran kopet (issue 214)`() = runTest(dispatcher) {
+        val days = TestDays()
+        val today = days.today
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        holdRecentWithLongHistory(fakeTransactionRepo, cachedPrices, fond, today)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading }
+
+            val analysis = state.analysis[fond.fundId]!!
+            // S2 räknas och flaggar (POR-8) fast positionen bara är tre månader; kronorna från köpet.
+            assertRecentWithLongHistoryAnalysis(analysis)
+            // Kontraktet mot Fonddetalj: exakt det analyze ger med hela analyshistoriken.
+            val holding = state.holdings.single()
+            val history = cachedPrices.priceHistoryByFundId.getValue(fond.fundId)
+            val purchase = today.minusDays(RECENT_PURCHASE_DAYS)
+            days.assertForTestDay(analysis) { day -> FundAnalysisCalc.analyze(day, holding, fakeTransactionRepo.transactions.value, history, purchase, holding.currentValue!!, null) }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `engangsuppdatering hamtar analyshistoriken tre ar bakat for en nyss kopt fond (issue 214)`() = runTest(dispatcher) {
+        val days = TestDays()
+        val purchase = days.today.minusDays(RECENT_PURCHASE_DAYS)
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A", isin = "SE0004297927")
+        transactions.value = listOf(buy(fond, purchase, 1.0, 100.0))
+        funds.value = listOf(fond)
+
+        viewModel()
+        advanceUntilIdle()
+
+        days.assertForTestDay(refreshSinceCalls.toList()) { listOf(Triple(fond.fundId, "SE0004297927", FundAnalysisCalc.analysisHistoryStart(purchase, it))) }
     }
 
     @Test

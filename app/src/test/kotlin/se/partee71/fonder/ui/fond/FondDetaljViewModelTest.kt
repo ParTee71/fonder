@@ -61,6 +61,7 @@ import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.TestDays
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.price
@@ -94,6 +95,8 @@ class FondDetaljViewModelTest {
     private var suggestIsinReturn: String? = null
     private var upsertedFund: Fund? = null
     private var capturedFromEpochDay: Long? = null
+    private var needsBackfillCall: Pair<String, LocalDate>? = null
+    private var needsBackfillResult = false
 
     private fun transaction(epochDay: Long) = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = epochDay, shares = 1.0, pricePerShare = 100.0)
 
@@ -125,6 +128,10 @@ class FondDetaljViewModelTest {
         override suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean {
             refreshSinceCall = Triple(fundId, isin, since)
             return true
+        }
+        override suspend fun needsBackfill(fundId: String, since: LocalDate): Boolean {
+            needsBackfillCall = fundId to since
+            return needsBackfillResult
         }
         override suspend fun historyForIsin(isin: String, from: LocalDate, to: LocalDate): List<FundPrice> {
             historyForIsinCalls += isin
@@ -302,35 +309,44 @@ class FondDetaljViewModelTest {
 
     @Test
     fun `visar kurshistorik sorterad fallande pa datum`() = runTest(dispatcher) {
-        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = 200, nav = 145.0, currency = "SEK")
+        // Inom diagrammets ettårsfönster för en fond utan köp (issue #214 — diagrammet klipps,
+        // snittet och analysen räknas på den längre historiken).
+        val today = LocalDate.now().toEpochDay()
+        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = today, nav = 145.0, currency = "SEK")
         history.value = listOf(
-            FundPrice(fundId = fund.fundId, epochDay = 100, nav = 140.0, currency = "SEK"),
-            FundPrice(fundId = fund.fundId, epochDay = 200, nav = 145.0, currency = "SEK")
+            FundPrice(fundId = fund.fundId, epochDay = today - 100, nav = 140.0, currency = "SEK"),
+            FundPrice(fundId = fund.fundId, epochDay = today, nav = 145.0, currency = "SEK")
         )
 
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItemSkipping { it.loading }
-            assertEquals(listOf(200L, 100L), state.content.prices.map { it.epochDay })
+            assertEquals(listOf(today, today - 100), state.content.prices.map { it.epochDay })
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `levererar 200-dagarssnittet ur hela historiken, och inget nar historiken ar for kort (ANA-14)`() = runTest(dispatcher) {
-        // 400 dagars kurser, osorterade som från en cache: snittet börjar dag 290 (första dagen
-        // med ett helt fönster bakom sig) och ligger i stigande ordning.
-        history.value = (0L..400L).reversed().map { FundPrice(fundId = fund.fundId, epochDay = it, nav = 100.0 + it, currency = "SEK") }
+        // 400 dagars kurser fram till i dag, osorterade som från en cache: snittet börjar dag 290
+        // (första dagen med ett helt fönster bakom sig) och ligger i stigande ordning. Dagarna
+        // räknas från `start` så att den sista är i dag och allt ryms i analyshistoriken.
+        val start = LocalDate.now().toEpochDay() - 400
+        history.value = (0L..400L).reversed().map { FundPrice(fundId = fund.fundId, epochDay = start + it, nav = 100.0 + it, currency = "SEK") }
+        // Köpt dag 200: diagrammet visar dag 200 … 400, men snittet räknas ur hela historiken.
+        transactionsForFund.value = listOf(transaction(epochDay = start + 200))
 
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItemSkipping { it.loading }
-            assertEquals((290L..400L).toList(), state.content.movingAverage.map { it.first })
+            assertEquals((290L..400L).map { start + it }, state.content.movingAverage.map { it.first })
             // Dag 400: medel av dag 110 … 400 → NAV 210 … 500 = 355.
             assertEquals(355.0, state.content.movingAverage.last().second, 1e-9)
+            assertEquals(201, state.content.prices.size)
 
-            history.value = history.value.filter { it.epochDay >= 200 }
-            do state = awaitItem() while (state.content.prices.size != 201)
+            history.value = history.value.filter { it.epochDay >= start + 200 }
+            do state = awaitItem() while (state.content.movingAverage.isNotEmpty())
+            assertEquals(201, state.content.prices.size)
             assertEquals(emptyList<Pair<Long, Double>>(), state.content.movingAverage)
             cancelAndIgnoreRemainingEvents()
         }
@@ -359,6 +375,22 @@ class FondDetaljViewModelTest {
         viewModel()
         advanceUntilIdle()
         assertEquals(fund.fundId, refreshCalledFor)
+    }
+
+    @Test
+    fun `backfillar fond utan isin trots aktuell kurs nar cachen inte nar analysens horisont`() = runTest(dispatcher) {
+        // Issue #214: S2/snittlinjen ska inte behöva vänta på bakgrundsjobbet.
+        val days = TestDays()
+        latestPriceValue = FundPrice(fundId = fund.fundId, epochDay = days.today.toEpochDay(), nav = 140.0, currency = "SEK")
+        val purchase = days.today.minusDays(91)
+        transactionsForFund.value = listOf(transaction(epochDay = purchase.toEpochDay()))
+        needsBackfillResult = true
+
+        viewModel()
+        advanceUntilIdle()
+
+        assertEquals(fund.fundId, refreshCalledFor)
+        days.assertForTestDay(needsBackfillCall) { fund.fundId to FundAnalysisCalc.analysisHistoryStart(purchase, it) }
     }
 
     @Test
@@ -469,6 +501,62 @@ class FondDetaljViewModelTest {
             org.junit.Assert.assertNotNull(state.content.analysis?.trend) // S2 räknas (historiken når 290 dagar)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `fond kopt for tre manader sedan far S2 och snittlinje ur langre historik, medan diagram och kronor utgar fran kopet`() = runTest(dispatcher) {
+        // Issue #214: kurshistorik två år bakåt men köpet bara 91 dagar sedan. Kursen är platt
+        // (180) före dag 200, så "1 år" inte beror på om ViewModeln räknar med dagen efter.
+        val days = TestDays()
+        val today = days.today
+        val purchase = today.minusDays(91)
+        fun nav(daysAgo: Long) = if (daysAgo >= 200) 180.0 else 200.0 - daysAgo * 0.1
+        funds.value = listOf(fund.copy(isin = "SE0004297927"))
+        val tx = Transaction(fundId = fund.fundId, type = TransactionType.KOP, epochDay = purchase.toEpochDay(), shares = 10.0, pricePerShare = nav(91))
+        transactionsForFund.value = listOf(tx)
+        allTransactions.value = listOf(tx)
+        history.value = (0..730L).map { daysAgo -> price(fund, today.minusDays(daysAgo), nav(daysAgo)) }
+        latestPricesFlow.value = mapOf(fund.fundId to price(fund, today, nav(0)))
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val content = awaitItemSkipping { it.loading || it.content.analysis == null }.content
+            val analysis = content.analysis!!
+            // Signalerna och snittlinjen handlar om fondens kurs: S2 räknas, linjen finns och
+            // täcker diagrammet från dess första punkt (köpdagen).
+            org.junit.Assert.assertNotNull(analysis.trend)
+            org.junit.Assert.assertNotNull(analysis.distanceFromHigh)
+            assertTrue(content.movingAverage.isNotEmpty())
+            assertTrue(content.movingAverage.first().first <= purchase.toEpochDay())
+            // Diagrammet (och jämförelsen) visar fortsatt bara tiden sedan köpet, "Allt" förankrad i köpet (TP-12).
+            assertEquals(purchase.toEpochDay(), content.prices.minOf { it.epochDay })
+            // Periodprocenten är fondens kurs, kronorna bara andelarna som ägts – från köpet (ANA-1, #193).
+            val oneYear = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.ETT_AR }
+            val sincePurchase = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.SEDAN_KOP }
+            assertEquals((nav(0) - nav(365)) / nav(365), oneYear.fraction!!, 1e-9)
+            assertEquals(10.0 * (nav(0) - nav(91)), oneYear.amount!!, 1e-6)
+            assertEquals((nav(0) - nav(91)) / nav(91), sincePurchase.fraction!!, 1e-9)
+            assertEquals(10.0 * (nav(0) - nav(91)), sincePurchase.amount!!, 1e-6)
+            assertEquals(nav(91), analysis.keyFigures.gavPerShare, 1e-9)
+            assertEquals(purchase.toEpochDay(), content.firstPurchaseEpochDay)
+            cancelAndIgnoreRemainingEvents()
+        }
+        // Läsning och hämtning har samma horisont: tre år bakåt, inte köpet.
+        days.assertForTestDay(capturedFromEpochDay) { FundAnalysisCalc.analysisHistoryStart(purchase, it).toEpochDay() }
+        days.assertForTestDay(refreshSinceCall) { Triple(fund.fundId, "SE0004297927", FundAnalysisCalc.analysisHistoryStart(purchase, it)) }
+    }
+
+    @Test
+    fun `bevakad fond med isin men utan kop hamtar analyshistoriken via ISIN`() = runTest(dispatcher) {
+        // Tidigare bara ett kort färskt fönster — då fick en bevakad fond aldrig en hel snittlinje (issue #214).
+        val days = TestDays()
+        funds.value = listOf(fund.copy(isin = "SE0004297927"))
+
+        viewModel()
+        advanceUntilIdle()
+
+        days.assertForTestDay(refreshSinceCall) { Triple(fund.fundId, "SE0004297927", FundAnalysisCalc.analysisHistoryStart(null, it)) }
+        assertEquals(null, refreshCalledFor)
     }
 
     @Test

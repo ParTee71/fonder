@@ -24,6 +24,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundMetadataFreshness
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.PortfolioCalc
@@ -190,14 +191,6 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * inte backfilla en historik appen ändå aldrig haft för fonden.
          */
         private const val BUY_NAV_LOOKBACK_DAYS = 30L
-
-        /**
-         * Historikhorisont för en ISIN-fond **utan** köphistorik (bevakad men aldrig köpt) — se
-         * grenvalet i [refreshAll]. Samma princip som [BUY_NAV_LOOKBACK_DAYS]: bara den senaste
-         * kursen behövs, fönstret ska överleva helger och röda dagar, inte backfilla en historik
-         * appen ändå aldrig haft.
-         */
-        private const val ISIN_FALLBACK_LOOKBACK_DAYS = 30L
 
         /**
          * Kör de begärda skanningarna — men **bara** efter en lyckad kursuppdatering.
@@ -496,21 +489,22 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
 
             var anySuccess = false
+            val today = LocalDate.now()
             targets.forEach { fund ->
                 val isin = fund.isin
-                // Utan köphistorik finns ingen historikhorisont att backfilla mot — en bevakad
-                // men aldrig köpt fond behöver bara en färsk kurs, inte trettio år bakåt
-                // (TP-18). Repositoryt hämtar då bara sitt korta fönster.
-                val since = earliestPurchaseByFund[fund.fundId]
-                // Villkoret är **bara** `isin != null`. Med `&& since != null` föll en fond vars
-                // fundId *är* dess ISIN (findFundByIsin-vägen, TP-13/TP-14) men som saknar
-                // transaktioner ner i else-grenen, där `refresh` frågar fondlista med ISIN:et som
-                // fondnyckel utan ISIN-fallback — samma dödläge som issue #75 punkt 2 beskrev,
-                // och fonden fick aldrig någon kurs. `refreshSince` degraderar korrekt utan
-                // historikhorisont: `since` används bara i fondlista-grenen, som hoppas över för
-                // en fond utan plattformskod.
+                // Samma horisont som Hem, Portfölj och Fonddetalj läser analysen från (issue
+                // #214): första transaktionen eller tre år bakåt, det som ligger tidigast — även för en
+                // bevakad men aldrig köpt fond, vars snittlinje och signaler också handlar om
+                // fondens kurs. Repositoryt backfillar bara när cachen inte redan når dit (TP-18).
+                val since = FundAnalysisCalc.analysisHistoryStart(earliestPurchaseByFund[fund.fundId], today)
+                // Villkoret är **bara** `isin != null`. Med ett extra villkor på köphistorik föll
+                // en fond vars fundId *är* dess ISIN (findFundByIsin-vägen, TP-13/TP-14) men som
+                // saknar transaktioner ner i else-grenen, där `refresh` frågar fondlista med
+                // ISIN:et som fondnyckel utan ISIN-fallback — samma dödläge som issue #75 punkt 2
+                // beskrev, och fonden fick aldrig någon kurs. `refreshSince` når fonden via
+                // ISIN-kedjan även när den saknar plattformskod.
                 val success = if (isin != null) {
-                    fundPriceRepository.refreshSince(fund.fundId, isin, since ?: LocalDate.now().minusDays(ISIN_FALLBACK_LOOKBACK_DAYS))
+                    fundPriceRepository.refreshSince(fund.fundId, isin, since)
                 } else {
                     fundPriceRepository.refresh(fund.fundId, since)
                 }

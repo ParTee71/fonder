@@ -32,6 +32,8 @@ import se.partee71.fonder.data.room.entities.FxRateEntity
 import se.partee71.fonder.domain.model.IsinFundInfo
 import se.partee71.fonder.domain.model.IsinPricePoint
 import se.partee71.fonder.domain.usecase.CurrencyConverter
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
+import se.partee71.fonder.testing.TestDays
 
 private class FakeFundPriceDao : FundPriceDao {
     val stored = mutableListOf<FundPriceEntity>()
@@ -658,6 +660,113 @@ class HandelsbankenFundPriceRepositoryTest {
 
         assertEquals(1, client.catalogCalls)
         assertEquals(1, sidanrop)
+    }
+
+    @Test
+    fun `refreshSince backfillar analyshistoriken fast cachen redan har nyare punkter`() = runTest {
+        // Issue #214: en fond köpt för tre månader sedan har cachen full från köpet till i dag.
+        // Analysens horisont ligger tre år bakåt — då måste hela spannet hämtas en gång, inte
+        // bara det korta fönstret, trots att cachen redan har färska kurser.
+        val days = TestDays()
+        val today = days.today
+        val purchase = today.minusDays(91)
+        val since = FundAnalysisCalc.analysisHistoryStart(purchase, today)
+        (purchase.toEpochDay()..today.toEpochDay()).forEach { day ->
+            dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = day, nav = 100.0, currency = "SEK"))
+        }
+        val client = RecordingSource()
+        val repo = repository(client = client)
+
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+
+        assertEquals(since, client.calls.single().from)
+        days.assertForTestDay(client.calls.single().to) { it }
+
+        // När backfillen landat når cachen horisonten, och nästa uppdatering tar bara det korta fönstret.
+        dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = since.toEpochDay(), nav = 90.0, currency = "SEK"))
+        client.calls.clear()
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+        days.assertForTestDay(client.calls.single().from) { it.minusDays(60) }
+    }
+
+    @Test
+    fun `needsBackfill foljer samma cachekontroll som hamtningen, utan natverk`() = runTest {
+        val since = LocalDate.of(2023, 10, 21) // lördag
+        val client = RecordingSource()
+        val repo = repository(client = client)
+
+        assertTrue("tom cache", repo.needsBackfill("SHB0000442", since))
+        dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = LocalDate.of(2025, 1, 2).toEpochDay(), nav = 100.0, currency = "SEK"))
+        assertTrue("cachen når inte horisonten", repo.needsBackfill("SHB0000442", since))
+        dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = since.plusDays(2).toEpochDay(), nav = 100.0, currency = "SEK"))
+        assertFalse("framme inom toleransen", repo.needsBackfill("SHB0000442", since))
+        assertTrue(client.calls.isEmpty())
+    }
+
+    @Test
+    fun `en horisont pa en helg eller rod dag ger ingen ny helhamtning`() = runTest {
+        // Cachen börjar på måndagen efter en horisont som föll på lördagen: framme, inom toleransen.
+        val since = LocalDate.of(2023, 10, 21) // lördag
+        dao.stored.add(FundPriceEntity(fundId = "SHB0000442", epochDay = since.plusDays(2).toEpochDay(), nav = 100.0, currency = "SEK"))
+        val client = RecordingSource()
+        val repo = repository(client = client)
+        val days = TestDays()
+
+        repo.refresh("SHB0000442", since = since)
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+
+        assertEquals(2, client.calls.size)
+        client.calls.forEach { call -> days.assertForTestDay(call.from) { it.minusDays(60) } }
+    }
+
+    @Test
+    fun `en fond yngre an horisonten helhamtas en gang per process, sedan bara kort fonster`() = runTest {
+        // Källan börjar efter horisonten: cachen kan aldrig nå `since`. Efter en helhämtning
+        // minns repositoryt källans första dag och hämtar sedan bara det korta fönstret.
+        val since = LocalDate.of(2023, 1, 2)
+        val launch = LocalDate.of(2025, 3, 3)
+        val client = RecordingSource(historyHtml(fundId = "SHB0000442", nav = "100,00", currency = "SEK", date = launch.toString()))
+        val repo = repository(client = client)
+        val days = TestDays()
+
+        repo.refresh("SHB0000442", since = since)
+        repo.refresh("SHB0000442", since = since)
+        repo.refreshSince("SHB0000442", "SE0004297927", since)
+
+        assertEquals(since, client.calls[0].from)
+        days.assertForTestDay(client.calls[1].from) { it.minusDays(60) }
+        days.assertForTestDay(client.calls[2].from) { it.minusDays(60) }
+
+        // En ny process (ny instans, samma cache) får högst en ny helhämtning.
+        val restarted = repository(client = client)
+        client.calls.clear()
+        restarted.refresh("SHB0000442", since = since)
+        restarted.refresh("SHB0000442", since = since)
+        assertEquals(since, client.calls[0].from)
+        days.assertForTestDay(client.calls[1].from) { it.minusDays(60) }
+    }
+
+    @Test
+    fun `refreshSince ber ISIN-kedjan om hela analyshistoriken en gang, sedan kort fonster`() = runTest {
+        // Utan plattformskod går fonden via ISIN-kedjan, som har samma cachekontroll (issue #214).
+        val days = TestDays()
+        val since = FundAnalysisCalc.analysisHistoryStart(null, days.today)
+        val calls = mutableListOf<Pair<LocalDate, LocalDate>>()
+        val avanza = FakeIsinSource(history = { _, from, to ->
+            calls += from to to
+            listOf(IsinPricePoint(epochDay = to.toEpochDay(), nav = 12.0, currency = "SEK"))
+        })
+        val repo = repository(isinSources = listOf(avanza))
+
+        assertTrue(repo.refreshSince("LU0496367417", "LU0496367417", since))
+        assertTrue(repo.refreshSince("LU0496367417", "LU0496367417", since))
+
+        // Först det långa spannet och förtätningen av de senaste dagarna (issue #35); andra
+        // gången bara det korta fönstret, utan förtätning.
+        assertEquals(3, calls.size)
+        assertEquals(since, calls[0].first)
+        calls.forEach { (_, to) -> days.assertForTestDay(to) { it } }
+        calls.drop(1).forEach { (from, to) -> assertEquals(to.minusDays(60), from) }
     }
 
     @Test

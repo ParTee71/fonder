@@ -2,6 +2,9 @@ package se.partee71.fonder.testing
 
 import app.cash.turbine.ReceiveTurbine
 import java.time.LocalDate
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeTransactionRepository
 import se.partee71.fonder.domain.model.Fund
@@ -10,6 +13,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 
 /*
  * Delade fixturer för tester som bygger en portfölj (Hem, Portfölj, Fonddetalj …): köp, kurser
@@ -91,6 +95,38 @@ fun FakeTransactionRepository.holdRebought(fund: Fund, today: LocalDate) {
  * som FundAnalysisCalcTest. Kursen 100 dagar sedan är 105.
  */
 fun decliningPriceHistory(fund: Fund, today: LocalDate): List<FundPrice> = (0..730L step 5).map { daysAgo -> price(fund, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05) }
+
+/**
+ * Fonden köpt för [RECENT_PURCHASE_DAYS] dagar sedan (10 andelar à 104,5 kr, kursen den dagen) med
+ * hela [decliningPriceHistory] — två år — i kurscachen och dagens kurs 100 (issue #214): historiken
+ * når långt före köpet, så S1/S2 kan räknas medan "sedan köp" och kronorna utgår från köpet.
+ */
+fun holdRecentWithLongHistory(transactions: FakeTransactionRepository, prices: FakeCachedPriceRepository, fund: Fund, today: LocalDate) {
+    transactions.holdOnly(fund, today.minusDays(RECENT_PURCHASE_DAYS), 10.0, 100.0 + RECENT_PURCHASE_DAYS * 0.05)
+    prices.priceHistoryByFundId = mapOf(fund.fundId to decliningPriceHistory(fund, today))
+    prices.quoteOnly(fund, today, 100.0)
+}
+
+/** Köpet i [holdRecentWithLongHistory] — tre månader, på [decliningPriceHistory]s femdagarsrutnät. */
+const val RECENT_PURCHASE_DAYS = 90L
+
+/**
+ * Analysen av [holdRecentWithLongHistory] (issue #214): S1 och S2 räknas på fondens långa historik
+ * (dagens 100 under både 52-veckorstoppen och 200-dagarssnittet → röd), medan "sedan köp" och
+ * periodradernas kronor utgår från köpet och "1 år"-procenten är fondens kurs.
+ */
+fun assertRecentWithLongHistoryAnalysis(analysis: FundAnalysisCalc.Analysis) {
+    assertNotNull(analysis.distanceFromHigh)
+    assertEquals(FundAnalysisCalc.SignalLevel.GUL, analysis.trend!!.level)
+    assertEquals(FundAnalysisCalc.SignalLevel.ROD, analysis.status)
+    val sedanKop = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.SEDAN_KOP }
+    val ettAr = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.ETT_AR }
+    assertEquals(100.0 / 104.5 - 1.0, sedanKop.fraction!!, 1e-9)
+    assertEquals(-45.0, sedanKop.amount!!, 1e-9) // 10 × (100 − 104,5)
+    assertEquals(-45.0, ettAr.amount!!, 1e-9) // bara andelarna som ägts, från köpet
+    assertEquals(100.0 / 118.25 - 1.0, ettAr.fraction!!, 1e-9) // fondens kurs 365 dagar sedan
+    assertNull(analysis.keyFigures.cagr)
+}
 
 /** Kurscachen har bara [fund]:s kurs [nav] den [day]. */
 fun FakeCachedPriceRepository.quoteOnly(fund: Fund, day: LocalDate, nav: Double) {

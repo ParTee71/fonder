@@ -28,6 +28,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.IsinPricePoint
 import se.partee71.fonder.domain.usecase.CurrencyConverter
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.NavCalendar
 
@@ -54,7 +55,8 @@ interface FundPriceRepository {
      * [since] är hur långt bak historiken behövs (normalt fondens första köp). Källan har
      * **inget** femårstak — den levererar hela fondens historik i ett anrop (KRAVLISTA TP-18)
      * — men ett fullt spann är också ett stort svar, så det hämtas bara som **backfill**: när
-     * cachen inte redan når tillbaka till [since]. Annars hämtas ett kort, färskt fönster.
+     * cachen inte redan når tillbaka till [since] (med några dagars tolerans, och inte om en
+     * tidigare helhämtning visat att källan börjar senare). Annars hämtas ett kort, färskt fönster.
      * [since] = null betyder "ingen känd historikhorisont" (t.ex. en bevakad men aldrig köpt
      * fond) och ger alltid bara det korta fönstret.
      *
@@ -75,10 +77,20 @@ interface FundPriceRepository {
      * efter. Kurserna cachas alltid under [fundId], som är fondens identitet.
      *
      * Källorna provas i prioritetsordning, nästa tas vid fel/tomt resultat. Fel loggas,
-     * kraschar aldrig, cache behålls.
+     * kraschar aldrig, cache behålls. Båda grenarna hämtar hela spannet bara som **backfill**
+     * (samma cachekontroll som [refresh]), annars ett kort, färskt fönster.
      * @return true om någon källa gav historik, false om alla misslyckades/var tomma.
      */
     suspend fun refreshSince(fundId: String, isin: String, since: LocalDate): Boolean
+
+    /**
+     * Sant om en hämtning mot [since] skulle bli en **backfill** — cachen når inte tillbaka dit
+     * (med samma tolerans och samma minne av källans första dag som [refresh]/[refreshSince]).
+     * Ingen nätverkstrafik. Låter en anropare hämta trots att den senaste kursen är färsk, så
+     * att analysens historik (issue #214) inte behöver vänta på bakgrundsjobbet.
+     * Standard: false (fakes och källor utan cache).
+     */
+    suspend fun needsBackfill(fundId: String, since: LocalDate): Boolean = false
 
     /**
      * Kurshistorik för ett [isin] **utan** att cacha den (ANA-11, issue #85) — underlaget till
@@ -139,12 +151,20 @@ interface FundPriceRepository {
  * annars [FundPriceRepository.refresh] direkt. Samma gren behövdes tidigare separat i flera
  * ViewModels (Portfölj, båda importflödena) — samlad här för att undvika ytterligare en kopia
  * (regel 4, issue #19). [se.partee71.fonder.ui.fond.FondDetaljViewModel] har en egen variant
- * med en extra gate (bara om fonden faktiskt köpts) och lämnas orörd.
+ * med en extra gate (fonder utan ISIN hämtas bara om kursen är inaktuell) och lämnas orörd.
+ * [since] är normalt `FundAnalysisCalc.analysisHistoryStart` (issue #214).
  */
 suspend fun FundPriceRepository.refreshFund(fund: Fund, since: LocalDate): Boolean {
     val isin = fund.isin
     return if (isin != null) refreshSince(fund.fundId, isin, since) else refresh(fund.fundId, since)
 }
+
+/**
+ * Fondens **analyshistorik** ur kurscachen (ingen nätverkstrafik): från
+ * [FundAnalysisCalc.analysisHistoryStart] till [today] — den enda läsningen Hem, Portfölj och
+ * Fonddetalj gör för analysen, så att nyckeltal och signaler blir identiska (issue #214, regel 4).
+ */
+suspend fun FundPriceRepository.analysisHistory(fundId: String, firstTransaction: LocalDate?, today: LocalDate): List<FundPrice> = priceHistory(fundId, FundAnalysisCalc.analysisHistoryStart(firstTransaction, today).toEpochDay(), today.toEpochDay())
 
 /**
  * Sant om [fundId] saknar cachad kurs helt, eller om senaste kända kurs är äldre än
@@ -177,6 +197,13 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     /** Fonder som saknar motsvarighet i katalogen — se [fondlistaKeyFor]. */
     private val unresolvableFundIds = mutableSetOf<String>()
 
+    /**
+     * Källans första dag per fond, inlärd av en helhämtning i den här processen — se
+     * [historyStart]. Bara i minnet (repositoryt är singleton): ingen schemaändring, och efter
+     * en omstart kostar en fond som är yngre än horisonten högst en extra helhämtning.
+     */
+    private val sourceFirstDayByFund = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     override suspend fun latestPrice(fundId: String): FundPrice? = dao.getLatest(fundId)?.toDomain()
 
     override fun observeLatestPrices(fundIds: List<String>): Flow<Map<String, FundPrice>> {
@@ -191,25 +218,51 @@ class HandelsbankenFundPriceRepository @Inject constructor(
     override suspend fun refresh(fundId: String, since: LocalDate?): Boolean {
         val to = LocalDate.now()
         val from = historyStart(fundId, since, to)
-        return fetchAndCacheFromFondlista(sourceFundId = fundId, from = from, to = to) != null
+        val prices = fetchAndCacheFromFondlista(sourceFundId = fundId, from = from, to = to)
+        rememberSourceStart(fundId, from, to, prices?.map { it.epochDay })
+        return prices != null
+    }
+
+    override suspend fun needsBackfill(fundId: String, since: LocalDate): Boolean {
+        val to = LocalDate.now()
+        return historyStart(fundId, since, to).isBefore(to.minusDays(RECENT_WINDOW_DAYS))
     }
 
     /**
      * Hur långt bak [refresh] hämtar. Källan har inget femårstak (KRAVLISTA TP-18) men ett
      * fullt spann är också ett stort svar (~3,6 MB för en fond med 30+ års historik), så det
      * hämtas bara när det faktiskt behövs: cachen är tom, eller når inte tillbaka till [since].
-     * I övrigt räcker ett kort, färskt fönster.
+     * I övrigt räcker ett kort, färskt fönster. Anroparna skickar analysens horisont
+     * (`FundAnalysisCalc.analysisHistoryStart`, första köpet eller tre år bakåt, issue #214):
+     * når cachen bara till köpet hämtas då hela spannet [since]..idag en gång, även om nyare
+     * punkter redan finns — sedan når cachen dit och nästa anrop tar det korta fönstret.
      *
-     * Marginalfall: har källan **mindre** historik än [since] (fonden köptes innan plattformens
-     * data börjar) når cachen aldrig ända fram, och varje uppdatering hämtar om det spann som
-     * faktiskt finns. Svaret är då lika stort som fondens hela historik, inte större — medvetet
-     * avvägt mot att införa separat cache-metadata bara för det fallet.
+     * Två fall där cachen aldrig når exakt fram till [since], och som annars gav en helhämtning
+     * vid varje uppdatering (issue #214, där horisonten är minst tre år bakåt):
+     * - [since] är en helg eller röd dag: cachen räknas som framme om den börjar högst
+     *   [BACKFILL_TOLERANCE_DAYS] efter [since].
+     * - Källan börjar **efter** [since] (fonden är yngre än horisonten, eller köptes innan
+     *   plattformens data börjar): en helhämtning lär repositoryt källans första dag
+     *   ([sourceFirstDayByFund]), och så länge cachen når den dagen hämtas bara det korta
+     *   fönstret. Minnet lever per process — högst en extra helhämtning per appstart och fond.
      */
     private suspend fun historyStart(fundId: String, since: LocalDate?, to: LocalDate): LocalDate {
         val recentFrom = to.minusDays(RECENT_WINDOW_DAYS)
         if (since == null || !since.isBefore(recentFrom)) return recentFrom
         val oldestCached = dao.getOldest(fundId)?.epochDay ?: return since
-        return if (since.toEpochDay() < oldestCached) since else recentFrom
+        if (oldestCached <= since.toEpochDay() + BACKFILL_TOLERANCE_DAYS) return recentFrom
+        val sourceFirstDay = sourceFirstDayByFund[fundId]
+        return if (sourceFirstDay != null && oldestCached <= sourceFirstDay) recentFrom else since
+    }
+
+    /**
+     * Efter en helhämtning ([from] före det korta fönstret) som gav kurser: minns källans första
+     * dag för [fundId] — se [historyStart]. Ett tomt eller misslyckat svar lär inget.
+     */
+    private fun rememberSourceStart(fundId: String, from: LocalDate, to: LocalDate, fetchedDays: List<Long>?) {
+        if (!from.isBefore(to.minusDays(RECENT_WINDOW_DAYS))) return
+        val first = fetchedDays?.minOrNull() ?: return
+        sourceFirstDayByFund[fundId] = first
     }
 
     /**
@@ -366,23 +419,29 @@ class HandelsbankenFundPriceRepository @Inject constructor(
         // nedsamplingen ISIN-kedjan behövde skyddas mot (TP-14). Är `fundId` ett ISIN saknar
         // fonden plattformskod och måste slås upp först (issue #39) — kurserna cachas ändå
         // alltid under appens `fundId`, som är fondens identitet.
+        // Samma cachekontroll för båda grenarna: helhämtning bara när cachen inte når [since].
+        val from = historyStart(fundId, since, to)
         val fondlistaKey = fondlistaKeyFor(fundId, isin)
         if (fondlistaKey != null) {
             val prices = fetchAndCacheFromFondlista(
                 sourceFundId = fondlistaKey,
                 cacheFundId = fundId,
-                from = historyStart(fundId, since, to),
+                from = from,
                 to = to
             )
-            if (prices?.isNotEmpty() == true) return true
+            if (prices?.isNotEmpty() == true) {
+                rememberSourceStart(fundId, from, to, prices.map { it.epochDay })
+                return true
+            }
         }
         for (source in isinSources) {
-            val points = runCatching { source.fetchHistory(isin, since, to) }
+            val points = runCatching { source.fetchHistory(isin, from, to) }
                 .onFailure { e -> Log.w(TAG, "ISIN-källa gav fel för $isin, provar nästa i kedjan", e) }
                 .getOrNull()
             if (!points.isNullOrEmpty()) {
                 dao.upsertAll(points.map { it.toEntity(fundId) })
-                refreshRecentIsinWindow(fundId, isin, since, to, source)
+                rememberSourceStart(fundId, from, to, points.map { it.epochDay })
+                refreshRecentIsinWindow(fundId, isin, from, to, source)
                 return true
             }
         }
@@ -500,6 +559,12 @@ class HandelsbankenFundPriceRepository @Inject constructor(
          * 30 dagar) plus helger/röda dagar.
          */
         const val RECENT_WINDOW_DAYS = 60L
+
+        /**
+         * Hur långt efter `since` cachens äldsta kurs får ligga och ändå räknas som framme —
+         * se [historyStart]. Täcker helger och röda dagar (påsk, jul) med marginal.
+         */
+        const val BACKFILL_TOLERANCE_DAYS = 7L
 
         /** Hur länge katalogen återanvänds i minnet — se [catalogFunds]. */
         val CATALOG_CACHE_TTL: Duration = Duration.ofMinutes(10)

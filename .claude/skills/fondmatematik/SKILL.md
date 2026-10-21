@@ -24,6 +24,7 @@ i UI-texten. Kraven står i KRAVLISTA; vid skillnad gäller kravlistan, och skil
 | Dagräkning för XIRR | ACT/365F (som Excel och pyxirr); löses med inringning + bisektion i [−99,99 %, +1 000 %] | `PortfolioTotalCalc.XIRR_DAYS_PER_YEAR`, `PortfolioTotalCalc.xirr` |
 | Dagsavkastning | `nav_t / nav_{t−1} − 1` mellan på varandra följande kända kurser, NAV ≤ 0 hoppas över | `FundAnalysisCalc.dailyReturns` |
 | Okänt värde | `null` och en räknare för det som uteslöts – aldrig noll eller en gissning | t.ex. `PortfolioFeeCalc.Result.unknownFeeCount` |
+| Analysens kurshistorik | Från fondens första transaktion eller `idag − (3 × 365 + 10)` dagar, det som ligger tidigast – samma fönster för läsning (Hem, Portfölj, Fonddetalj) och hämtning (backfill). "Sedan köp", GAV, CAGR och periodradernas kronor utgår ändå från köpet | `FundAnalysisCalc.analysisHistoryStart`, `ANALYSIS_LOOKBACK_DAYS` (issue #214) |
 
 Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyFormat`).
 

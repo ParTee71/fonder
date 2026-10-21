@@ -44,9 +44,11 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.IndexBenchmarkSelector
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.testing.TestDays
 
 /**
  * Ren logik-test av [FundPriceUpdateWorker.refreshAll] — kringgår CoroutineWorker/WorkManager
@@ -158,8 +160,10 @@ class FundPriceUpdateWorkerTest {
         // transaktioner föll ner i refresh(fundId) — där fondlista frågas med ISIN:et som
         // fondnyckel utan ISIN-fallback. Den fonden fick aldrig någon kurs. Metodens egen KDoc
         // sa redan att ISIN-fonder *måste* gå via refreshSince; testet låste fast fel gren.
-        // Historikhorisonten är ett kort färskt fönster: en bevakad men aldrig köpt fond har
-        // ingen historik att backfilla mot (TP-18, issue #37).
+        // Historikhorisonten är analysens (issue #214): tre år bakåt även för en bevakad men
+        // aldrig köpt fond, vars snittlinje och signaler handlar om fondens kurs — tidigare ett
+        // kort färskt fönster (TP-18, issue #37).
+        val days = TestDays()
         val fond = Fund(fundId = "LU0496367417", name = "Franklin Gold", isin = "LU0496367417")
         funds.value = listOf(fond)
         // Ingen transaktion (fonden bara bevakad, aldrig köpt) — inget känt inköpsdatum.
@@ -170,7 +174,7 @@ class FundPriceUpdateWorkerTest {
         val (fundId, isin, since) = refreshSinceCalls.single()
         assertEquals(fond.fundId, fundId)
         assertEquals(fond.isin, isin)
-        assertTrue("kort fönster, inte en backfill", since.isAfter(LocalDate.now().minusDays(60)))
+        days.assertForTestDay(since) { FundAnalysisCalc.analysisHistoryStart(null, it) }
     }
 
     @Test
@@ -185,6 +189,22 @@ class FundPriceUpdateWorkerTest {
         FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
 
         assertEquals(fond.fundId to since, refreshCalls.single())
+    }
+
+    @Test
+    fun `nyss kopt fond hamtar analyshistoriken tre ar bakat, inte bara fran kopet (issue 214)`() = runTest {
+        // S2/snittlinjen kräver 290 dagar och #195 tre år — samma horisont som skärmarna läser.
+        val days = TestDays()
+        val purchase = days.today.minusMonths(3)
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        funds.value = listOf(fond)
+        transactions.value = listOf(
+            Transaction(fundId = fond.fundId, type = TransactionType.KOP, epochDay = purchase.toEpochDay(), shares = 1.0, pricePerShare = 100.0)
+        )
+
+        FundPriceUpdateWorker.refreshAll(fakeTransactionRepo, fakeFundPriceRepo)
+
+        days.assertForTestDay(refreshCalls.single()) { fond.fundId to it.minusDays(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS) }
     }
 
     @Test
