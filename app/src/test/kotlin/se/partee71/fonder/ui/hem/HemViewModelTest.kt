@@ -70,8 +70,10 @@ import se.partee71.fonder.testing.FailingUntilRetry
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.buy
+import se.partee71.fonder.testing.decliningPriceHistory
 import se.partee71.fonder.testing.holdFundAWorth1200
 import se.partee71.fonder.testing.holdOnly
+import se.partee71.fonder.testing.holdRebought
 import se.partee71.fonder.testing.price
 import se.partee71.fonder.testing.quoteOnly
 import se.partee71.fonder.testing.testFundMetadata
@@ -297,17 +299,35 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `flaggad fond analyseras fran positionens start, samma som Portfolj och Fonddetalj (issue 194)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        fakeTransactionRepo.holdRebought(fond, today)
+        // Fallande kurs → under 200-dagarssnittet → flaggad, så analysen syns i summeringen.
+        priceHistoryByFundId = mapOf(fond.fundId to decliningPriceHistory(fond, today))
+        fakeFundPriceRepo.quoteOnly(fond, today, 100.0)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading }
+
+            val analysis = state.content.analysisSummary.flagged.single().analysis
+            val sedanKop = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.SEDAN_KOP }
+            assertEquals(100.0 / 105.0 - 1.0, sedanKop.fraction!!, 1e-9)
+            assertNull(analysis.keyFigures.cagr)
+            assertEquals(FundAnalysisCalc.SignalLevel.ROD, analysis.status) // under både 52-veckorstoppen och 200-dagarssnittet
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `flaggar en fond som ligger under 200-dagars snitt`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")
         fakeTransactionRepo.holdOnly(fond, today.minusYears(2))
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under både
         // 52-veckorstoppen och 200-dagarssnittet (samma fixturprincip som FundAnalysisCalcTest).
-        priceHistoryByFundId = mapOf(
-            fond.fundId to (0..730L step 5).map { daysAgo ->
-                price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05)
-            }
-        )
+        priceHistoryByFundId = mapOf(fond.fundId to decliningPriceHistory(fond, today))
         fakeFundPriceRepo.quoteOnly(fond, today, 100.0)
 
         val vm = viewModel()

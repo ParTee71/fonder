@@ -331,19 +331,19 @@ class FundAnalysisCalcTest {
     fun `analyzeAll analyserar varje innehav mot ovriga fonders snitt och utelamnar fonder utan kopdag`() {
         val fondB = Fund(fundId = "B", name = "Fond B")
         val fondC = Fund(fundId = "C", name = "Fond C")
-        val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1100.0)
-        val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 900.0, currentValue = 900.0)
+        val firstPurchase = today.minusYears(1)
+        // Positionens startdatum kommer ur Holding (issue #194); C saknar det och utelämnas.
+        val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 500.0, currentValue = 1100.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
+        val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 900.0, currentValue = 900.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
         val holdingC = Holding(fund = fondC, netShares = 10.0, netInvested = 900.0, currentValue = 1000.0)
         val historyA = listOf(price(100, 100.0), price(0, 110.0))
         val historyB = listOf(price(100, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
         val histories = mapOf(fond.fundId to historyA, "B" to historyB, "C" to historyB.map { it.copy(fundId = "C") })
-        val firstPurchase = today.minusYears(1)
 
         val result = FundAnalysisCalc.analyzeAll(
             today = today,
             holdings = listOf(holdingA, holdingB, holdingC),
-            historyByFundId = histories,
-            firstPurchaseByFund = mapOf(fond.fundId to firstPurchase, "B" to firstPurchase)
+            historyByFundId = histories
         )
 
         assertEquals(listOf(fond.fundId, "B"), result.keys.toList())

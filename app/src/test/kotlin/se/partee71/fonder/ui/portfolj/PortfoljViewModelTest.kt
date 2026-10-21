@@ -39,13 +39,16 @@ import se.partee71.fonder.domain.model.FundTag
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.buy
+import se.partee71.fonder.testing.decliningPriceHistory
 import se.partee71.fonder.testing.holdFundAWorth1200
 import se.partee71.fonder.testing.holdOnly
+import se.partee71.fonder.testing.holdRebought
 import se.partee71.fonder.testing.price
 import se.partee71.fonder.testing.quoteOnly
 import se.partee71.fonder.testing.testFundMetadata
@@ -260,11 +263,7 @@ class PortfoljViewModelTest {
         fakeTransactionRepo.holdOnly(fond, today.minusYears(2))
         // NAV var högre förr — dagens kurs (100, vid daysAgo=0) hamnar under 200-dagarssnittet
         // (samma fixturprincip som FundAnalysisCalcTest/HemViewModelTest).
-        priceHistoryByFundId = mapOf(
-            fond.fundId to (0..730L step 5).map { daysAgo ->
-                price(fond, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05)
-            }
-        )
+        priceHistoryByFundId = mapOf(fond.fundId to decliningPriceHistory(fond, today))
         cachedPrices.quoteOnly(fond, today, 100.0)
 
         val vm = viewModel()
@@ -273,6 +272,32 @@ class PortfoljViewModelTest {
 
             val analysis = state.analysis[fond.fundId]!!
             assertEquals(se.partee71.fonder.domain.usecase.FundAnalysisCalc.SignalLevel.GUL, analysis.trend!!.level)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `analysen raknar sedan kop och CAGR fran positionens start, inte fondens forsta transaktion (issue 194)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        fakeTransactionRepo.holdRebought(fond, today)
+        val history = decliningPriceHistory(fond, today)
+        priceHistoryByFundId = mapOf(fond.fundId to history)
+        cachedPrices.quoteOnly(fond, today, 100.0)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading }
+
+            val analysis = state.analysis[fond.fundId]!!
+            // Sedan köp: 105 → 100 sedan återköpet, inte 136,5 → 100 sedan första köpet för två år sedan.
+            val sedanKop = analysis.keyFigures.periodReturns.first { it.period == FundAnalysisCalc.Period.SEDAN_KOP }
+            assertEquals(100.0 / 105.0 - 1.0, sedanKop.fraction!!, 1e-9)
+            assertNull(analysis.keyFigures.cagr) // positionen är 100 dagar gammal — ingen årstakt
+            // Kontraktet mot Fonddetalj: exakt det FundAnalysisCalc.analyze ger med positionens start.
+            val holding = state.holdings.single()
+            val expected = FundAnalysisCalc.analyze(today, holding, history, today.minusDays(100), holding.currentValue!!, null)
+            assertEquals(expected, analysis)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -221,9 +221,6 @@ private data class PlanInput(
     val emptiedAtEpochMillis: Long? = null
 )
 
-/** Hur långt tillbaka övriga innehavs kurshistorik hämtas ur cachen för momentum-signalen (S3, ANA-2) — tre månader plus en buffert för helger/röda dagar utan NAV. */
-private const val OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS = 4L
-
 /**
  * Hur långt tillbaka en föreslagen fonds kurshistorik hämtas för jämförelsediagrammet (ANA-11).
  * Täcker diagrammets längsta fasta period ("1 år") med marginal; "Allt" beskärs då till den
@@ -364,7 +361,7 @@ class FondDetaljViewModel @AssistedInject constructor(
                 firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
                 netInvested = holding?.netInvested,
                 purchaseEpochDays = snapshot.purchaseEpochDays.toImmutableList(),
-                analysis = buildAnalysis(holdings, holding, latestPrices, history),
+                analysis = buildAnalysis(holdings, holding, snapshot.transactions, latestPrices, history),
                 holdingValue = holdingValue
             )
             DetailUiState.Content(detail)
@@ -546,6 +543,7 @@ class FondDetaljViewModel @AssistedInject constructor(
     private suspend fun buildAnalysis(
         holdings: List<Holding>,
         holding: Holding?,
+        transactions: List<Transaction>,
         latestPrices: Map<String, FundPrice>,
         thisFundHistory: List<FundPrice>
     ): FundAnalysisCalc.Analysis? {
@@ -555,11 +553,16 @@ class FondDetaljViewModel @AssistedInject constructor(
         val portfolioTotalValue = PortfolioCalc.totalValue(PortfolioCalc.withCurrentValue(holdings, latestPrices))
 
         val today = LocalDate.now()
-        val since = today.minusMonths(OTHER_HOLDINGS_HISTORY_LOOKBACK_MONTHS)
+        // Övriga innehavs historik sedan deras första transaktion — samma fönster som Hem och
+        // Portfölj ger analyzeAll, så momentum-signalen (S3) får samma underlag här (issue #194).
+        val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions)
         val otherHistories = holdings
             .map { it.fund.fundId }
             .filter { it != fundId }
-            .associateWith { otherId -> fundPriceRepository.priceHistory(otherId, since.toEpochDay(), today.toEpochDay()) }
+            .associateWith { otherId ->
+                val since = firstTransactionByFund[otherId] ?: today.minusYears(1).toEpochDay()
+                fundPriceRepository.priceHistory(otherId, since, today.toEpochDay())
+            }
         val otherAverage = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
 
         return FundAnalysisCalc.analyze(

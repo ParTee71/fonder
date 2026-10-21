@@ -67,6 +67,18 @@ class PortfolioCalcTest {
     }
 
     @Test
+    fun `firstTransactionEpochDayByFund ar fondens aldsta transaktion, aven ett salj (issue 194)`() {
+        val fondB = Fund(fundId = "B", name = "B")
+        val txs = listOf(
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
+            Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 10, shares = 2.0, pricePerShare = 90.0),
+            Transaction(fundId = fondB.fundId, type = TransactionType.SALJ, epochDay = 5, shares = 1.0, pricePerShare = 90.0)
+        )
+
+        assertEquals(mapOf(fondA.fundId to 10L, fondB.fundId to 5L), PortfolioCalc.firstTransactionEpochDayByFund(txs))
+    }
+
+    @Test
     fun `holdings sorteras pa namn och totalen summeras`() {
         val txs = listOf(
             Transaction(fundId = fondB.fundId, type = TransactionType.KOP, epochDay = 1, shares = 1.0, pricePerShare = 200.0),

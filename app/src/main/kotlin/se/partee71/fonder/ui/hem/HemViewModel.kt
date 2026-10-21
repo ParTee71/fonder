@@ -297,16 +297,14 @@ class HemViewModel @Inject constructor(
             ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
-                val firstPurchaseByFund = transactions
-                    .groupBy { it.fundId }
-                    .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
+                val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions).mapValues { LocalDate.ofEpochDay(it.value) }
                 // **En** hämtning per fond, inte en per läsare: fönstret är det vidaste någon av
                 // dem behöver (sedan första köpet för analysen och avkastningskurvan, minst
                 // HISTORY_LOOKBACK_DAYS bakåt för dag/vecka/månad även för en nyss köpt fond).
                 // Var och en klipper sedan till sitt eget fönster i minnet — analysen räknar
                 // volatilitet på hela listan den får (ANA-7) och måste därför få exakt sitt.
                 val historyByFundId = funds.associate { fund ->
-                    val since = firstPurchaseByFund[fund.fundId]
+                    val since = firstTransactionByFund[fund.fundId]
                         ?.let { minOf(it, today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS)) }
                         ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
                     fund.fundId to fundPriceRepository.priceHistory(
@@ -328,7 +326,7 @@ class HemViewModel @Inject constructor(
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
-                    analysisSummary = buildAnalysisSummary(enriched, firstPurchaseByFund, historyByFundId, today),
+                    analysisSummary = buildAnalysisSummary(enriched, firstTransactionByFund, historyByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
                     benchmarkSeries = buildBenchmark(
                         refs = currentSettings.benchmark,
@@ -391,26 +389,29 @@ class HemViewModel @Inject constructor(
     /**
      * Analyserar varje innehav och summerar statusarna (HEM-4). Kurshistoriken kommer från den
      * gemensamma hämtningen i flödet ovan (lokal cache, Room — ingen nätverksuppdatering) och
-     * **klipps här till sedan första köpet**, samma räckvidd som
-     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Klippet är
+     * **klipps här till sedan fondens första transaktion**, samma räckvidd som
+     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Det är
+     * historikens fönster, inte "sedan köp" — positionens startdatum tas ur `Holding` inne i
+     * [FundAnalysisCalc.analyzeAll] (issue #194). Klippet är
      * inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela listan den får
      * (ANA-7), så en vidare historik hade tyst gett andra siffror än fondkortet visar.
      */
     private fun buildAnalysisSummary(
         enriched: List<Holding>,
-        firstPurchaseByFund: Map<String, LocalDate>,
+        firstTransactionByFund: Map<String, LocalDate>,
         fullHistoryByFundId: Map<String, List<FundPrice>>,
         today: LocalDate
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
         val historyByFundId = enriched.associate { holding ->
-            val since = firstPurchaseByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
+            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
             holding.fund.fundId to fullHistoryByFundId[holding.fund.fundId].orEmpty()
                 .filter { it.epochDay >= since.toEpochDay() }
         }
 
-        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId, firstPurchaseByFund)
+        // Positionens startdatum ("sedan köp", CAGR) tas ur Holding inne i analyzeAll (issue #194).
+        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId)
         val analyses = enriched.mapNotNull { holding -> byFundId[holding.fund.fundId]?.let { FlaggedHolding(holding.fund, it) } }
 
         return AnalysisSummary(

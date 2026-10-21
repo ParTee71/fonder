@@ -188,22 +188,27 @@ object FundAnalysisCalc {
      * Portfölj. Momentum-signalen (S3) jämför varje fond mot snittet av **övriga** fonders
      * tremånadersutveckling, och portföljandelen räknas mot hela [holdings].
      *
-     * @param historyByFundId kurshistorik per fond, redan klippt till den räckvidd anroparen vill
-     *   analysera (sedan första köpet).
-     * @param firstPurchaseByFund första köpdag per fond; innehav utan köpdag utelämnas.
-     * @return analysen per fundId i [holdings] ordning; fonder som [analyze] inte kan analysera
-     *   utelämnas.
+     * "Sedan köp" och CAGR utgår från **positionens** startdatum, [Holding.firstPurchaseEpochDay]
+     * (första köpet efter att innehavet senast var noll, POR-6) — samma datum som Fonddetalj
+     * använder (issue #194; tidigare räknade Hem och Portfölj från fondens första transaktion
+     * någonsin). Signalerna (S1/S2, volatilitet, Sharpe) räknas på hela [historyByFundId], och S3
+     * på de övriga fondernas; är fönstren desamma som i Fonddetalj blir nyckeltal och signalnivå
+     * identiska på alla tre skärmar.
+     *
+     * @param historyByFundId kurshistorik per fond sedan fondens första transaktion
+     *   ([PortfolioCalc.firstTransactionEpochDayByFund]) — samma fönster som Fonddetalj.
+     * @return analysen per fundId i [holdings] ordning; innehav utan [Holding.firstPurchaseEpochDay]
+     *   och fonder som [analyze] inte kan analysera utelämnas.
      */
     fun analyzeAll(
         today: LocalDate,
         holdings: List<Holding>,
-        historyByFundId: Map<String, List<FundPrice>>,
-        firstPurchaseByFund: Map<String, LocalDate>
+        historyByFundId: Map<String, List<FundPrice>>
     ): Map<String, Analysis> {
         val portfolioTotalValue = PortfolioCalc.totalValue(holdings)
         return holdings.mapNotNull { holding ->
             val fundId = holding.fund.fundId
-            val firstPurchase = firstPurchaseByFund[fundId] ?: return@mapNotNull null
+            val firstPurchase = holding.firstPurchaseEpochDay?.let(LocalDate::ofEpochDay) ?: return@mapNotNull null
             val analysis = analyze(
                 today = today,
                 holding = holding,

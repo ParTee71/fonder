@@ -72,6 +72,26 @@ fun FakeTransactionRepository.holdOnly(fund: Fund, boughtAt: LocalDate, shares: 
     transactions.value = listOf(buy(fund, boughtAt, shares, pricePerShare))
 }
 
+/**
+ * Fonden köpt för två år sedan, **helt såld** för ett år sedan och köpt igen för 100 dagar sedan
+ * (à 105 kr) — positionen är alltså 100 dagar gammal fast fondens historik är två år (issue #194).
+ */
+fun FakeTransactionRepository.holdRebought(fund: Fund, today: LocalDate) {
+    funds.value = listOf(fund)
+    transactions.value = listOf(
+        buy(fund, today.minusYears(2), 10.0, 136.5),
+        Transaction(fundId = fund.fundId, type = TransactionType.SALJ, epochDay = today.minusYears(1).toEpochDay(), shares = 10.0, pricePerShare = 118.25),
+        buy(fund, today.minusDays(100), 10.0, 105.0)
+    )
+}
+
+/**
+ * Två års fallande kurshistorik var femte dag: NAV var högre förr (100 + dagar sedan × 0,05), så
+ * dagens kurs 100 hamnar under både 52-veckorstoppen och 200-dagarssnittet — samma fixturprincip
+ * som FundAnalysisCalcTest. Kursen 100 dagar sedan är 105.
+ */
+fun decliningPriceHistory(fund: Fund, today: LocalDate): List<FundPrice> = (0..730L step 5).map { daysAgo -> price(fund, today.minusDays(daysAgo), 100.0 + daysAgo * 0.05) }
+
 /** Kurscachen har bara [fund]:s kurs [nav] den [day]. */
 fun FakeCachedPriceRepository.quoteOnly(fund: Fund, day: LocalDate, nav: Double) {
     latestPrices.value = mapOf(fund.fundId to price(fund, day, nav))
