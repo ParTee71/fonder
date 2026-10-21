@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -248,6 +249,50 @@ class FondDetaljViewModelTest {
         vm.uiState.test {
             val state = awaitRecoveryAfterRetry(source, vm::retry, { it.loading }, { it.error })
             assertEquals("Fond A", state.content.fundName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Forsok igen visar laddningen medan fonden lases om (NFR-6)`() = runTest(dispatcher) {
+        var failing = true
+        val released = MutableStateFlow(false)
+        val slowRepo = object : TransactionRepository by fakeTransactionRepo {
+            override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flow {
+                if (failing) throw DataError.Database
+                // Omläsningen står still tills testet släpper den – laddningsläget hinner alltid synas.
+                released.first { it }
+                emitAll(fakeTransactionRepo.observeTransactionsForFund(fundId))
+            }
+        }
+        val vm = viewModel(slowRepo)
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.error == null) state = awaitItem()
+
+            failing = false
+            vm.retry()
+            assertTrue("ramen ska visa laddningen, inte det gamla felet", awaitItem().loading)
+
+            released.value = true
+            state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull(state.error)
+            assertEquals("Fond A", state.content.fundName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `en fond som inte finns langre sags ut utan Forsok igen (NFR-6)`() = runTest(dispatcher) {
+        funds.value = emptyList()
+        val vm = viewModel()
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertEquals(DataError.NotFound, state.error?.cause)
+            assertFalse(state.error!!.retryable)
+            assertFalse(state.isEmpty)
             cancelAndIgnoreRemainingEvents()
         }
     }

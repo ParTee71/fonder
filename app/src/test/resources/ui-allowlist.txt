@@ -8,7 +8,6 @@
 
 # Baslinje
 app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitScreen.kt:padding(horizontal = Spacing.l, vertical = 6.dp – baslinje 2026-10 – rättas i skärm-PR:erna
-app/src/main/kotlin/se/partee71/fonder/ui/fond/FondDetaljScreen.kt:padding(top = 2.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/hem/HemScreen.kt:padding(top = 2.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportHoldingsScreen.kt:padding(horizontal = Spacing.l, vertical = 6.dp – baslinje 2026-10 – rättas i skärm-PR:erna
 app/src/main/kotlin/se/partee71/fonder/ui/imports/ImportOrdersScreen.kt:padding(horizontal = Spacing.l, vertical = 6.dp – baslinje 2026-10 – rättas i skärm-PR:erna

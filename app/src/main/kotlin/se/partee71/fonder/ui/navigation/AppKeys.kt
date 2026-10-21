@@ -50,9 +50,12 @@ data object HandelserKey : TabKey, FrameKey
 @Serializable
 data object SettingsKey : AppKey
 
-/** Fonddetalj för [fundId] (Handelsbankens fondlista-id, TP-9). */
+/**
+ * Fonddetalj för [fundId] (Handelsbankens fondlista-id, TP-9) – en ramskärm på android-ui:s
+ * detaljram ([FrameKey]) med fondens namn i den lilla toppraden.
+ */
 @Serializable
-data class FondDetaljKey(val fundId: String) : AppKey
+data class FondDetaljKey(val fundId: String) : FrameKey
 
 /** Sök och lägg till en Handelsbanken-fond i bevakningen – en ramskärm på android-ui:s listram ([FrameKey]). */
 @Serializable

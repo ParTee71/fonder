@@ -49,8 +49,14 @@ class ScreenTest {
 
     @Test
     fun `skarmar med argument har rubrik oavsett argument`() {
-        assertEquals(R.string.fond_title, titleResFor(FondDetaljKey("SHB0000442")))
         assertEquals(R.string.switch_watch_title, titleResFor(SwitchWatchKey(7)))
+    }
+
+    @Test
+    fun `fonddetalj ar en ramskarm som ritar sin rubrik sjalv`() {
+        // NAV-2: fondens namn står i detaljramens topprad, oavsett fond.
+        assertEquals(null, titleResFor(FondDetaljKey("SHB0000442")))
+        assertEquals(null, titleResFor(FondDetaljKey("SHB0000999")))
     }
 
     @Test

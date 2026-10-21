@@ -68,6 +68,7 @@ ItemRow(title = "Global Indexfond A", navigates = true, onClick = {})
 InfoPill(text = "Sålt", tone = Tone.Copper, shape = AppTheme.shapes.smallTile)
 SectionHeader(title = "Byten", count = "2 väntar på dig", working = true)
 AppDivider()
+AppDivider(Modifier.padding(top = Spacing.s))
 AppFloatingToolbar(tabs = tabs, selectedIndex = 0, onSelect = {})
 AppFabMenu(expanded = false, onExpandedChange = {}, items = items)
 AppTopBar(title = "Fond", onBack = {})
@@ -132,6 +133,10 @@ ToggleFloatingActionButton(checked = false, onCheckedChange = {}) { }
 FloatingActionButtonMenu(expanded = false, button = {}) { }
 TopAppBar(title = {})
 CenterAlignedTopAppBar(title = {})
+HorizontalDivider()
+HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+VerticalDivider(modifier = Modifier.height(Spacing.l))
+Divider()
 PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
 ExposedDropdownMenuBox(expanded = false, onExpandedChange = {}) { }
 CartesianChartHost(chart, model)
@@ -152,6 +157,7 @@ Button(onClick = onClick, shapes = shapes) { label() }
 OutlinedTextField(value = value, onValueChange = onValueChange)
 TopAppBar(title = { Text(title) }, navigationIcon = {})
 HorizontalFloatingToolbar(expanded = true, modifier = modifier) { }
+HorizontalDivider(modifier.padding(horizontal = Spacing.m), thickness = 1.dp)
 ToggleFloatingActionButton(checked = expanded, onCheckedChange = onExpandedChange) { }
 
 [komponent-stopp]

@@ -27,8 +27,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.suspendRunCatching
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
@@ -68,8 +70,9 @@ import se.partee71.ui.common.UiError
 
 /**
  * Det Fonddetalj läser ur Room för fonden: namn, ISIN, kurshistorik, innehavets utgångsläge och
- * analysen — innehållet i [FondDetaljUiState.fund]. Vid ett läsfel finns inget av det, och skärmen
- * visar felet i stället för en tom fond (NFR-6).
+ * analysen — innehållet i [FondDetaljUiState.fund], som detaljramen (`EntityDetailScreen`) visar.
+ * Vid ett läsfel, eller när fonden inte finns längre, finns inget av det, och ramen visar felet i
+ * stället för en tom fond (NFR-6).
  */
 @Immutable
 data class FundDetail(
@@ -98,7 +101,7 @@ data class FundDetail(
 
 @Immutable
 data class FondDetaljUiState(
-    /** Fonden — laddning, läsfel (NFR-6) eller innehåll. */
+    /** Fonden — laddning, läsfel eller "finns inte längre" (NFR-6), eller innehåll; detaljramens tillstånd. */
     val fund: DetailUiState<FundDetail> = DetailUiState.Loading,
     /** Billigare-alternativ-jämförelse (ANA-9, issue #59). Null = fonden är inte ett kvarvarande innehav, inget kort visas. */
     val feeComparison: FeeComparisonUiState? = null,
@@ -146,7 +149,7 @@ data class FondDetaljUiState(
     /** Läsfelet som visas i stället för fonden (NFR-6). */
     val error: UiError? get() = fund.errorOrNull()
 
-    /** Det skärmen visar: fonden, eller tomt under den första laddningen (rubrik och diagram snurrar då). */
+    /** Det lästa, eller tomt medan fonden laddas eller inte gick att läsa (då visar ramen sitt läge i stället). */
     val content: FundDetail get() = fund.valueOrNull() ?: FundDetail()
 
     val isEmpty: Boolean get() = fund.valueOrNull()?.prices?.isEmpty() == true
@@ -324,13 +327,16 @@ class FondDetaljViewModel @AssistedInject constructor(
             }
         }
         .map { (snapshot, latestPrices, history) ->
+            // En fond som inte finns (längre) – borttagen, eller databasen tömd – sägs ut utan
+            // "Försök igen", aldrig som en tom fond (NFR-6).
             val fund = snapshot.funds.firstOrNull { it.fundId == fundId }
+                ?: return@map DetailUiState.Error(AppErrors.notFound())
             val holdings = PortfolioCalc.computeHoldings(snapshot.funds, snapshot.transactions)
             val holding = holdings.firstOrNull { it.fund.fundId == fundId }
             val holdingValue = holding?.let { PortfolioCalc.withCurrentValue(listOf(it), latestPrices).first().currentValue }
-            FundDetail(
-                fundName = fund?.name,
-                isin = fund?.isin,
+            val detail = FundDetail(
+                fundName = fund.name,
+                isin = fund.isin,
                 suggestedIsin = snapshot.suggestedIsin,
                 prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
                 movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
@@ -340,8 +346,9 @@ class FondDetaljViewModel @AssistedInject constructor(
                 analysis = buildAnalysis(holdings, holding, latestPrices, history),
                 holdingValue = holdingValue
             )
+            DetailUiState.Content(detail)
         }
-        .map { FondDetaljUiState(fund = DetailUiState.Content(it)) }
+        .map { FondDetaljUiState(fund = it) }
 
     /** Bytesplanens råmaterial: kontotyp (SET-4-gaten), senast inspelade batch och metadatan de slås upp mot. */
     private val planInput: Flow<PlanInput> = combine(
@@ -420,6 +427,9 @@ class FondDetaljViewModel @AssistedInject constructor(
         // Sist i kedjan: ett läsfel i vilken källa som helst (fonden, kurserna, planen,
         // bevakningarna) visas som fel i stället för att krascha fondkortet (NFR-6).
         .catchAsDetailError { FondDetaljUiState(fund = it) }
+        // Varje läsning – även efter "Försök igen" – börjar i laddningsläget, så att ramen visar
+        // laddningen och inte det gamla felet medan fonden läses om (NFR-6).
+        .onStart { emit(FondDetaljUiState()) }
         .restartOn(retrySignal)
         .stateIn(
             scope = viewModelScope,

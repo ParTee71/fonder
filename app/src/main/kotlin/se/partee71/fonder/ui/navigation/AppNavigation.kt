@@ -328,6 +328,7 @@ fun fonderEntries(
     entry<FondDetaljKey> { key ->
         FondDetaljScreen(
             fundId = key.fundId,
+            onBack = { backStack.popIfTop(key) },
             onOpenSwitchWatch = { watchId -> backStack.push(SwitchWatchKey(watchId)) },
             onOpenTransactionForm = { formKey -> backStack.push(formKey) }
         )
