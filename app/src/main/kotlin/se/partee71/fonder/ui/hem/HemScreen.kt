@@ -574,19 +574,21 @@ private fun RiskCard(
  */
 @Composable
 private fun BackupReminderRow(reminder: BackupReminder, onOpenBackup: () -> Unit, modifier: Modifier = Modifier) {
+    // Lokal kopia: BackupReminder ligger i :core, och Kotlin smart-castar inte en publik egenskap från en annan modul.
+    val lastBackupEpochMillis = reminder.lastBackupEpochMillis
     val body = when {
-        reminder.lastBackupEpochMillis == null -> stringResource(R.string.hem_backup_reminder_never)
+        lastBackupEpochMillis == null -> stringResource(R.string.hem_backup_reminder_never)
 
         reminder.newTransactions > 0 -> pluralStringResource(
             R.plurals.format_hem_backup_reminder_new_transactions,
             reminder.newTransactions,
             reminder.newTransactions,
-            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis)
+            BackupReminderCalc.formatDate(lastBackupEpochMillis)
         )
 
         else -> stringResource(
             R.string.format_hem_backup_reminder_last,
-            BackupReminderCalc.formatDate(reminder.lastBackupEpochMillis)
+            BackupReminderCalc.formatDate(lastBackupEpochMillis)
         )
     }
     ReminderRow(

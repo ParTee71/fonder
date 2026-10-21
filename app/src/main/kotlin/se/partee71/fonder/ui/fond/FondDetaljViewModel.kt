@@ -577,9 +577,11 @@ class FondDetaljViewModel @AssistedInject constructor(
                 suspendRunCatching {
                     val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
                     val since = earliestPurchase.first()
+                    // Lokal kopia: Fund ligger i :core, och Kotlin smart-castar inte en publik egenskap från en annan modul.
+                    val isin = fund?.isin
 
-                    if (fund?.isin != null && since != null) {
-                        fundPriceRepository.refreshSince(fundId, fund.isin, since)
+                    if (isin != null && since != null) {
+                        fundPriceRepository.refreshSince(fundId, isin, since)
                     } else if (fundPriceRepository.isPriceStale(fundId)) {
                         fundPriceRepository.refresh(fundId, since)
                     }

@@ -1,6 +1,11 @@
+import com.android.build.api.dsl.ApplicationExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 plugins {
     base
     alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.hilt) apply false
@@ -32,14 +37,38 @@ val ktlintRules = mapOf(
 )
 spotless {
     kotlin {
-        target("app/src/**/*.kt")
+        target("core/src/**/*.kt", "app/src/**/*.kt")
         ktlint(libs.versions.ktlint.get())
             .editorConfigOverride(ktlintRules)
             .customRuleSets(listOf(libs.compose.rules.ktlint.get().toString()))
     }
     kotlinGradle {
-        target("*.gradle.kts", "app/*.gradle.kts")
+        target("*.gradle.kts", "core/*.gradle.kts", "app/*.gradle.kts")
         ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintRules)
+    }
+}
+
+// Java-målet för alla moduler, på ett ställe (skill android:android-gradle-logic): källa och mål 17,
+// JDK 21 kör bygget (ARKITEKTUR.md → Byggkonfiguration). Modulfilerna har bara det som är deras eget.
+val javaVersion = JavaVersion.VERSION_17
+
+subprojects {
+    tasks.withType<KotlinJvmCompile>().configureEach {
+        compilerOptions.jvmTarget.set(JvmTarget.fromTarget(javaVersion.toString()))
+    }
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<JavaPluginExtension> {
+            sourceCompatibility = javaVersion
+            targetCompatibility = javaVersion
+        }
+    }
+    plugins.withId("com.android.application") {
+        extensions.configure<ApplicationExtension> {
+            compileOptions {
+                sourceCompatibility = javaVersion
+                targetCompatibility = javaVersion
+            }
+        }
     }
 }
 
@@ -59,7 +88,7 @@ dependencies {
     add(cpdClasspath.name, libs.pmd.kotlin)
 }
 val cpdSources = fileTree(rootDir) {
-    include("app/src/main/**/*.kt", "app/src/test/**/*.kt", "app/src/androidTest/**/*.kt")
+    include("core/src/**/*.kt", "app/src/main/**/*.kt", "app/src/test/**/*.kt", "app/src/androidTest/**/*.kt")
 }
 val cpdBaselineHeader = """
     # Kända kopior (PMD CPD, minst $cpdMinimumTokens tokens) – baslinjen för cpdCheck i build.gradle.kts.

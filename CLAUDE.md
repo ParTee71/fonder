@@ -63,7 +63,7 @@ effekten i PR:en. Att slippa köra ett test är aldrig ett skäl att inte skriva
 
 **Läget i dag:** efter CI-etappen uppskattat **~2 minuter** för en dokument-PR och **~6–7
 minuter** för en kod-PR (`changes` + `build-and-test` + `ci-ok`), plus emulatorn (~10–15) bara
-när `app/src/main/**`, `app/src/androidTest/**` eller byggfilerna ändrats. Tidigare ~19–20
+när `core/src/main/**`, `app/src/main/**`, `app/src/androidTest/**` eller byggfilerna ändrats. Tidigare ~19–20
 minuter per PR-push. Ingen ändring får göra det dyrare.
 → Skill: **ci-budget**.
 
@@ -113,6 +113,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ## Bygg & test (kommandon)
 
 ```bash
+./gradlew :core:test                         # domänen: modeller och rena use cases (ren JVM, sekunder)
 ./gradlew :app:compileDebugKotlin            # kompilera
 ./gradlew :app:testDebugUnitTest             # enhetstester (JUnit/MockK/Turbine), Robolectric, UiConsistencyTest
 ./gradlew :app:verifyRoborazziDebug          # samma tester + skärmdumpsjämförelse mot app/src/test/screenshots/ (som CI)
@@ -133,7 +134,7 @@ att installera Android SDK och liknande verktyg i sessionen vid behov
 får CI bekräfta – säg det i PR:en.
 
 I GitHub Actions kör `.github/workflows/android.yml` vid push och PR mot `master`: ett
-`changes`-jobb avgör utifrån ändrade sökvägar om kompilering och enhetstester
+`changes`-jobb avgör utifrån ändrade sökvägar om kompilering och enhetstester, `:core:test` inräknat
 (`build-and-test`) och instrumenttesterna på emulator (`instrumented-tests`, **bara i PR**
 som rör koden de testar) körs, och `ci-ok` är den samlade statusen. Lint och release-bygget
 (R8) körs veckovis och på begäran i `quality.yml` samt i `release.yml`. `release.yml` bygger
@@ -185,7 +186,8 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
 ## Arkitektur i korthet
 
 `Compose → ViewModel (StateFlow<UiState>) → Repository → Room/DataStore`.
-Paket under `app/src/main/kotlin/se/partee71/fonder/`:
+Två moduler: `:core` (ren Kotlin/JVM – `domain/model` och de rena use casen i `domain/usecase`) och
+`:app`. Paket under `se/partee71/fonder/`:
 `data/` (auth, datastore, imports, network, repository, room) · `di/` · `domain/` (model, usecase) ·
 `ui/<feature>/` + `ui/components/` + `ui/diagram/` + `ui/theme/` · `worker/`.
 Detaljer i [ARKITEKTUR.md](ARKITEKTUR.md) (enda källan för paketträd, dataflöde och datamodell).

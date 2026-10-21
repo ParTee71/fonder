@@ -88,11 +88,6 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -141,12 +136,6 @@ roborazzi {
     outputDir.set(file("src/test/screenshots"))
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
@@ -158,6 +147,8 @@ composeCompiler {
 }
 
 dependencies {
+    // Domänen: modeller och rena use cases (ren Kotlin/JVM, #171)
+    implementation(project(":core"))
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.compose.ui.text.googlefonts)
     implementation(libs.androidx.appcompat)
