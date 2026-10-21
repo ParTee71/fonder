@@ -188,14 +188,15 @@ object FundAnalysisCalc {
      * Portfölj. Momentum-signalen (S3) jämför varje fond mot snittet av **övriga** fonders
      * tremånadersutveckling, och portföljandelen räknas mot hela [holdings].
      *
-     * "Sedan köp", CAGR och signalerna utgår från **positionens** startdatum,
-     * [Holding.firstPurchaseEpochDay] (första köpet efter att innehavet senast var noll, POR-6)
-     * — samma datum som Fonddetalj använder, så att en fond som sålts av helt och köpts igen
-     * visar samma nyckeltal och samma signalnivå på alla tre skärmar (issue #194; tidigare
-     * räknade Hem och Portfölj från fondens första transaktion någonsin).
+     * "Sedan köp" och CAGR utgår från **positionens** startdatum, [Holding.firstPurchaseEpochDay]
+     * (första köpet efter att innehavet senast var noll, POR-6) — samma datum som Fonddetalj
+     * använder (issue #194; tidigare räknade Hem och Portfölj från fondens första transaktion
+     * någonsin). Signalerna (S1/S2, volatilitet, Sharpe) räknas på hela [historyByFundId], och S3
+     * på de övriga fondernas; är fönstren desamma som i Fonddetalj blir nyckeltal och signalnivå
+     * identiska på alla tre skärmar.
      *
-     * @param historyByFundId kurshistorik per fond, redan klippt till den räckvidd anroparen vill
-     *   analysera (sedan fondens första transaktion, som Fonddetalj).
+     * @param historyByFundId kurshistorik per fond sedan fondens första transaktion
+     *   ([PortfolioCalc.firstTransactionEpochDayByFund]) — samma fönster som Fonddetalj.
      * @return analysen per fundId i [holdings] ordning; innehav utan [Holding.firstPurchaseEpochDay]
      *   och fonder som [analyze] inte kan analysera utelämnas.
      */

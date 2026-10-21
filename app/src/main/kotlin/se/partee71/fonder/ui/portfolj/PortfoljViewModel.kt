@@ -271,12 +271,10 @@ class PortfoljViewModel @Inject constructor(
 
         // Historiken sedan fondens första transaktion (samma fönster som Fonddetalj); positionens
         // startdatum för "sedan köp"/CAGR tas ur Holding inne i analyzeAll (issue #194).
-        val firstTransactionByFund = transactions
-            .groupBy { it.fundId }
-            .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
+        val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions)
         val historyByFundId = enriched.associate { holding ->
-            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
-            holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since.toEpochDay(), today.toEpochDay())
+            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS).toEpochDay()
+            holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since, today.toEpochDay())
         }
 
         return FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId)

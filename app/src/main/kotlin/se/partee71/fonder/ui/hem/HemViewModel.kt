@@ -297,9 +297,7 @@ class HemViewModel @Inject constructor(
             ) { prices, metadataByIsin, currentSettings ->
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
-                val firstTransactionByFund = transactions
-                    .groupBy { it.fundId }
-                    .mapValues { (_, txs) -> LocalDate.ofEpochDay(txs.minOf { it.epochDay }) }
+                val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions).mapValues { LocalDate.ofEpochDay(it.value) }
                 // **En** hämtning per fond, inte en per läsare: fönstret är det vidaste någon av
                 // dem behöver (sedan första köpet för analysen och avkastningskurvan, minst
                 // HISTORY_LOOKBACK_DAYS bakåt för dag/vecka/månad även för en nyss köpt fond).
@@ -391,8 +389,10 @@ class HemViewModel @Inject constructor(
     /**
      * Analyserar varje innehav och summerar statusarna (HEM-4). Kurshistoriken kommer från den
      * gemensamma hämtningen i flödet ovan (lokal cache, Room — ingen nätverksuppdatering) och
-     * **klipps här till sedan första köpet**, samma räckvidd som
-     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Klippet är
+     * **klipps här till sedan fondens första transaktion**, samma räckvidd som
+     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Det är
+     * historikens fönster, inte "sedan köp" — positionens startdatum tas ur `Holding` inne i
+     * [FundAnalysisCalc.analyzeAll] (issue #194). Klippet är
      * inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela listan den får
      * (ANA-7), så en vidare historik hade tyst gett andra siffror än fondkortet visar.
      */

@@ -62,6 +62,15 @@ object PortfolioCalc {
      */
     fun oldestKnownNavEpochDay(holdings: List<Holding>): Long? = holdings.mapNotNull { if (it.currentValue != null) it.navEpochDay else null }.minOrNull()
 
+    /**
+     * Fondens **första transaktion någonsin** (köp eller sälj) per fondId — kurshistorikens
+     * startdag för analysen, densamma på Hem, Portfölj och Fonddetalj (issue #194). Skild från
+     * [Holding.firstPurchaseEpochDay], positionens start, som "sedan köp" och CAGR räknas från.
+     */
+    fun firstTransactionEpochDayByFund(transactions: List<Transaction>): Map<String, Long> = transactions
+        .groupBy { it.fundId }
+        .mapValues { (_, txs) -> txs.minOf { it.epochDay } }
+
     /** Summa nettoinvesterat över alla innehav. */
     fun totalInvested(holdings: List<Holding>): Double = holdings.sumOf { it.netInvested }
 
