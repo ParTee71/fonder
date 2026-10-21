@@ -18,7 +18,7 @@ object PortfolioCalc {
      * resultat i stället, issue #10).
      *
      * `netInvested` är de kvarvarande (ej sålda) andelarnas verkliga anskaffningsvärde,
-     * matchat med FIFO ([RealizedGainCalculator.remainingPositions]) — inte kassaflödet
+     * enligt genomsnittsmetoden ([RealizedGainCalculator.remainingPositions], issue #192) — inte kassaflödet
      * (köp minus säljintäkter). Det gör orealiserat resultat korrekt även efter en
      * delförsäljning, och även när andelarna köpts till olika pris vid olika tillfällen.
      */
@@ -34,7 +34,7 @@ object PortfolioCalc {
                     fund = fund,
                     netShares = position.shares,
                     netInvested = position.costBasis,
-                    // Äldsta **kvarvarande** köp-lott, inte fondens äldsta transaktion: en fond
+                    // Positionens första köp, inte fondens äldsta transaktion: en fond
                     // som sålts av helt och köpts igen ska räknas från det nya köpet, annars
                     // beskriver datumet och netInvested två olika positioner (och ANA-1:s
                     // "sedan köp" annualiserar över år positionen inte funnits).

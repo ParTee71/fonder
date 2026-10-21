@@ -10,8 +10,8 @@ import se.partee71.fonder.domain.model.Holding
  * Nyckeltal och säljsignaler per innehav (issue #16) — hjälper användaren följa en fond över
  * längre tid och avgöra om det kan vara läge att se över den. Ren, testbar domänlogik utan
  * repository-beroende, samma "senaste kända NAV på/före periodens start"-princip som
- * [PortfolioPerformanceCalc] och samma FIFO-kvarvarande anskaffningsvärde ([Holding.netInvested])
- * som [PortfolioCalc] — ingen ny persisterad data eller egen FIFO-motor.
+ * [PortfolioPerformanceCalc] och samma kvarvarande anskaffningsvärde enligt genomsnittsmetoden ([Holding.netInvested])
+ * som [PortfolioCalc] — ingen ny persisterad data eller egen anskaffningsmotor.
  *
  * Domänlagret känner inte till Android/strängresurser (regel: UI-text i `strings.xml`) — ett
  * icke-null [Analysis.status]/signal betyder "tillräcklig data", detaljer (t.ex.

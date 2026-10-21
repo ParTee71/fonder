@@ -215,7 +215,7 @@ class PortfolioReturnSeriesCalcTest {
     @Test
     fun `en delforsaljning flyttar inte kurvan`() {
         // Två köp till olika kurs, sedan en sälj av den första lotten. Anskaffningsvärdet
-        // (FIFO) styr totalkortet, men inte den tidsviktade kurvan: kedjan följer kursrörelsen
+        // (genomsnittsmetoden) styr totalkortet, men inte den tidsviktade kurvan: kedjan följer kursrörelsen
         // på de andelar som faktiskt ägdes varje dag.
         val transaktioner = listOf(
             kop("A", day = 10, shares = 10.0, price = 100.0),

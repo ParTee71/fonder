@@ -257,6 +257,17 @@ def average_cost_sales(transactions: list[Transaction]) -> list[Sale]:
     """Genomsnittsmetoden (Skatteverket): köpavgiften ingår i anskaffningsvärdet, ett sälj
     ändrar inte snittet per andel, säljavgiften dras från försäljningspriset. Andelar som
     säljs utöver innehavet räknas som `uncovered_units`, som i appen."""
+    return _average_cost(transactions)[0]
+
+
+def average_cost_remaining(transactions: list[Transaction]) -> float:
+    """Kvarvarande anskaffningsvärde med genomsnittsmetoden, som appens Holding.netInvested
+    (sedan issue #192): summan av vad som är kvar av varje fonds anskaffningsvärde."""
+    return sum(_average_cost(transactions)[1].values())
+
+
+def _average_cost(transactions: list[Transaction]) -> tuple[list[Sale], dict[str, float]]:
+    """En genomgång som ger både säljen och det kvarvarande anskaffningsvärdet per fond."""
     units: dict[str, float] = {}
     cost: dict[str, float] = {}
     sales = []
@@ -273,17 +284,18 @@ def average_cost_sales(transactions: list[Transaction]) -> list[Sale]:
         cost[t.fund] = cost.get(t.fund, 0.0) - sold_cost
         if units[t.fund] <= EPSILON:
             units[t.fund], cost[t.fund] = 0.0, 0.0
-    return sales
+    return sales, cost
 
 
 def fifo_sales(transactions: list[Transaction]) -> list[Sale]:
-    """FIFO som appens RealizedGainCalculator i dag: äldsta lott säljs först, lottens kostnad är
-    andelar × kurs (köpavgiften räknas inte in), säljavgiften dras från resultatet."""
+    """FIFO som appens RealizedGainCalculator räknade före issue #192: äldsta lott säljs först,
+    lottens kostnad är andelar × kurs (köpavgiften räknas inte in), säljavgiften dras från
+    resultatet. Kvar som referens för att visa skillnaden mot genomsnittsmetoden."""
     return _fifo(transactions)[0]
 
 
 def fifo_remaining_cost(transactions: list[Transaction]) -> float:
-    """Kvarvarande lotters anskaffningsvärde med FIFO, som appens Holding.netInvested."""
+    """Kvarvarande lotters anskaffningsvärde med FIFO (referens, appens regel före issue #192)."""
     return sum(units * price for queue in _fifo(transactions)[1].values() for units, price in queue)
 
 
@@ -370,7 +382,8 @@ def golden(fixture: dict) -> dict:
     mwr_ex_fees, _ = money_weighted_return(transactions, prices, end, include_fees=False)
     twr_365 = annualized(twr, days, XIRR_DAYS_PER_YEAR)
     deposited = net_deposits(transactions)
-    remaining_cost = fifo_remaining_cost(transactions)
+    remaining_cost = average_cost_remaining(transactions)
+    remaining_cost_fifo = fifo_remaining_cost(transactions)
     comparable = mwr_ex_fees is not None and twr_365 is not None and not (mwr_partial or twr_partial)
 
     def sale_rows(sales: list[Sale]) -> list[dict]:
@@ -409,13 +422,16 @@ def golden(fixture: dict) -> dict:
                 "net_deposits": deposited,
                 "total_gain": None if value_partial else value - deposited,
                 "total_gain_fraction": None if value_partial or deposited <= 0 else (value - deposited) / deposited,
-                # Appens totalkort i dag: orealiserat mot kvarvarande FIFO-lotter, utan realiserat.
-                "unrealized_fifo_as_app": None if value_partial else value - remaining_cost,
-                "unrealized_fifo_as_app_fraction": None if value_partial or remaining_cost <= 0 else (value - remaining_cost) / remaining_cost,
+                # Totalkortets "Varav orealiserat": värde mot kvarvarande anskaffningsvärde enligt
+                # genomsnittsmetoden (appens regel sedan issue #192); FIFO kvar som referens.
+                "remaining_cost_average": remaining_cost,
+                "unrealized_average_cost_as_app": None if value_partial else value - remaining_cost,
+                "unrealized_average_cost_as_app_fraction": None if value_partial or remaining_cost <= 0 else (value - remaining_cost) / remaining_cost,
+                "unrealized_fifo": None if value_partial else value - remaining_cost_fifo,
             },
             "funds": {fund: risk_figures(series) for fund, series in prices.series.items()},
             "realized_average_cost": sale_rows(average_cost_sales(transactions)),
-            "realized_fifo_as_app": sale_rows(fifo_sales(transactions)),
+            "realized_fifo": sale_rows(fifo_sales(transactions)),
         }
     )
 

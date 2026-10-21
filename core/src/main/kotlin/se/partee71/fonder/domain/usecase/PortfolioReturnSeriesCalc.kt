@@ -98,7 +98,7 @@ object PortfolioReturnSeriesCalc {
             .sorted()
         if (timeline.isEmpty()) return Result.EMPTY
 
-        // Innehav ändras bara på transaktionsdagar, så FIFO körs en gång per segment i stället för en
+        // Innehav ändras bara på transaktionsdagar, så innehaven räknas en gång per segment i stället för en
         // gång per dag — annars hade "Allt" för en flerårig portfölj räknat om hela
         // transaktionshistoriken tusentals gånger vid varje omkomposition.
         var nextTransactionIndex = 0
@@ -198,8 +198,8 @@ object PortfolioReturnSeriesCalc {
      * hoppar över en insättning är sämre än ingen jämförelse alls (samma
      * hellre-markerat-än-gissat-princip som HEM-2).
      *
-     * Avgifter (courtage) tas inte med i skuggportföljen: de påverkar inte anskaffningsvärdet
-     * på köpsidan ([RealizedGainCalculator]), och att låtsas att ett fondbyte i en indexfond
+     * Avgifter (courtage) tas inte med i skuggportföljen: kurvan är tidsviktad och ser inga
+     * avgifter, och att låtsas att ett fondbyte i en indexfond
      * hade kostat exakt lika mycket vore en gissning.
      */
     fun benchmark(transactions: List<Transaction>, components: List<BenchmarkComponent>): Result? {
@@ -212,7 +212,7 @@ object PortfolioReturnSeriesCalc {
         val synthetic = mutableListOf<Transaction>()
 
         // Varje komponent blir en egen syntetisk fond, så den viktade skuggportföljen räknas av
-        // exakt samma maskineri som den riktiga: FIFO, framåtfyllda kurser och allt. En
+        // exakt samma maskineri som den riktiga: innehav per segment, framåtfyllda kurser och allt. En
         // enkomponentsblandning ger därför per konstruktion samma kurva som före issue #101.
         components.forEachIndexed { index, component ->
             val fundId = "$BENCHMARK_FUND_ID$index"

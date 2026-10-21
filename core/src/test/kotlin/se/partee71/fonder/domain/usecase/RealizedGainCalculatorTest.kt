@@ -9,14 +9,19 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 
-private fun kop(fundId: String, day: Long, shares: Double, price: Double, id: Long = 0) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price)
+private fun kop(fundId: String, day: Long, shares: Double, price: Double, fee: Double = 0.0, id: Long = 0) = Transaction(id = id, fundId = fundId, type = TransactionType.KOP, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
 
 private fun salj(fundId: String, day: Long, shares: Double, price: Double, fee: Double = 0.0, id: Long = 0) = Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = shares, pricePerShare = price, fee = fee)
 
+/**
+ * [RealizedGainCalculator] — genomsnittsmetoden (Skatteverket, issue #192; tidigare FIFO). Golden-
+ * värdena kommer ur `python tools/fondmatte/fondmatte.py golden <fixtur>` (`realized_average_cost`,
+ * `remaining_cost_average`), inte ur koden som testas.
+ */
 class RealizedGainCalculatorTest {
 
     @Test
-    fun `enkel forsaljning av en enda lott ger korrekt realiserat resultat`() {
+    fun `enkel forsaljning av ett enda kop ger korrekt realiserat resultat`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
             salj("F1", day = 200, shares = 10.0, price = 120.0, id = 2)
@@ -33,7 +38,7 @@ class RealizedGainCalculatorTest {
     }
 
     @Test
-    fun `delforsaljning konsumerar aldsta koplotten forst (FIFO)`() {
+    fun `delforsaljning raknas pa genomsnittligt anskaffningsvarde, inte aldsta kop`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 6.0, price = 100.0, id = 1),
             kop("F1", day = 150, shares = 8.0, price = 110.0, id = 2),
@@ -44,15 +49,49 @@ class RealizedGainCalculatorTest {
 
         assertEquals(1, sales.size)
         val sale = sales.first()
-        // 6 andelar från den äldre lotten (à 100) + 4 från den yngre (à 110) = 600 + 440.
-        assertEquals(1040.0, sale.costBasis, 1e-9)
+        // Snitt (600 + 880) / 14 = 105,714… kr per andel; 10 sålda → 1 057,14 kr (FIFO hade gett 1 040).
+        assertEquals(10.0 * 1480.0 / 14.0, sale.costBasis, 1e-9)
         assertEquals(1300.0, sale.proceeds, 1e-9)
-        assertEquals(260.0, sale.realizedGain, 1e-9)
+        assertEquals(1300.0 - 10.0 * 1480.0 / 14.0, sale.realizedGain, 1e-9)
         assertEquals(0.0, sale.uncoveredShares, 1e-9)
     }
 
     @Test
-    fun `flera delforsaljningar over tid konsumerar resterande andelar av samma lott`() {
+    fun `kopavgiften ingar i anskaffningsvardet och saljavgiften dras fran likviden (golden exempel)`() {
+        // tools/fondmatte/exempel.json, "Påhittad Sverige Aktiv": köp 120 à 250 + 39 kr, sälj 70,4461,
+        // köp 45,0402 à 222,0237 + 39 kr, sälj 62,2464. Förväntat: realized_average_cost.
+        val transactions = listOf(
+            kop("S", day = 19968, shares = 120.0, price = 250.0, fee = 39.0, id = 1),
+            salj("S", day = 20185, shares = 70.4461, price = 212.9286, fee = 39.0, id = 2),
+            kop("S", day = 20241, shares = 45.0402, price = 222.0237, fee = 39.0, id = 3),
+            salj("S", day = 20332, shares = 62.2464, price = 192.7823, fee = 39.0, id = 4)
+        )
+
+        val byId = RealizedGainCalculator.compute(transactions).associateBy { it.transactionId }
+
+        assertEquals(17634.419982500003, byId.getValue(2).costBasis, 1e-9)
+        assertEquals(-2673.430534040004, byId.getValue(2).realizedGain, 1e-9)
+        assertEquals(14768.696483857948, byId.getValue(4).costBasis, 1e-9)
+        assertEquals(-2807.6923251379485, byId.getValue(4).realizedGain, 1e-9)
+        assertEquals(0.0, byId.getValue(4).uncoveredShares, 1e-9)
+    }
+
+    @Test
+    fun `ett salj andrar inte snittet per andel for de andelar som ar kvar`() {
+        val transactions = listOf(
+            kop("F1", day = 100, shares = 10.0, price = 100.0, fee = 50.0, id = 1),
+            salj("F1", day = 200, shares = 4.0, price = 300.0, id = 2)
+        )
+
+        val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
+
+        // Snitt 1 050 / 10 = 105 kr per andel före och efter säljet: 6 kvar à 105.
+        assertEquals(6.0, position.shares, 1e-9)
+        assertEquals(630.0, position.costBasis, 1e-9)
+    }
+
+    @Test
+    fun `flera delforsaljningar over tid konsumerar resten av samma position`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
             salj("F1", day = 200, shares = 4.0, price = 120.0, id = 2),
@@ -96,7 +135,7 @@ class RealizedGainCalculatorTest {
     }
 
     @Test
-    fun `olika fonder paverkar inte varandras lotter`() {
+    fun `olika fonder paverkar inte varandras snitt`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 10.0, price = 100.0, id = 1),
             kop("F2", day = 100, shares = 5.0, price = 50.0, id = 2),
@@ -124,7 +163,7 @@ class RealizedGainCalculatorTest {
     }
 
     @Test
-    fun `remainingPositions ger FIFO-anskaffningsvarde for kvarvarande andelar`() {
+    fun `remainingPositions ger genomsnittligt anskaffningsvarde for kvarvarande andelar`() {
         val transactions = listOf(
             kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
             kop("F1", day = 150, shares = 5.0, price = 200.0, id = 2),
@@ -134,25 +173,54 @@ class RealizedGainCalculatorTest {
         val positions = RealizedGainCalculator.remainingPositions(transactions)
 
         assertEquals(4.0, positions.getValue("F1").shares, 1e-9)
-        // 4 kvarvarande andelar ur den yngre lotten à 200 kr.
-        assertEquals(800.0, positions.getValue("F1").costBasis, 1e-9)
-        // Den äldre lotten är helt konsumerad, så positionen räknas från det yngre köpet —
-        // samma position som costBasis beskriver (POR-6).
-        assertEquals(150L, positions.getValue("F1").firstPurchaseEpochDay)
+        // Snitt 1 500 / 10 = 150 kr per andel: 4 kvar à 150 = 600 kr (FIFO hade gett 800).
+        assertEquals(600.0, positions.getValue("F1").costBasis, 1e-9)
+        // Ett delsälj flyttar inte positionens startdatum — det finns inga lotter att konsumera (POR-6, issue #192).
+        assertEquals(100L, positions.getValue("F1").firstPurchaseEpochDay)
     }
 
     @Test
-    fun `remainingPositions behaller aldsta kop-lotten nar den bara delvis konsumerats`() {
+    fun `summan av saljens anskaffningsvarden ar exakt summan av kopen nar allt salts`() {
         val transactions = listOf(
-            kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
-            kop("F1", day = 150, shares = 5.0, price = 200.0, id = 2),
-            salj("F1", day = 200, shares = 2.0, price = 150.0, id = 3)
+            kop("F1", day = 1, shares = 3.0, price = 101.37, fee = 39.0, id = 1),
+            kop("F1", day = 2, shares = 7.1, price = 97.11, fee = 39.0, id = 2),
+            salj("F1", day = 3, shares = 1.3, price = 110.0, id = 3),
+            salj("F1", day = 4, shares = 2.9, price = 105.0, id = 4),
+            salj("F1", day = 5, shares = 5.9, price = 99.0, id = 5)
+        )
+
+        val sales = RealizedGainCalculator.compute(transactions)
+
+        assertEquals(3.0 * 101.37 + 39.0 + 7.1 * 97.11 + 39.0, sales.sumOf { it.costBasis }, 0.0)
+        assertFalse(RealizedGainCalculator.remainingPositions(transactions).containsKey("F1"))
+    }
+
+    @Test
+    fun `en rad utan andelar varken startar position eller bar kostnad`() {
+        val transactions = listOf(
+            kop("F1", day = 10, shares = 0.0, price = 100.0, fee = 39.0, id = 1),
+            kop("F1", day = 20, shares = 10.0, price = 100.0, id = 2)
         )
 
         val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
 
-        assertEquals(8.0, position.shares, 1e-9)
-        assertEquals(100L, position.firstPurchaseEpochDay)
+        assertEquals(1000.0, position.costBasis, 1e-9)
+        assertEquals(20L, position.firstPurchaseEpochDay)
+    }
+
+    @Test
+    fun `ny position efter att allt salts raknas fran det nya kopet`() {
+        val transactions = listOf(
+            kop("F1", day = 100, shares = 5.0, price = 100.0, id = 1),
+            salj("F1", day = 200, shares = 5.0, price = 150.0, id = 2),
+            kop("F1", day = 300, shares = 2.0, price = 120.0, id = 3)
+        )
+
+        val position = RealizedGainCalculator.remainingPositions(transactions).getValue("F1")
+
+        assertEquals(2.0, position.shares, 1e-9)
+        assertEquals(240.0, position.costBasis, 1e-9) // inget av den gamla positionens värde följer med
+        assertEquals(300L, position.firstPurchaseEpochDay)
     }
 
     @Test

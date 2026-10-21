@@ -92,7 +92,7 @@ domain/
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding · RiskProfile/RiskProfileAnswers (#68)
 └── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
                   FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
-                  RealizedGainCalculator (delad FIFO-motor, realiserat + kvarvarande resultat, #10) ·
+                  RealizedGainCalculator (delad anskaffningsmotor, genomsnittsmetoden, realiserat + kvarvarande resultat, #10, #192) ·
                   MoneyFormat · SwedishNumberFormat · FundCompanyMatcher (kärnnamn för bolagsledtråd) · FundNameMatcher ·
                   PurchaseDateEstimator · ImportFundMatcher (delad matchningsordning, regel 4) ·
                   CurrencyConverter (fondlistas kurser → kronor, #43) · TransactionFormValidator ·

@@ -24,17 +24,17 @@ beloppet är alltid andelar × kurs, som i appens `Transaction`.
 
 | Del | Innehåll | Oberoende källa |
 |---|---|---|
-| `portfolio` | marknadsvärde, kedjad TWR (total, årstakt och `twr_annualized_act365`), XIRR (ACT/365F) med och utan avgifter, beteendegapet (`xirr_excluding_fees` − `twr_annualized_act365`), totalresultatet (`net_deposits`, `total_gain`) och appens totalkort (`unrealized_fifo_as_app`), och `*_partial` när ett innehav saknat kurs | pyxirr för XIRR; TWR skriven efter `PortfolioReturnSeriesCalc` |
+| `portfolio` | marknadsvärde, kedjad TWR (total, årstakt och `twr_annualized_act365`), XIRR (ACT/365F) med och utan avgifter, beteendegapet (`xirr_excluding_fees` − `twr_annualized_act365`), totalresultatet (`net_deposits`, `total_gain`) appens "Varav orealiserat" (`remaining_cost_average`, `unrealized_average_cost_as_app`) och FIFO som referens (`unrealized_fifo`), och `*_partial` när ett innehav saknat kurs | pyxirr för XIRR; TWR skriven efter `PortfolioReturnSeriesCalc` |
 | `funds` | total avkastning, seriens CAGR, max drawdown, och volatilitet, Sharpe och Sortino från 60 dagsavkastningar (volatilitet 0 ger Sharpe `null`) | empyrical-reloaded |
-| `realized_average_cost` | realiserat resultat per sälj med genomsnittsmetoden, köpavgiften i anskaffningsvärdet | Skatteverkets regel |
-| `realized_fifo_as_app` | samma med appens nuvarande regel: FIFO, köpavgiften utanför | `RealizedGainCalculator` |
+| `realized_average_cost` | realiserat resultat per sälj med genomsnittsmetoden, köpavgiften i anskaffningsvärdet – appens regel sedan #192 | Skatteverkets regel; `RealizedGainCalculator` |
+| `realized_fifo` | samma med appens regel före #192: FIFO, köpavgiften utanför – kvar som referens | – |
 
 Sålda andelar utan känt köp redovisas i `uncovered_units`, som i appen.
 
 Värdena klistras in i JUnit-testet för motsvarande objekt i `domain/usecase/` med fixturen som
 indata (tolerans `1e-9`). `exempel.json` är en påhittad portfölj med två fonder, köp, delsälj och
-avgifter – den visar att appens regel och genomsnittsmetoden skiljer 23 kr på första säljet
-(köpavgiften) och 438 kr på det andra (FIFO). Nya fixturer har alltid påhittad data, aldrig riktiga innehav.
+avgifter – den visar att FIFO och genomsnittsmetoden skiljer 23 kr på första säljet
+(köpavgiften) och 438 kr på det andra. Nya fixturer har alltid påhittad data, aldrig riktiga innehav.
 
 ## `fi_innehav.py` – Finansinspektionens fondinnehav
 

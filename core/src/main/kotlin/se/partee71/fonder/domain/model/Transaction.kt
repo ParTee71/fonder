@@ -10,9 +10,9 @@ enum class TransactionType { KOP, SALJ }
  * @param epochDay handelsdag som epoch-day (UTC), sorterbar utan tidszonsberoende.
  * @param shares antal andelar.
  * @param pricePerShare kurs (NAV) per andel vid transaktionen.
- * @param fee avgift i kr (t.ex. courtage), default 0.0. Dras av från försäljningsbeloppet
- *   vid realisationsberäkning för sälj-transaktioner (se [se.partee71.fonder.domain.usecase]
- *   `RealizedGainCalculator`, issue #10) — räknas inte in i anskaffningsvärdet för köp.
+ * @param fee avgift i kr (t.ex. courtage), default 0.0. För ett köp ingår den i anskaffningsvärdet,
+ *   för ett sälj dras den från försäljningsbeloppet (genomsnittsmetoden, se
+ *   [se.partee71.fonder.domain.usecase] `RealizedGainCalculator`, issue #10, #192).
  */
 @Serializable
 data class Transaction(

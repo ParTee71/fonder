@@ -33,7 +33,7 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 |---|---|---|---|
 | **Tidsviktad (TWR)** | Kedja av dagsfaktorer där gårdagens andelar värderas till gårdagens och dagens NAV; in- och utflöden faller ur | "Hur gick fonderna?" Jämförbart med faktablad och index | `PortfolioReturnSeriesCalc.compute` (HEM-9) |
 | **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | `PortfolioTotalCalc.compute` → `moneyWeightedAnnualReturn` (HEM-1, årstakt bara ≥ 365 dagar) |
-| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande FIFO-lotter | Totalkortets rad "Varav orealiserat" – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
+| Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande anskaffningsvärde enligt genomsnittsmetoden | Totalkortets rad "Varav orealiserat" – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
 | Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" Totalkortets huvudtal | `PortfolioTotalCalc.compute` → `totalGainKr`/`totalGainFraction` (golden: `total_gain`) |
 | Periodförändring | NAV på referensdagen mot NAV `n` dagar före, ingen kassaflödesjustering | Dag/vecka/månad | `PortfolioPerformanceCalc` |
 | Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
@@ -53,12 +53,11 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
   per fond, omräknat vid varje köp; köpavgiften ingår; ett sälj ändrar inte snittet per andel;
   säljavgiften dras från försäljningspriset. Resultatet deklareras på K4. Schablonmetoden (20 %
   av priset) är tillåten för marknadsnoterade andelar.
-- **Avvikelse i dag, två delar:** `RealizedGainCalculator` och `Holding.netInvested` räknar
-  **FIFO**, och köpavgiften räknas **inte** in i anskaffningsvärdet (`Transaction.fee`: dras bara
-  från säljet). Vid fler köp till olika kurs och delsälj, eller köp med avgift, blir realiserat
-  resultat och kvarvarande anskaffningsvärde då inte vad Skatteverket räknar med
-  (`tools/fondmatte/exempel.json`: första säljet skiljer 23 kr på köpavgiften, andra 438 kr).
-  Hur det ska rättas, och om FIFO ska finnas kvar någonstans, avgörs i ett issue.
+- **I appen:** `RealizedGainCalculator` (`:core`) räknar genomsnittsmetoden sedan 0.79.1 (issue #192):
+  `Holding.netInvested`, GAV, säljradernas resultat och "Realiserat resultat i år" bygger alla på
+  den. Positionens startdatum (`firstPurchaseEpochDay`) är första köpet efter att innehavet senast
+  var noll. FIFO finns bara kvar som referens i `tools/fondmatte` (`realized_fifo`, `unrealized_fifo`)
+  för att visa skillnaden (`exempel.json`: 23 kr på första säljet, 438 kr på det andra).
 - **ISK/KF** (`AccountType.ISK_KF`): ingen skatt vid sälj. Schablonskatt = kapitalunderlag ×
   max(1,25 %, statslåneräntan 30/11 året före + 1 pp) × 30 %. Kapitalunderlaget är de fyra
   kvartalens ingående värden plus årets insättningar delat med fyra, **minus den skattefria
@@ -127,8 +126,8 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
    `fondmatte.py` med ett handräknat test i `test_fondmatte.py`, helst via referensbiblioteket
    (pyxirr, empyrical-reloaded).
 3. Skriv JUnit-testet för objektet i `domain/usecase/` med samma indata och de utskrivna
-   värdena, tolerans `1e-9`. Kommentera vilket kommando som gav dem. `realized_fifo_as_app` är
-   appens nuvarande regel, `realized_average_cost` Skatteverkets.
+   värdena, tolerans `1e-9`. Kommentera vilket kommando som gav dem. `realized_average_cost` är
+   appens regel (Skatteverkets), `realized_fifo` referensen för hur det räknades före #192.
 4. Ändras en konvention ovan: ändra tabellen, `fondmatte.py` och koden i samma PR.
 
 Python behövs bara i sessionen; CI kör bara JUnit-testerna (regel 5).

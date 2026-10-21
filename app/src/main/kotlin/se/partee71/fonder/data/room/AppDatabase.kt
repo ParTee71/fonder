@@ -92,8 +92,8 @@ abstract class AppDatabase : RoomDatabase() {
 
         /**
          * Version 3 → 4: lägger till `fee` (avgift, NOT NULL DEFAULT 0.0) på `transactions`
-         * — nytt attribut för realisationsberäkning av sälj-transaktioner (FIFO, se
-         * `RealizedGainCalculator`, issue #10). Befintliga rader får 0.0, dvs. ingen känd
+         * — nytt attribut för realisationsberäkningen (se `RealizedGainCalculator`, issue #10;
+         * sedan #192 ingår köpavgiften i anskaffningsvärdet). Befintliga rader får 0.0, dvs. ingen känd
          * avgift — oförändrat beteende för all historisk data.
          */
         val MIGRATION_3_4 = object : Migration(3, 4) {
