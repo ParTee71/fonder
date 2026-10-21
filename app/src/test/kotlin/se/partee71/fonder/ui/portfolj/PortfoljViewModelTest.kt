@@ -296,7 +296,7 @@ class PortfoljViewModelTest {
             assertNull(analysis.keyFigures.cagr) // positionen är 100 dagar gammal — ingen årstakt
             // Kontraktet mot Fonddetalj: exakt det FundAnalysisCalc.analyze ger med positionens start.
             val holding = state.holdings.single()
-            val expected = FundAnalysisCalc.analyze(today, holding, history, today.minusDays(100), holding.currentValue!!, null)
+            val expected = FundAnalysisCalc.analyze(today, holding, fakeTransactionRepo.transactions.value, history, today.minusDays(100), holding.currentValue!!, null)
             assertEquals(expected, analysis)
             cancelAndIgnoreRemainingEvents()
         }

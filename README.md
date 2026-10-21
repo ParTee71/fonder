@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.79.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.79.3 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.79.3 | Kronbeloppen i periodraderna (dag/vecka/månad på Hem och Portfölj, i år/3 mån/1 år/3 år i Analys) är nu värdeförändringen på de andelar som faktiskt ägts, dag för dag – tidigare räknades kursrörelsen på dagens antal andelar, så andelar köpta mitt i perioden fick "avkastning" från före köpet. "Sedan köp" i kronor är positionens vinst mot anskaffningsvärdet, samma tal som GAV-raden (#193). |
 | 0.79.2 | "Sedan köp", CAGR och säljsignalerna räknas från positionens startdatum på alla tre skärmarna – Hem och Portfölj räknade tidigare från fondens första transaktion, så en fond som sålts av helt och köpts igen kunde visa andra siffror och annan signalfärg än i Fonddetalj (#194). |
 | 0.79.1 | Anskaffningsvärde och realiserat resultat räknas med **genomsnittsmetoden** (Skatteverkets regel för fondandelar, K4) i stället för FIFO, och köpavgiften ingår i anskaffningsvärdet (#192). Påverkar säljradernas resultat i Händelser, "Realiserat resultat i år", innehavens inköpsvärde, GAV och "Varav orealiserat". Inget nytt sparas. |
 | 0.79.0 | Totalkortet på Hem och Portfölj visar **totalresultatet** (värde + uttag − insättningar, avgifter inräknade, även helt sålda fonder) som huvudtal, **årsavkastning (pengaviktad, XIRR)** efter ett år och orealiserat resultat på kvarvarande andelar som underordnad rad, med en utfällbar förklaring (#191). Tidigare dolde kortet realiserade förluster och avgifter. |
