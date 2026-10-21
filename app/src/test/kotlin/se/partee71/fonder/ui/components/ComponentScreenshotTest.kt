@@ -88,6 +88,16 @@ class ComponentScreenshotTest {
     }
 
     @Test
+    fun `PeriodRow med olika tecken pa procent och kronor`() = composeRule.captureLightAndDark("PeriodRow_mixedSigns") {
+        // Issue #193: procenten är fondens kursutveckling, kronorna värdeförändringen på ägda andelar —
+        // köpt efter en uppgång ger + % men − kr. Varje tal färgas efter sitt eget tecken.
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PeriodRow(label = "Senaste månaden", amount = -412.0, fraction = 0.021)
+            PeriodRow(label = "Senaste veckan", amount = 156.0, fraction = -0.004)
+        }
+    }
+
+    @Test
     fun `RiskBadge och ProfitTakeBadge`() = composeRule.captureLightAndDark("Badges_default") {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

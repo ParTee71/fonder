@@ -318,6 +318,7 @@ class HemViewModel @Inject constructor(
                 val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
                 val navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched)
+                val transactionsByFundId = transactions.groupBy { it.fundId }
                 HemPortfolio(
                     hasHoldings = enriched.isNotEmpty(),
                     totalInvested = PortfolioCalc.totalInvested(enriched),
@@ -325,8 +326,8 @@ class HemViewModel @Inject constructor(
                     totalGainLoss = PortfolioCalc.totalGainLoss(enriched),
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
-                    performance = PortfolioPerformanceCalc.totalPerformance(enriched, today, historyByFundId),
-                    analysisSummary = buildAnalysisSummary(enriched, firstTransactionByFund, historyByFundId, today),
+                    performance = PortfolioPerformanceCalc.totalPerformance(enriched, transactionsByFundId, today, historyByFundId),
+                    analysisSummary = buildAnalysisSummary(enriched, transactionsByFundId, firstTransactionByFund, historyByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
                     benchmarkSeries = buildBenchmark(
                         refs = currentSettings.benchmark,
@@ -398,6 +399,7 @@ class HemViewModel @Inject constructor(
      */
     private fun buildAnalysisSummary(
         enriched: List<Holding>,
+        transactionsByFundId: Map<String, List<Transaction>>,
         firstTransactionByFund: Map<String, LocalDate>,
         fullHistoryByFundId: Map<String, List<FundPrice>>,
         today: LocalDate
@@ -411,7 +413,7 @@ class HemViewModel @Inject constructor(
         }
 
         // Positionens startdatum ("sedan köp", CAGR) tas ur Holding inne i analyzeAll (issue #194).
-        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, historyByFundId)
+        val byFundId = FundAnalysisCalc.analyzeAll(today, enriched, transactionsByFundId, historyByFundId)
         val analyses = enriched.mapNotNull { holding -> byFundId[holding.fund.fundId]?.let { FlaggedHolding(holding.fund, it) } }
 
         return AnalysisSummary(

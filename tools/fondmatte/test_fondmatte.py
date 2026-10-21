@@ -174,6 +174,64 @@ class TotalGainTest(unittest.TestCase):
         self.assertAlmostEqual(fm.average_cost_remaining(trades), 5005.0)
 
 
+class PeriodRowsTest(unittest.TestCase):
+    """Periodradernas kronor = värdeförändring på ägda andelar, dag för dag (issue #193)."""
+
+    P = prices(A=[("2026-01-01", 100.0), ("2026-01-02", 110.0), ("2026-01-03", 99.0), ("2026-01-04", 120.0)])
+
+    def test_buy_on_a_day_gets_the_move_from_the_next_point(self):
+        # Köp 10 à 110 den 2:a: 110 → 99 → 120 på 10 andelar = +100 kr, inte 10 × (120 − 100).
+        change = fm.value_change([tx("2026-01-02", "BUY", 10, 110.0)], self.P, "A", date(2026, 1, 1), date(2026, 1, 4))
+        self.assertAlmostEqual(change, 100.0, places=12)
+
+    def test_sell_on_a_day_keeps_the_move_up_to_that_day(self):
+        # 10 andelar sedan före perioden, 4 säljs den 3:e: 10 × (110 − 100) + 10 × (99 − 110) + 6 × (120 − 99).
+        trades = [tx("2025-12-01", "BUY", 10, 90.0), tx("2026-01-03", "SELL", 4, 99.0)]
+        change = fm.value_change(trades, self.P, "A", date(2026, 1, 1), date(2026, 1, 4))
+        self.assertAlmostEqual(change, 100.0 - 110.0 + 126.0, places=12)
+
+    def test_trade_on_a_day_without_price_is_traded_at_the_next_price(self):
+        # Kurs bara fredag den 2:a (100) och måndag den 5:e (120): ett köp på lördagen till
+        # måndagens kurs får ingen rörelse, ett sälj på lördagen behåller rörelsen till måndagen.
+        gap = prices(A=[("2026-01-02", 100.0), ("2026-01-05", 120.0)])
+        buy = fm.value_change([tx("2026-01-03", "BUY", 10, 120.0)], gap, "A", date(2026, 1, 2), date(2026, 1, 5))
+        self.assertAlmostEqual(buy, 0.0, places=12)
+        sell = [tx("2025-12-01", "BUY", 10, 90.0), tx("2026-01-03", "SELL", 10, 120.0)]
+        self.assertAlmostEqual(fm.value_change(sell, gap, "A", date(2026, 1, 2), date(2026, 1, 5)), 200.0, places=12)
+
+    def test_nothing_held_is_zero_and_no_start_price_is_none(self):
+        self.assertEqual(fm.value_change([tx("2026-02-01", "BUY", 10, 120.0)], self.P, "A", date(2026, 1, 1), date(2026, 1, 4)), 0.0)
+        self.assertIsNone(fm.value_change([tx("2025-12-01", "BUY", 10, 90.0)], self.P, "A", date(2025, 12, 31), date(2026, 1, 4)))
+
+    def test_value_change_is_end_value_minus_net_purchases_when_starting_empty(self):
+        # Oberoende kontroll: från ett tomt innehav är värdeförändringen slutvärdet minus nettoköpen
+        # (andelar × kurs, avgifter utanför) när kursen på transaktionsdagen är transaktionens kurs.
+        trades = [tx("2026-01-02", "BUY", 10, 110.0, fee=5.0), tx("2026-01-03", "SELL", 4, 99.0, fee=5.0)]
+        change = fm.value_change(trades, self.P, "A", date(2026, 1, 1), date(2026, 1, 4))
+        self.assertAlmostEqual(change, 6 * 120.0 - (10 * 110.0 - 4 * 99.0), places=12)
+
+    def test_minus_months_clips_to_month_end_like_java_time(self):
+        self.assertEqual(fm.minus_months(date(2026, 5, 31), 3), date(2026, 2, 28))
+        self.assertEqual(fm.minus_months(date(2026, 1, 15), 1), date(2025, 12, 15))
+        self.assertEqual(fm.minus_months(date(2026, 10, 16), 36), date(2023, 10, 16))
+
+    def test_periodkop_fixture_matches_hand_calculation(self):
+        # periodkop.json: köp 100 à 101,5 (1/9), köp 50 à 106 + 10 kr (1/10), sälj 30 à 105,3 − 10 kr (9/10).
+        with open(Path(__file__).with_name("periodkop.json"), encoding="utf-8") as f:
+            rows = fm.golden(json.load(f))["funds"]["A"]["periods"]
+        self.assertAlmostEqual(rows["day"]["amount"], 120 * (110.2 - 108.9), places=9)
+        self.assertAlmostEqual(rows["week"]["amount"], 120 * (110.2 - 105.3), places=9)
+        self.assertAlmostEqual(rows["month"]["amount"], 100 * (106 - 102.25) + 150 * (105.3 - 106) + 120 * (110.2 - 105.3), places=9)
+        # 3 mån börjar utan innehav: slutvärde 13 224 minus nettoköp 10 150 + 5 300 − 3 159.
+        self.assertAlmostEqual(rows["3m"]["amount"], 13224 - (10150 + 5300 - 3159), places=9)
+        self.assertAlmostEqual(rows["3m"]["fraction"], 110.2 / 98.0 - 1, places=12)
+        # Sedan köp: 120 × 110,2 − 120/150 × (10 150 + 5 310) = 856 kr (genomsnittsmetoden, köpavgift inräknad).
+        self.assertAlmostEqual(rows["since_purchase"]["amount"], 856.0, places=9)
+        self.assertAlmostEqual(rows["since_purchase"]["fraction"], 110.2 / 101.5 - 1, places=12)
+        for period in ("ytd", "1y", "3y"):
+            self.assertEqual(rows[period], {"amount": None, "fraction": None})
+
+
 class ExampleFixtureTest(unittest.TestCase):
     def test_example_runs_and_methods_differ(self):
         with open(Path(__file__).with_name("exempel.json"), encoding="utf-8") as f:

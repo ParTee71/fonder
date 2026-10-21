@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.pow
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.Transaction
 
 /**
  * Nyckeltal och säljsignaler per innehav (issue #16) — hjälper användaren följa en fond över
@@ -43,7 +44,13 @@ object FundAnalysisCalc {
 
     enum class Period { YTD, TRE_MANADER, ETT_AR, TRE_AR, SEDAN_KOP }
 
-    /** [amount]/[fraction] null = otillräcklig kurshistorik för perioden (ANA-1/ANA-4), aldrig gissat. */
+    /**
+     * [fraction] = fondens kursutveckling under perioden (NAV mot NAV). [amount] = värdeförändringen
+     * i kr på de andelar som faktiskt ägts under perioden, dag för dag ([PositionValueChangeCalc],
+     * issue #193); för [Period.SEDAN_KOP] positionens vinst mot anskaffningsvärdet (samma tal som
+     * GAV-raden och portföljkortet, [Holding.gainLoss]). Null = otillräcklig kurshistorik för
+     * perioden (ANA-1/ANA-4), aldrig gissat.
+     */
     data class PeriodReturn(val period: Period, val amount: Double?, val fraction: Double?)
 
     enum class SignalLevel { GRON, GUL, ROD }
@@ -100,6 +107,8 @@ object FundAnalysisCalc {
      * saknar kurshistorik — det finns då inget att analysera (samma princip som
      * [PortfolioCalc.computeHoldings], som redan utelämnar sådana fonder ur portföljen).
      *
+     * @param transactions fondens egna transaktioner — avgör hur många andelar som ägts varje
+     *   dag i periodraderna ([PositionValueChangeCalc]); procenten och signalerna behöver dem inte.
      * @param priceHistory fondens kurshistorik, gärna sedan första köpet (redan reaktivt
      *   laddad i Fonddetalj, se [se.partee71.fonder.ui.fond.FondDetaljViewModel]) — ju kortare
      *   historik, desto fler perioder/signaler blir otillräcklig data i stället för gissade.
@@ -110,13 +119,15 @@ object FundAnalysisCalc {
     fun analyze(
         today: LocalDate,
         holding: Holding,
+        transactions: List<Transaction>,
         priceHistory: List<FundPrice>,
         firstPurchaseDate: LocalDate,
         portfolioTotalValue: Double,
         otherHoldingsAverageThreeMonthReturn: Double?
     ): Analysis? {
         if (holding.netShares <= 0.0) return null
-        val currentNav = priceHistory.maxByOrNull { it.epochDay }?.nav ?: return null
+        val latest = priceHistory.maxByOrNull { it.epochDay } ?: return null
+        val currentNav = latest.nav
 
         val periodReturns = listOf(
             Period.YTD to LocalDate.of(today.year, 1, 1),
@@ -124,7 +135,18 @@ object FundAnalysisCalc {
             Period.ETT_AR to today.minusYears(1),
             Period.TRE_AR to today.minusYears(3),
             Period.SEDAN_KOP to firstPurchaseDate
-        ).map { (period, start) -> periodReturn(period, start, priceHistory, currentNav, holding.netShares) }
+        ).map { (period, start) ->
+            val fraction = priceReturn(start, priceHistory, currentNav)
+            val amount = when {
+                // Positionens faktiska vinst — samma tal som GAV-raden, så skärmen inte visar två "vinster".
+                period == Period.SEDAN_KOP -> holding.gainLoss ?: (holding.netShares * currentNav - holding.netInvested)
+
+                fraction == null -> null
+
+                else -> PositionValueChangeCalc.valueChange(transactions, priceHistory, start.toEpochDay(), latest.epochDay)
+            }
+            PeriodReturn(period, amount, fraction)
+        }
 
         val sincePurchaseFraction = periodReturns.first { it.period == Period.SEDAN_KOP }.fraction
         val holdingDays = ChronoUnit.DAYS.between(firstPurchaseDate, today)
@@ -195,6 +217,7 @@ object FundAnalysisCalc {
      * på de övriga fondernas; är fönstren desamma som i Fonddetalj blir nyckeltal och signalnivå
      * identiska på alla tre skärmar.
      *
+     * @param transactionsByFundId transaktionerna per fond (periodradernas kronor, se [analyze]).
      * @param historyByFundId kurshistorik per fond sedan fondens första transaktion
      *   ([PortfolioCalc.firstTransactionEpochDayByFund]) — samma fönster som Fonddetalj.
      * @return analysen per fundId i [holdings] ordning; innehav utan [Holding.firstPurchaseEpochDay]
@@ -203,6 +226,7 @@ object FundAnalysisCalc {
     fun analyzeAll(
         today: LocalDate,
         holdings: List<Holding>,
+        transactionsByFundId: Map<String, List<Transaction>>,
         historyByFundId: Map<String, List<FundPrice>>
     ): Map<String, Analysis> {
         val portfolioTotalValue = PortfolioCalc.totalValue(holdings)
@@ -212,6 +236,7 @@ object FundAnalysisCalc {
             val analysis = analyze(
                 today = today,
                 holding = holding,
+                transactions = transactionsByFundId[fundId].orEmpty(),
                 priceHistory = historyByFundId[fundId].orEmpty(),
                 firstPurchaseDate = firstPurchase,
                 portfolioTotalValue = portfolioTotalValue,
@@ -227,21 +252,14 @@ object FundAnalysisCalc {
         return if (fractions.isEmpty()) null else fractions.average()
     }
 
-    private fun periodReturn(
-        period: Period,
-        periodStart: LocalDate,
-        priceHistory: List<FundPrice>,
-        currentNav: Double,
-        shares: Double
-    ): PeriodReturn {
+    /** Fondens kursutveckling från senaste kända NAV på eller före [periodStart] till [currentNav]; null utan sådan kurs. */
+    private fun priceReturn(periodStart: LocalDate, priceHistory: List<FundPrice>, currentNav: Double): Double? {
         val historicalNav = priceHistory
             .filter { it.epochDay <= periodStart.toEpochDay() }
             .maxByOrNull { it.epochDay }
             ?.nav
-        if (historicalNav == null || historicalNav <= 0.0) return PeriodReturn(period, amount = null, fraction = null)
-        val fraction = (currentNav - historicalNav) / historicalNav
-        val amount = (currentNav - historicalNav) * shares
-        return PeriodReturn(period, amount, fraction)
+        if (historicalNav == null || historicalNav <= 0.0) return null
+        return (currentNav - historicalNav) / historicalNav
     }
 
     private fun computeCagr(holdingDays: Long, sincePurchaseFraction: Double?): Double? {

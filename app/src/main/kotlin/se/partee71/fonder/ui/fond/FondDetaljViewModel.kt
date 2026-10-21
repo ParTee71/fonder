@@ -568,6 +568,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         return FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = transactions.filter { it.fundId == fundId },
             priceHistory = thisFundHistory,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = portfolioTotalValue,

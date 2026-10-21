@@ -9,6 +9,8 @@ import org.junit.Test
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.Transaction
+import se.partee71.fonder.domain.model.TransactionType
 
 class FundAnalysisCalcTest {
 
@@ -29,6 +31,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = history,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = 1200.0,
@@ -48,6 +51,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = history,
             firstPurchaseDate = today.minusDays(30),
             portfolioTotalValue = 1200.0,
@@ -67,6 +71,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = history,
             firstPurchaseDate = today.minusMonths(6),
             portfolioTotalValue = 1200.0,
@@ -86,6 +91,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = history,
             firstPurchaseDate = firstPurchase,
             portfolioTotalValue = 2000.0,
@@ -103,6 +109,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = history,
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 1200.0,
@@ -120,6 +127,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = longHistory(),
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 4800.0,
@@ -135,6 +143,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today = today,
             holding = holding,
+            transactions = emptyList(),
             priceHistory = longHistory(),
             firstPurchaseDate = today.minusYears(2),
             portfolioTotalValue = 0.0,
@@ -156,6 +165,7 @@ class FundAnalysisCalcTest {
         val gron = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             historyWithHighAndCurrent(100.0, 95.0),
             today.minusYears(2),
             950.0,
@@ -166,6 +176,7 @@ class FundAnalysisCalcTest {
         val gul = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             historyWithHighAndCurrent(100.0, 89.0),
             today.minusYears(2),
             890.0,
@@ -176,6 +187,7 @@ class FundAnalysisCalcTest {
         val rod = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             historyWithHighAndCurrent(100.0, 79.0),
             today.minusYears(2),
             790.0,
@@ -189,7 +201,7 @@ class FundAnalysisCalcTest {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
         val history = (0..100L).map { price(it, nav = 100.0) }
 
-        val analysis = FundAnalysisCalc.analyze(today, holding, history, today.minusDays(100), 1000.0, null)!!
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusDays(100), 1000.0, null)!!
 
         assertNull(analysis.distanceFromHigh)
     }
@@ -202,10 +214,10 @@ class FundAnalysisCalcTest {
         val underSnitt = listOf(price(200, 100.0), price(100, 100.0), price(0, 80.0))
         val overSnitt = listOf(price(200, 100.0), price(100, 100.0), price(0, 130.0))
 
-        val gul = FundAnalysisCalc.analyze(today, holding, underSnitt, today.minusYears(1), 800.0, null)!!.trend!!
+        val gul = FundAnalysisCalc.analyze(today, holding, emptyList(), underSnitt, today.minusYears(1), 800.0, null)!!.trend!!
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, gul.level)
 
-        val gron = FundAnalysisCalc.analyze(today, holding, overSnitt, today.minusYears(1), 1300.0, null)!!.trend!!
+        val gron = FundAnalysisCalc.analyze(today, holding, emptyList(), overSnitt, today.minusYears(1), 1300.0, null)!!.trend!!
         assertEquals(FundAnalysisCalc.SignalLevel.GRON, gron.level)
     }
 
@@ -214,7 +226,7 @@ class FundAnalysisCalcTest {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
         val history = (0..100L).map { price(it, nav = 100.0) }
 
-        val analysis = FundAnalysisCalc.analyze(today, holding, history, today.minusDays(100), 1000.0, null)!!
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusDays(100), 1000.0, null)!!
 
         assertNull(analysis.trend)
     }
@@ -228,7 +240,7 @@ class FundAnalysisCalcTest {
         // och dagens 110 ligger över det. Hade toppen räknats in hade S2 blivit gul.
         val history = listOf(price(201, 1000.0), price(200, 100.0), price(100, 100.0), price(0, 110.0))
 
-        val trend = FundAnalysisCalc.analyze(today, holding, history, today.minusYears(1), 1100.0, null)!!.trend!!
+        val trend = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusYears(1), 1100.0, null)!!.trend!!
 
         assertEquals(FundAnalysisCalc.SignalLevel.GRON, trend.level)
         assertEquals(
@@ -246,6 +258,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             history,
             today.minusYears(1),
             900.0,
@@ -264,6 +277,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             history,
             today.minusYears(1),
             900.0,
@@ -279,7 +293,7 @@ class FundAnalysisCalcTest {
         val history = longHistory() // platt/stigande, inga signaler triggade
         // Portföljsnittet sätts nära denna fonds egen 3-månadersutveckling så momentumsignalen
         // inte triggas av misstag — testet gäller S1/S2, inte S3.
-        val analysis = FundAnalysisCalc.analyze(today, holding, history, today.minusYears(4), 1200.0, 0.0)!!
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusYears(4), 1200.0, 0.0)!!
 
         assertEquals(FundAnalysisCalc.SignalLevel.GRON, analysis.status)
     }
@@ -291,7 +305,7 @@ class FundAnalysisCalcTest {
         // inte röd), momentum uteslutet (null -> räknas inte).
         val history = (0..400L).map { daysAgo -> price(daysAgo, nav = 100.0 + daysAgo * 0.05) } // NAV var högre förr
 
-        val analysis = FundAnalysisCalc.analyze(today, holding, history, today.minusYears(2), 1200.0, null)!!
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), history, today.minusYears(2), 1200.0, null)!!
 
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, analysis.distanceFromHigh!!.level)
         assertEquals(FundAnalysisCalc.SignalLevel.GUL, analysis.trend!!.level)
@@ -301,13 +315,13 @@ class FundAnalysisCalcTest {
     @Test
     fun `analyze ar null om inga andelar kvarstar`() {
         val holding = Holding(fund = fond, netShares = 0.0, netInvested = 0.0)
-        assertNull(FundAnalysisCalc.analyze(today, holding, longHistory(), today.minusYears(1), 0.0, null))
+        assertNull(FundAnalysisCalc.analyze(today, holding, emptyList(), longHistory(), today.minusYears(1), 0.0, null))
     }
 
     @Test
     fun `analyze ar null om ingen kurshistorik alls finns`() {
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 500.0)
-        assertNull(FundAnalysisCalc.analyze(today, holding, emptyList(), today.minusYears(1), 0.0, null))
+        assertNull(FundAnalysisCalc.analyze(today, holding, emptyList(), emptyList(), today.minusYears(1), 0.0, null))
     }
 
     @Test
@@ -343,6 +357,7 @@ class FundAnalysisCalcTest {
         val result = FundAnalysisCalc.analyzeAll(
             today = today,
             holdings = listOf(holdingA, holdingB, holdingC),
+            transactionsByFundId = emptyMap(),
             historyByFundId = histories
         )
 
@@ -350,6 +365,7 @@ class FundAnalysisCalcTest {
         val expectedA = FundAnalysisCalc.analyze(
             today,
             holdingA,
+            emptyList(),
             historyA,
             firstPurchase,
             3000.0,
@@ -359,6 +375,7 @@ class FundAnalysisCalcTest {
         val expectedB = FundAnalysisCalc.analyze(
             today,
             holdingB,
+            emptyList(),
             historyB,
             firstPurchase,
             3000.0,
@@ -374,6 +391,7 @@ class FundAnalysisCalcTest {
     private fun analyzeWith(history: List<FundPrice>) = FundAnalysisCalc.analyze(
         today = today,
         holding = riskHolding,
+        transactions = emptyList(),
         priceHistory = history,
         firstPurchaseDate = today.minusYears(1),
         portfolioTotalValue = 1200.0,
@@ -424,6 +442,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             listOf(price(daysAgo = 0, nav = 120.0)),
             today.minusYears(2),
             1200.0,
@@ -440,6 +459,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             listOf(price(daysAgo = 0, nav = 149.0)),
             today.minusYears(2),
             1490.0,
@@ -455,6 +475,7 @@ class FundAnalysisCalcTest {
         val analysis = FundAnalysisCalc.analyze(
             today,
             holding,
+            emptyList(),
             listOf(price(daysAgo = 0, nav = 50.0)),
             today.minusYears(2),
             500.0,
@@ -471,9 +492,137 @@ class FundAnalysisCalcTest {
         // ett lägre netInvested så vinstsignalen (S4) också triggas — status ska ändå bli grön,
         // eftersom S4 medvetet inte deltar i combineStatus.
         val holding = Holding(fund = fond, netShares = 10.0, netInvested = 400.0, currentValue = 1200.0)
-        val analysis = FundAnalysisCalc.analyze(today, holding, longHistory(), today.minusYears(4), 1200.0, 0.0)!!
+        val analysis = FundAnalysisCalc.analyze(today, holding, emptyList(), longHistory(), today.minusYears(4), 1200.0, 0.0)!!
 
         assertTrue(analysis.profitTake!!.triggered)
         assertEquals(FundAnalysisCalc.SignalLevel.GRON, analysis.status)
+    }
+
+    // --- Periodradernas kronor på ägda andelar (issue #193) ---
+
+    private fun kop(daysAgo: Long, shares: Double, nav: Double, fee: Double = 0.0, fundId: String = fond.fundId) = Transaction(fundId = fundId, type = TransactionType.KOP, epochDay = today.minusDays(daysAgo).toEpochDay(), shares = shares, pricePerShare = nav, fee = fee)
+
+    private fun salj(daysAgo: Long, shares: Double, nav: Double, fee: Double = 0.0) = Transaction(fundId = fond.fundId, type = TransactionType.SALJ, epochDay = today.minusDays(daysAgo).toEpochDay(), shares = shares, pricePerShare = nav, fee = fee)
+
+    private fun FundAnalysisCalc.Analysis.row(period: FundAnalysisCalc.Period) = keyFigures.periodReturns.first { it.period == period }
+
+    /** 3 mån-raden när kursen var 80 för ett år och 100 dagar sedan, 100 för 30 dagar sedan och 120 idag. */
+    private fun threeMonthsWithTradeThirtyDaysAgo(holding: Holding, transactions: List<Transaction>) = FundAnalysisCalc.analyze(
+        today,
+        holding,
+        transactions,
+        listOf(price(daysAgo = 365, nav = 80.0), price(daysAgo = 100, nav = 80.0), price(daysAgo = 30, nav = 100.0), price(daysAgo = 0, nav = 120.0)),
+        today.minusDays(365),
+        holding.currentValue!!,
+        null
+    )!!.row(FundAnalysisCalc.Period.TRE_MANADER)
+
+    @Test
+    fun `tre manader raknar kronorna pa agda andelar nar ett kop gjorts inom perioden`() {
+        // 10 andelar sedan ett år, 10 till köpta för 30 dagar sedan à 100. 3 mån: 80 → 100 på 10
+        // andelar och 100 → 120 på 20 = 600 kr, inte 20 × (120 − 80) = 800 kr. Procenten är fondens.
+        val holding = Holding(fund = fond, netShares = 20.0, netInvested = 1800.0, currentValue = 2400.0)
+        val transactions = listOf(kop(daysAgo = 365, shares = 10.0, nav = 80.0), kop(daysAgo = 30, shares = 10.0, nav = 100.0, fee = 39.0))
+
+        val threeMonths = threeMonthsWithTradeThirtyDaysAgo(holding, transactions)
+        assertEquals(600.0, threeMonths.amount!!, 1e-9)
+        assertEquals(0.5, threeMonths.fraction!!, 1e-9)
+    }
+
+    @Test
+    fun `tre manader raknar kronorna pa salda andelar fram till saljdagen`() {
+        // 20 andelar sedan ett år, 10 sålda för 30 dagar sedan à 100: 20 × 20 + 10 × 20 = 600 kr,
+        // inte dagens 10 × (120 − 80) = 400 kr.
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 800.0, currentValue = 1200.0)
+        val transactions = listOf(kop(daysAgo = 365, shares = 20.0, nav = 80.0), salj(daysAgo = 30, shares = 10.0, nav = 100.0, fee = 39.0))
+
+        val threeMonths = threeMonthsWithTradeThirtyDaysAgo(holding, transactions)
+        assertEquals(600.0, threeMonths.amount!!, 1e-9)
+        assertEquals(0.5, threeMonths.fraction!!, 1e-9)
+    }
+
+    @Test
+    fun `sedan kop i kronor ar positionens vinst mot anskaffningsvardet`() {
+        // Samma tal som GAV-raden: 20 × 120 − 1 800 = 600 kr, även om kursen sedan första köpet
+        // (80 → 120) gånger dagens andelar vore 800 kr. Procenten är fondens kursutveckling.
+        val holding = Holding(fund = fond, netShares = 20.0, netInvested = 1800.0, currentValue = 2400.0)
+        val transactions = listOf(kop(daysAgo = 365, shares = 10.0, nav = 80.0), kop(daysAgo = 30, shares = 10.0, nav = 100.0))
+        val history = listOf(price(daysAgo = 365, nav = 80.0), price(daysAgo = 30, nav = 100.0), price(daysAgo = 0, nav = 120.0))
+
+        val sedanKop = FundAnalysisCalc.analyze(today, holding, transactions, history, today.minusDays(365), 2400.0, null)!!
+            .row(FundAnalysisCalc.Period.SEDAN_KOP)
+
+        assertEquals(600.0, sedanKop.amount!!, 1e-9)
+        assertEquals(0.5, sedanKop.fraction!!, 1e-9)
+    }
+
+    @Test
+    fun `sedan kop i kronor finns aven utan kurshistorik vid kopet`() {
+        // Bara dagens kurs är känd: procenten saknas (ingen kurs vid köpet), men vinsten mot
+        // anskaffningsvärdet går ändå att räkna — 10 × 120 − 1 000 = 200 kr.
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1200.0)
+
+        val sedanKop = FundAnalysisCalc.analyze(today, holding, listOf(kop(daysAgo = 730, shares = 10.0, nav = 100.0)), listOf(price(daysAgo = 0, nav = 120.0)), today.minusYears(2), 1200.0, null)!!
+            .row(FundAnalysisCalc.Period.SEDAN_KOP)
+
+        assertNull(sedanKop.fraction)
+        assertEquals(200.0, sedanKop.amount!!, 1e-9)
+    }
+
+    @Test
+    fun `period utan startkurs har varken kronor eller procent aven med transaktioner`() {
+        val holding = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1200.0)
+        val history = listOf(price(daysAgo = 30, nav = 100.0), price(daysAgo = 0, nav = 120.0))
+
+        val ettAr = FundAnalysisCalc.analyze(today, holding, listOf(kop(daysAgo = 30, shares = 10.0, nav = 100.0)), history, today.minusDays(30), 1200.0, null)!!
+            .row(FundAnalysisCalc.Period.ETT_AR)
+
+        assertNull(ettAr.amount)
+        assertNull(ettAr.fraction)
+    }
+
+    @Test
+    fun `analyzeAll raknar periodradernas kronor med varje fonds egna transaktioner`() {
+        val fondB = Fund(fundId = "B", name = "Fond B")
+        val firstPurchase = today.minusYears(1)
+        val holdingA = Holding(fund = fond, netShares = 10.0, netInvested = 1000.0, currentValue = 1100.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
+        val holdingB = Holding(fund = fondB, netShares = 10.0, netInvested = 1000.0, currentValue = 900.0, firstPurchaseEpochDay = firstPurchase.toEpochDay())
+        val histories = mapOf(
+            fond.fundId to listOf(price(100, 100.0), price(0, 110.0)),
+            "B" to listOf(price(100, 100.0).copy(fundId = "B"), price(0, 90.0).copy(fundId = "B"))
+        )
+        // A har sitt köp i kartan, B saknas där: B:s kronor räknas inte på A:s transaktioner.
+        val transactions = mapOf(fond.fundId to listOf(kop(daysAgo = 365, shares = 10.0, nav = 100.0)))
+
+        val result = FundAnalysisCalc.analyzeAll(today, listOf(holdingA, holdingB), transactions, histories)
+
+        assertEquals(100.0, result.getValue(fond.fundId).row(FundAnalysisCalc.Period.TRE_MANADER).amount!!, 1e-9) // 10 × (110 − 100)
+        // Utan egna transaktioner har inga andelar ägts: 0 kr, procenten är ändå fondens (−10 %).
+        assertEquals(0.0, result.getValue("B").row(FundAnalysisCalc.Period.TRE_MANADER).amount!!, 0.0)
+        assertEquals(-0.1, result.getValue("B").row(FundAnalysisCalc.Period.TRE_MANADER).fraction!!, 1e-9)
+    }
+
+    @Test
+    fun `periodraderna matchar fondmatte golden for periodkop`() {
+        // tools/fondmatte/periodkop.json → funds.A.periods (3m, since_purchase, ytd/1y/3y null).
+        val fixture = PeriodkopFixture
+        val analysis = FundAnalysisCalc.analyze(
+            today = fixture.endDate,
+            holding = fixture.holding,
+            transactions = fixture.transactions,
+            priceHistory = fixture.history,
+            firstPurchaseDate = java.time.LocalDate.ofEpochDay(fixture.holding.firstPurchaseEpochDay!!),
+            portfolioTotalValue = fixture.holding.currentValue!!,
+            otherHoldingsAverageThreeMonthReturn = null
+        )!!
+
+        assertEquals(933.0000000000002, analysis.row(FundAnalysisCalc.Period.TRE_MANADER).amount!!, 1e-9)
+        assertEquals(0.12448979591836729, analysis.row(FundAnalysisCalc.Period.TRE_MANADER).fraction!!, 1e-9)
+        assertEquals(856.0, analysis.row(FundAnalysisCalc.Period.SEDAN_KOP).amount!!, 1e-9)
+        assertEquals(0.08571428571428563, analysis.row(FundAnalysisCalc.Period.SEDAN_KOP).fraction!!, 1e-9)
+        for (period in listOf(FundAnalysisCalc.Period.YTD, FundAnalysisCalc.Period.ETT_AR, FundAnalysisCalc.Period.TRE_AR)) {
+            assertNull(analysis.row(period).amount)
+            assertNull(analysis.row(period).fraction)
+        }
     }
 }

@@ -203,6 +203,29 @@ class HemViewModelTest {
     }
 
     @Test
+    fun `manadens kronor raknas pa de andelar som agts, med fondens transaktioner (issue 193)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        // 10 andelar sedan ett år, 10 till köpta för 3 dagar sedan à 100.
+        fakeTransactionRepo.funds.value = listOf(fond)
+        fakeTransactionRepo.transactions.value = listOf(buy(fond, today.minusYears(1), 10.0, 80.0), buy(fond, today.minusDays(3), 10.0, 100.0))
+        priceHistoryByFundId = mapOf(
+            fond.fundId to listOf(price(fond, today.minusDays(30), 80.0), price(fond, today.minusDays(3), 100.0), price(fond, today, 120.0))
+        )
+        fakeFundPriceRepo.quoteOnly(fond, today, 120.0)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading || it.content.performance.month !is PortfolioPerformanceCalc.PortfolioPeriodResult.Available }
+            val month = state.content.performance.month as PortfolioPerformanceCalc.PortfolioPeriodResult.Available
+            // 10 × (100 − 80) + 20 × (120 − 100) = 600 kr — inte dagens 20 andelar × (120 − 80) = 800 kr.
+            assertEquals(600.0, month.amount, 1e-9)
+            assertEquals(0.5, month.fraction!!, 1e-9) // fondens kursutveckling, oberoende av köpet
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `visar total varde vinst och dag vecka manad`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = Fund(fundId = "SHB0000442", name = "Fond A")

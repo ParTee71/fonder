@@ -21,13 +21,14 @@ import json
 import math
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 TRADING_DAYS_PER_YEAR = 252
 DAYS_PER_YEAR = 365.2425
 XIRR_DAYS_PER_YEAR = 365  # pyxirr DayCount.ACT_365F, samma som Excels XIRR
 ANNUALIZE_MIN_DAYS = 365
 MIN_RETURN_SAMPLES = 60  # FundAnalysisCalc.MIN_RETURN_SAMPLES
+MAX_PRICE_GAP_DAYS = 5  # PortfolioPerformanceCalc.MAX_PRICE_GAP_DAYS
 EPSILON = 1e-9
 
 # Statslåneräntan den 30 november året före och skattefri nivå per person (ISK + KF + PEPP
@@ -196,6 +197,84 @@ def market_value(transactions: list[Transaction], prices: Prices, day: date) -> 
         else:
             value += u * nav
     return value, partial
+
+
+def value_change(transactions: list[Transaction], prices: Prices, fund: str, start: date, end: date) -> float | None:
+    """Värdeförändringen i kr på de andelar som faktiskt ägts, dag för dag, som appens
+    PositionValueChangeCalc (issue #193): från kurspunkten på eller före `start` till den sista
+    på eller före `end` räknas `andelar × (NAV_i − NAV_{i−1})` på andelarna som ägdes vid
+    förra kurspunkten – ett köp på en kursdag får rörelsen först från nästa punkt, ett sälj har den
+    med, och en transaktion på en dag utan kurs räknas som handlad till nästa kurs. None utan kurs på eller före `start`."""
+    series = [(d, v) for d, v in prices.series.get(fund, []) if d <= end]
+    start_index = max((i for i, (d, _) in enumerate(series) if d <= start), default=None)
+    if start_index is None:
+        return None
+    own = [t for t in transactions if t.fund == fund]
+    units: dict[str, float] = {}
+    next_tx, previous, change = 0, series[start_index][1], 0.0
+    previous_day = series[start_index][0]
+    for day, nav in series[start_index + 1 :]:
+        # Andelarna vid förra kurspunkten; en transaktion på en dag utan kurs handlas till nästa kurs.
+        while next_tx < len(own) and own[next_tx].day <= previous_day:
+            apply_transaction(units, own[next_tx])
+            next_tx += 1
+        change += units.get(fund, 0.0) * (nav - previous)
+        previous, previous_day = nav, day
+    return change
+
+
+def minus_months(day: date, months: int) -> date:
+    """Som java.time LocalDate.minusMonths: samma dag i månaden, klippt till månadens sista dag."""
+    month_index = day.year * 12 + day.month - 1 - months
+    year, month = divmod(month_index, 12)
+    month += 1
+    last = (date(year + (month == 12), month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(day.day, last))
+
+
+def period_rows(transactions: list[Transaction], prices: Prices, fund: str, end: date) -> dict:
+    """Periodraderna för ett innehav som appen visar dem (POR-5, ANA-1): `fraction` är fondens
+    kursutveckling NAV mot NAV, `amount` värdeförändringen på ägda andelar (`value_change`), och
+    för `since_purchase` positionens vinst mot anskaffningsvärdet med genomsnittsmetoden. Dag,
+    vecka och månad ankras i senaste NAV-dag på eller före `end` och kräver en startkurs högst
+    fem dagar före måldagen (PortfolioPerformanceCalc); i år/3 mån/1 år/3 år räknas från `end`
+    (FundAnalysisCalc). None = otillräcklig historik."""
+    own = [t for t in transactions if t.fund == fund]
+    series = [(d, v) for d, v in prices.series.get(fund, []) if d <= end]
+    if not series:
+        return {}
+    reference_day, latest_nav = series[-1]
+    units = units_held(own, end).get(fund, 0.0)
+
+    def row(start: date, max_gap_days: int | None = None, amount: float | None = None) -> dict:
+        start_point = next(((d, v) for d, v in reversed(series) if d <= start), None)
+        if start_point is None or start_point[1] <= 0.0 or (max_gap_days is not None and (start - start_point[0]).days > max_gap_days):
+            # "Sedan köp" i kr är vinsten mot anskaffningsvärdet och finns utan startkurs, som i appen.
+            return {"amount": amount, "fraction": None}
+        if amount is None:
+            amount = value_change(transactions, prices, fund, start_point[0], reference_day)
+        return {"amount": amount, "fraction": latest_nav / start_point[1] - 1.0}
+
+    # Positionens start: första köpet efter att innehavet senast var noll (POR-6).
+    held: dict[str, float] = {}
+    position_start = None
+    for t in own:
+        if t.kind == "BUY" and held.get(fund, 0.0) <= EPSILON:
+            position_start = t.day
+        apply_transaction(held, t)
+    rows = {
+        "day": row(reference_day - timedelta(days=1), max_gap_days=MAX_PRICE_GAP_DAYS),
+        "week": row(reference_day - timedelta(days=7), max_gap_days=MAX_PRICE_GAP_DAYS),
+        "month": row(reference_day - timedelta(days=30), max_gap_days=MAX_PRICE_GAP_DAYS),
+        "ytd": row(date(end.year, 1, 1)),
+        "3m": row(minus_months(end, 3)),
+        "1y": row(minus_months(end, 12)),
+        "3y": row(minus_months(end, 36)),
+    }
+    if position_start is not None and units > EPSILON:
+        gain = units * latest_nav - _average_cost(transactions)[1].get(fund, 0.0)
+        rows["since_purchase"] = row(position_start, amount=gain)
+    return rows
 
 
 def money_weighted_return(transactions: list[Transaction], prices: Prices, end: date, include_fees: bool = True) -> tuple[float | None, bool]:
@@ -429,7 +508,10 @@ def golden(fixture: dict) -> dict:
                 "unrealized_average_cost_as_app_fraction": None if value_partial or remaining_cost <= 0 else (value - remaining_cost) / remaining_cost,
                 "unrealized_fifo": None if value_partial else value - remaining_cost_fifo,
             },
-            "funds": {fund: risk_figures(series) for fund, series in prices.series.items()},
+            "funds": {
+                fund: risk_figures(series) | {"periods": period_rows(transactions, prices, fund, end)}
+                for fund, series in prices.series.items()
+            },
             "realized_average_cost": sale_rows(average_cost_sales(transactions)),
             "realized_fifo": sale_rows(fifo_sales(transactions)),
         }

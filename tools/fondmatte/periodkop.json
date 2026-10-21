@@ -1,0 +1,21 @@
+{
+ "description": "Påhittad: fond A köps 2026-09-01, köps igen med avgift 2026-10-01 och delsäljs 2026-10-09 – köp och sälj inom periodraderna (issue #193). Kurs på transaktionsdagarna = transaktionens kurs.",
+ "end": "2026-10-16",
+ "transactions": [
+  {"date": "2026-09-01", "fund": "A", "kind": "BUY", "units": 100.0, "price": 101.5, "fee": 0.0},
+  {"date": "2026-10-01", "fund": "A", "kind": "BUY", "units": 50.0, "price": 106.0, "fee": 10.0},
+  {"date": "2026-10-09", "fund": "A", "kind": "SELL", "units": 30.0, "price": 105.3, "fee": 10.0}
+ ],
+ "prices": {
+  "A": [
+   ["2026-07-16", 98.0],
+   ["2026-08-14", 99.2],
+   ["2026-09-01", 101.5],
+   ["2026-09-16", 102.25],
+   ["2026-10-01", 106.0],
+   ["2026-10-09", 105.3],
+   ["2026-10-15", 108.9],
+   ["2026-10-16", 110.2]
+  ]
+ }
+}

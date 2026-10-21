@@ -35,9 +35,13 @@ Belopp är `Double` i kronor; avrundning görs bara vid formatering (`MoneyForma
 | **Pengaviktad (XIRR)** | Räntan som nollställer köp (inkl. avgift, negativa), sälj (minus avgift, positiva) och slutvärdet, dag för dag | "Hur gick det för mina pengar?" Påverkas av när jag köpte | `PortfolioTotalCalc.compute` → `moneyWeightedAnnualReturn` (HEM-1, årstakt bara ≥ 365 dagar) |
 | Orealiserat på kvarvarande andelar | `(värde − nettoinvesterat) / nettoinvesterat`, där nettoinvesterat är kvarvarande anskaffningsvärde enligt genomsnittsmetoden | Totalkortets rad "Varav orealiserat" – **inte** "vad du tjänat på insatt kapital": realiserat resultat och avgifter på sålda andelar syns inte | `PortfolioCalc.totalGainLossFraction` |
 | Totalresultat | `värde + uttag − insättningar`, avgifter inräknade; procent mot insatt netto | "Hur mycket har jag tjänat?" Totalkortets huvudtal | `PortfolioTotalCalc.compute` → `totalGainKr`/`totalGainFraction` (golden: `total_gain`) |
-| Periodförändring | NAV på referensdagen mot NAV `n` dagar före, ingen kassaflödesjustering | Dag/vecka/månad | `PortfolioPerformanceCalc` |
+| Periodförändring, procent | Fondens kursutveckling: NAV på referensdagen mot senaste NAV på eller före periodens start; köp och sälj påverkar inte | Dag/vecka/månad (POR-5, HEM-1) och i år/3 mån/1 år/3 år/sedan köp (ANA-1) | `PortfolioPerformanceCalc`, `FundAnalysisCalc` (golden: `funds.<fond>.periods.*.fraction`) |
+| Periodförändring, kronor | Värdeförändringen på de andelar som **faktiskt ägts**, dag för dag: `Σ andelar_före_dag_i × (NAV_i − NAV_{i−1})` från startkursen till referensdagen. Ett köp på en kursdag får rörelsen först från nästa kurspunkt, ett sälj har rörelsen fram till säljdagen med; avgifter ingår inte. Startar perioden utan innehav är det slutvärdet minus nettoköpen (andelar × kurs). "Sedan köp" i kr är i stället positionens vinst mot anskaffningsvärdet (genomsnittsmetoden), samma tal som GAV-raden | Vad har mitt innehav ändrats i kronor under perioden? | `PositionValueChangeCalc.valueChange` (issue #193; golden: `funds.<fond>.periods.*.amount`, fixtur `periodkop.json`) |
 | Beteendegap | XIRR utan avgifter − TWR i årstakt med samma dagräkning, ACT/365F (bara över ett år, `null` om ett innehav saknat kurs) | Kostade min tajming något? | **Saknas** |
 
+- **Periodrader:** procent och kronor är olika mått – procenten är fondens, kronorna mina. Ett köp
+  inom perioden ändrar kronorna men inte procenten; Hems portföljtotal summerar kronorna och väger
+  procenten med dagens andelar × startkurs (`PortfolioPerformanceCalc.totalChange`).
 - **Visa alltid vilket mått det är.** Avanzas procent är troligen TWR och kronorna orealiserat mot
   insatt; appens siffror kan skilja sig, och hjälptexten säger varför.
 - **Jämförelse mot referens med samma kassaflöden:** skuggportföljen köper referensen samma dagar
