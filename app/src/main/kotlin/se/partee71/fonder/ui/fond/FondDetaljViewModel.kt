@@ -38,6 +38,7 @@ import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.analysisHistory
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
@@ -229,6 +230,16 @@ private data class PlanInput(
  */
 private const val COMPARISON_HISTORY_YEARS = 3L
 
+/** Hur långt tillbaka kursdiagrammet ser för en fond utan transaktion — oförändrat sedan före issue #214. */
+private const val CHART_FALLBACK_LOOKBACK_YEARS = 1L
+
+/**
+ * Första dagen i kursdiagrammet och jämförelsen (TP-12, ANA-11): fondens första transaktion —
+ * "Allt" är förankrad i köpet — annars ett år bakåt. Analysens längre historik
+ * ([FundAnalysisCalc.analysisHistoryStart]) visas inte i diagrammet, bara i snittlinjen.
+ */
+private fun chartStart(firstTransaction: LocalDate?): LocalDate = firstTransaction ?: LocalDate.now().minusYears(CHART_FALLBACK_LOOKBACK_YEARS)
+
 /** Användarens handlingar på Fonddetalj, till [FondDetaljViewModel.onEvent]. */
 sealed interface FondDetaljEvent {
     /** Dra ned för att uppdatera (UI-11). */
@@ -335,10 +346,11 @@ class FondDetaljViewModel @AssistedInject constructor(
     ) { funds, transactions, since, suggested, purchases -> Snapshot(funds, transactions, since, suggested, purchases) }
         .flatMapLatest { snapshot ->
             val fundIds = snapshot.funds.map { it.fundId }
+            val today = LocalDate.now()
             val priceHistoryFlow = fundPriceRepository.observePriceHistory(
                 fundId = fundId,
-                fromEpochDay = (snapshot.since ?: LocalDate.now().minusYears(1)).toEpochDay(),
-                toEpochDay = LocalDate.now().toEpochDay()
+                fromEpochDay = FundAnalysisCalc.analysisHistoryStart(snapshot.since, today).toEpochDay(),
+                toEpochDay = today.toEpochDay()
             )
             combine(fundPriceRepository.observeLatestPrices(fundIds), priceHistoryFlow) { latestPrices, history ->
                 Triple(snapshot, latestPrices, history)
@@ -352,11 +364,18 @@ class FondDetaljViewModel @AssistedInject constructor(
             val holdings = PortfolioCalc.computeHoldings(snapshot.funds, snapshot.transactions)
             val holding = holdings.firstOrNull { it.fund.fundId == fundId }
             val holdingValue = holding?.let { PortfolioCalc.withCurrentValue(listOf(it), latestPrices).first().currentValue }
+            val chartStartEpochDay = chartStart(snapshot.since).toEpochDay()
             val detail = FundDetail(
                 fundName = fund.name,
                 isin = fund.isin,
                 suggestedIsin = snapshot.suggestedIsin,
-                prices = history.sortedByDescending { it.epochDay }.toImmutableList(),
+                // Diagrammet (och jämförelsen, ANA-11) visar fortsatt historiken sedan första
+                // köpet — "Allt" är förankrad i köpet (TP-12). Snittlinjen och analysen räknas
+                // på hela analyshistoriken (issue #214), så linjen finns från diagrammets första punkt.
+                prices = history
+                    .filter { it.epochDay >= chartStartEpochDay }
+                    .sortedByDescending { it.epochDay }
+                    .toImmutableList(),
                 movingAverage = MovingAverageCalc.series(history.map { it.epochDay to it.nav }).toImmutableList(),
                 firstPurchaseEpochDay = holding?.firstPurchaseEpochDay,
                 netInvested = holding?.netInvested,
@@ -553,15 +572,14 @@ class FondDetaljViewModel @AssistedInject constructor(
         val portfolioTotalValue = PortfolioCalc.totalValue(PortfolioCalc.withCurrentValue(holdings, latestPrices))
 
         val today = LocalDate.now()
-        // Övriga innehavs historik sedan deras första transaktion — samma fönster som Hem och
-        // Portfölj ger analyzeAll, så momentum-signalen (S3) får samma underlag här (issue #194).
+        // Övriga innehavs analyshistorik — samma fönster som Hem och Portfölj ger analyzeAll, så
+        // momentum-signalen (S3) får samma underlag här (issue #194, #214).
         val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions)
         val otherHistories = holdings
             .map { it.fund.fundId }
             .filter { it != fundId }
             .associateWith { otherId ->
-                val since = firstTransactionByFund[otherId] ?: today.minusYears(1).toEpochDay()
-                fundPriceRepository.priceHistory(otherId, since, today.toEpochDay())
+                fundPriceRepository.analysisHistory(otherId, firstTransactionByFund[otherId]?.let(LocalDate::ofEpochDay), today)
             }
         val otherAverage = FundAnalysisCalc.averageThreeMonthReturn(today, otherHistories)
 
@@ -612,13 +630,17 @@ class FondDetaljViewModel @AssistedInject constructor(
                 // för att krascha skärmen, och den cachade historiken står kvar.
                 suspendRunCatching {
                     val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId }
-                    val since = earliestPurchase.first()
+                    // Samma horisont som historiken läses från (issue #214) — repositoryt
+                    // backfillar bara om cachen inte redan når dit (TP-18).
+                    val since = FundAnalysisCalc.analysisHistoryStart(earliestPurchase.first(), LocalDate.now())
                     // Lokal kopia: Fund ligger i :core, och Kotlin smart-castar inte en publik egenskap från en annan modul.
                     val isin = fund?.isin
 
-                    if (isin != null && since != null) {
+                    if (isin != null) {
                         fundPriceRepository.refreshSince(fundId, isin, since)
-                    } else if (fundPriceRepository.isPriceStale(fundId)) {
+                    } else if (fundPriceRepository.isPriceStale(fundId) || fundPriceRepository.needsBackfill(fundId, since)) {
+                        // Även med färsk kurs: når cachen inte horisonten ska S2/snittlinjen
+                        // inte behöva vänta på bakgrundsjobbet (issue #214).
                         fundPriceRepository.refresh(fundId, since)
                     }
 
@@ -667,7 +689,7 @@ class FondDetaljViewModel @AssistedInject constructor(
         }
     }
 
-    /** Sparar ett användarbekräftat/rättat ISIN och hämtar direkt historik sedan första köpet med det. */
+    /** Sparar ett användarbekräftat/rättat ISIN och hämtar direkt analyshistoriken med det (issue #214). */
     private fun onIsinConfirmed(isin: String) {
         val trimmed = isin.trim().uppercase()
         if (trimmed.isEmpty()) return
@@ -675,7 +697,7 @@ class FondDetaljViewModel @AssistedInject constructor(
             val fund = transactionRepository.observeFunds().first().firstOrNull { it.fundId == fundId } ?: return@launch
             transactionRepository.upsertFund(fund.copy(isin = trimmed))
             suggestedIsin.value = null
-            earliestPurchase.first()?.let { since -> fundPriceRepository.refreshSince(fundId, trimmed, since) }
+            fundPriceRepository.refreshSince(fundId, trimmed, FundAnalysisCalc.analysisHistoryStart(earliestPurchase.first(), LocalDate.now()))
         }
     }
 

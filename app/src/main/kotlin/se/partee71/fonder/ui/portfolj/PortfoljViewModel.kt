@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.analysisHistory
 import se.partee71.fonder.data.repository.isPriceStale
 import se.partee71.fonder.data.repository.refreshFund
 import se.partee71.fonder.domain.model.FundMetadata
@@ -113,9 +114,6 @@ private val EMPTY_EXPOSURE = PortfolioExposureCalc.Result(
     includedValueKr = 0.0,
     excludedCount = 0
 )
-
-/** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #26) om inget köp finns (bör inte hända för ett verkligt innehav). Samma princip som `HemViewModel`. */
-private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
 
 /** Användarens handlingar på Innehav, till [PortfoljViewModel.onEvent]. */
 sealed interface PortfoljEvent {
@@ -270,12 +268,13 @@ class PortfoljViewModel @Inject constructor(
     ): Map<String, FundAnalysisCalc.Analysis> {
         if (enriched.isEmpty()) return emptyMap()
 
-        // Historiken sedan fondens första transaktion (samma fönster som Fonddetalj); positionens
-        // startdatum för "sedan köp"/CAGR tas ur Holding inne i analyzeAll (issue #194).
+        // Analyshistoriken (samma fönster som Hem och Fonddetalj, issue #214); positionens
+        // startdatum för "sedan köp"/CAGR tas ur Holding och periodraderna klipps mot köpet,
+        // båda inne i analyzeAll (issue #194).
         val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions)
         val historyByFundId = enriched.associate { holding ->
-            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS).toEpochDay()
-            holding.fund.fundId to fundPriceRepository.priceHistory(holding.fund.fundId, since, today.toEpochDay())
+            val fundId = holding.fund.fundId
+            fundId to fundPriceRepository.analysisHistory(fundId, firstTransactionByFund[fundId]?.let(LocalDate::ofEpochDay), today)
         }
 
         return FundAnalysisCalc.analyzeAll(today, enriched, transactions.groupBy { it.fundId }, historyByFundId)
@@ -318,16 +317,12 @@ class PortfoljViewModel @Inject constructor(
                         // aldrig slutar.
                         refreshingFundIds.update { it + fund.fundId }
                         try {
-                            // Utan köphistorik finns ingen historikhorisont att hämta mot — då
-                            // räcker repositoryts korta färska fönster (TP-18), se worker-varianten.
-                            val since = transactionRepository.observeTransactionsForFund(fund.fundId).first()
+                            // Samma horisont som analysen läser (issue #214) — repositoryt
+                            // backfillar bara om cachen inte redan når dit (TP-18).
+                            val firstTransaction = transactionRepository.observeTransactionsForFund(fund.fundId).first()
                                 .minOfOrNull { it.epochDay }
                                 ?.let(LocalDate::ofEpochDay)
-                            if (since != null) {
-                                fundPriceRepository.refreshFund(fund, since)
-                            } else {
-                                fundPriceRepository.refresh(fund.fundId)
-                            }
+                            fundPriceRepository.refreshFund(fund, FundAnalysisCalc.analysisHistoryStart(firstTransaction, LocalDate.now()))
                         } finally {
                             refreshingFundIds.update { it - fund.fundId }
                         }

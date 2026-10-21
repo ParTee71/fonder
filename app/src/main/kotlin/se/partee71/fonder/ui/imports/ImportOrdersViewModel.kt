@@ -33,6 +33,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedOrderTransaction
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwedishNumberFormat
@@ -255,7 +256,9 @@ class ImportOrdersViewModel @Inject constructor(
         // (ISIN vs Handelsbanken-FundId) som Excel-flödet nu använder.
         var priceFetchFailed = false
         if (match != null && fundPriceRepository.isPriceStale(match.fund.fundId)) {
-            priceFetchFailed = !fundPriceRepository.refreshFund(match.fund, LocalDate.ofEpochDay(transaction.epochDay))
+            // Analysens horisont (issue #214): köpdagen eller tre år bakåt, det som ligger tidigast.
+            val since = FundAnalysisCalc.analysisHistoryStart(LocalDate.ofEpochDay(transaction.epochDay), LocalDate.now())
+            priceFetchFailed = !fundPriceRepository.refreshFund(match.fund, since)
         }
 
         return ImportOrderRowUiState(

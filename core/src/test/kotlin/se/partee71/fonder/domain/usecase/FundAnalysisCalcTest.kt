@@ -625,4 +625,54 @@ class FundAnalysisCalcTest {
             assertNull(analysis.row(period).fraction)
         }
     }
+
+    @Test
+    fun `analysHistoryStart ar forsta transaktionen eller tre ar bakat, det som ligger tidigast`() {
+        val lookbackStart = today.minusDays(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS)
+        // Köpt för tre månader sedan: tre år bakåt vinner (S2 behöver 290 dagar, #195 tre år).
+        assertEquals(lookbackStart, FundAnalysisCalc.analysisHistoryStart(today.minusMonths(3), today))
+        // Köpt för fem år sedan: köpet vinner, sedan köp och CAGR behöver hela innehavstiden.
+        assertEquals(today.minusYears(5), FundAnalysisCalc.analysisHistoryStart(today.minusYears(5), today))
+        // Bevakad fond utan transaktion: lookbacken ensam.
+        assertEquals(lookbackStart, FundAnalysisCalc.analysisHistoryStart(null, today))
+    }
+
+    @Test
+    fun `lookbacken tacker treårsperioden och 200-dagarssnittet med marginal`() {
+        // En kurs på eller före "3 år"-periodens startdag måste rymmas även över ett skottår
+        // och en långhelg — och snittets 290 dagar med råge.
+        assertTrue(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS >= java.time.temporal.ChronoUnit.DAYS.between(today.minusYears(3), today) + 7)
+        assertTrue(FundAnalysisCalc.ANALYSIS_LOOKBACK_DAYS > MovingAverageCalc.WINDOW_DAYS)
+    }
+
+    @Test
+    fun `fond kopt for tre manader sedan med lang historik far S2 men kronor och sedan kop fran kopet`() {
+        // Issue #214: analyshistoriken når två år bakåt fast fonden köptes för 91 dagar sedan.
+        val history = longHistory().filter { it.epochDay >= today.minusYears(2).toEpochDay() }
+        val buy = kop(daysAgo = 91, shares = 10.0, nav = navDaysAgo(91))
+        val holding = PortfolioCalc.withCurrentValue(PortfolioCalc.computeHoldings(listOf(fond), listOf(buy)), mapOf(fond.fundId to history.maxBy { it.epochDay })).single()
+
+        val analysis = FundAnalysisCalc.analyzeAll(today, listOf(holding), mapOf(fond.fundId to listOf(buy)), mapOf(fond.fundId to history)).getValue(fond.fundId)
+
+        // S1 och S2 handlar om fondens kurs och beräknas trots att innehavet är tre månader.
+        assertTrue(analysis.trend != null)
+        assertTrue(analysis.distanceFromHigh != null)
+        // Periodprocenten är fondens kursutveckling under hela perioden (ANA-1) …
+        val oneYear = analysis.row(FundAnalysisCalc.Period.ETT_AR)
+        assertEquals((120.0 - navDaysAgo(365)) / navDaysAgo(365), oneYear.fraction!!, 1e-9)
+        // … men kronorna räknar bara de andelar som faktiskt ägts, alltså från köpet (#193).
+        val sinceBuyValueChange = 10.0 * (120.0 - navDaysAgo(91))
+        assertEquals(sinceBuyValueChange, oneYear.amount!!, 1e-9)
+        // Tre år når historiken (två år) inte: otillräcklig data, inte gissat (ANA-4).
+        assertNull(analysis.row(FundAnalysisCalc.Period.TRE_AR).fraction)
+        // "Sedan köp" och GAV utgår från köpet, CAGR saknas för ett innehav yngre än ett år.
+        val sinceBuy = analysis.row(FundAnalysisCalc.Period.SEDAN_KOP)
+        assertEquals((120.0 - navDaysAgo(91)) / navDaysAgo(91), sinceBuy.fraction!!, 1e-9)
+        assertEquals(sinceBuyValueChange, sinceBuy.amount!!, 1e-9)
+        assertEquals(navDaysAgo(91), analysis.keyFigures.gavPerShare, 1e-9)
+        assertNull(analysis.keyFigures.cagr)
+    }
+
+    /** NAV i [longHistory] för en given dag. */
+    private fun navDaysAgo(daysAgo: Long): Double = 120.0 - daysAgo * (70.0 / 1460.0)
 }

@@ -207,8 +207,9 @@ används inte – den skulle fördröja dagens laddningsindikatorer.
 
 Repository är single source of truth. `FundPriceRepository` hämtar och cachar riktiga
 kurser från `handelsbanken.fondlista.se` (se issue #2/#3 för källbeslut och risknotis —
-odokumenterad, inofficiell HTML-källa). Källan har **inget datumtak**: hela historiken
-sedan första köpet kommer i ett anrop, men eftersom svaret kan bli flera megabyte hämtas
+odokumenterad, inofficiell HTML-källa). Källan har **inget datumtak**: hela analyshistoriken
+(sedan första köpet eller tre år bakåt, det som ligger tidigast – `FundAnalysisCalc.analysisHistoryStart`,
+issue #214) kommer i ett anrop, men eftersom svaret kan bli flera megabyte hämtas
 det bara som backfill — när cachen inte redan når tillbaka så långt räcker ett kort färskt
 fönster (KRAVLISTA TP-18, issue #37). Räcker inte fondlista provas en prioritetsordnad
 lista av `IsinPriceHistorySource` som reserv — i dag bara Avanzas odokumenterade fond-API

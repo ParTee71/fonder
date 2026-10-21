@@ -67,6 +67,8 @@ import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
+import se.partee71.fonder.testing.RECENT_PURCHASE_DAYS
+import se.partee71.fonder.testing.assertRecentWithLongHistoryAnalysis
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.awaitRecoveryAfterRetry
 import se.partee71.fonder.testing.buy
@@ -74,6 +76,7 @@ import se.partee71.fonder.testing.decliningPriceHistory
 import se.partee71.fonder.testing.holdFundAWorth1200
 import se.partee71.fonder.testing.holdOnly
 import se.partee71.fonder.testing.holdRebought
+import se.partee71.fonder.testing.holdRecentWithLongHistory
 import se.partee71.fonder.testing.price
 import se.partee71.fonder.testing.quoteOnly
 import se.partee71.fonder.testing.testFundMetadata
@@ -339,6 +342,25 @@ class HemViewModelTest {
             assertEquals(100.0 / 105.0 - 1.0, sedanKop.fraction!!, 1e-9)
             assertNull(analysis.keyFigures.cagr)
             assertEquals(FundAnalysisCalc.SignalLevel.ROD, analysis.status) // under både 52-veckorstoppen och 200-dagarssnittet
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `fond kopt for tre manader sedan analyseras pa lang historik men kronor och kurva utgar fran kopet (issue 214)`() = runTest(dispatcher) {
+        val today = LocalDate.now()
+        val fond = Fund(fundId = "SHB0000442", name = "Fond A")
+        holdRecentWithLongHistory(fakeTransactionRepo, fakeFundPriceRepo, fond, today)
+        val purchase = today.minusDays(RECENT_PURCHASE_DAYS)
+
+        val vm = viewModel()
+        vm.uiState.test {
+            val state = awaitItemSkipping { it.loading || it.content.returnSeries.isEmpty }
+
+            // S1/S2 räknas på fondens långa historik, "sedan köp" och kronorna från köpet.
+            assertRecentWithLongHistoryAnalysis(state.content.analysisSummary.flagged.single().analysis)
+            // Avkastningskurvan (HEM-9) börjar fortfarande vid första köpet.
+            assertEquals(purchase.toEpochDay(), state.content.returnSeries.points.first().first)
             cancelAndIgnoreRemainingEvents()
         }
     }

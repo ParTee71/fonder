@@ -44,9 +44,11 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SwitchDecision
 import se.partee71.fonder.domain.usecase.SwitchOption
+import se.partee71.fonder.testing.TestDays
 import se.partee71.fonder.testing.awaitItemSkipping
 import se.partee71.fonder.testing.testFundMetadata
 import se.partee71.fonder.testing.testPreferencesRepository
@@ -305,6 +307,22 @@ class ImportOrdersViewModelTest {
             assertEquals(LocalDate.of(2020, 3, 13).toEpochDay(), tx.epochDay)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `nyligen kopt rad hamtar analyshistoriken tre ar bakat (issue 214)`() = runTest(dispatcher) {
+        val days = TestDays()
+        val purchase = days.today.minusDays(30)
+        findFundByIsinResult = nordeaFund
+        val vm = viewModel(PdfTextExtractor { NORDEA_TEXT.replace("2020-03-13", purchase.toString()) })
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onFilesRead(listOf("nota.pdf" to ByteArray(0)))
+            awaitItemSkipping { it.loading || !it.switchReady }
+            cancelAndIgnoreRemainingEvents()
+        }
+        days.assertForTestDay(refreshSinceCall) { today -> Triple("SE0003653302", "SE0003653302", FundAnalysisCalc.analysisHistoryStart(purchase, today)) }
     }
 
     @Test

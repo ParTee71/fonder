@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.79.4 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.80.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.80.0 | Säljsignalerna S1/S2, 200-dagarssnittet i Fonddetaljs diagram och riskmåtten räknas på fondens kurs upp till tre år bakåt, även för en fond köpt nyligen eller bara bevakad – tidigare gav en fond köpt för mindre än ~9,5 månader sedan "otillräcklig data" för S2 och ingen snittlinje. Periodraderna i Analys visar därmed fondens kursutveckling även för perioder som börjar före köpet, medan kronorna, "sedan köp", GAV och diagrammens "Allt" fortfarande utgår från köpet. Kurshistoriken hämtas en gång tre år bakåt per fond (ca 300 kB från fondlista), därefter bara de senaste 60 dagarna; en fond yngre än tre år hämtas helt högst en gång per appstart (#214). |
 | 0.79.4 | 200-dagarssnittet (S2 i Analys och snittlinjen i Fonddetaljs diagram) räknas nu över 290 kalenderdagar (≈ 200 handelsdagar) i stället för 200 kalenderdagar (~137 handelsdagar), så att det stämmer med texterna i appen. Snittet kräver därmed ca 290 dagars historik: en fond som ägts kortare tid än ca 9,5 månader visar S2 och snittlinjen först då (otillräcklig data dessförinnan). |
 | 0.79.3 | Kronbeloppen i periodraderna (dag/vecka/månad på Hem och Portfölj, i år/3 mån/1 år/3 år i Analys) är nu värdeförändringen på de andelar som faktiskt ägts, dag för dag – tidigare räknades kursrörelsen på dagens antal andelar, så andelar köpta mitt i perioden fick "avkastning" från före köpet. "Sedan köp" i kronor är positionens vinst mot anskaffningsvärdet, samma tal som GAV-raden (#193). |
 | 0.79.2 | "Sedan köp", CAGR och säljsignalerna räknas från positionens startdatum på alla tre skärmarna – Hem och Portfölj räknade tidigare från fondens första transaktion, så en fond som sålts av helt och köpts igen kunde visa andra siffror och annan signalfärg än i Fonddetalj (#194). |

@@ -42,6 +42,31 @@ object FundAnalysisCalc {
     /** Vinstsignalens tröskel (ANA-8, issue #26) — fast för v1, samma princip som övriga trösklar. */
     private const val PROFIT_TAKE_THRESHOLD = 0.50
 
+    /**
+     * Hur långt bakåt analysens kurshistorik når (issue #214): tre år ([Period.TRE_AR] och
+     * kommande treårsfönster för volatilitet/Sharpe, #195) plus tio dagars marginal för skottår,
+     * helger och röda dagar, så att det finns en kurs **på eller före** fönstrets startdag. Täcker
+     * med god marginal 200-dagarssnittet ([MovingAverageCalc.WINDOW_DAYS] = 290 dagar).
+     */
+    const val ANALYSIS_LOOKBACK_DAYS = 3L * 365L + 10L
+
+    /**
+     * Första dagen i analysens kurshistorik (issue #214) — den **enda** regeln för hur långt
+     * bakåt Hem, Portfölj och Fonddetalj läser **och** hämtar (backfill i Fonddetalj, Portfölj
+     * och bakgrundsjobbet), så att nyckeltal och signaler blir identiska på alla tre skärmarna.
+     *
+     * Den tidigaste av fondens första transaktion och `today − `[ANALYSIS_LOOKBACK_DAYS]: S1/S2,
+     * snittlinjen och riskmåtten handlar om **fondens** kurs, inte om innehavet, och ska inte
+     * bli "otillräcklig data" bara för att fonden köptes nyligen. Utan transaktion (bevakad
+     * fond) gäller lookbacken ensam. Det som ska utgå från köpet — "sedan köp",
+     * periodradernas kronor ([PositionValueChangeCalc]), GAV, CAGR och diagrammens "Allt" —
+     * klipps mot köpet där det räknas, inte här.
+     */
+    fun analysisHistoryStart(firstTransaction: LocalDate?, today: LocalDate): LocalDate {
+        val lookbackStart = today.minusDays(ANALYSIS_LOOKBACK_DAYS)
+        return if (firstTransaction == null) lookbackStart else minOf(firstTransaction, lookbackStart)
+    }
+
     enum class Period { YTD, TRE_MANADER, ETT_AR, TRE_AR, SEDAN_KOP }
 
     /**
@@ -108,9 +133,11 @@ object FundAnalysisCalc {
      * [PortfolioCalc.computeHoldings], som redan utelämnar sådana fonder ur portföljen).
      *
      * @param transactions fondens egna transaktioner — avgör hur många andelar som ägts varje
-     *   dag i periodraderna ([PositionValueChangeCalc]); procenten och signalerna behöver dem inte.
-     * @param priceHistory fondens kurshistorik, gärna sedan första köpet (redan reaktivt
-     *   laddad i Fonddetalj, se [se.partee71.fonder.ui.fond.FondDetaljViewModel]) — ju kortare
+     *   dag i periodraderna ([PositionValueChangeCalc]), så periodradernas kronor bara räknar
+     *   tid andelarna faktiskt ägts även när historiken når före köpet; procenten och
+     *   signalerna behöver dem inte.
+     * @param priceHistory fondens analyshistorik från [analysisHistoryStart] (issue #214) —
+     *   periodprocenten, signalerna (S1–S3) och riskmåtten räknas på hela listan; ju kortare
      *   historik, desto fler perioder/signaler blir otillräcklig data i stället för gissade.
      * @param portfolioTotalValue portföljens totala nuvarande värde, för portföljandelen.
      * @param otherHoldingsAverageThreeMonthReturn snittet av övriga innehavs tremånaders
@@ -214,12 +241,12 @@ object FundAnalysisCalc {
      * (första köpet efter att innehavet senast var noll, POR-6) — samma datum som Fonddetalj
      * använder (issue #194; tidigare räknade Hem och Portfölj från fondens första transaktion
      * någonsin). Signalerna (S1/S2, volatilitet, Sharpe) räknas på hela [historyByFundId], och S3
-     * på de övriga fondernas; är fönstren desamma som i Fonddetalj blir nyckeltal och signalnivå
-     * identiska på alla tre skärmar.
+     * mot de övriga fondernas; är fönstren desamma som i Fonddetalj ([analysisHistoryStart])
+     * blir nyckeltal och signalnivå identiska på alla tre skärmar.
      *
      * @param transactionsByFundId transaktionerna per fond (periodradernas kronor, se [analyze]).
-     * @param historyByFundId kurshistorik per fond sedan fondens första transaktion
-     *   ([PortfolioCalc.firstTransactionEpochDayByFund]) — samma fönster som Fonddetalj.
+     * @param historyByFundId kurshistorik per fond från [analysisHistoryStart] — samma fönster
+     *   som Fonddetalj.
      * @return analysen per fundId i [holdings] ordning; innehav utan [Holding.firstPurchaseEpochDay]
      *   och fonder som [analyze] inte kan analysera utelämnas.
      */

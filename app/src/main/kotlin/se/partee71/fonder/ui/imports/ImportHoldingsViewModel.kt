@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.model.FundCatalog
 import se.partee71.fonder.domain.model.ImportedHoldingRow
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.FundNameMatcher
 import se.partee71.fonder.domain.usecase.ImportFundMatcher
 import se.partee71.fonder.domain.usecase.PurchaseDateEstimator
@@ -231,7 +232,8 @@ class ImportHoldingsViewModel @Inject constructor(
             // redan full historik cachad sedan tidigare, så en ny hämtning bara gör importet
             // onödigt långsamt utan att ge mer data (issue #19).
             if (fundPriceRepository.isPriceStale(fund.fundId)) {
-                priceFetchFailed = !fundPriceRepository.refreshFund(fund, since)
+                // Analysens horisont (issue #214) — här redan sökfönstret på 30 år, som ligger tidigare.
+                priceFetchFailed = !fundPriceRepository.refreshFund(fund, FundAnalysisCalc.analysisHistoryStart(since, to))
             }
             val history = fundPriceRepository.priceHistory(fund.fundId, since.toEpochDay(), to.toEpochDay())
             PurchaseDateEstimator.estimate(row.averageCostPerShare, history)?.let { estimate ->

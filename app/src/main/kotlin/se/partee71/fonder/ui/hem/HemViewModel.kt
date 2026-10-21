@@ -27,6 +27,7 @@ import se.partee71.fonder.data.repository.BackupStatusRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.TransactionRepository
+import se.partee71.fonder.data.repository.analysisHistory
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
@@ -166,8 +167,12 @@ data class HemUiState(
     val riskWorking: Boolean get() = loading || metadataWorking
 }
 
-/** Hur långt tillbaka ett innehavs kurshistorik hämtas för analysen (issue #16) om inget köp finns (bör inte hända för ett verkligt innehav, men skyddar mot en tom historik-hämtning). */
-private const val ANALYSIS_FALLBACK_LOOKBACK_YEARS = 1L
+/**
+ * Hur långt tillbaka periodresultaten och avkastningskurvan (HEM-1, HEM-9) ser för en fond utan
+ * transaktion — de räknar bara på ägda andelar, så fönstret påverkar inga siffror; det är
+ * kvar som det var innan analysen fick sin egen, längre historik (issue #214).
+ */
+private const val PORTFOLIO_FALLBACK_LOOKBACK_YEARS = 1L
 
 /** Användarens handlingar på Översikt, till [HemViewModel.onEvent]. */
 sealed interface HemEvent {
@@ -298,20 +303,27 @@ class HemViewModel @Inject constructor(
                 val enriched = PortfolioCalc.withCurrentValue(holdings, prices)
                 val today = LocalDate.now()
                 val firstTransactionByFund = PortfolioCalc.firstTransactionEpochDayByFund(transactions).mapValues { LocalDate.ofEpochDay(it.value) }
-                // **En** hämtning per fond, inte en per läsare: fönstret är det vidaste någon av
-                // dem behöver (sedan första köpet för analysen och avkastningskurvan, minst
-                // HISTORY_LOOKBACK_DAYS bakåt för dag/vecka/månad även för en nyss köpt fond).
-                // Var och en klipper sedan till sitt eget fönster i minnet — analysen räknar
-                // volatilitet på hela listan den får (ANA-7) och måste därför få exakt sitt.
+                // **En** hämtning per fond, inte en per läsare. Innehaven läser analyshistoriken
+                // (den delade [analysisHistory], minst tre år bakåt, issue #214), som rymmer både
+                // avkastningskurvans "sedan första köpet" och dag/vecka/månadens
+                // HISTORY_LOOKBACK_DAYS; helt sålda och bevakade fonder analyseras inte och läser
+                // bara portföljfönstret. Var och en klipper sedan till sitt eget fönster i minnet —
+                // analysen räknar volatilitet på hela listan den får (ANA-7) och måste därför få
+                // exakt sitt, och kurvan och periodresultaten ska fortsatt utgå från köpet (HEM-1, HEM-9).
+                val analysisHistoryByFundId = holdings.associate { holding ->
+                    val fundId = holding.fund.fundId
+                    fundId to fundPriceRepository.analysisHistory(fundId, firstTransactionByFund[fundId], today)
+                }
                 val historyByFundId = funds.associate { fund ->
-                    val since = firstTransactionByFund[fund.fundId]
-                        ?.let { minOf(it, today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS)) }
-                        ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
-                    fund.fundId to fundPriceRepository.priceHistory(
-                        fundId = fund.fundId,
-                        fromEpochDay = since.toEpochDay(),
-                        toEpochDay = today.toEpochDay()
-                    )
+                    val since = (
+                        firstTransactionByFund[fund.fundId]
+                            ?.let { minOf(it, today.minusDays(PortfolioPerformanceCalc.HISTORY_LOOKBACK_DAYS)) }
+                            ?: today.minusYears(PORTFOLIO_FALLBACK_LOOKBACK_YEARS)
+                        ).toEpochDay()
+                    fund.fundId to (
+                        analysisHistoryByFundId[fund.fundId]?.filter { it.epochDay >= since }
+                            ?: fundPriceRepository.priceHistory(fund.fundId, since, today.toEpochDay())
+                        )
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
@@ -327,7 +339,7 @@ class HemViewModel @Inject constructor(
                     totalGainLossFraction = PortfolioCalc.totalGainLossFraction(enriched),
                     total = PortfolioTotalCalc.compute(transactions, enriched, navEpochDay),
                     performance = PortfolioPerformanceCalc.totalPerformance(enriched, transactionsByFundId, today, historyByFundId),
-                    analysisSummary = buildAnalysisSummary(enriched, transactionsByFundId, firstTransactionByFund, historyByFundId, today),
+                    analysisSummary = buildAnalysisSummary(enriched, transactionsByFundId, analysisHistoryByFundId, today),
                     returnSeries = PortfolioReturnSeriesCalc.compute(funds, transactions, historyByFundId),
                     benchmarkSeries = buildBenchmark(
                         refs = currentSettings.benchmark,
@@ -390,26 +402,22 @@ class HemViewModel @Inject constructor(
     /**
      * Analyserar varje innehav och summerar statusarna (HEM-4). Kurshistoriken kommer från den
      * gemensamma hämtningen i flödet ovan (lokal cache, Room — ingen nätverksuppdatering) och
-     * **klipps här till sedan fondens första transaktion**, samma räckvidd som
-     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond. Det är
-     * historikens fönster, inte "sedan köp" — positionens startdatum tas ur `Holding` inne i
-     * [FundAnalysisCalc.analyzeAll] (issue #194). Klippet är
-     * inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela listan den får
-     * (ANA-7), så en vidare historik hade tyst gett andra siffror än fondkortet visar.
+     * når [FundAnalysisCalc.analysisHistoryStart] bakåt, samma fönster som
+     * [se.partee71.fonder.ui.fond.FondDetaljViewModel] använder för sin egen fond (issue #214).
+     * Fönstret är inte kosmetiskt: [FundAnalysisCalc] räknar volatilitet och Sharpe på hela
+     * listan den får (ANA-7), så ett annat fönster hade tyst gett andra siffror än fondkortet
+     * visar. Periodradernas kronor och "sedan köp" utgår från köpet inne i [FundAnalysisCalc.analyze].
      */
     private fun buildAnalysisSummary(
         enriched: List<Holding>,
         transactionsByFundId: Map<String, List<Transaction>>,
-        firstTransactionByFund: Map<String, LocalDate>,
-        fullHistoryByFundId: Map<String, List<FundPrice>>,
+        analysisHistoryByFundId: Map<String, List<FundPrice>>,
         today: LocalDate
     ): AnalysisSummary {
         if (enriched.isEmpty()) return AnalysisSummary()
 
         val historyByFundId = enriched.associate { holding ->
-            val since = firstTransactionByFund[holding.fund.fundId] ?: today.minusYears(ANALYSIS_FALLBACK_LOOKBACK_YEARS)
-            holding.fund.fundId to fullHistoryByFundId[holding.fund.fundId].orEmpty()
-                .filter { it.epochDay >= since.toEpochDay() }
+            holding.fund.fundId to analysisHistoryByFundId[holding.fund.fundId].orEmpty()
         }
 
         // Positionens startdatum ("sedan köp", CAGR) tas ur Holding inne i analyzeAll (issue #194).
