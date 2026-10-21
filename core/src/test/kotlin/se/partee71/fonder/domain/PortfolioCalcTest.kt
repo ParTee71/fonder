@@ -99,7 +99,7 @@ class PortfolioCalcTest {
     }
 
     @Test
-    fun `firstPurchaseEpochDay ar aldsta kvarvarande kop-lott, oavsett transaktionsordning (POR-6)`() {
+    fun `firstPurchaseEpochDay ar positionens forsta kop, oavsett transaktionsordning (POR-6)`() {
         // Köpen ligger i omvänd ordning i listan — positionen ska ändå räknas från det äldsta.
         val txs = listOf(
             Transaction(fundId = fondA.fundId, type = TransactionType.KOP, epochDay = 50, shares = 1.0, pricePerShare = 100.0),
@@ -114,7 +114,7 @@ class PortfolioCalcTest {
     }
 
     @Test
-    fun `firstPurchaseEpochDay hoppar over en helt konsumerad kop-lott (POR-6)`() {
+    fun `firstPurchaseEpochDay raknas om nar en helt avsald fond kops igen (POR-6)`() {
         // Regression (issue #75): datumet togs ur *alla* transaktioner, medan netInvested bara
         // gäller kvarvarande lotter. En position som sålts av helt och köpts igen visade då
         // "investerat sedan 2020" för pengar som placerats i år — och ANA-1 annualiserade

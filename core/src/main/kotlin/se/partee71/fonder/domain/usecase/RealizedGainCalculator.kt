@@ -95,6 +95,9 @@ object RealizedGainCalculator {
         val sorted = txsForFund.sortedWith(compareBy({ it.epochDay }, { it.id }))
 
         for (tx in sorted) {
+            // En rad utan andelar (0 andelar, bara avgift) kan varken starta en position eller
+            // bära kostnad — den hoppas över i stället för att smitta nästa köps snitt.
+            if (tx.shares <= SHARE_EPSILON) continue
             when (tx.type) {
                 TransactionType.KOP -> {
                     if (shares <= SHARE_EPSILON) positionStartEpochDay = tx.epochDay
@@ -104,7 +107,13 @@ object RealizedGainCalculator {
 
                 TransactionType.SALJ -> {
                     val covered = minOf(tx.shares, shares)
-                    val costBasis = if (shares > SHARE_EPSILON) cost * covered / shares else 0.0
+                    // Ett sälj som tömmer innehavet tar exakt resten, så summan av säljens
+                    // anskaffningsvärden alltid är summan av köpen (ingen ulp-rest).
+                    val costBasis = when {
+                        shares <= SHARE_EPSILON -> 0.0
+                        covered >= shares -> cost
+                        else -> cost * covered / shares
+                    }
                     shares -= covered
                     cost -= costBasis
                     if (shares <= SHARE_EPSILON) {

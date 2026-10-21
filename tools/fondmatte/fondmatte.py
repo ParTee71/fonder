@@ -257,6 +257,17 @@ def average_cost_sales(transactions: list[Transaction]) -> list[Sale]:
     """Genomsnittsmetoden (Skatteverket): köpavgiften ingår i anskaffningsvärdet, ett sälj
     ändrar inte snittet per andel, säljavgiften dras från försäljningspriset. Andelar som
     säljs utöver innehavet räknas som `uncovered_units`, som i appen."""
+    return _average_cost(transactions)[0]
+
+
+def average_cost_remaining(transactions: list[Transaction]) -> float:
+    """Kvarvarande anskaffningsvärde med genomsnittsmetoden, som appens Holding.netInvested
+    (sedan issue #192): summan av vad som är kvar av varje fonds anskaffningsvärde."""
+    return sum(_average_cost(transactions)[1].values())
+
+
+def _average_cost(transactions: list[Transaction]) -> tuple[list[Sale], dict[str, float]]:
+    """En genomgång som ger både säljen och det kvarvarande anskaffningsvärdet per fond."""
     units: dict[str, float] = {}
     cost: dict[str, float] = {}
     sales = []
@@ -273,27 +284,7 @@ def average_cost_sales(transactions: list[Transaction]) -> list[Sale]:
         cost[t.fund] = cost.get(t.fund, 0.0) - sold_cost
         if units[t.fund] <= EPSILON:
             units[t.fund], cost[t.fund] = 0.0, 0.0
-    return sales
-
-
-def average_cost_remaining(transactions: list[Transaction]) -> float:
-    """Kvarvarande anskaffningsvärde med genomsnittsmetoden, som appens Holding.netInvested
-    (sedan issue #192): summan av vad som är kvar av varje fonds anskaffningsvärde."""
-    units: dict[str, float] = {}
-    cost: dict[str, float] = {}
-    for t in transactions:
-        held = units.get(t.fund, 0.0)
-        if t.kind == "BUY":
-            units[t.fund] = held + t.units
-            cost[t.fund] = cost.get(t.fund, 0.0) + t.amount + t.fee
-            continue
-        covered = min(t.units, held)
-        sold_cost = cost[t.fund] * covered / held if held > EPSILON else 0.0
-        units[t.fund] = held - covered
-        cost[t.fund] = cost.get(t.fund, 0.0) - sold_cost
-        if units[t.fund] <= EPSILON:
-            units[t.fund], cost[t.fund] = 0.0, 0.0
-    return sum(cost.values())
+    return sales, cost
 
 
 def fifo_sales(transactions: list[Transaction]) -> list[Sale]:
