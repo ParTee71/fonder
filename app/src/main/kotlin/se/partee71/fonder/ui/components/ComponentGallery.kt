@@ -186,6 +186,8 @@ private fun ColumnScope.CardsAndRows() {
     AppCard(modifier = Modifier.fillMaxWidth(), tone = Tone.Error, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
         Text("Farozonen (Tone.Error).")
     }
+    Label("TotalCard")
+    TotalCard(totalValue = 412_380.5, totalInvested = 360_000.0, gainLoss = 52_380.5, gainLossFraction = 0.1455, navEpochDay = 20_742, working = true)
     Label("CardSegment · ItemRow · AppDivider (android-ui)")
     val rows = listOf(
         Triple("Köp", "Global Indexfond A", "+12 000 kr"),

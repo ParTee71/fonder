@@ -36,6 +36,7 @@ import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.ReminderRow
 import se.partee71.fonder.ui.components.ReminderRowTone
 import se.partee71.fonder.ui.components.StatusDot
+import se.partee71.fonder.ui.components.TotalCard
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.diagram.ChartSeries
@@ -143,7 +144,17 @@ fun HemContent(
             // Ordningen enligt Översiktens mockup: värdet, det som väntar på beslut, jämförelsen
             // mot index och påminnelsen om säkerhetskopia; resten av Hems kort under dem.
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(HEM_LIST_TEST_TAG)) {
-                item(contentType = "total") { TotalCard(portfolio = portfolio, working = state.totalWorking) }
+                item(contentType = "total") {
+                    TotalCard(
+                        totalValue = portfolio.totalValue,
+                        totalInvested = portfolio.totalInvested,
+                        gainLoss = portfolio.totalGainLoss,
+                        gainLossFraction = portfolio.totalGainLossFraction,
+                        navEpochDay = portfolio.navEpochDay,
+                        working = state.totalWorking,
+                        modifier = Modifier.padding(Spacing.l)
+                    )
+                }
                 if (state.decisions.count > 0) {
                     item(contentType = "decisions") { DecisionsRow(decisions = state.decisions, onOpen = onOpenBeslut) }
                 }
@@ -177,33 +188,6 @@ fun HemContent(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TotalCard(portfolio: HemPortfolio, working: Boolean) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
-        CardTitleRow(
-            title = stringResource(R.string.portfolj_total_value),
-            working = working
-        )
-        val fraction = portfolio.totalGainLossFraction
-        if (fraction != null) {
-            Text(MoneyFormat.kr(portfolio.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-            Text(
-                "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(portfolio.totalGainLoss)}",
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = ReturnColors.forAmount(portfolio.totalGainLoss)
-            )
-            ValueAsOfRow(navEpochDay = portfolio.navEpochDay, modifier = Modifier.padding(top = 2.dp))
-        } else {
-            Text(MoneyFormat.kr(portfolio.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-            Text(
-                stringResource(R.string.portfolj_price_missing),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

@@ -34,6 +34,7 @@ import se.partee71.fonder.ui.components.ProfitTakeBadge
 import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
+import se.partee71.fonder.ui.components.TotalCard
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.WorkingIndicator
 import se.partee71.fonder.ui.theme.MonoAmountStyle
@@ -111,7 +112,17 @@ fun PortfoljContent(
             modifier = modifier
         ) {
             LazyColumn(modifier = Modifier.fillMaxSize().testTag(PORTFOLJ_LIST_TEST_TAG)) {
-                item(contentType = "total") { TotalCard(state = state) }
+                item(contentType = "total") {
+                    TotalCard(
+                        totalValue = state.totalValue,
+                        totalInvested = state.totalInvested,
+                        gainLoss = state.totalGainLoss,
+                        gainLossFraction = state.totalGainLossFraction,
+                        navEpochDay = state.navEpochDay,
+                        working = state.totalWorking,
+                        modifier = Modifier.padding(Spacing.l)
+                    )
+                }
                 item(contentType = "exposure") { ExposureCard(exposure = state.exposure, working = state.exposureWorking) }
                 items(state.holdings, key = { it.fund.fundId }, contentType = { "holding" }) { holding ->
                     HoldingRow(
@@ -124,33 +135,6 @@ fun PortfoljContent(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TotalCard(state: PortfoljUiState) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
-        CardTitleRow(
-            title = stringResource(R.string.portfolj_total_value),
-            working = state.totalWorking
-        )
-        val fraction = state.totalGainLossFraction
-        if (fraction != null) {
-            Text(MoneyFormat.kr(state.totalValue), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-            Text(
-                "${MoneyFormat.percentSigned(fraction)} · ${MoneyFormat.kr(state.totalGainLoss)}",
-                style = MonoAmountStyle.merge(MaterialTheme.typography.bodyMedium),
-                color = ReturnColors.forAmount(state.totalGainLoss)
-            )
-            ValueAsOfRow(navEpochDay = state.navEpochDay, modifier = Modifier.padding(top = 2.dp))
-        } else {
-            Text(MoneyFormat.kr(state.totalInvested), style = MonoAmountStyle.merge(MaterialTheme.typography.headlineMedium))
-            Text(
-                stringResource(R.string.portfolj_price_missing),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
