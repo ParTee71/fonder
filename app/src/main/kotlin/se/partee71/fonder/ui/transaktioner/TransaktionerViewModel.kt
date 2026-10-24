@@ -134,6 +134,9 @@ sealed interface TransaktionerEvent {
 
     /** Kvitterar navigeringen till en nystartad bevakning. */
     data object SwitchWatchOpened : TransaktionerEvent
+
+    /** Rättar ett uppskattat datum (TRX-9, IMP-2): dagen sätts och markeringen tas bort. */
+    data class CorrectDate(val id: Long, val date: LocalDate) : TransaktionerEvent
 }
 
 /**
@@ -240,6 +243,7 @@ class TransaktionerViewModel internal constructor(
             is TransaktionerEvent.DeleteTransaction -> deleteTransaction(event.id)
             is TransaktionerEvent.StartSwitchWatch -> startSwitchWatch(event.row)
             TransaktionerEvent.SwitchWatchOpened -> onSwitchWatchOpened()
+            is TransaktionerEvent.CorrectDate -> correctDate(event.id, event.date)
         }
     }
 
@@ -255,6 +259,15 @@ class TransaktionerViewModel internal constructor(
     /** Tar bort transaktionen (TRX-2) via [RecordTransaction.delete]; bytets länk nollas, bevakningen ligger kvar. */
     private fun deleteTransaction(id: Long) {
         viewModelScope.launch { recordTransaction.delete(id) }
+    }
+
+    /**
+     * Rättar transaktionens uppskattade datum (TRX-9) via [TransactionRepository.correctDate], som
+     * sätter dagen och tar bort markeringen i en uppdatering; listan följer med via flödet. Ett
+     * datum framåt i tiden släpps igenom, precis som i transaktionsformuläret (NAV-4).
+     */
+    private fun correctDate(id: Long, date: LocalDate) {
+        viewModelScope.launch { repository.correctDate(id, date.toEpochDay()) }
     }
 
     /**

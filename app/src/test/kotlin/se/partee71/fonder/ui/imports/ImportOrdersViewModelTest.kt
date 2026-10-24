@@ -305,6 +305,8 @@ class ImportOrdersViewModelTest {
             assertEquals(16.9862, tx.shares, 1e-9)
             assertEquals(294.36, tx.pricePerShare, 1e-9)
             assertEquals(LocalDate.of(2020, 3, 13).toEpochDay(), tx.epochDay)
+            // Avräkningsnotans datum är känt, aldrig en uppskattning (IMP-2, #222).
+            assertFalse(tx.dateEstimated)
             cancelAndIgnoreRemainingEvents()
         }
     }

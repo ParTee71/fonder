@@ -110,6 +110,7 @@ class FundPriceUpdateWorkerTest {
         override fun observeTransactionsForFund(fundId: String): Flow<List<Transaction>> = flowOf(transactions.value.filter { it.fundId == fundId })
         override suspend fun upsertFund(fund: Fund) {}
         override suspend fun addTransaction(tx: Transaction): Long = 0
+        override suspend fun correctDate(id: Long, epochDay: Long) {}
         override suspend fun deleteTransaction(id: Long) {}
         override suspend fun clearAll() {}
     }

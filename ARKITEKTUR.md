@@ -88,7 +88,7 @@ data/
                   SuggestionDismissalEntity) · daos (inkl. FxRateDao, FundMetadataDao, SwitchWatchDao, SuggestionDismissalDao)
 di/               Hilt-moduler (AppModule, StorageModule – Room-filen och DataStore, NetworkModule, RepositoryModule)
 domain/
-├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee) · FundPrice ·
+├── model/        Fund (fundId, valfritt isin/fondlistaFundId) · FundCompany · FundCatalog · Transaction (inkl. fee, dateEstimated) · FundPrice ·
 │                 IsinPricePoint · ImportedHoldingRow · ImportedOrderTransaction · Holding · RiskProfile/RiskProfileAnswers (#68)
 └── usecase/      PortfolioCalc · PortfolioPerformanceCalc (dag/vecka/månad, #14) ·
                   FundAnalysisCalc (nyckeltal + säljsignaler per innehav, #16) ·
@@ -245,14 +245,14 @@ staleness-gaten (`isPriceStale`) falskt negativ.
 
 ## Datamodell
 
-**Room** (`data/room/AppDatabase`, version **20**, `exportSchema = true`). Schemafilerna ligger i
-`app/schemas/` och används av migreringstesterna. Migreringarna 1→2 … 18→19 står i
+**Room** (`data/room/AppDatabase`, version **21**, `exportSchema = true`). Schemafilerna ligger i
+`app/schemas/` och används av migreringstesterna. Migreringarna 1→2 … 20→21 står i
 `AppDatabase` och har var sitt `MigrationXYTest` (skill `room-migrations`).
 
 | Entitet | Tabell | Nyckel | I backupen |
 |---|---|---|---|
 | `FundEntity` | `funds` | `fundId` | ja |
-| `TransactionEntity` | `transactions` | `id` (autoincrement) | ja |
+| `TransactionEntity` | `transactions` | `id` (autoincrement); fälten `fundId`, `type`, `epochDay`, `shares`, `pricePerShare`, `fee`, `dateEstimated` (importens uppskattade köpdatum, IMP-2, sedan 20→21) | ja |
 | `SuggestionRecordEntity` | `suggestion_records` | `id` (autoincrement) | ja |
 | `SwitchWatchEntity` | `switch_watches` | `id` (autoincrement) | ja |
 | `SwitchWatchCandidateEntity` | `switch_watch_candidates` | främmande nyckel till `switch_watches` | ja, med sitt byte |

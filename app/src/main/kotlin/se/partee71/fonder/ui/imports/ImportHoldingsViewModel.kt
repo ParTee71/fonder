@@ -57,10 +57,17 @@ private const val PRICE_HISTORY_YEARS = 30L
  * exporten är ofta en aggregerad post byggd av flera köp vid olika tillfällen — hela
  * innehavet behöver därför kunna delas upp i flera transaktioner med egna datum/antal,
  * i stället för att tvinga in allt i en enda syntetisk transaktion).
+ *
+ * [dateEstimated] (IMP-2, issue #222): datumet är importens uppskattning — ur kurshistoriken
+ * ([PurchaseDateEstimator]), reservdatumet eller dagens datum för ett tillagt tillfälle — och inte
+ * valt av användaren. Följer med till [Transaction.dateEstimated], så transaktionen kan märkas
+ * "uppskattat datum" tills någon rättar det. Skilt från [dateConfident], som bara säger hur säker
+ * uppskattningen är: även en säker uppskattning är en uppskattning.
  */
 data class ImportOccasion(
     val date: LocalDate,
     val dateConfident: Boolean,
+    val dateEstimated: Boolean,
     val sharesText: String,
     // Standard Köp — exportens innehav är i praktiken alltid köpta andelar, men en importrad
     // kan sättas till Sälj (t.ex. en manuellt tillagd rad för en avyttring) i stället för att
@@ -246,7 +253,7 @@ class ImportHoldingsViewModel @Inject constructor(
             row = row,
             matchedFund = match?.fund,
             matchConfidence = match?.confidence,
-            occasions = persistentListOf(ImportOccasion(date = date, dateConfident = dateConfident, sharesText = row.shares.toString())),
+            occasions = persistentListOf(ImportOccasion(date = date, dateConfident = dateConfident, dateEstimated = true, sharesText = row.shares.toString())),
             priceFetchFailed = priceFetchFailed
         )
     }
@@ -260,7 +267,7 @@ class ImportHoldingsViewModel @Inject constructor(
     }
 
     private fun onOccasionDateChange(row: ImportedHoldingRow, index: Int, date: LocalDate) {
-        updateOccasion(row, index) { it.copy(date = date, dateConfident = true) }
+        updateOccasion(row, index) { it.copy(date = date, dateConfident = true, dateEstimated = false) }
     }
 
     private fun onOccasionSharesChange(row: ImportedHoldingRow, index: Int, sharesText: String) {
@@ -273,7 +280,7 @@ class ImportHoldingsViewModel @Inject constructor(
 
     /** Delar upp raden i ytterligare ett inköpstillfälle — kvarstående andelar måste fördelas manuellt. */
     private fun onAddOccasion(row: ImportedHoldingRow) {
-        updateRow(row) { it.copy(occasions = (it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, sharesText = "")).toImmutableList()) }
+        updateRow(row) { it.copy(occasions = (it.occasions + ImportOccasion(date = LocalDate.now(), dateConfident = false, dateEstimated = true, sharesText = "")).toImmutableList()) }
     }
 
     private fun onRemoveOccasion(row: ImportedHoldingRow, index: Int) {
@@ -324,7 +331,8 @@ class ImportHoldingsViewModel @Inject constructor(
                                 type = occasion.type,
                                 epochDay = occasion.date.toEpochDay(),
                                 shares = requireNotNull(occasion.shares),
-                                pricePerShare = rowState.row.averageCostPerShare
+                                pricePerShare = rowState.row.averageCostPerShare,
+                                dateEstimated = occasion.dateEstimated
                             )
                         )
                     }

@@ -34,7 +34,7 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SwitchWatchCandidateEntity::class,
         SuggestionDismissalEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -490,6 +490,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 20 → 21 (IMP-2, issue #222): `transactions.dateEstimated` — köpdatumet uppskattades
+         * av innehavsimporten ur kurshistoriken i stället för att vara känt.
+         *
+         * `NOT NULL DEFAULT 0` (falskt) för befintliga rader. Det är inte helt ärligt för köp som en
+         * tidigare import redan uppskattade, men de går inte att skilja från riktiga datum i efterhand,
+         * och ett sant värde på en manuellt registrerad rad hade varit värre (det hade påstått att
+         * användarens eget datum var en gissning). Samma default står i entiteten
+         * (`@ColumnInfo(defaultValue = "0")`), så Rooms schemavalidering prövar den. Inga befintliga
+         * rader eller kolumner rörs.
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `dateEstimated` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -509,7 +526,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_16_17,
             MIGRATION_17_18,
             MIGRATION_18_19,
-            MIGRATION_19_20
+            MIGRATION_19_20,
+            MIGRATION_20_21
         )
     }
 }

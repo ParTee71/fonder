@@ -1,17 +1,21 @@
 package se.partee71.fonder.ui.transaktioner
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -33,7 +37,8 @@ import se.partee71.ui.testing.runListScreenContract
 /**
  * Fliken Händelser i JVM med Robolectric: listramens kontrakt (laddning, tomt med "Ny transaktion" och
  * "Importera avräkningsnota", fel med "Försök igen", NFR-6, TRX-7), filterraden (TRX-3), kortet med årets
- * realiserade resultat (TRX-4), säljraden med vinst, förlust och osäkert resultat (SLD-1/SLD-2), och
+ * realiserade resultat (TRX-4), säljraden med vinst, förlust och osäkert resultat (SLD-1/SLD-2), det
+ * uppskattade datumet med förklaring och rättning (TRX-9), och
  * skärmdumpar ljust + mörkt i "Alla", "Sälj" och utan transaktioner enligt mockupen. Radernas utfällning, bevakning och radering testas
  * instrumenterat i `androidTest/…/ui/transaktioner/TransaktionerScreenTest`.
  */
@@ -208,6 +213,85 @@ class TransaktionerScreenTest {
     @Test
     fun `skärmdump av Händelser utan transaktioner`() = composeRule.captureLightAndDark("HandelserScreen_tomt") {
         TransaktionerContent(state = TransaktionerUiState(list = ListUiState.Empty))
+    }
+
+    // --- Uppskattat datum (TRX-9, issue #222) ---
+
+    /** Senaste först som i DAO:n: ett sälj, ett importerat köp med uppskattat datum och ett vanligt köp. */
+    private val estimatedTransactions = listOf(
+        Transaction(id = 11, fundId = "SB", type = TransactionType.SALJ, epochDay = day(2, 10), shares = 10.0, pricePerShare = 300.0),
+        Transaction(id = 12, fundId = "GI", type = TransactionType.KOP, epochDay = day(3, 14, year = 2025), shares = 42.0, pricePerShare = 184.5, dateEstimated = true),
+        Transaction(id = 10, fundId = "SB", type = TransactionType.KOP, epochDay = day(1, 5, year = 2024), shares = 20.0, pricePerShare = 270.0)
+    )
+
+    private fun estimatedState(): TransaktionerUiState {
+        val sales = RealizedGainCalculator.compute(estimatedTransactions).associateBy { it.transactionId }
+        return TransaktionerUiState(
+            list = estimatedTransactions.map { tx -> TransaktionRad(transaction = tx, fundName = names.getValue(tx.fundId), sale = sales[tx.id]) }.toListUiState()
+        )
+    }
+
+    @Test
+    fun `ett uppskattat datum märks i undertexten och bara på den raden`() {
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = estimatedState()) } }
+        composeRule.onNodeWithText("Köp · uppskattat datum", substring = true).assertIsDisplayed()
+        composeRule.onAllNodes(hasText("uppskattat datum", substring = true)).assertCountEquals(1)
+    }
+
+    @Test
+    fun `ett osäkert sälj med uppskattat datum får båda tilläggen`() {
+        val tx = Transaction(id = 1, fundId = "RF", type = TransactionType.SALJ, epochDay = day(2, 1), shares = 10.0, pricePerShare = 100.0, dateEstimated = true)
+        val sale = RealizedGainCalculator.compute(listOf(tx)).single()
+        composeRule.setContent {
+            FonderTheme { TransaktionerContent(state = TransaktionerUiState(list = listOf(TransaktionRad(tx, "Räntefond Kort", sale)).toListUiState())) }
+        }
+        composeRule.onNodeWithText("· osäkert · uppskattat datum", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `utfälld rad med uppskattat datum förklarar det och rättar via datumväljaren`() {
+        var corrected: Pair<Long, LocalDate>? = null
+        composeRule.setContent {
+            FonderTheme { TransaktionerContent(state = estimatedState(), onCorrectDate = { id, date -> corrected = id to date }) }
+        }
+        composeRule.onNodeWithText("Importen uppskattade datumet", substring = true).assertDoesNotExist()
+
+        composeRule.onNodeWithText("Köp · uppskattat datum", substring = true).performClick()
+        composeRule.onNodeWithText("Importen uppskattade datumet", substring = true).assertIsDisplayed()
+        // DateField läses som en knapp med etikett och datum (android-ui sköter a11y).
+        composeRule.onNodeWithContentDescription("Rätta datum, fre 14 mars 2025").assertIsDisplayed().performClick()
+
+        // Datumväljaren (Material, Robolectrics engelska locale): välj en annan dag och bekräfta.
+        composeRule.onNodeWithText("Monday, March 17, 2025").performClick()
+        composeRule.onNodeWithText("OK").performClick()
+        assertEquals(12L to LocalDate.of(2025, 3, 17), corrected)
+    }
+
+    @Test
+    fun `utfällt köp med känt datum har ingen rättning`() {
+        composeRule.setContent { FonderTheme { TransaktionerContent(state = estimatedState()) } }
+        // Det vanliga köpet i Sverige Småbolag (det andra köpet är det uppskattade).
+        composeRule.onNode(hasText("Sverige Småbolag") and hasText("Köp", substring = true) and hasStateDescription("Ihopfälld")).performClick()
+        composeRule.onNode(hasText("Sverige Småbolag") and hasText("Köp", substring = true) and hasStateDescription("Utfälld")).assertExists()
+        composeRule.onNodeWithText("Importen uppskattade datumet", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Rätta datum", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `skärmdump av Händelser med uppskattat datum`() = composeRule.captureLightAndDark("HandelserScreen_uppskattat") {
+        TransaktionerContent(state = estimatedState())
+    }
+
+    @Test
+    fun `skärmdump av Händelser med uppskattat datum utfällt`() = composeRule.captureLightAndDark(
+        "HandelserScreen_uppskattat_utfalld",
+        prepare = {
+            // Semantikens klick, inte ett tryck: ett tryck lämnar plattformens ripple (med slumpat
+            // brusmönster) kvar i bilden, olika mellan körningar.
+            onNodeWithText("Köp · uppskattat datum", substring = true).performSemanticsAction(SemanticsActions.OnClick)
+        }
+    ) {
+        TransaktionerContent(state = estimatedState())
     }
 
     // --- Ungefärlig skatt i depå/AF (TRX-8, issue #199) ---

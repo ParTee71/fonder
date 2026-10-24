@@ -40,6 +40,10 @@ class FakeTransactionRepository(
         return id
     }
 
+    override suspend fun correctDate(id: Long, epochDay: Long) {
+        transactions.value = transactions.value.map { if (it.id == id) it.copy(epochDay = epochDay, dateEstimated = false) else it }
+    }
+
     override suspend fun deleteTransaction(id: Long) {
         transactions.value = transactions.value.filterNot { it.id == id }
     }

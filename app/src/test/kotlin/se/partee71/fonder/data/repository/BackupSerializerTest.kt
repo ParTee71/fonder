@@ -47,7 +47,7 @@ class BackupSerializerTest {
             Fund(fundId = "LU0055631609", name = "Fond utan koder", currency = "USD", isin = null, fondlistaFundId = null)
         ),
         transactions = listOf(
-            Transaction(id = 7, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0),
+            Transaction(id = 7, fundId = "SHB0000442", type = TransactionType.KOP, epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0, dateEstimated = true),
             Transaction(id = 8, fundId = "SHB0000442", type = TransactionType.SALJ, epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0)
         ),
         suggestionRecords = listOf(
@@ -231,7 +231,7 @@ class BackupSerializerTest {
             root.getValue("funds").jsonArray.first().jsonObject.keys
         )
         assertEquals(
-            setOf("id", "fundId", "type", "epochDay", "shares", "pricePerShare", "fee"),
+            setOf("id", "fundId", "type", "epochDay", "shares", "pricePerShare", "fee", "dateEstimated"),
             root.getValue("transactions").jsonArray.first().jsonObject.keys
         )
         assertEquals(
@@ -289,6 +289,22 @@ class BackupSerializerTest {
         assertEquals(2, restored.switchWatches.size)
         assertTrue(restored.switchWatches.all { it.sellTransactionId == null && it.buyTransactionId == null })
         assertEquals(BackupPayload.FORMAT_VERSION, restored.formatVersion)
+    }
+
+    @Test
+    fun `det uppskattade kopdatumet overlever och en aldre fil utan markeringen lases som kant datum`() {
+        // IMP-2, issue #222: markeringen kan inte räknas fram igen — efter en återställning vet
+        // ingen längre vilka datum importen gissade. En fil från före markeringen saknar nyckeln:
+        // samma formatversion, datumen lästa som kända, aldrig en avvisad fil.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+        assertEquals(listOf(true, false), restored.transactions.map { it.dateEstimated })
+
+        val utanMarkering = BackupSerializer.encode(fullPayload()).replace(Regex(",\\s*\"dateEstimated\": (true|false)"), "")
+        assertFalse(utanMarkering.contains("dateEstimated"))
+        val old = BackupSerializer.decode(utanMarkering).getOrThrow()
+        assertTrue(old.transactions.none { it.dateEstimated })
+        assertEquals(listOf(19_000L, 19_500L), old.transactions.map { it.epochDay })
+        assertEquals(BackupPayload.FORMAT_VERSION, old.formatVersion)
     }
 
     @Test

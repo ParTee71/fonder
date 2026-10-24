@@ -1,5 +1,6 @@
 package se.partee71.fonder.data.room.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -17,7 +18,9 @@ data class TransactionEntity(
     val epochDay: Long,
     val shares: Double,
     val pricePerShare: Double,
-    val fee: Double = 0.0
+    val fee: Double = 0.0,
+    /** IMP-2, #222: datumet uppskattades av importen. Defaulten står också i migreringen 20→21. */
+    @ColumnInfo(defaultValue = "0") val dateEstimated: Boolean = false
 ) {
     fun toDomain() = Transaction(
         id = id,
@@ -26,7 +29,8 @@ data class TransactionEntity(
         epochDay = epochDay,
         shares = shares,
         pricePerShare = pricePerShare,
-        fee = fee
+        fee = fee,
+        dateEstimated = dateEstimated
     )
 
     companion object {
@@ -40,7 +44,8 @@ data class TransactionEntity(
             epochDay = tx.epochDay,
             shares = tx.shares,
             pricePerShare = tx.pricePerShare,
-            fee = tx.fee
+            fee = tx.fee,
+            dateEstimated = tx.dateEstimated
         )
     }
 }

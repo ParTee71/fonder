@@ -345,6 +345,8 @@ class ImportHoldingsViewModelTest {
             val occasion = state.rows.first().occasions.first()
             assertEquals(LocalDate.now().minusYears(30), occasion.date)
             assertFalse(occasion.dateConfident)
+            // Reservdatumet är också en uppskattning (IMP-2, #222).
+            assertTrue(occasion.dateEstimated)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -463,6 +465,8 @@ class ImportHoldingsViewModelTest {
             var state = awaitItem()
             while (state.loading) state = awaitItem()
             val row = state.rows.first().row
+            // Datumet ur kurshistoriken är importens uppskattning tills användaren väljer (IMP-2, #222).
+            assertTrue(state.rows.first().occasions.first().dateEstimated)
 
             vm.onEvent(ImportHoldingsEvent.FundOverride(row, null))
             state = awaitItem()
@@ -477,6 +481,7 @@ class ImportHoldingsViewModelTest {
             state = awaitItem()
             assertEquals(newDate, state.rows.first().occasions.first().date)
             assertTrue(state.rows.first().occasions.first().dateConfident)
+            assertFalse(state.rows.first().occasions.first().dateEstimated)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -494,6 +499,8 @@ class ImportHoldingsViewModelTest {
             vm.onEvent(ImportHoldingsEvent.AddOccasion(row))
             state = awaitItem()
             assertEquals(2, state.rows.first().occasions.size)
+            // Ett tillagt tillfälle har dagens datum som platshållare — inte valt, alltså uppskattat.
+            assertTrue(state.rows.first().occasions[1].dateEstimated)
             // Nya tillfället saknar andelar tills användaren fyller i — blockerar import trots att
             // summan (0 + ursprungliga andelarna) råkar matcha totalt.
             assertFalse(state.rows.first().readyToImport)
@@ -536,6 +543,7 @@ class ImportHoldingsViewModelTest {
             assertEquals(handelsbankenFund.copy(isin = "SE0000582033"), addedFunds.first())
             assertEquals(1, addedTransactions.size)
             assertEquals(1.9378, addedTransactions.first().shares, 1e-9)
+            assertTrue(addedTransactions.first().dateEstimated)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -616,6 +624,8 @@ class ImportHoldingsViewModelTest {
             assertEquals(1.0, addedTransactions[0].shares, 1e-9)
             assertEquals(0.9378, addedTransactions[1].shares, 1e-9)
             assertEquals(secondDate.toEpochDay(), addedTransactions[1].epochDay)
+            // Det uppskattade datumet märks på transaktionen, det användaren valde gör det inte (IMP-2, #222).
+            assertEquals(listOf(true, false), addedTransactions.map { it.dateEstimated })
             assertEquals(expectedPrice, addedTransactions[0].pricePerShare, 1e-9)
             assertEquals(expectedPrice, addedTransactions[1].pricePerShare, 1e-9)
             cancelAndIgnoreRemainingEvents()

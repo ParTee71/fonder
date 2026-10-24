@@ -24,6 +24,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import se.partee71.fonder.R
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -42,6 +44,7 @@ import se.partee71.ui.components.AppCard
 import se.partee71.ui.components.AppCardStyle
 import se.partee71.ui.components.ButtonVariant
 import se.partee71.ui.components.ConfirmDialog
+import se.partee71.ui.components.DateField
 import se.partee71.ui.components.EmptyAction
 import se.partee71.ui.components.EmptyContent
 import se.partee71.ui.components.EntityListScreen
@@ -85,6 +88,7 @@ fun TransaktionerScreen(
         onDeleteTransaction = { viewModel.onEvent(TransaktionerEvent.DeleteTransaction(it)) },
         onStartSwitchWatch = { viewModel.onEvent(TransaktionerEvent.StartSwitchWatch(it)) },
         onRetry = { viewModel.onEvent(TransaktionerEvent.Retry) },
+        onCorrectDate = { id, date -> viewModel.onEvent(TransaktionerEvent.CorrectDate(id, date)) },
         onNewTransaction = onNewTransaction,
         onImportOrders = onImportOrders,
         modifier = modifier
@@ -100,6 +104,7 @@ fun TransaktionerContent(
     onDeleteTransaction: (Long) -> Unit = {},
     onStartSwitchWatch: (TransaktionRad) -> Unit = {},
     onRetry: () -> Unit = {},
+    onCorrectDate: (Long, LocalDate) -> Unit = { _, _ -> },
     onNewTransaction: () -> Unit = {},
     onImportOrders: () -> Unit = {}
 ) {
@@ -134,7 +139,8 @@ fun TransaktionerContent(
             HandelseRow(
                 row = row,
                 onLongPress = { pendingDeleteId = row.transaction.id },
-                onStartSwitchWatch = onStartSwitchWatch
+                onStartSwitchWatch = onStartSwitchWatch,
+                onCorrectDate = onCorrectDate
             )
         }
     }
@@ -276,14 +282,16 @@ private fun RealizedCard(state: TransaktionerUiState, cardStyle: AppCardStyle, m
 /**
  * En transaktion (TRX-1): datum, fondnamn, typ och belopp med tecken — in (sälj) eller ut (köp) — i
  * listramens rad. Ett sälj visar sitt realiserade resultat i undertexten, osäkert markerat i text
- * (SLD-2). Tryck fäller ut detaljerna (SLD-4), långtryck frågar om radering (TRX-2).
+ * (SLD-2), ett uppskattat datum likaså (TRX-9). Tryck fäller ut detaljerna (SLD-4), långtryck frågar
+ * om radering (TRX-2).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HandelseRow(
     row: TransaktionRad,
     onLongPress: () -> Unit,
-    onStartSwitchWatch: (TransaktionRad) -> Unit
+    onStartSwitchWatch: (TransaktionRad) -> Unit,
+    onCorrectDate: (Long, LocalDate) -> Unit
 ) {
     val tx = row.transaction
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -291,7 +299,7 @@ private fun HandelseRow(
     Column {
         ItemRow(
             title = row.fundName,
-            subtitle = subtitle(tx.type, row.sale),
+            subtitle = subtitle(tx.type, row.sale, tx.dateEstimated),
             modifier = Modifier
                 .combinedClickable(
                     onClickLabel = stringResource(if (expanded) R.string.sold_fund_collapse else R.string.sold_fund_expand),
@@ -318,14 +326,23 @@ private fun HandelseRow(
             }
         )
         AnimatedVisibility(visible = expanded) {
-            HandelseDetails(row = row, onStartSwitchWatch = onStartSwitchWatch)
+            HandelseDetails(row = row, onStartSwitchWatch = onStartSwitchWatch, onCorrectDate = onCorrectDate)
         }
     }
 }
 
-/** "Köp", eller "Sälj · vinst +2 140,00 kr" med "· osäkert" när köphistoriken inte räcker (SLD-2). */
+/**
+ * "Köp", eller "Sälj · vinst +2 140,00 kr" med "· osäkert" när köphistoriken inte räcker (SLD-2), och
+ * "· uppskattat datum" när importen gissade dagen (TRX-9).
+ */
 @Composable
-private fun subtitle(type: TransactionType, sale: RealizedSale?): String {
+private fun subtitle(type: TransactionType, sale: RealizedSale?, dateEstimated: Boolean): String {
+    val text = saleSubtitle(type, sale)
+    return if (dateEstimated) stringResource(R.string.format_handelse_estimated_date, text) else text
+}
+
+@Composable
+private fun saleSubtitle(type: TransactionType, sale: RealizedSale?): String {
     val typeLabel = stringResource(type.labelRes())
     if (sale == null) return typeLabel
     val gain = sale.realizedGain
@@ -340,10 +357,11 @@ private fun subtitle(type: TransactionType, sale: RealizedSale?): String {
 /**
  * Utfällda detaljer (SLD-4): andelar och kurs, för ett sälj även belopp, avgift,
  * anskaffningsvärde, resultatet i kr + %, en ev. osäkerhetsvarning (SLD-2) och "Bevaka
- * alternativ" (SLD-5) — knappen ligger här så att den hopfällda raden förblir namn och resultat.
+ * alternativ" (SLD-5) — knappen ligger här så att den hopfällda raden förblir namn och resultat. Ett
+ * uppskattat datum förklaras och kan rättas här (TRX-9).
  */
 @Composable
-private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (TransaktionRad) -> Unit) {
+private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (TransaktionRad) -> Unit, onCorrectDate: (Long, LocalDate) -> Unit) {
     val tx = row.transaction
     val sale = row.sale
     Column(
@@ -363,8 +381,35 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            return@Column
+        } else {
+            SaleDetails(sale)
         }
+        if (tx.dateEstimated) {
+            Text(
+                stringResource(R.string.handelse_estimated_date_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            DateField(
+                label = stringResource(R.string.handelse_correct_date),
+                date = LocalDate.ofEpochDay(tx.epochDay).toKotlinLocalDate(),
+                onDateChange = { onCorrectDate(tx.id, it.toJavaLocalDate()) }
+            )
+        }
+        if (row.canStartSwitchWatch) {
+            AppButton(
+                text = stringResource(R.string.switch_watch_start),
+                onClick = { onStartSwitchWatch(row) },
+                variant = ButtonVariant.Text
+            )
+        }
+    }
+}
+
+/** Säljets belopp, avgift och anskaffningsvärde, resultatet i kr + % och en ev. osäkerhetsvarning (SLD-2, SLD-4). */
+@Composable
+private fun SaleDetails(sale: RealizedSale) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Text(
             stringResource(
                 R.string.format_sold_fund_detail,
@@ -385,13 +430,6 @@ private fun HandelseDetails(row: TransaktionRad, onStartSwitchWatch: (Transaktio
                 stringResource(R.string.sold_fund_uncovered_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
-            )
-        }
-        if (row.canStartSwitchWatch) {
-            AppButton(
-                text = stringResource(R.string.switch_watch_start),
-                onClick = { onStartSwitchWatch(row) },
-                variant = ButtonVariant.Text
             )
         }
     }

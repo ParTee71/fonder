@@ -148,6 +148,9 @@
     <string name="format_handelse_sell_gain">%1$s · vinst %2$s</string>
     <string name="format_handelse_sell_loss">%1$s · förlust %2$s</string>
     <string name="format_handelse_uncertain">%1$s · osäkert</string>
+    <string name="format_handelse_estimated_date">%1$s · uppskattat datum</string>
+    <string name="handelse_estimated_date_explain">Importen uppskattade datumet ur fondens kurshistorik (en dag då kursen låg nära snittkursen). Det styr avkastningen, köpmarkörerna, ”sedan köp” och facit – rätta det om du vet det riktiga.</string>
+    <string name="handelse_correct_date">Rätta datum</string>
     <string name="transaktion_delete_title">Ta bort transaktion?</string>
     <string name="format_transaktion_delete_confirm">Transaktionen för \"%s\" raderas permanent.</string>
     <string name="transaktionsform_title">Ny transaktion</string>

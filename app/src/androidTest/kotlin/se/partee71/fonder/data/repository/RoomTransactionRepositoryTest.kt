@@ -24,7 +24,7 @@ import se.partee71.fonder.domain.model.Fund
 
 /**
  * Verifierar [TransactionRepository.clearAll] (SET-1, töm databasen) och att [TransactionRepository.upsertFund]
- * slår ihop mot lagrad rad i stället för att skriva över den.
+ * slår ihop mot lagrad rad i stället för att skriva över den, samt [TransactionRepository.correctDate] (IMP-2, #222).
  */
 @RunWith(AndroidJUnit4::class)
 class RoomTransactionRepositoryTest {
@@ -164,5 +164,33 @@ class RoomTransactionRepositoryTest {
         assertNull(watch.sellTransactionId)
         assertTrue(watch.isOpen)
         assertEquals(150.0, watch.proceedsKr!!, 1e-9)
+    }
+
+    @Test
+    fun correctDate_satter_datumet_och_rensar_uppskattningen_utan_att_rora_resten() = runTest {
+        // IMP-2, #222: ett uppskattat köpdatum som användaren rättar är inte längre en gissning.
+        db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033"))
+        val estimated = db.transactionDao().insert(
+            TransactionEntity(fundId = "SHB0000442", type = "KOP", epochDay = 19_000, shares = 12.5, pricePerShare = 101.25, fee = 9.0, dateEstimated = true)
+        )
+        val other = db.transactionDao().insert(
+            TransactionEntity(fundId = "SHB0000442", type = "KOP", epochDay = 19_100, shares = 2.0, pricePerShare = 110.0, dateEstimated = true)
+        )
+
+        repository.correctDate(estimated, epochDay = 18_640)
+        repository.correctDate(id = 9_999, epochDay = 18_000)
+
+        val all = repository.observeTransactions().first().associateBy { it.id }
+        assertEquals(2, all.size)
+        val corrected = all.getValue(estimated)
+        assertEquals(18_640L, corrected.epochDay)
+        assertEquals(false, corrected.dateEstimated)
+        assertEquals(12.5, corrected.shares, 1e-9)
+        assertEquals(101.25, corrected.pricePerShare, 1e-9)
+        assertEquals(9.0, corrected.fee, 1e-9)
+        assertEquals("SHB0000442", corrected.fundId)
+        // En annan rad rörs inte.
+        assertEquals(19_100L, all.getValue(other).epochDay)
+        assertEquals(true, all.getValue(other).dateEstimated)
     }
 }
