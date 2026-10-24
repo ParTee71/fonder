@@ -18,6 +18,14 @@ interface TransactionDao {
     @Insert
     suspend fun insert(tx: TransactionEntity): Long
 
+    /**
+     * Rättar handelsdagen och rensar [TransactionEntity.dateEstimated] i samma uppdatering (IMP-2,
+     * #222) — ett datum användaren själv satt är inte längre en uppskattning. Returnerar antalet
+     * ändrade rader (0 om id:t inte finns).
+     */
+    @Query("UPDATE transactions SET epochDay = :epochDay, dateEstimated = 0 WHERE id = :id")
+    suspend fun correctDate(id: Long, epochDay: Long): Int
+
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)
 

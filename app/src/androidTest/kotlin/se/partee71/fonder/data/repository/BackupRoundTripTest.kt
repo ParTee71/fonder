@@ -97,7 +97,7 @@ class BackupRoundTripTest {
         db.fundDao().upsert(FundEntity(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033", fondlistaFundId = "SHB0000442"))
         db.fundDao().upsert(FundEntity(fundId = "LU0055631609", name = "Fond B", currency = "USD", isin = null, fondlistaFundId = null))
         db.transactionDao().insert(
-            TransactionEntity(id = 11, fundId = "SHB0000442", type = "KOP", epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0)
+            TransactionEntity(id = 11, fundId = "SHB0000442", type = "KOP", epochDay = 19_000, shares = 12.5, pricePerShare = 178.25, fee = 25.0, dateEstimated = true)
         )
         db.transactionDao().insert(
             TransactionEntity(id = 12, fundId = "SHB0000442", type = "SALJ", epochDay = 19_500, shares = 4.0, pricePerShare = 201.5, fee = 0.0)
@@ -232,6 +232,8 @@ class BackupRoundTripTest {
         assertEquals(listOf("KOP", "SALJ"), txs.map { it.type })
         assertEquals(25.0, txs[0].fee, 1e-9)
         assertEquals(12.5, txs[0].shares, 1e-9)
+        // IMP-2, #222: att köpdatumet uppskattades går inte att räkna fram igen efter en återställning.
+        assertEquals(listOf(true, false), txs.map { it.dateEstimated })
         assertEquals(178.25, txs[0].pricePerShare, 1e-9)
 
         val records = db.suggestionRecordDao().getAll().sortedBy { it.id }

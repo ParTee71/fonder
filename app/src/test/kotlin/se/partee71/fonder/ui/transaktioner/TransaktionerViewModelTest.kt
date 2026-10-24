@@ -165,6 +165,32 @@ class TransaktionerViewModelTest {
         assertTrue(42L in deletedIds)
     }
 
+    // --- Uppskattat datum (TRX-9, IMP-2) ---
+
+    @Test
+    fun `ett rättat datum sätts, markeringen försvinner och listan följer med`() = runTest(dispatcher) {
+        val estimated = kop(id = 1, day = 100, shares = 2.0, price = 150.0).copy(dateEstimated = true)
+        val other = kop(id = 2, day = 300, shares = 1.0, price = 160.0).copy(dateEstimated = true)
+        transactions.value = listOf(other, estimated)
+        val vm = viewModel()
+        vm.uiState.test {
+            val before = awaitLoaded()
+            assertTrue(before.rows.all { it.transaction.dateEstimated })
+
+            val corrected = LocalDate.of(2025, 3, 14)
+            vm.onEvent(TransaktionerEvent.CorrectDate(1, corrected))
+
+            var state = awaitItem()
+            while (state.rows.first { it.transaction.id == 1L }.transaction.dateEstimated) state = awaitItem()
+            val row = state.rows.first { it.transaction.id == 1L }.transaction
+            assertEquals(corrected.toEpochDay(), row.epochDay)
+            assertFalse(row.dateEstimated)
+            // Bara den rättade raden ändras.
+            assertEquals(other, state.rows.first { it.transaction.id == 2L }.transaction)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `ett läsfel i databasen visas som fel i stället för en tom lista (NFR-6)`() = runTest(dispatcher) {
         val failingRepo = object : TransactionRepository by fakeRepo {

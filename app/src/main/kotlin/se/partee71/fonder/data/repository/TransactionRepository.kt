@@ -41,6 +41,13 @@ interface TransactionRepository {
     suspend fun addTransaction(tx: Transaction): Long
 
     /**
+     * Rättar transaktionens handelsdag till [epochDay] och markerar den som **känd**
+     * ([Transaction.dateEstimated] = falskt) i en och samma uppdatering (IMP-2, #222). Övriga fält
+     * rörs inte. Ett id som inte finns är ingen ändring — ingen rad skapas.
+     */
+    suspend fun correctDate(id: Long, epochDay: Long)
+
+    /**
      * Tar bort transaktionen (TRX-2). En bevakning som pekar på den får sina länkar nollade men
      * ligger kvar — användardata raderas aldrig som sidoeffekt.
      */
@@ -89,6 +96,10 @@ class RoomTransactionRepository @Inject constructor(
     }
 
     override suspend fun addTransaction(tx: Transaction): Long = transactionDao.insert(TransactionEntity.fromDomain(tx))
+
+    override suspend fun correctDate(id: Long, epochDay: Long) {
+        transactionDao.correctDate(id, epochDay)
+    }
 
     override suspend fun deleteTransaction(id: Long) {
         database.withTransaction {

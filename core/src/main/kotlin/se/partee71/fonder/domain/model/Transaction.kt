@@ -13,6 +13,10 @@ enum class TransactionType { KOP, SALJ }
  * @param fee avgift i kr (t.ex. courtage), default 0.0. För ett köp ingår den i anskaffningsvärdet,
  *   för ett sälj dras den från försäljningsbeloppet (genomsnittsmetoden, se
  *   [se.partee71.fonder.domain.usecase] `RealizedGainCalculator`, issue #10, #192).
+ * @param dateEstimated sant när [epochDay] inte är känt utan **uppskattades** av innehavsimporten ur
+ *   kurshistoriken (`PurchaseDateEstimator`, eller importens reservdatum), IMP-2, issue #222. Rensas
+ *   (falskt) när användaren rättar datumet. Default falskt: en manuellt registrerad transaktion och en
+ *   avräkningsnota har ett riktigt datum.
  */
 @Serializable
 data class Transaction(
@@ -22,7 +26,8 @@ data class Transaction(
     val epochDay: Long,
     val shares: Double,
     val pricePerShare: Double,
-    val fee: Double = 0.0
+    val fee: Double = 0.0,
+    val dateEstimated: Boolean = false
 ) {
     /** Transaktionens totalbelopp (positivt för köp, används med tecken i beräkningar). */
     val amount: Double get() = shares * pricePerShare

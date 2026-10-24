@@ -11,9 +11,11 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 20`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_19_20` ligger i `companion object` och samlas i `MIGRATIONS`.
-  Senaste: `MIGRATION_19_20` lägger `suggestion_records.navEpochDay` (nullbar utan default — dagen
+- `data/room/AppDatabase.kt` — `version = 21`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_20_21` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_20_21` lägger `transactions.dateEstimated` (`NOT NULL DEFAULT 0`, även i
+  entiteten via `@ColumnInfo(defaultValue = "0")`; gamla rader räknas som kända datum, TRX-9, #222).
+  Före den: `MIGRATION_19_20` lägger `suggestion_records.navEpochDay` (nullbar utan default — dagen
   båda NAV-utgångslägena gäller; gamla rader vet den inte och mäts från förslagsdagen, SET-5, #197).
   Före den: `MIGRATION_18_19` ändrar inget schema utan glömmer cachade nej på köpbarhet
   (`fund_metadata.availableAtHandelsbanken = 0` → `NULL`, #153). Före den: `MIGRATION_17_18` lägger `switch_watches.indexOnly` (`NOT NULL DEFAULT 0`, filtret "bara

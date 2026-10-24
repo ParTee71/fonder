@@ -66,6 +66,9 @@ private val screenshotOptions = RoborazziOptions(
  * [ready] för innehåll som ritas klart utanför compose-klockan (diagrammets modell byggs på en
  * annan tråd): bilden tas först när villkoret är sant, så den aldrig fångar ett halvfärdigt läge.
  *
+ * [prepare] körs en gång efter `setContent`, före bilderna – för ett läge som nås genom en handling
+ * (en utfälld rad), så båda temana fotograferas i samma läge.
+ *
  * [screen] fotograferar hela skärmen med alla fönster i stället för noden – för det som ritas i
  * ett eget fönster (dialoger, menyer), som inte finns i nodens bild.
  *
@@ -79,6 +82,7 @@ fun ComposeContentTestRule.captureLightAndDark(
     screen: Boolean = false,
     animated: Boolean = false,
     ready: (ComposeContentTestRule.() -> Boolean)? = null,
+    prepare: (ComposeContentTestRule.() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     var dark by mutableStateOf(false)
@@ -99,6 +103,7 @@ fun ComposeContentTestRule.captureLightAndDark(
             }
         }
     }
+    prepare?.invoke(this)
     for (suffix in listOf("light", "dark")) {
         dark = suffix == "dark"
         if (animated) mainClock.advanceTimeBy(ANIMATION_STEP_MS) else waitForIdle()

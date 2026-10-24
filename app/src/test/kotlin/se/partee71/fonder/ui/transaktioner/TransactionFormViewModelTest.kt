@@ -106,6 +106,7 @@ class TransactionFormViewModelTest {
             addedTransactions.add(tx)
             return 1
         }
+        override suspend fun correctDate(id: Long, epochDay: Long) {}
         override suspend fun deleteTransaction(id: Long) {}
         override suspend fun clearAll() {}
     }

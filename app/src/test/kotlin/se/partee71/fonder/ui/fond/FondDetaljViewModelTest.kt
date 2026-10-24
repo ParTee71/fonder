@@ -109,6 +109,7 @@ class FondDetaljViewModelTest {
             funds.value = funds.value.map { if (it.fundId == fund.fundId) fund else it }
         }
         override suspend fun addTransaction(tx: Transaction): Long = 0
+        override suspend fun correctDate(id: Long, epochDay: Long) {}
         override suspend fun deleteTransaction(id: Long) {}
         override suspend fun clearAll() {}
     }
