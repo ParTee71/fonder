@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.82.1 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.82.2 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.82.2 | Intern: komponentbiblioteket android-ui 0.9.2 med rättningar – Ångra får sina 5 s från att meddelandet syns, "Försök igen" under en pågående läsning visar inte den avbrutna läsningen som fel, och redigeringens meny visas först när det sparade är läst. Utseendet är oförändrat (#224). |
 | 0.82.1 | Importens uppskattade inköpsdatum är deterministiskt: bland dagar nära snittkursen väljs den senaste, och datumet markeras som säkert bara när alla träffar ligger inom 30 dagar – annars ombeds användaren välja datum (#200). |
 | 0.82.0 | Skatten syns: Hem visar årets ungefärliga schablonskatt i ISK/KF med snittunderlag, skattefri nivå och årets parametrar; Händelsers årskort visar i depå/AF årets vinster och förluster, skatten på vinsten efter kvittning och skatten på schablonintäkten den 1 januari; Fonddetalj visar i depå/AF vad ett byte kostar i skatt i stället för att bytesplanen inte föreslår något (#199). |
 | 0.81.1 | Analysens periodrader mäter inte längre från en månader gammal startkurs: saknas kurs inom 5 dagar före periodens start visas otillräcklig data, en äldre slutkurs anges som "per ÅÅÅÅ-MM-DD" och CAGR räknas mellan de två kursdagarna (#198). |
