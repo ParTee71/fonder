@@ -6,7 +6,7 @@
 
 Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, för alla
 ändringar, oavsett storlek. De detaljerade reglerna ligger som skills i
-`.claude/skills/` (i projekttrådar `fonder:<namn>`) — den här filen är kontraktet som binder ihop dem.
+`.claude/skills/` (i projekttrådar `<namn>`, eller `fonder:<namn>` när ett annat repo i tråden har en skill med samma namn) — den här filen är kontraktet som binder ihop dem.
 
 **Svarslängd:** håll chattsvar minimala. Inga sammanfattningar, ingen upprepning av vad
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
@@ -172,8 +172,8 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   skapas, utan att fråga. Bevaka tills den är mergad eller stängd: fixa CI-fel, hantera
   granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `android:ci-doktor`
   diagnostisera. Avsluta prenumerationen när PR:en är klar.
-- **Delegera på rätt nivå:** huvudsessionen orkestrerar och granskar; agenten `byggare` tar
-  skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `arkitekt`
+- **Delegera på rätt nivå:** huvudsessionen orkestrerar och granskar; agenten `fonder-byggare` tar
+  skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `fonder-arkitekt`
   Room-schema, migreringar, backup-kedjan och arkitekturval. Går ett steg fel två gånger i
   rad flyttas det upp en nivå.
 - **Modellval** för sessionen och varje agent (skill `android:ai-model-choice`, enda källan;
@@ -200,7 +200,7 @@ Detaljer i [ARKITEKTUR.md](ARKITEKTUR.md) (enda källan för paketträd, datafl�
 
 ## Agenter, modellval och skills
 
-Agenterna (`byggare`, `arkitekt` och pluginens `android:granskare`, `android:ci-doktor`,
+Agenterna (`fonder-byggare`, `fonder-arkitekt` och pluginens `android:granskare`, `android:ci-doktor`,
 `android:testskrivare`), modellvalet och alla skills, med när de används, står i
 [.claude/README.md](.claude/README.md). Agenterna
 svarar med kortrapporten i sin fil. Vid komprimering av en lång session: behåll ändrade filer,

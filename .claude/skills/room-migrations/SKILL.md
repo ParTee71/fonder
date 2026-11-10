@@ -85,7 +85,7 @@ och det inte är sant, välj ett som är ärligt tomt i stället.
 - **En migrering som tyst gallrar data.** Retention är ett krav, inte en implementationsdetalj
   — den ska stå i KRAVLISTA innan den står i SQL.
 - **Checka in schema-JSON utan beslut.** Att börja checka in `app/schemas/` (och gå över till
-  `MigrationTestHelper`) är ett arkitekturval för agenten `arkitekt`, i ett eget issue.
+  `MigrationTestHelper`) är ett arkitekturval för agenten `fonder-arkitekt`, i ett eget issue.
 
 ## Checklista
 
