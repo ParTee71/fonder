@@ -12,6 +12,10 @@ Den här filen laddas automatiskt vid **varje** uppgift. Den gäller alltid, fö
 som gjordes, inga rubriker/listor om inte nödvändigt. Kod, commits och PR-beskrivningar
 skrivs normalt.
 
+**Ärliga svar:** säg emot när Mats har fel, och säg varför. Inget beröm för frågan, inga
+artighetsfraser, inga ursäkter, ingen utfyllnad. Säg vad som är osäkert eller inte kontrollerat.
+Ett nej mjukas inte upp.
+
 Visuell identitet: **Nordisk blå** (#1F4E79) med **kopparaccent** (#B4552F ljust / #FFB59A mörkt), M3 Expressive, rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
