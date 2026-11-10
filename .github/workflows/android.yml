@@ -56,15 +56,19 @@ jobs:
             exit 1
           fi
 
-      # Regel 4-kontrollen körs i varje PR – några sekunder, varken JDK eller Gradle. Motorn finns i
-      # pluginen (claude-android #57, publikt repo); repot har mönster, undantag, exempel, baslinje
-      # och .claude/regel4.json, och --verify prövar dem mot motorn.
-      - name: Pluginen claude-android (regel 4-motorn)
+      # Dokumentkontrollerna och regel 4-kontrollen körs i varje PR – några sekunder, varken JDK
+      # eller Gradle. Skripten finns i pluginen (claude-android #57/#59, publikt repo); repot har
+      # mönster, undantag, exempel, baslinje och .claude/regel4.json, och --verify prövar dem.
+      - name: Pluginen claude-android (kontrollerna)
         uses: actions/checkout@v4
         with:
           repository: ParTee71/claude-android
           path: .claude-android
-          sparse-checkout: plugins/android/hooks
+          sparse-checkout: plugins/android
+
+      # Länkar, skill- och agentnamn och filtertabellen i skill ci-budget mot filtren nedan.
+      - name: Dokumentkontroller (doc-checks)
+        run: node .claude-android/plugins/android/checks/doc-checks.mjs .
 
       - name: Regel 4-kontrollen (regel4-check --verify)
         run: node .claude-android/plugins/android/hooks/regel4-check.mjs --verify .
