@@ -176,9 +176,13 @@ commit och `versionName` APK:n är byggd på, så en installation går att knyta
   skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `arkitekt`
   Room-schema, migreringar, backup-kedjan och arkitekturval. Går ett steg fel två gånger i
   rad flyttas det upp en nivå.
-- **Modell efter uppgift:** sessionen och varje agent väljer modell och effort efter uppgiftens
-  komplexitet – Opus är standard; byt via `/model` eller låt en billigare agent ta rutindelar,
-  och starta agenter med `model` efter uppgiften ([.claude/README.md](.claude/README.md) → Modellval).
+- **Modellval** för sessionen och varje agent (skill `android:ai-model-choice`, enda källan;
+  agenterna: [.claude/README.md](.claude/README.md) → Modellval):
+  Opus 5.5 (`claude-opus-5-5`) är standard. Fable 5.2 (`claude-fable-5-2`) är ok när det behövs –
+  svår arkitektur eller design, knepiga integrationer, långa agentuppgifter, buggar Opus inte
+  klarat – men försiktigt för kostnadens skull: medium eller high effort, aldrig max eller fast
+  mode. Säg varför och vilken effort innan du byter till Fable 5.2; planera med Fable, genomför
+  med Opus när det går. Fable 5.1 används inte längre.
 - **Varje issue anger Agent · modell · effort** (skill `android:refine-issue`), och agenten körs med
   just den modellen och effort (skill `android:implement-issue`). Fonders delar av de tre
   arbetsflödesskillsen står i skill **android-projekt** (Arbetsflöde, Issues, Release).
