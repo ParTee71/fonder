@@ -1,5 +1,6 @@
 package se.partee71.fonder.testing
 
+import java.time.LocalDate
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
@@ -40,9 +41,11 @@ fun testSwitchChoicesSource(
     switchWatchRepo: FakeSwitchWatchRepository = FakeSwitchWatchRepository(),
     priceRepo: FundPriceRepository = FakeCachedPriceRepository(),
     metadataRepo: FakeFundMetadataRepository = FakeFundMetadataRepository(),
-    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository()
+    dismissalRepo: FakeSuggestionDismissalRepository = FakeSuggestionDismissalRepository(),
+    today: () -> LocalDate = LocalDate::now
 ): SwitchChoicesSource = SwitchChoicesSource(
     testPendingDecisionsSource(preferences, suggestionRepo, switchWatchRepo, priceRepo, metadataRepo, dismissalRepo),
     switchWatchRepo,
-    suggestionRepo
+    suggestionRepo,
+    today
 )

@@ -57,11 +57,11 @@ Behöver du ett diagram, ett kort, en tom-tillståndsvy, en datum/tid-rad osv. �
 den befintliga delade komponenten i `ui/components/` eller `ui/diagram/`. Bygg inte en ny
 variant av något som redan finns; utöka den delade komponenten i stället.
 
-**Kontrolleras automatiskt:** hooken `regel4-check` ger besked direkt efter varje filändring;
+**Kontrolleras automatiskt:** pluginens hook `regel4-check` ger besked direkt efter varje filändring;
 `UiConsistencyTest` (Konsist) och `cpdCheck` (copy-paste-detektor) fäller bygget. Förbjudna mönster
 finns i en fil (`ui-forbidden.txt`), undantag bara via `ui-allowlist.txt` med motivering och
 användarens ok i PR:en. Brotten från före kontrollerna står som baslinje som bara får krympa
-(`tools/regel4-baseline.mjs`); `cpdCheck` har ingen baslinje – varje kopia fäller bygget.
+(pluginens `regel4-check.mjs --baseline`); `cpdCheck` har ingen baslinje – varje kopia fäller bygget.
 → Skill: **shared-ui-components**.
 
 ### 5. CI-budget
@@ -131,8 +131,8 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ./gradlew cpdCheck                           # copy-paste-detektor (regel 4)
 ./gradlew spotlessApply                      # kodstil (ktlint + compose-rules), före push – inte i CI
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
-node --test .claude/hooks/test/*.test.mjs    # hooktest regel4-check + baslinjen (ingen SDK behövs)
-node tools/regel4-baseline.mjs               # skriv om baslinjen i ui-allowlist.txt när en skärm rättats
+node <claude-android>/plugins/android/hooks/regel4-check.mjs --verify .    # regel 4-kontrollen + baslinjen (ingen SDK behövs)
+node <claude-android>/plugins/android/hooks/regel4-check.mjs --baseline .  # skriv om baslinjen i ui-allowlist.txt när en skärm rättats
 python tools/fondmatte/fondmatte.py golden <fixtur>  # förväntade värden till beräkningstester (skill fondmatematik)
 ```
 

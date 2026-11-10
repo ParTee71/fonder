@@ -56,7 +56,7 @@ här med test – aldrig i composablen, och aldrig i en ViewModel om två skärm
   bevarar dagens beteende (så kom `comparisonSeries`, `valueAxis` och `working` till). En ny
   diagramtyp (staplar, sparkline) blir en ny komponent i `ui/diagram/` med test.
 - **Vico bara i `ui/diagram/`.** Ingen `com.patrykandpatrick.vico`-import utanför. Kontrolleras
-  automatiskt: scope `vico` i `ui-forbidden.txt` (hooken `regel4-check` och `UiConsistencyTest`).
+  automatiskt: scope `vico` i `ui-forbidden.txt` (pluginens hook `regel4-check` och `UiConsistencyTest`).
 - **Vico är 3.3.1** (`gradle/libs.versions.toml`, artefakten `compose-m3`, API:t under
   `vico.compose.*`). Höjningen från 2.5.2 ändrade y-axelns steg och etiketter (t.ex. +0,8 % →
   +0,9 %) – godkänt, och skärmdumparna spelades in på nytt. Läs Vico 3-API:t i den befintliga

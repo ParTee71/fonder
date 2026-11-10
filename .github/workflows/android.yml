@@ -56,11 +56,18 @@ jobs:
             exit 1
           fi
 
-      # Hooktestet (regel4-check, baslinjen i ui-allowlist.txt, hookkommandona i settings.json)
-      # körs i varje PR – det tar några sekunder och behöver varken JDK eller Gradle. Globben
-      # expanderas av skalet: runnerns Node 20 tolkar inte globbar i `node --test`.
-      - name: Hooktest (regel 4)
-        run: node --test .claude/hooks/test/*.test.mjs
+      # Regel 4-kontrollen körs i varje PR – några sekunder, varken JDK eller Gradle. Motorn finns i
+      # pluginen (claude-android #57, publikt repo); repot har mönster, undantag, exempel, baslinje
+      # och .claude/regel4.json, och --verify prövar dem mot motorn.
+      - name: Pluginen claude-android (regel 4-motorn)
+        uses: actions/checkout@v4
+        with:
+          repository: ParTee71/claude-android
+          path: .claude-android
+          sparse-checkout: plugins/android/hooks
+
+      - name: Regel 4-kontrollen (regel4-check --verify)
+        run: node .claude-android/plugins/android/hooks/regel4-check.mjs --verify .
 
       - name: Ändrade sökvägar
         id: filter
@@ -126,7 +133,7 @@ jobs:
             echo "| Del | Körs |"
             echo "|---|---|"
             echo "| nyckelgrind | true |"
-            echo "| hooktest (regel 4) | true |"
+            echo "| regel 4-kontrollen | true |"
             echo "| kompilering, :core:test, enhetstester, Robolectric, skärmdumpsjämförelse, UiConsistencyTest och cpdCheck (\`build-and-test\`) | $app |"
             echo "| instrumenttester på emulator (\`instrumented-tests\`) | $instrumented |"
           } >> "$GITHUB_STEP_SUMMARY"

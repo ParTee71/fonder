@@ -73,14 +73,13 @@ Intents). Pluginens `firebase-security-rules-auditor` gäller inte – Fonder ha
 Pluginen är generell; Fonders delar och nuvarande avvikelser står i `android-projekt`, och där
 de krockar gäller projektets regler.
 
-## Hooks (`.claude/hooks/`) och inställningar (`.claude/settings.json`)
+## Hooks och inställningar (`.claude/settings.json`)
 
-- **`regel4-check.mjs`** kontrollerar regel 4 direkt efter varje filändring (PostToolUse), med
-  samma mönster som bygget (`app/src/test/resources/ui-forbidden.txt`). Den kör också som
-  **Stop-hook** innan Claude avslutar en tur: alla filer som ändrats mot `origin/master` går
-  igenom, och en träff gör att Claude ombeds rätta först (högst en gång i följd). Har sessionen
-  flera repon under en gemensam katalog kontrollerar Stop-hooken varje repo med det repots
-  egen hook; ett repo utan hook lämnas därhän.
+- **Regel 4** kontrolleras av pluginens hook `regel4-check` (claude-android #57) direkt efter
+  varje filändring (PostToolUse), med samma mönster som bygget
+  (`app/src/test/resources/ui-forbidden.txt`), och som **Stop-hook** innan Claude avslutar en tur:
+  alla filer som ändrats mot `origin/master` går igenom, och en träff gör att Claude ombeds rätta
+  först (högst en gång i följd). Repots scope, texter och baslinje står i `.claude/regel4.json`.
 - **Sessionsstarten** i molnet (SDK och `sdk.dir`, `GPR_TOKEN`, Maven Central-spegeln mot 429)
   sköts av pluginens hook `android-start` (claude-android #55), gemensam för alla Android-repon.
   SDK:n installeras av miljöns setup-skript med claude-android `scripts/android-sdk.sh`.

@@ -3,8 +3,8 @@
 # Varje ny handskriven rad kräver användarens uttryckliga ok i PR:en.
 #
 # Raderna med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" är baslinjen: brotten som fanns när
-# kontrollen infördes. De genereras av `node tools/regel4-baseline.mjs` och ska bara bli färre –
-# kör skriptet igen när en skärm rättats. Lägg aldrig till en baslinjerad för hand.
+# kontrollen infördes. De genereras av pluginens regel4-check.mjs --baseline och ska bara bli
+# färre – kör den igen när en skärm rättats. Lägg aldrig till en baslinjerad för hand.
 
 # Baslinje
 app/src/main/kotlin/se/partee71/fonder/ui/facit/FacitScreen.kt:padding(horizontal = Spacing.l, vertical = 6.dp – baslinje 2026-10 – rättas i skärm-PR:erna

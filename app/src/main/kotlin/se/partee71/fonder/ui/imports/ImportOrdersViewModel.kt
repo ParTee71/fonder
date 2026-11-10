@@ -391,7 +391,7 @@ class ImportOrdersViewModel @Inject constructor(
                     options[index]?.decision?.let { decision -> toEntryIndices(decision, candidates, ready) } ?: SwitchDecision.None
                 )
             }
-            val recorded = recordTransaction.recordAll(entries)
+            val recorded = recordTransaction.recordAll(entries, inputs.today)
             val linkFailed = entries.indices.count { entries[it].decision is SwitchDecision.LinksWatch && recorded[it].watchId == null }
             _uiState.update { it.copy(imported = true, importing = false, linkFailedCount = linkFailed) }
         }
