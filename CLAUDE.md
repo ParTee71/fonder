@@ -16,6 +16,11 @@ skrivs normalt.
 artighetsfraser, inga ursäkter, ingen utfyllnad. Säg vad som är osäkert eller inte kontrollerat.
 Ett nej mjukas inte upp.
 
+**Plan före kod bara för större ändringar:** nytt beteende, flera lager, datamodell eller ett
+vägval → plan i ett issue och Mats ok ("kör" eller `plan-godkänd`). Små fixar och dokument går
+direkt till PR med raden `Liten ändring: <varför>`, och tråden mergar när CI är grön. Osäker →
+större. Skill `android:arbetsregler` är enda källan.
+
 Visuell identitet: **Nordisk blå** (#1F4E79) med **kopparaccent** (#B4552F ljust / #FFB59A mörkt), M3 Expressive, rubriker i
 **Space Grotesk**, belopp med **tabulära siffror**. Fast palett — ingen dynamisk färg.
 
