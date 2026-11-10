@@ -157,16 +157,16 @@ sammanfattar den. Undantag bara i `app/src/test/resources/ui-allowlist.txt`
 
 | Kontroll | När | Vad |
 |---|---|---|
-| Hooken `regel4-check` (`.claude/hooks/regel4-check.mjs`) | direkt efter varje `Edit`/`Write` av en `.kt`-fil i `app/src/main` | samma mönster och undantag som testet; exit 2 med rad, träff och ersättning. Kontrollerar bara Fonder (ett grannrepo i samma session har sin egen hook) |
-| `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hooktestet, så att hook och bygge tolkar lika; dessutom (bara här) att UiState-typerna är `@Immutable`/`@Stable` |
+| Pluginens hook `regel4-check` (claude-android, scope i `.claude/regel4.json`) | direkt efter varje `Edit`/`Write` av en `.kt`-fil i `app/src/main`, och vid Stop | samma mönster och undantag som testet; exit 2 med rad, träff och ersättning. Varje repo kontrolleras med sin egen konfiguration |
+| `UiConsistencyTest` (Konsist) | `testDebugUnitTest` | hela `app/src/main` mot `ui-forbidden.txt` minus `ui-allowlist.txt`; exemplen i `ui-forbidden-examples.txt` körs både här och i hookens `--verify` i CI, så att hook och bygge tolkar lika; dessutom (bara här) att UiState-typerna är `@Immutable`/`@Stable` |
 | `./gradlew cpdCheck` (PMD CPD, 80 tokens) | `build-and-test` | kopierad Kotlin i `core/src` och `app/src/{main,test,androidTest}`; varje kopia fäller bygget (ingen baslinje) |
 
 **Baslinjen** (skuld från före kontrollerna, får bara krympa):
 
 - `ui-allowlist.txt`: rader med motiveringen "baslinje 2026-10 – rättas i skärm-PR:erna" (19 när kontrollen infördes, 0 sedan M3 Expressive steg 2b)
-  genereras av `node tools/regel4-baseline.mjs` – kör det när en skärm rättats. Ett undantag gäller
+  genereras av pluginens `regel4-check.mjs --baseline .` – kör den när en skärm rättats. Ett undantag gäller
   fil + symbol, så en baslinjerad för `Card(` i `HemScreen.kt` släpper igenom *alla* `Card(` i den
-  filen tills den rättats. Hooktestet fäller en inaktuell baslinje. Handskrivna undantag står kvar.
+  filen tills den rättats. `--verify` i CI fäller en inaktuell baslinje. Handskrivna undantag står kvar.
 
 ## Arbetsflöde
 

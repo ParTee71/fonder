@@ -29,7 +29,7 @@ Krav: NFR-2 (tester), NFR-1 (rundtur), NFR-3 (migrering) i KRAVLISTA.md.
 | Skärmdump | `app/src/test` + referensbilder i `app/src/test/screenshots/` | Roborazzi via `composeRule.captureLightAndDark(name) { … }`, ljust + mörkt – en per komponent i `ComponentScreenshotTest` och `FundLineChartScreenshotTest` | `android.yml` (`build-and-test`): `verifyRoborazziDebug` – samma körning som enhetstesterna, jämför mot referenserna med 0,1 % pixeltolerans och fäller vid skillnad; diffbilderna som artifact `screenshot-diffs`. Se "Skärmdumpsreferenser" nedan |
 | Konsistens (regel 4) | `app/src/test/…/consistency/UiConsistencyTest.kt` mot hela `app/src/main` (`:core` skannas inte: utan Compose-, Vico- och coroutines-beroenden kan inget av mönstren förekomma där) | Konsist + `ui-forbidden.txt`/`ui-allowlist.txt` | `android.yml` (`build-and-test`) |
 | Dubbelkod (regel 4) | hela `core/src` och `app/src` (`main`, `test`, `androidTest`), utan baslinje | `./gradlew cpdCheck` (PMD CPD) | `android.yml` (`build-and-test`) |
-| Hooken `regel4-check` och baslinjeskriptet | `.claude/hooks/test/regel4-check.test.mjs` | `node --test` | `android.yml` (`changes`, varje PR) |
+| Regel 4: konfigurationen, de delade exemplen och baslinjen | `.claude/regel4.json` + mönsterfilerna (motorn och dess test i claude-android) | pluginens `regel4-check.mjs --verify` | `android.yml` (`changes`, varje PR) |
 
 Vad som körs när i CI står i skill `ci-budget` (enda källan). **Selektiv körning ändrar inte
 kravet på att skriva tester.**
@@ -135,7 +135,7 @@ jämför inga bilder.
 ./gradlew spotlessApply                        # kodstil (ktlint + compose-rules), före push – inte i CI
 ./gradlew :app:compileDebugAndroidTestKotlin   # instrumenttester ska minst kompilera
 ./gradlew :app:connectedDebugAndroidTest       # kräver emulator/enhet
-node --test .claude/hooks/test/*.test.mjs      # hooken regel4-check och baslinjen (ingen SDK behövs)
+node <claude-android>/plugins/android/hooks/regel4-check.mjs --verify .  # regel 4 och baslinjen (ingen SDK behövs)
 ```
 
 **Manifest, resurser, `proguard-rules.pro` eller byggfiler ändrade** (`app/build.gradle.kts`,

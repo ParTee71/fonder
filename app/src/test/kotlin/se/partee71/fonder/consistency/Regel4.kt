@@ -2,8 +2,9 @@ package se.partee71.fonder.consistency
 
 /**
  * Tolkning av `ui-forbidden.txt` och `ui-allowlist.txt` – speglar hooken
- * `.claude/hooks/regel4-check.mjs` rad för rad. Att de tolkar lika bevisas av att både
- * hooktestet och [UiConsistencyTest] kör exemplen i `ui-forbidden-examples.txt`.
+ * pluginens regel 4-hook (claude-android `plugins/android/hooks/regel4-check.mjs`, scope i
+ * `.claude/regel4.json`) rad för rad. Att de tolkar lika bevisas av att både hookens `--verify` i CI
+ * och [UiConsistencyTest] kör exemplen i `ui-forbidden-examples.txt`.
  */
 object Regel4 {
 

@@ -105,7 +105,7 @@ security rules – `android:firebase-security-rules-auditor` gäller inte här.
   som samlar state med `collectAsStateWithLifecycle()` och lämnar typat state och callbacks till
   en tillståndslös `XContent` (t.ex. `SettingsScreen` → `SettingsContent`).
 - Inga Material 3-komponenter, färger, former eller textstilar direkt i `ui/<feature>/` –
-  `ui-forbidden.txt`, hooken `regel4-check` och `UiConsistencyTest` fäller.
+  `ui-forbidden.txt`, pluginens hook `regel4-check` och `UiConsistencyTest` fäller.
 
 ## Navigation 3 (android:navigation-3)
 
@@ -325,7 +325,7 @@ Release här; GUI → avsnittet Mockup här och `ui-style`.
 - **Regel 4:** avvikelse från nordisk blå/koppar, Space Grotesk eller tabulära siffror för
   belopp; en egen listrad i stället för `ItemRow`; en tredje kopia av en känd dubblett
   (`TotalCard`, `ComparisonChart`, importens laddningsdialoger) i stället för att slå ihop den;
-  baslinjen (`ui-allowlist.txt` ur `tools/regel4-baseline.mjs`) får bara krympa, och `cpdCheck`
+  baslinjen (`ui-allowlist.txt` ur pluginens `regel4-check.mjs --baseline`) får bara krympa, och `cpdCheck`
   har ingen.
 - **Regel 5:** emulatorn i fler jobb än `instrumented-tests`.
 - **Integritet:** innehav, belopp, transaktioner eller tokens i loggar. Fonder har ingen

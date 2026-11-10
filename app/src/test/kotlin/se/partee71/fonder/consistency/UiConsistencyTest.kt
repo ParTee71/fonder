@@ -10,8 +10,8 @@ import org.junit.Test
 
 /**
  * Regel 4 i bygget (skill shared-ui-components). Mönstren står bara i `ui-forbidden.txt`,
- * undantagen bara i `ui-allowlist.txt` – samma filer som hooken `regel4-check` läser.
- * Baslinjen i allowlisten genereras av `tools/regel4-baseline.mjs`.
+ * undantagen bara i `ui-allowlist.txt` – samma filer som pluginens hook `regel4-check` läser.
+ * Baslinjen i allowlisten genereras av pluginens `regel4-check.mjs --baseline`.
  */
 class UiConsistencyTest {
 
@@ -72,7 +72,7 @@ class UiConsistencyTest {
         }
     }
 
-    // De delade exemplen körs med tom allowlist utom sektionen "allowlist" – precis som i hooktestet.
+    // De delade exemplen körs med tom allowlist utom sektionen "allowlist" – precis som i hookens --verify.
 
     @Test
     fun `delade exempel - tillåtna och förbjudna rader tolkas likadant som i hooken`() {
