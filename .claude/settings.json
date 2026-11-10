@@ -52,16 +52,6 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=$(ls \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh \"$CLAUDE_PROJECT_DIR\"/fonder/.claude/hooks/session-start.sh 2>/dev/null | head -n1); [ -z \"$f\" ] || \"$f\""
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",

@@ -15,7 +15,7 @@ const patternsRel = 'app/src/test/resources/ui-forbidden.txt';
 const allowRel = 'app/src/test/resources/ui-allowlist.txt';
 const examplesRel = 'app/src/test/resources/ui-forbidden-examples.txt';
 const pkg = 'app/src/main/kotlin/se/partee71/fonder';
-const hookFiles = ['regel4-check.mjs', 'session-start.sh', 'maven-central-mirror.init.gradle.kts'];
+const hookFiles = ['regel4-check.mjs'];
 
 const readPatterns = () => readFileSync(path.join(repoRoot, patternsRel), 'utf8');
 
@@ -234,7 +234,6 @@ test('baslinjeskriptet behåller handskrivna undantag och tar bort rättade brot
 test('hook-kommandona i settings.json hittar skripten både i repot och från en föräldrakatalog', () => {
   const settings = JSON.parse(readFileSync(path.join(repoRoot, '.claude/settings.json'), 'utf8'));
   const postCmd = settings.hooks.PostToolUse[0].hooks[0].command;
-  const startCmd = settings.hooks.SessionStart[0].hooks[0].command;
 
   const { dir, parent } = makeProject();
   const file = writeKt(dir, featureFileRel, featureCard);
@@ -245,15 +244,6 @@ test('hook-kommandona i settings.json hittar skripten både i repot och från en
       input, env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir }, encoding: 'utf8',
     });
     assert.equal(post.status, 2, `PostToolUse med projektrot ${projectDir}: ${post.stderr}`);
-
-    const home = mkdtempSync(path.join(tmpdir(), 'hem-'));
-    const start = spawnSync('bash', ['-c', startCmd], {
-      env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir, CLAUDE_CODE_REMOTE: 'true', HOME: home },
-      encoding: 'utf8',
-    });
-    assert.equal(start.status, 0, start.stderr);
-    assert.match(start.stdout, /Android SDK: /);
-    assert.ok(existsSync(path.join(home, '.gradle/init.d/maven-central-mirror.init.gradle.kts')), 'spegeln för Maven Central');
   }
 
   const none = spawnSync('bash', ['-c', postCmd], {

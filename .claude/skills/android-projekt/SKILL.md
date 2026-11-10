@@ -148,7 +148,7 @@ SDK-nivåer uppdaterar TP-1 i samma PR.
 - **android-ui** (`se.partee71.ui` 0.5.0) från GitHub Packages: `implementation` av `ui-components`
   (drar in `ui-theme` och `ui-common`) och `testImplementation` av `ui-testing`. Repot står i
   `settings.gradle.kts` med `includeGroup("se.partee71.ui")`; inloggningen kommer från
-  `GPR_USER`/`GPR_TOKEN` (session-start-hooken säger om token saknas). I CI sätter
+  `GPR_USER`/`GPR_TOKEN` (pluginens hook `android-start` säger om token saknas). I CI sätter
   `.github/actions/setup-android` dem från `secrets.GPR_TOKEN || github.token` och stoppar direkt om
   token inte når paketen. Detaljer i ARKITEKTUR.md → Byggkonfiguration och pluginens skill.
 - Två moduler (`:core`, `:app`), ingen `build-logic` och inga convention plugins – rotens
@@ -246,7 +246,7 @@ Stegen står i pluginen; det här är Fonders delar.
 - **Repo:** owner `ParTee71`, repo `fonder`, basbranch `master`. Issues och PR:er läses och
   skrivs med GitHub MCP.
 - **Lokalt och i CI:** testerna körs lokalt före push när Android SDK finns i `/opt/android-sdk`
-  (session-start-hooken säger om den gör det; annars `.claude/hooks/install-android-sdk.sh`).
+  (pluginens hook `android-start` säger om den gör det; annars claude-android `scripts/android-sdk.sh`).
   Går det inte får CI testa – säg det i PR:en. `android.yml` kör `build-and-test` på push och i
   PR som rör koden, och emulatorjobbet `instrumented-tests` **bara i PR** som rör koden det
   testar (skill `ci-budget`).

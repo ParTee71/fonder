@@ -151,12 +151,12 @@ Två anrop, inte `./gradlew :app:lintDebug :app:assembleRelease`: i samma anrop 
 `kspDebugKotlin` och `kspReleaseKotlin` parallellt och krockar om Room-schemat i `app/schemas/`
 ("Empty schema file", se `quality.yml`). De körs inte i PR-flödet (skill `ci-budget`).
 
-**Kör det du ändrat lokalt innan varje push** när Android SDK finns (session-start-hooken
-säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
+**Kör det du ändrat lokalt innan varje push** när Android SDK finns (pluginens hook
+`android-start` säger om den gör det) – en röd CI-runda är det dyraste som finns. Kör en Gradle-körning i
 taget. `LC_ALL=C.UTF-8` (testnamn med å/ä/ö) sätts av `.claude/settings.json`. Saknas SDK:
 installera den – det är alltid ok att installera Android SDK och liknande verktyg i sessionen
-(`.claude/hooks/install-android-sdk.sh`, ≈450 MB, några minuter; skriptet skriver också
-`sdk.dir` i `local.properties`). Går det inte får CI bekräfta – säg det i PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
+(`bash /home/user/claude-android/scripts/android-sdk.sh` (eller `/opt/claude-android/...` i appprojekten); `android-start` skriver
+`sdk.dir` i `local.properties` vid nästa sessionsstart, eller lägg raden själv). Går det inte får CI bekräfta – säg det i PR:en. `android.yml` kör kompilering och enhetstester på push och i PR som rör koden, och
 emulatortesterna (`instrumented-tests`) **bara i PR** som rör `app/src/main`,
 `app/src/androidTest` eller byggfilerna – en ren push ger ingen instrumenttäckning (skill
 `ci-budget`). Vid rött CI – låt

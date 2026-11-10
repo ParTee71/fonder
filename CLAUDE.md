@@ -136,10 +136,10 @@ node tools/regel4-baseline.mjs               # skriv om baslinjen i ui-allowlist
 python tools/fondmatte/fondmatte.py golden <fixtur>  # förväntade värden till beräkningstester (skill fondmatematik)
 ```
 
-**Gradle körs i sessionen med Android SDK i `/opt/android-sdk`** (session-start-hooken säger
-om den finns); kör det du ändrat innan varje push. Saknas den: installera den – det är alltid ok
+**Gradle körs i sessionen med Android SDK i `/opt/android-sdk`** (pluginens hook `android-start`
+säger om den finns); kör det du ändrat innan varje push. Saknas den: installera den – det är alltid ok
 att installera Android SDK och liknande verktyg i sessionen vid behov
-(`.claude/hooks/install-android-sdk.sh`, ≈450 MB, några minuter). Bara om installationen inte går
+(`bash /home/user/claude-android/scripts/android-sdk.sh` (eller `/opt/claude-android/...` i appprojekten), några minuter). Bara om installationen inte går
 får CI bekräfta – säg det i PR:en.
 
 I GitHub Actions kör `.github/workflows/android.yml` vid push och PR mot `master`: ett
