@@ -150,15 +150,8 @@ som rör koden de testar) körs, och `ci-ok` är den samlade statusen. Lint och 
 signerad release (tagg eller manuellt), `release-debug.yml` en debug-snapshot. Vad som körs
 när står i skill `ci-budget`. Från telefonen: **pusha branchen och öppna en PR mot `master`**.
 
-**Länka alltid APK:n efter ett bygge.** Har en körning producerat en installerbar APK ska
-svaret alltid avslutas med **länken till den** — release-sidan (t.ex.
-`https://github.com/ParTee71/fonder/releases/tag/debug-snapshot`) eller, för ett bygge som
-bara laddar upp en artifact, artifact-länken. Gäller **alla** byggen: debug-snapshot
-(`release-debug.yml`), signerad release (`release.yml`) och varje ombyggnad av samma commit.
-Skälet är praktiskt: appen installeras från telefonen, och ett "bygget är grönt" utan länk
-tvingar fram ett extra steg för att hitta filen. Räcker inte länken ensam — säg också vilken
-commit och `versionName` APK:n är byggd på, så en installation går att knyta till rätt
-ändring.
+**Efter ett bygge som ger en APK:** länka release-sidan, aldrig direkt till APK:n, med commit och
+`versionName` (skill `android:release`, steg 4 – gäller alla Android-appar).
 
 ## PR-flöde
 
