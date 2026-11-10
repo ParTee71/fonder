@@ -8,8 +8,8 @@ varje uppgift – hålls kort.
 
 | Agent | När |
 |---|---|
-| `byggare` | Skärmar, komponenter, use cases, nätverkskällor, workers och CI-filer enligt en klar plan (Opus · medium). |
-| `arkitekt` | Room-entiteter, migreringar, backup-kedjan, DataStore och arkitekturval (Opus · high). |
+| `fonder-byggare` | Skärmar, komponenter, use cases, nätverkskällor, workers och CI-filer enligt en klar plan (Opus · medium). |
+| `fonder-arkitekt` | Room-entiteter, migreringar, backup-kedjan, DataStore och arkitekturval (Opus · high). |
 
 Från pluginen (generella, läser Fonders delar ur repot):
 
