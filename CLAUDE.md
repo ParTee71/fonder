@@ -131,6 +131,7 @@ Utvecklingen sker mest från telefonen, och ett bygge för att "se hur det blev"
 ./gradlew cpdCheck                           # copy-paste-detektor (regel 4)
 ./gradlew spotlessApply                      # kodstil (ktlint + compose-rules), före push – inte i CI
 ./gradlew :app:connectedDebugAndroidTest     # instrumenttester (kräver emulator/enhet)
+node <claude-android>/plugins/android/checks/doc-checks.mjs .            # dokumentkontroller: länkar, skill-/agentnamn, filtertabellen i ci-budget
 node <claude-android>/plugins/android/hooks/regel4-check.mjs --verify .    # regel 4-kontrollen + baslinjen (ingen SDK behövs)
 node <claude-android>/plugins/android/hooks/regel4-check.mjs --baseline .  # skriv om baslinjen i ui-allowlist.txt när en skärm rättats
 python tools/fondmatte/fondmatte.py golden <fixtur>  # förväntade värden till beräkningstester (skill fondmatematik)

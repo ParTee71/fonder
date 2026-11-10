@@ -51,13 +51,26 @@ SDK-jaren (~100 MB) en gång per cachenyckel, och något längre testkompilering
 ## Vad som körs när (enda källan för denna tabell)
 
 Tabellen beskriver workflowfilerna **som de är** och ska kontrolleras mot dem vid varje ändring i
-`.github/workflows/` – ändra båda i samma PR. Ett kontrollskript som fäller bygget vid skillnad
-finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
+`.github/workflows/` – ändra båda i samma PR. Det som pluginens kontroll fäller bygget för
+är filtertabellen nedan; jobbtabellen därunder kontrolleras inte automatiskt.
+
+**Filtren** i `changes` (`dorny/paths-filter`) står här, och pluginens dokumentkontroll
+(`doc-checks.mjs .`, claude-android) fäller `changes` när tabellen och `android.yml` skiljer sig:
 
 <!-- ci-table:start -->
+| Filter | Sökvägar | Körs |
+|---|---|---|
+| `app` | `core/src/**`, `core/build.gradle.kts`, `tools/fondmatte/**`, `.claude/skills/fondmatematik/**`, `app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`, `.github/actions/**` | `build-and-test` (`TaxCalcTest` jämför ISK-parametrarna i `tools/fondmatte` och skill `fondmatematik`, issue #199) |
+| `instrumented` | `core/src/main/**`, `core/build.gradle.kts`, `app/src/main/**`, `app/src/androidTest/**`, `app/build.gradle.kts`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties` | `instrumented-tests` (emulatorn), bara i PR; `release.yml` läser samma filter |
+| – | allt annat (`*.md`, `.claude/**`, andra workflows) | bara `changes` med nyckelgrinden och dokumentkontrollerna |
+<!-- ci-table:end -->
+
+Jobben:
+
+<!-- workflow-table:start -->
 | Workflow · jobb | Trigger | Villkor | Steg |
 |---|---|---|---|
-| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); regel 4-kontrollen (claude-android utcheckat till `.claude-android`, `regel4-check.mjs --verify .`: konfigurationen, de delade exemplen, baslinjen i `ui-allowlist.txt`); i PR `dorny/paths-filter@v3` med filtren `app` (`core/src/**`, `core/build.gradle.kts`, `tools/fondmatte/**` och `.claude/skills/fondmatematik/**` – `TaxCalcTest` jämför ISK-parametrarna där, issue #199 – `app/src/**`, `app/build.gradle.kts`, `config/**`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/**`, `gradle.properties`, `.github/workflows/android.yml`) och `instrumented` (`core/src/main/**`, `core/build.gradle.kts`, `app/src/main/**`, `app/src/androidTest/**` och samma byggfiler, inte workflowen); sammanfattning "Vad körs" |
+| `android.yml` · `changes` (timeout 5) | `pull_request` och `push` mot `master`, `workflow_dispatch` (input `instrumented`) | alltid | nyckelgrind (`git ls-files '*.jks' '*.keystore' '*.p12' '*.pem'` utom `app/debug.keystore`); dokumentkontrollerna (claude-android utcheckat till `.claude-android`, sparse `plugins/android`: `doc-checks.mjs .` – länkar, skill- och agentnamn och filtertabellen ovan mot `android.yml` – och regel 4-kontrollen `regel4-check.mjs --verify .`: konfigurationen, de delade exemplen, baslinjen i `ui-allowlist.txt`); i PR `dorny/paths-filter@v3` med filtren i tabellen ovan; sammanfattning "Vad körs" |
 | `android.yml` · `build-and-test` (timeout 8) | som ovan | PR: filtret `app`; `push`/`workflow_dispatch`: alltid | `setup-android` (provar att token når android-ui och sätter `GPR_USER`/`GPR_TOKEN`, JDK 21 och `setup-gradle`, cache skrivs från `master`, läses i PR), `actions/cache@v4` för Robolectrics SDK-jar (`~/.m2/repository/org/robolectric`), **ett** Gradle-anrop `--continue :core:test :app:compileDebugKotlin :app:verifyRoborazziDebug :app:compileDebugAndroidTestKotlin :cpdCheck` med build cache (`org.gradle.caching=true`) – `:core:test` kör domänens rena JVM-tester; `verifyRoborazziDebug` kör `testDebugUnitTest` (alla enhetstester, Robolectric-testerna och `UiConsistencyTest`) **en gång** med skärmdumpsjämförelsen mot `app/src/test/screenshots/` påslagen (tolerans 0,1 % pixlar i `captureLightAndDark`); testrapporterna (`core` och `app`) och CPD-rapporten som artifact (`test-results`, `if: always()`), vid fel även diffbilderna (`screenshot-diffs`: `app/build/outputs/roborazzi/`, `app/build/test-results/roborazzi/`, `app/build/reports/roborazzi/`; `if: failure()`, 7 dagar) |
 | `android.yml` · `instrumented-tests` | som ovan | PR: filtret `instrumented`; `workflow_dispatch`: input `instrumented`; aldrig på `master`-push. `needs: build-and-test` – startar inte om bygget är rött | anropar `instrumented.yml` (check-run `instrumented-tests / instrumented`) |
 | `instrumented.yml` · `instrumented` (timeout 18) | bara `workflow_call` (från `android.yml` och `release.yml`) | – | `setup-android`, KVM, `reactivecircus/android-emulator-runner@v2` (API 36, `google_apis`, x86_64, `pixel_6`) med `:app:connectedDebugAndroidTest`; fel-stackar och rapport som artifact. Ingen AVD-cache |
@@ -67,7 +80,7 @@ finns inte ännu (Dagbokens `check-ci-table.mjs` är förlagan).
 | `release.yml` · `gate` (timeout 5) | tagg `v*` eller `workflow_dispatch` (`version_name`, `publish_release`) | alltid | stannar om commiten inte ligger på `master` eller om check-run `ci-ok` på exakt commiten inte är `completed success`; löser taggen (vägrar om den finns); `run_instrumented=false` bara om en grön PR-körning av `android.yml` har ett grönt instrumenttestjobb på en commit vars sökvägar i filtret `instrumented` (läst ur `android.yml` med `yq`) är oförändrade |
 | `release.yml` · `instrumented` | som ovan | `gate`: `run_instrumented` | anropar `instrumented.yml` |
 | `release.yml` · `release` (timeout 30) | som ovan | `gate` grön och `instrumented` `success` eller `skipped` | avkodar keystore ur secrets, `:app:assembleRelease` signerat, sedan `:app:lintDebug` i eget anrop (KSP-krocken om Room-schemat), lintrapport vid fel, artifact, GitHub Release, raderar keystore. Enhetstester och skärmdumpar körs inte om – `ci-ok` på commiten är beviset |
-<!-- ci-table:end -->
+<!-- workflow-table:end -->
 
 `concurrency: ci-${{ github.workflow }}-${{ github.ref }}` med `cancel-in-progress` bara för
 `pull_request` – en ny push till PR:en avbryter den förra körningen; `master` avbryts aldrig.
