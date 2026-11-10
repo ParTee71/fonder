@@ -277,7 +277,7 @@ Stegen står i pluginen; det här är Fonders delar.
 - **Agenter:** huvudsessionen orkestrerar och granskar; agenten `fonder-byggare` tar skärmar,
   komponenter, use cases, nätverkskällor, workers och CI-filer, agenten `fonder-arkitekt` Room-schema,
   migreringar, backup-kedjan, DataStore och arkitekturval, pluginens `android:testskrivare` tester på
-  tre eller fler nivåer, `android:granskare` diffen (steg 8) och `android:ci-doktor` rött CI. Går ett steg fel två gånger i
+  tre eller fler nivåer, `android:granskare` diffen (Granska i rundor) och `android:ci-doktor` rött CI. Går ett steg fel två gånger i
   rad flyttas det upp en nivå (`fonder-byggare` → `fonder-arkitekt`, Sonnet → Opus). Saknar issuet
   **Agent · modell · effort** kompletteras det (avsnittet Issues nedan).
 - **`/code-review` krävs** (efter `android:granskare`) när ändringen rör `domain/usecase/`, datalagret,
@@ -374,7 +374,7 @@ Release här; GUI → avsnittet Mockup här och `ui-style`.
   | `fonder-byggare` | skärmar, komponenter, use cases, nätverkskällor, workers, CI-filer | Opus · medium |
   | `fonder-arkitekt` | Room-schema, migreringar, backup-kedjan, DataStore, arkitekturval | Opus · high (Fable vid väldigt komplexa issues) |
   | `android:testskrivare` | tester när tre eller fler nivåer berörs | Sonnet · medium |
-  | `android:granskare` | granskningen i steg 8, alltid med | sessionens modell · medium |
+  | `android:granskare` | granskningsrundorna, alltid med | sessionens modell · medium |
   | `android:ci-doktor` | rött CI – startas vid behov, anges inte i förväg | Sonnet · medium |
 
   Room-schema, migreringar och backup-kedjan minst `fonder-arkitekt` · Opus · high. Exempel: `fonder-arkitekt` ·

@@ -156,39 +156,23 @@ när står i skill `ci-budget`. Från telefonen: **pusha branchen och öppna en 
 
 ## PR-flöde
 
-- **En PR i taget.** Öppna/driv aldrig flera PR:ar mot `master` samtidigt — parallella PR:ar
-  mot samma bas (särskilt när båda rör `KRAVLISTA.md`/`README.md`/`versionName`) ger nästan
-  alltid en mergekonflikt på den andra. Vid flera issues: ett i taget, sekventiellt.
-- **Kontrollera mergen via GitHub** (`pull_request_read`) innan nästa issue påbörjas –
-  inte via antagande. Först när den är mergad startas arbetsbranchen om från `origin/master`.
-- **Förbered releasen i funktions-PR:en.** Varje PR som ändrar appens beteende höjer
-  versionen i samma ändring, så att ingen separat release-PR behövs. Välj semver efter
-  ändringen: **major** = brytande/borttagen funktion eller backupformat som äldre appar inte
-  läser, **minor** = ny funktion, **patch** = fix, chore, refactor. Höj `versionCode` med 1,
-  uppdatera `versionCode`/`versionName` i `version.properties`, versionsraden överst i README och
-  versionstabellen (raden i "Versionshistorik") – i funktions-PR:en, inte vid release – och skriv
-  versionen i PR-beskrivningen. Ren dokument-, test- eller CI-ändring utan effekt i appen höjer
-  inte. Är versionen redan höjd sedan senaste tagg, höj bara om denna PR är allvarligare. Själva
-  releasen (tagg, bygge, publicering) körs fortfarande bara på uttrycklig begäran (skill
-  **android:release**), frågar inte om versionen och kräver då ingen ny PR.
-- **Prenumerera automatiskt** på PR-aktivitet (`subscribe_pr_activity`) så fort en PR
-  skapas, utan att fråga. Bevaka tills den är mergad eller stängd: fixa CI-fel, hantera
-  granskningskommentarer, schemalägg check-in. Vid rött CI: låt agenten `android:ci-doktor`
-  diagnostisera. Avsluta prenumerationen när PR:en är klar.
+Stommen – en PR i taget, merge kontrollerad via GitHub, granskning i rundor, en push, bevakning
+till merge, rött CI – står i skill **android:arbetsflode**; Android-delen i
+**android:implement-issue**, när plan och ok krävs i **android:arbetsregler**. PR:er går mot
+`master`. Parallella PR:ar mot samma bas krockar nästan alltid på `KRAVLISTA.md`, `README.md` och
+`versionName`.
+
+- **Förbered releasen i funktions-PR:en** (skill **android:release** → Versionshöjning): höj
+  `versionCode`/`versionName` i `version.properties`, versionsraden överst i README och raden i
+  "Versionshistorik" – i funktions-PR:en, inte vid release. Själva releasen bara på uttrycklig begäran.
 - **Delegera på rätt nivå:** huvudsessionen orkestrerar och granskar; agenten `fonder-byggare` tar
   skärmar, komponenter, use cases, nätverkskällor och CI-filer, agenten `fonder-arkitekt`
   Room-schema, migreringar, backup-kedjan och arkitekturval. Går ett steg fel två gånger i
   rad flyttas det upp en nivå.
-- **Modellval** för sessionen och varje agent (skill `android:ai-model-choice`, enda källan;
-  agenterna: [.claude/README.md](.claude/README.md) → Modellval):
-  Opus 5.5 (`claude-opus-5-5`) är standard. Fable 5.2 (`claude-fable-5-2`) är ok när det behövs –
-  svår arkitektur eller design, knepiga integrationer, långa agentuppgifter, buggar Opus inte
-  klarat – men försiktigt för kostnadens skull: medium eller high effort, aldrig max eller fast
-  mode. Säg varför och vilken effort innan du byter till Fable 5.2; planera med Fable, genomför
-  med Opus när det går. Fable 5.1 används inte längre.
-- **Varje issue anger Agent · modell · effort** (skill `android:refine-issue`), och agenten körs med
-  just den modellen och effort (skill `android:implement-issue`). Fonders delar av de tre
-  arbetsflödesskillsen står i skill **android-projekt** (Arbetsflöde, Issues, Release).
+- **Modellval** för sessionen och varje agent: skill **android:ai-model-choice** (enda källan) –
+  Opus 5.5 som standard, Fable 5.2 bara med skäl och medium eller high effort. Agenterna:
+  [.claude/README.md](.claude/README.md) → Modellval. Fonders delar av arbetsflödesskillsen står
+  i skill **android-projekt** (Arbetsflöde, Issues, Release).
 
 ## Arkitektur i korthet
 
