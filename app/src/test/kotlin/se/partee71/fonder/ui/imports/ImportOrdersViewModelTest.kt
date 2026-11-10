@@ -65,6 +65,9 @@ Text Belopp Kurs Andelar Saldo andelar
 In Självbetjäning 2020-03-13 5 000.00 294.36 16.9862 16.9862
 """
 
+/** Bytesväljarens "idag": dagen efter notornas köp (2026-10-13). */
+private val TODAY: LocalDate = LocalDate.of(2026, 10, 14)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ImportOrdersViewModelTest {
 
@@ -133,7 +136,9 @@ class ImportOrdersViewModelTest {
         priceRepo,
         extractor,
         recordTransaction,
-        testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo),
+        // Fast "idag" dagen efter notornas köp: bevakningen från 2026-10-10 gick ut efter 14 dagar
+        // och testerna föll från 2026-10-25, när de räknade mot den riktiga dagen.
+        testSwitchChoicesSource(preferences, suggestionRepo, switchWatchRepo, metadataRepo = metadataRepo, today = { TODAY }),
         fileReader
     )
 

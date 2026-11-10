@@ -190,11 +190,19 @@ object SwitchTransitions {
  * källförslag ([SuggestionRecordRepository.observeByIds]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SwitchChoicesSource @Inject constructor(
+class SwitchChoicesSource internal constructor(
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val switchWatchRepository: SwitchWatchRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository
+    private val suggestionRecordRepository: SuggestionRecordRepository,
+    /** "Idag" — fast i testerna, så att bevakningarnas utgång (14 dagar) inte beror på när de körs. */
+    private val today: () -> LocalDate
 ) {
+    @Inject
+    constructor(
+        pendingDecisionsSource: PendingDecisionsSource,
+        switchWatchRepository: SwitchWatchRepository,
+        suggestionRecordRepository: SuggestionRecordRepository
+    ) : this(pendingDecisionsSource, switchWatchRepository, suggestionRecordRepository, LocalDate::now)
 
     /**
      * Indatan till [SwitchTransitions] — [suggestFor] och [linkableWatch] per transaktion utan nya läsningar.
@@ -217,7 +225,7 @@ class SwitchChoicesSource @Inject constructor(
         fun linkableWatch(fundIsin: String?, epochDay: Long, exclude: Set<Long> = emptySet()): SwitchWatch? = SwitchTransitions.linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull { it.id !in exclude }
     }
 
-    fun observe(today: () -> LocalDate = LocalDate::now): Flow<Inputs> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
+    fun observe(today: () -> LocalDate = this.today): Flow<Inputs> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
         val ids = watches.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }
         combine(pendingDecisionsSource.observe(), suggestionRecordRepository.observeByIds(ids)) { pending, records ->
             Inputs(
