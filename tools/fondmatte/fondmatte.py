@@ -758,19 +758,20 @@ def switch_effect(fixture: dict) -> dict:
     else:
         direction = "MIXED"
 
-    steps, known = [], True
+    steps, known, moved = [], True, 0.0
     for frm, to, amount in moves:
         if not known or amount is None:
             known = False
             steps.append(None)
             continue
         amount = min(max(amount, 0.0), max(values.get(frm, 0.0), 0.0))  # aldrig under noll på en nivå
+        moved += amount
         before_from, before_to = values.get(frm, 0.0) / total, values.get(to, 0.0) / total
         values[frm] = values.get(frm, 0.0) - amount
         values[to] = values.get(to, 0.0) + amount
         steps.append({"from": {"level": frm, "before": before_from, "after": values[frm] / total}, "to": {"level": to, "before": before_to, "after": values[to] / total}})
     reaches = all(abs((target.get(k, 0.0) * total - values.get(k, 0.0)) / total * 100) < MIN_GAP_PP for k in set(target) | set(values)) if known else None
-    return {"levels": shares, "direction": direction, "weighted_actual": weighted_actual, "weighted_target": weighted_target, "steps": steps, "total_to_move": to_move, "reaches_target_after_plan": reaches}
+    return {"levels": shares, "direction": direction, "weighted_actual": weighted_actual, "weighted_target": weighted_target, "steps": steps, "total_to_move": moved if to_move is not None else None, "reaches_target_after_plan": reaches}
 
 
 # --- Kommandoraden --------------------------------------------------------------------------

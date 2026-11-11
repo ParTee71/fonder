@@ -680,6 +680,7 @@ class SwitchEffectTest(unittest.TestCase):
         r = fm.switch_effect({"level_values": {"5": 25, "2": 75}, "target": {"2": 1.0}, "moves": [{"from": 5, "to": 2, "amount": 40}]})
         self.assertAlmostEqual(r["steps"][0]["from"]["after"], 0.0, places=12)
         self.assertTrue(r["reaches_target_after_plan"])
+        self.assertEqual(r["total_to_move"], 25.0)
         r = fm.switch_effect({"level_values": {"4": 70, "2": 30}, "target": {"2": 0.5, "4": 0.5}, "moves": [{"from": 4, "to": 2, "amount": 10}]})
         self.assertFalse(r["reaches_target_after_plan"])
 

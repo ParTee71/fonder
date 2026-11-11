@@ -547,8 +547,8 @@ class HemViewModelTest {
 
     @Test
     fun `riskkortet raknar summan att flytta ur bytesplanen och effekten per niva`() = runTest(dispatcher) {
-        // Innehav på nivå 5 för 1 200 kr, mål 100 % nivå 3; planen säljer 2 500 kr (inspelat belopp,
-        // större än innehavet — kortet visar planens belopp, inte en egen omräkning).
+        // Innehav på nivå 5 för 1 200 kr, mål 100 % nivå 3; planen spelades in för 2 500 kr, mer än
+        // som finns kvar i dag — summan blir det som går att flytta (HEM-17).
         setUpHoldingWithMetadataForSwitchPlan()
         preferencesRepository.setAccountType(AccountType.ISK_KF)
         preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
@@ -556,7 +556,7 @@ class HemViewModelTest {
         viewModel().uiState.test {
             val state = awaitItemSkipping { it.loading || it.content.risk?.effect?.totalToMoveKr == null || it.content.risk?.effect?.direction == null }
             val effect = state.content.risk!!.effect
-            assertEquals(2_500.0, effect.totalToMoveKr!!, 1e-9)
+            assertEquals(1_200.0, effect.totalToMoveKr!!, 1e-9)
             assertEquals(SwitchEffectCalc.Direction.TOO_MUCH_RISK, effect.direction)
             val step = effect.steps.single()!!
             assertEquals(5, step.from.level)

@@ -80,6 +80,7 @@ class SwitchEffectCalcTest {
         val step = result.steps.single()!!
         assertEquals(0.0, step.from.afterFraction, eps)
         assertEquals(1.0, step.to.afterFraction, eps)
+        assertEquals(25.0, result.totalToMoveKr!!, eps)
     }
 
     @Test
