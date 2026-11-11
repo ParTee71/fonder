@@ -676,3 +676,10 @@ class SwitchEffectTest(unittest.TestCase):
         self.assertIsNone(r["direction"])
         self.assertEqual(r["levels"], [{"level": 3, "target": 1.0, "actual": 0.0}])
 
+    def test_amount_is_clamped_and_reach_is_reported(self):
+        r = fm.switch_effect({"level_values": {"5": 25, "2": 75}, "target": {"2": 1.0}, "moves": [{"from": 5, "to": 2, "amount": 40}]})
+        self.assertAlmostEqual(r["steps"][0]["from"]["after"], 0.0, places=12)
+        self.assertTrue(r["reaches_target_after_plan"])
+        r = fm.switch_effect({"level_values": {"4": 70, "2": 30}, "target": {"2": 0.5, "4": 0.5}, "moves": [{"from": 4, "to": 2, "amount": 10}]})
+        self.assertFalse(r["reaches_target_after_plan"])
+

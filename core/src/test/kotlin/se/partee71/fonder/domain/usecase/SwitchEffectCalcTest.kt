@@ -45,6 +45,7 @@ class SwitchEffectCalcTest {
         assertEquals(0.31, second.to.afterFraction, eps)
         assertNull(third)
         assertNull(result.totalToMoveKr)
+        assertNull(result.reachesTargetAfterPlan)
     }
 
     @Test
@@ -60,6 +61,25 @@ class SwitchEffectCalcTest {
 
         assertEquals(10.0, result.totalToMoveKr!!, eps)
         assertEquals(0.5, result.steps.last()!!.to.afterFraction, eps)
+        assertEquals(true, result.reachesTargetAfterPlan)
+    }
+
+    @Test
+    fun `en plan som slutar fore malet nar inte fram`() {
+        // 20 pp under målet på nivå 2, men planen flyttar bara 10 kr av 100.
+        val result = SwitchEffectCalc.compute(mapOf(4 to 70.0, 2 to 30.0), emptyMap(), mapOf(2 to 0.5, 4 to 0.5), listOf(Move(4, 2, 10.0)))!!
+
+        assertEquals(false, result.reachesTargetAfterPlan)
+    }
+
+    @Test
+    fun `ett inspelat belopp storre an nivans varde flyttar bara det som finns`() {
+        // Planen spelades in när nivå 5 hade mer; i dag finns 25 kr kvar där.
+        val result = SwitchEffectCalc.compute(mapOf(5 to 25.0, 2 to 75.0), emptyMap(), mapOf(2 to 1.0), listOf(Move(5, 2, 40.0)))!!
+
+        val step = result.steps.single()!!
+        assertEquals(0.0, step.from.afterFraction, eps)
+        assertEquals(1.0, step.to.afterFraction, eps)
     }
 
     @Test

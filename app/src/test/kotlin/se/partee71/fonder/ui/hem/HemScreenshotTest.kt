@@ -217,7 +217,7 @@ class HemScreenshotTest {
 
     // --- Riskkortet (HEM-7, issue #238, mockup C2) ---
 
-    /** Mockupens påhittade läge: mål 20/35/45 på nivå 2–4, för mycket på 4 och 5, planen flyttar 16 500 kr. */
+    /** Mockupens påhittade läge: mål 20/35/45 på nivå 2–4, för mycket på 4 och 5, planen flyttar 17 000 kr. */
     private val risk = PortfolioRiskSource.summary(
         PortfolioRiskSource.RiskBase(
             riskProfile = RiskProfile(targetAllocation = mapOf(2 to 0.20, 3 to 0.35, 4 to 0.45)),
@@ -231,7 +231,7 @@ class HemScreenshotTest {
             ),
             SwitchPlanResolver.Suggestion(
                 recordId = 2, planIndex = 1, sellIsin = "SE_E", buyIsin = "SE_R", sellFundName = "Energi Norden",
-                buyFundName = "Räntefond Bred", fromLevel = 4, toLevel = 3, feeDeltaPercent = -0.2, switchValueKr = 4_000.0
+                buyFundName = "Räntefond Bred", fromLevel = 4, toLevel = 3, feeDeltaPercent = -0.2, switchValueKr = 4_500.0
             )
         )
     )!!
@@ -242,7 +242,7 @@ class HemScreenshotTest {
     fun `riskkortet visar laget en stapel per niva med mal och summan att flytta`() {
         composeRule.setContent { FonderTheme { RiskCard(risk = risk, portfolioRisk = riskPortfolioRisk, working = false) } }
         composeRule.onNodeWithText("Du har mer risk än ditt mål").assertExists()
-        composeRule.onNodeWithText("Flytta ca ${MoneyFormat.krWhole(16_500.0)} så är du framme.").assertExists()
+        composeRule.onNodeWithText("Flytta ca ${MoneyFormat.krWhole(17_000.0)} så är du framme.").assertExists()
         composeRule.onNode(hasContentDescription("Nivå 4: ${MoneyFormat.percent(0.52)}, mål ${MoneyFormat.percent(0.45)}")).assertExists()
         composeRule.onNode(hasContentDescription("Nivå 5: ${MoneyFormat.percent(0.14)}, mål ${MoneyFormat.percent(0.0)}")).assertExists()
         // Nivåer utan mål och innehav visas inte.
@@ -258,6 +258,22 @@ class HemScreenshotTest {
         composeRule.setContent { FonderTheme { RiskCard(risk = inLine, portfolioRisk = riskPortfolioRisk, working = false) } }
         composeRule.onNodeWithText("Du ligger i linje med ditt mål").assertExists()
         composeRule.onNodeWithText("Flytta ca", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `riskkortet sager nar planen inte racker hela vagen`() {
+        val partial = PortfolioRiskSource.summary(
+            PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = mapOf(2 to 0.5, 4 to 0.5)), mapOf(2 to 30_000.0, 4 to 70_000.0), emptyMap()),
+            listOf(
+                SwitchPlanResolver.Suggestion(
+                    recordId = 1, planIndex = 0, sellIsin = "SE_S", buyIsin = "SE_K", sellFundName = "S",
+                    buyFundName = "K", fromLevel = 4, toLevel = 2, feeDeltaPercent = 0.0, switchValueKr = 10_000.0
+                )
+            )
+        )!!
+        composeRule.setContent { FonderTheme { RiskCard(risk = partial, portfolioRisk = riskPortfolioRisk, working = false) } }
+        composeRule.onNodeWithText("Bytesplanen flyttar ca ${MoneyFormat.krWhole(10_000.0)}. Det räcker inte hela vägen till målet.").assertExists()
+        composeRule.onNodeWithText("så är du framme", substring = true).assertDoesNotExist()
     }
 
     @Test

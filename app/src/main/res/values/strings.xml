@@ -541,6 +541,7 @@
     <string name="hem_risk_direction_in_line">Du ligger i linje med ditt mål</string>
     <string name="hem_risk_scale">Risknivå 1 är lägst och 7 högst. Så ligger dina pengar i dag, strecket är målet:</string>
     <string name="format_hem_risk_move">Flytta ca %1$s så är du framme.</string>
+    <string name="format_hem_risk_move_partial">Bytesplanen flyttar ca %1$s. Det räcker inte hela vägen till målet.</string>
 
     <!-- Bytesplan på Beslut (HEM-8, NAV-9) -->
     <string name="switch_plan_title">Bytesplan</string>

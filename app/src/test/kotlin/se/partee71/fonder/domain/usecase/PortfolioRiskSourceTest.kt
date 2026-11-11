@@ -1,5 +1,6 @@
 package se.partee71.fonder.domain.usecase
 
+import app.cash.turbine.test
 import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -14,6 +15,7 @@ import se.partee71.fonder.data.repository.FakeSwitchWatchRepository
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.testing.testPreferencesRepository
@@ -102,5 +104,34 @@ class PortfolioRiskSourceTest {
         assertEquals(200.0, summary.effect.totalToMoveKr!!, 1e-9)
         assertEquals(1, summary.effect.steps.size)
         assertEquals(0.8, summary.effect.steps.single()!!.from.afterFraction, 1e-9)
+    }
+
+    @Test
+    fun `efter ett avstatt steg gar resten av planen inte att rakna`() {
+        // Steg 0 avstått (HEM-14) och borta ur den visade planen; steg 1 förutsatte det.
+        val base = PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = mapOf(2 to 0.5, 4 to 0.5)), mapOf(4 to 1_000.0), emptyMap())
+
+        val summary = PortfolioRiskSource.summary(base, listOf(suggestion(planIndex = 1, amount = 200.0)))!!
+
+        assertNull(summary.effect.totalToMoveKr)
+        assertEquals(listOf(null), summary.effect.steps)
+    }
+
+    @Test
+    fun `en ny kurs hos en kandidat ger ingen ny kontext`() = runTest(dispatcher) {
+        val preferences = testPreferencesRepository(dispatcher, tempFolder, "kandidat")
+        preferences.setRiskProfile(RiskProfile(targetAllocation = mapOf(2 to 1.0)))
+        watches.watches.value = listOf(watch().copy(candidates = listOf(SwitchWatchCandidate(isin = "SE_K", name = "K"))))
+        val source = PortfolioRiskSource(preferences, watches, records)
+
+        source.observeContext().test {
+            awaitItem()
+            // Bakgrundskörningen noterar kandidatens startkurs — likviden påverkas inte.
+            watches.watches.value = listOf(watch().copy(candidates = listOf(SwitchWatchCandidate(isin = "SE_K", name = "K", navAtStart = 101.0))))
+            expectNoEvents()
+            // Ett nytt belopp gör det.
+            watches.watches.value = listOf(watch().copy(proceedsKr = 500.0, candidates = listOf(SwitchWatchCandidate(isin = "SE_K", name = "K"))))
+            assertEquals(500.0, awaitItem().watches.watches.single().proceedsKr!!, 1e-9)
+        }
     }
 }

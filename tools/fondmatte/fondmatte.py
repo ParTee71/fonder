@@ -745,7 +745,7 @@ def switch_effect(fixture: dict) -> dict:
     amounts = [a for _, _, a in moves]
     to_move = sum(amounts) if moves and all(a is not None for a in amounts) else None
     if total <= 0:
-        return {"levels": shares, "direction": None, "weighted_actual": None, "weighted_target": weighted_target, "steps": [None] * len(moves), "total_to_move": to_move}
+        return {"levels": shares, "direction": None, "weighted_actual": None, "weighted_target": weighted_target, "steps": [None] * len(moves), "total_to_move": to_move, "reaches_target_after_plan": None}
 
     weighted_actual = sum(k * v for k, v in values.items()) / total
     gaps = [(target.get(k, 0.0) * total - values.get(k, 0.0)) / total * 100 for k in set(target) | set(values)]
@@ -764,11 +764,13 @@ def switch_effect(fixture: dict) -> dict:
             known = False
             steps.append(None)
             continue
+        amount = min(max(amount, 0.0), max(values.get(frm, 0.0), 0.0))  # aldrig under noll på en nivå
         before_from, before_to = values.get(frm, 0.0) / total, values.get(to, 0.0) / total
         values[frm] = values.get(frm, 0.0) - amount
         values[to] = values.get(to, 0.0) + amount
         steps.append({"from": {"level": frm, "before": before_from, "after": values[frm] / total}, "to": {"level": to, "before": before_to, "after": values[to] / total}})
-    return {"levels": shares, "direction": direction, "weighted_actual": weighted_actual, "weighted_target": weighted_target, "steps": steps, "total_to_move": to_move}
+    reaches = all(abs((target.get(k, 0.0) * total - values.get(k, 0.0)) / total * 100) < MIN_GAP_PP for k in set(target) | set(values)) if known else None
+    return {"levels": shares, "direction": direction, "weighted_actual": weighted_actual, "weighted_target": weighted_target, "steps": steps, "total_to_move": to_move, "reaches_target_after_plan": reaches}
 
 
 # --- Kommandoraden --------------------------------------------------------------------------

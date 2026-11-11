@@ -5,7 +5,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
@@ -14,6 +14,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SwitchWatch
+import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.Transaction
 
 /**
@@ -38,26 +39,21 @@ class PortfolioRiskSource @Inject constructor(
     private val suggestionRecordRepository: SuggestionRecordRepository
 ) {
 
-    /** Profilen och bevakningarna, lästa tillsammans — se [observeContext]. */
-    class Context(
-        val riskProfile: RiskProfile?,
-        /** **Alla** bevakningar, även stängda — deras köp får inte förbrukas igen ([SwitchPlanCalc.pendingProceedsByLevel]). */
-        internal val watches: List<SwitchWatch>,
-        internal val buyIsinByRecordId: Map<Long, String>
-    )
+    /** Profilen och bevakningarna, lästa tillsammans — se [observeContext]. Jämförs på värde. */
+    data class Context(val riskProfile: RiskProfile?, internal val watches: WatchInputs)
 
     /**
-     * Riskprofilen och bevakningarna. Emitterar om när profilen eller en öppen bevakning ändras
-     * (ett sälj, ett köp som avslutar den, en stängning). Hela tabellen läses vid varje ändring: en
-     * stängd bevaknings köp undantas från förbrukningen, och tabellen är liten.
+     * Riskprofilen och bevakningarna, samma läsväg som planen ([SwitchPlanInputs.loadWatches]).
+     * Läses om när profilen eller en öppen bevakning ändras, men **emitterar bara när något likviden
+     * vilar på ändrats**: kandidaternas kurser skrivs av bakgrundskörningen hela tiden, och Hem läser
+     * kontexten i samma gren som portföljen — varje sådan skrivning hade annars räknat om hela Översikten.
      */
     fun observeContext(): Flow<Context> = combine(preferencesRepository.riskProfile, switchWatchRepository.observeOpen()) { profile, _ -> profile }
         .mapLatest { profile ->
-            val watches = switchWatchRepository.getAll()
-            val sourceIds = watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }
-            val buyIsinByRecordId = suggestionRecordRepository.observeByIds(sourceIds).first().associate { it.id to it.buyIsin }
-            Context(profile, watches, buyIsinByRecordId)
+            val loaded = SwitchPlanInputs.loadWatches(switchWatchRepository, suggestionRecordRepository)
+            Context(profile, loaded.copy(watches = loaded.watches.map { it.forPendingProceeds() }))
         }
+        .distinctUntilChanged()
 
     /** Portföljens del av underlaget — null utan profil (då finns inget kort). */
     data class RiskBase(
@@ -80,7 +76,7 @@ class PortfolioRiskSource @Inject constructor(
     ): RiskBase? {
         val profile = context.riskProfile ?: return null
         if (profile.effectiveAllocation.isEmpty()) return null
-        val pending = SwitchPlanCalc.pendingProceedsByLevel(context.watches, transactions, funds, context.buyIsinByRecordId, metadataByIsin, today)
+        val pending = SwitchPlanCalc.pendingProceedsByLevel(context.watches.watches, transactions, funds, context.watches.buyIsinByRecordId, metadataByIsin, today)
         return RiskBase(profile, PortfolioRiskCalc.valueByLevel(byRiskLevel), pending)
     }
 
@@ -89,12 +85,19 @@ class PortfolioRiskSource @Inject constructor(
          * Riskkortet med planens byten lagda på. Sålda byten (likviden ligger redan på målnivån,
          * BYT-3) och genomförda (syns redan i innehaven) tas bort — annars räknades de två gånger.
          * Ordningen behålls: planen är sekventiell.
+         *
+         * [plan] är den visade planen, utan avstådda byten (HEM-14). Ett senare byte är räknat under
+         * antagandet att de före det görs, så från första lucka i `planIndex` går stegen inte att
+         * räkna — de får okänt belopp, och kortet nämner då ingen summa i stället för en som inte går ihop.
          */
         fun summary(base: RiskBase, plan: List<SwitchPlanResolver.Suggestion>): RiskSummary? {
-            val moves = plan
-                .filterNot { it.inProgress || it.followed }
-                .sortedBy { it.planIndex }
-                .map { SwitchEffectCalc.Move(it.fromLevel, it.toLevel, it.switchValueKr) }
+            val sorted = plan.sortedBy { it.planIndex }
+            val unbroken = sorted.withIndex().takeWhile { (position, suggestion) -> suggestion.planIndex == position }.count()
+            val moves = sorted.withIndex()
+                .filterNot { (_, suggestion) -> suggestion.inProgress || suggestion.followed }
+                .map { (position, suggestion) ->
+                    SwitchEffectCalc.Move(suggestion.fromLevel, suggestion.toLevel, suggestion.switchValueKr.takeIf { position < unbroken })
+                }
             val effect = SwitchEffectCalc.compute(base.valueByLevelKr, base.pendingProceedsByLevel, base.riskProfile.effectiveAllocation, moves) ?: return null
             return RiskSummary(base.riskProfile, effect)
         }
@@ -103,3 +106,9 @@ class PortfolioRiskSource @Inject constructor(
 
 /** Riskkortet redo för visning: profilen och [SwitchEffectCalc]s resultat. */
 data class RiskSummary(val riskProfile: RiskProfile, val effect: SwitchEffectCalc.Result)
+
+/**
+ * Bevakningen med bara det likviden (BYT-3) räknas på — kandidaternas kurser och position tas bort,
+ * så att en ny kursnotering hos en kandidat inte ser ut som en ändrad bevakning.
+ */
+private fun SwitchWatch.forPendingProceeds(): SwitchWatch = copy(candidates = candidates.map { SwitchWatchCandidate(isin = it.isin, name = "") })

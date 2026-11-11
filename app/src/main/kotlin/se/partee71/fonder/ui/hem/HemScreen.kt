@@ -521,8 +521,8 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
  * nivåer som finns i målet eller innehavet visas. En nivå med minst 5 procentenheter för mycket
  * ritas i koppar med målstrecket i blått, de andra tvärtom — samma gräns som planen säljer vid.
  *
- * Det värdeviktade snittet ([SwitchEffectCalc.Result.weightedTargetLevel] mot
- * [SwitchEffectCalc.Result.weightedActualLevel]) står kvar under staplarna med sitt förbehåll:
+ * Det värdeviktade snittet ([SwitchEffectCalc.Result.weightedTargetLevel] mot innehavens
+ * [PortfolioRiskCalc.Result.weightedAverageRisk], utan likviden på väg) står kvar under staplarna med sitt förbehåll:
  * en enda skalär kan inte skilja en 50/50-mix av nivå 1 och 6 från 100 % nivå 3,5, se
  * [PortfolioRiskCalc]s precisionsanmärkning. Ren läsvy — bytena själva ligger på fliken Beslut (NAV-9).
  */
@@ -560,8 +560,11 @@ internal fun RiskCard(
         }
         val toMove = effect.totalToMoveKr
         if (toMove != null && effect.direction != SwitchEffectCalc.Direction.IN_LINE) {
+            // "Så är du framme" bara när planen faktiskt når målet — den kan sluta före (högst tre byten,
+            // ingen köpbar kandidat, räknad mot gårdagens kurser).
+            val moveRes = if (effect.reachesTargetAfterPlan == true) R.string.format_hem_risk_move else R.string.format_hem_risk_move_partial
             Text(
-                stringResource(R.string.format_hem_risk_move, MoneyFormat.krWhole(toMove)),
+                stringResource(moveRes, MoneyFormat.krWhole(toMove)),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = Spacing.xs)
             )
@@ -577,7 +580,8 @@ internal fun RiskCard(
             label = stringResource(R.string.hem_risk_actual_label),
             amount = null,
             fraction = null,
-            valueText = effect.weightedActualLevel?.let { MoneyFormat.decimal(it) },
+            // Innehaven själva, utan likviden på väg — det är vad etiketten och förklaringen säger.
+            valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
             modifier = Modifier.padding(top = Spacing.xs)
         )
         Text(

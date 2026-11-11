@@ -65,7 +65,14 @@ object SwitchEffectCalc {
         /** En per [Move], i samma ordning; null från första steget med okänt belopp. */
         val steps: List<StepEffect?>,
         /** Summan av bytenas belopp — null utan byten eller när något belopp är okänt. */
-        val totalToMoveKr: Double?
+        val totalToMoveKr: Double?,
+        /**
+         * Sant när ingen nivå avviker minst [SwitchPlanCalc.MIN_GAP_PP] efter sista steget — bara då
+         * stämmer "så är du framme". Planen kan sluta före målet (högst
+         * [SwitchPlanCalc.MAX_SWITCHES_PER_PLAN] byten, ingen köpbar kandidat, en plan räknad mot
+         * gårdagens kurser). Null när något steg inte gick att räkna.
+         */
+        val reachesTargetAfterPlan: Boolean? = null
     )
 
     /**
@@ -99,7 +106,7 @@ object SwitchEffectCalc {
 
         val totalToMoveKr = moves.takeIf { it.isNotEmpty() && it.all { move -> move.amountKr != null } }?.sumOf { it.amountKr!! }
         if (totalKr <= 0.0) {
-            return Result(levels, direction = null, weightedActualLevel = null, weightedTargetLevel = weightedTarget, steps = moves.map { null }, totalToMoveKr = totalToMoveKr)
+            return Result(levels, direction = null, weightedActualLevel = null, weightedTargetLevel = weightedTarget, steps = moves.map { null }, totalToMoveKr = totalToMoveKr, reachesTargetAfterPlan = null)
         }
 
         val weightedActual = values.entries.sumOf { it.key * it.value } / totalKr
@@ -112,14 +119,17 @@ object SwitchEffectCalc {
         }
 
         // Kumulativt: varje steg flyttar från läget efter det förra. Totalen är oförändrad — ett byte
-        // flyttar pengar mellan nivåer, det tillför eller tar inget.
+        // flyttar pengar mellan nivåer, det tillför eller tar inget. Beloppet är inspelat mot planens
+        // dag; har nivån sedan dess mindre kvar (kursfall, ett sälj utanför planen) flyttas högst det
+        // som finns, aldrig så att en nivå hamnar under noll.
         var known = true
         val steps = moves.map { move ->
-            val amount = move.amountKr
-            if (!known || amount == null) {
+            val recorded = move.amountKr
+            if (!known || recorded == null) {
                 known = false
                 return@map null
             }
+            val amount = recorded.coerceIn(0.0, (values[move.fromLevel] ?: 0.0).coerceAtLeast(0.0))
             val fromBefore = (values[move.fromLevel] ?: 0.0) / totalKr
             val toBefore = (values[move.toLevel] ?: 0.0) / totalKr
             values[move.fromLevel] = (values[move.fromLevel] ?: 0.0) - amount
@@ -129,6 +139,7 @@ object SwitchEffectCalc {
                 to = LevelChange(move.toLevel, toBefore, (values[move.toLevel] ?: 0.0) / totalKr)
             )
         }
-        return Result(levels, direction, weightedActual, weightedTarget, steps, totalToMoveKr)
+        val reaches = if (known) SwitchPlanCalc.gapsPp(targetAllocation, values, totalKr).values.all { abs(it) < SwitchPlanCalc.MIN_GAP_PP } else null
+        return Result(levels, direction, weightedActual, weightedTarget, steps, totalToMoveKr, reaches)
     }
 }
