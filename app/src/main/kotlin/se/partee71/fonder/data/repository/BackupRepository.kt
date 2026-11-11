@@ -18,8 +18,10 @@ import se.partee71.fonder.data.room.daos.SuggestionRecordDao
 import se.partee71.fonder.data.room.daos.SwitchWatchDao
 import se.partee71.fonder.data.room.daos.TransactionDao
 import se.partee71.fonder.data.room.entities.FundEntity
+import se.partee71.fonder.data.room.entities.SuggestionCandidateEntity
 import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordWithCandidates
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
@@ -86,7 +88,7 @@ class LocalBackupRepository @Inject constructor(
         exportedAtEpochMillis = System.currentTimeMillis(),
         funds = fundDao.getAll().map(FundEntity::toDomain),
         transactions = transactionDao.getAll().map(TransactionEntity::toDomain),
-        suggestionRecords = suggestionRecordDao.getAll().map(SuggestionRecordEntity::toDomain),
+        suggestionRecords = suggestionRecordDao.getAllWithCandidates().map(SuggestionRecordWithCandidates::toDomain),
         switchWatches = switchWatchDao.getAll().map(SwitchWatchWithCandidates::toDomain),
         suggestionDismissals = suggestionDismissalDao.getAll().map(SuggestionDismissalEntity::toDomain),
         riskProfile = preferences.riskProfile.first(),
@@ -143,7 +145,14 @@ class LocalBackupRepository @Inject constructor(
 
                 payload.funds.forEach { fundDao.upsert(FundEntity.fromDomain(it)) }
                 payload.transactions.forEach { transactionDao.insert(TransactionEntity.fromDomain(it)) }
-                payload.suggestionRecords.forEach { suggestionRecordDao.insert(SuggestionRecordEntity.fromDomain(it)) }
+                payload.suggestionRecords.forEach { record ->
+                    // Förslagets kandidater (issue #239) knyts till det id insättningen gav, som
+                    // bevakningarnas nedan; de kaskadraderades med förslagen i tömningen ovan.
+                    suggestionRecordDao.insertWithCandidates(
+                        SuggestionRecordEntity.fromDomain(record),
+                        record.candidates.map { SuggestionCandidateEntity.fromDomain(it, record.id) }
+                    )
+                }
                 payload.switchWatches.forEach { watch ->
                     val row = SwitchWatchWithCandidates.fromDomain(watch)
                     // Kandidaterna knyts till det id insättningen faktiskt gav i stället för
@@ -183,6 +192,7 @@ private val CONTRACT_TABLES = arrayOf(
     FundEntity.TABLE_NAME,
     TransactionEntity.TABLE_NAME,
     SuggestionRecordEntity.TABLE_NAME,
+    SuggestionCandidateEntity.TABLE_NAME,
     SwitchWatchEntity.TABLE_NAME,
     SwitchWatchCandidateEntity.TABLE_NAME,
     SuggestionDismissalEntity.TABLE_NAME

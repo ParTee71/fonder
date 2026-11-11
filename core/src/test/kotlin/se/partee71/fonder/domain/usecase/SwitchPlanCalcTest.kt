@@ -194,6 +194,79 @@ class SwitchPlanCalcTest {
     }
 
     @Test
+    fun `rankBuyCandidates - kvartilen i avgiftsordning forst, sedan resten i avkastningsordning`() {
+        // 8 kandidater -> kvartil = 2. Den valda är kvartilens billigaste, alternativen nästa tre.
+        val candidates = listOf(
+            candidate("C5", risk = 3, fee = 0.4, twelveMonthReturn = 0.10),
+            candidate("HOG_DYR", risk = 3, fee = 0.9, twelveMonthReturn = 0.30),
+            candidate("ANNAN_NIVA", risk = 4, fee = 0.1, twelveMonthReturn = 0.50),
+            candidate("HOG_BILLIG", risk = 3, fee = 0.2, twelveMonthReturn = 0.25),
+            candidate("C3", risk = 3, fee = 0.05, twelveMonthReturn = 0.20),
+            candidate("C4", risk = 3, fee = 0.5, twelveMonthReturn = 0.15),
+            candidate("C6", risk = 3, fee = 0.5, twelveMonthReturn = 0.05),
+            candidate("C7", risk = 3, fee = 0.5, twelveMonthReturn = 0.02),
+            candidate("C8", risk = 3, fee = 0.5, twelveMonthReturn = 0.01)
+        )
+
+        val ranked = SwitchPlanCalc.rankBuyCandidates(candidates, level = 3, excludeIsins = emptySet())
+
+        assertEquals(listOf("HOG_BILLIG", "HOG_DYR", "C3", "C4", "C5", "C6", "C7", "C8"), ranked.map { it.metadata.isin })
+    }
+
+    @Test
+    fun `rankBuyCandidates utelamnar exkluderade ISIN och kandidater utan avgift`() {
+        val candidates = listOf(
+            candidate("A", risk = 3, fee = 0.3, twelveMonthReturn = 0.30),
+            SwitchPlanCalc.Candidate(metadata("UTAN_AVGIFT", risk = 3, fee = null), twelveMonthReturn = 0.40),
+            candidate("B", risk = 3, fee = 0.2, twelveMonthReturn = 0.20),
+            candidate("C", risk = 3, fee = 0.1, twelveMonthReturn = 0.10)
+        )
+
+        val ranked = SwitchPlanCalc.rankBuyCandidates(candidates, level = 3, excludeIsins = setOf("A"))
+
+        // Två kvar -> kvartil = 1: B (högst avkastning), sedan C.
+        assertEquals(listOf("B", "C"), ranked.map { it.metadata.isin })
+        assertTrue(SwitchPlanCalc.rankBuyCandidates(candidates, level = 5, excludeIsins = emptySet()).isEmpty())
+    }
+
+    @Test
+    fun `bytet bar upp till tre alternativ i rangordning, farre nar kandidaterna inte racker`() {
+        val holdings = listOf(holding("A", 10_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
+        val five = listOf(
+            candidate("K1", risk = 3, fee = 0.2, twelveMonthReturn = 0.30),
+            candidate("K2", risk = 3, fee = 0.3, twelveMonthReturn = 0.25),
+            candidate("K3", risk = 3, fee = 0.1, twelveMonthReturn = 0.20),
+            candidate("K4", risk = 3, fee = 0.4, twelveMonthReturn = 0.15),
+            candidate("K5", risk = 3, fee = 0.5, twelveMonthReturn = 0.10)
+        )
+
+        val switch = plan(holdings, metadataByIsin, five, mapOf(3 to 1.0)).single()
+        // 5 kandidater -> kvartil = 2: K1 (billigast av K1, K2) väljs, sedan K2, K3, K4.
+        assertEquals("K1", switch.buyIsin)
+        assertEquals(listOf("K2", "K3", "K4"), switch.alternatives.map { it.metadata.isin })
+
+        val two = plan(holdings, metadataByIsin, five.take(2), mapOf(3 to 1.0)).single()
+        assertEquals(listOf("K2"), two.alternatives.map { it.metadata.isin })
+    }
+
+    @Test
+    fun `ett avstatt par ar inte heller ett alternativ for den saljfonden`() {
+        val holdings = listOf(holding("A", 10_000.0))
+        val metadataByIsin = mapOf("SEA" to metadata("SEA", risk = 5, fee = 1.0))
+        val candidates = listOf(
+            candidate("K1", risk = 3, fee = 0.2, twelveMonthReturn = 0.30),
+            candidate("K2", risk = 3, fee = 0.3, twelveMonthReturn = 0.25),
+            candidate("K3", risk = 3, fee = 0.1, twelveMonthReturn = 0.20)
+        )
+
+        val switch = plan(holdings, metadataByIsin, candidates, mapOf(3 to 1.0), excludedPairs = setOf("SEA" to "K2")).single()
+
+        assertEquals("K1", switch.buyIsin)
+        assertEquals(listOf("K3"), switch.alternatives.map { it.metadata.isin })
+    }
+
+    @Test
     fun `innehav utan kand riskniva utesluts ur planen och rakas inte in i totalen`() {
         val holdings = listOf(holding("OkandRisk", 5_000.0, isin = "SEOKAND"), holding("KandRisk", 5_000.0, isin = "SEKAND"))
         val metadataByIsin = mapOf(

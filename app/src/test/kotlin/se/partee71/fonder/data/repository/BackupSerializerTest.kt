@@ -17,6 +17,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
@@ -56,7 +57,15 @@ class BackupSerializerTest {
                 sellIsin = "SE0000582033", buyIsin = "SE0001466368",
                 sellNavAtSuggestion = 201.5, buyNavAtSuggestion = 95.25,
                 switchValueKr = 4_200.0, followed = true, batchEpochMillis = 1_754_200_000_000,
-                navEpochDay = 19_798
+                navEpochDay = 19_798,
+                candidates = listOf(
+                    SuggestionCandidate(
+                        id = 21, recordId = 3, isin = "SE0000709123", name = "Alternativ Global", position = 0,
+                        totalFee = 0.25, risk = 4, category = "Globalfond", fundType = "Aktiefond",
+                        companyName = "Fondbolaget AB", developmentOneYear = 0.083
+                    ),
+                    SuggestionCandidate(id = 22, recordId = 3, isin = "SE0000709124", name = "Alternativ utan fakta", position = 1)
+                )
             ),
             SuggestionRecord(
                 id = 4, suggestedAtEpochDay = 19_800, planIndex = 1,
@@ -238,9 +247,17 @@ class BackupSerializerTest {
             setOf(
                 "id", "suggestedAtEpochDay", "planIndex", "sellIsin", "buyIsin",
                 "sellNavAtSuggestion", "buyNavAtSuggestion", "switchValueKr", "followed",
-                "batchEpochMillis", "kind", "navEpochDay"
+                "batchEpochMillis", "kind", "navEpochDay", "candidates"
             ),
             root.getValue("suggestionRecords").jsonArray.first().jsonObject.keys
+        )
+        assertEquals(
+            setOf(
+                "id", "recordId", "isin", "name", "position", "totalFee", "risk", "category", "fundType",
+                "companyName", "developmentOneYear"
+            ),
+            root.getValue("suggestionRecords").jsonArray.first().jsonObject
+                .getValue("candidates").jsonArray.first().jsonObject.keys
         )
         assertEquals(
             setOf(
@@ -342,6 +359,26 @@ class BackupSerializerTest {
         val closed = restored.switchWatches.first { !it.isOpen }
         assertEquals("SE0001466368", closed.boughtIsin)
         assertEquals(SwitchWatchCloseReason.KOPT, closed.closeReason)
+    }
+
+    @Test
+    fun `forslagets kandidater overlever och en aldre fil utan dem lases som inga alternativ`() {
+        // Issue #239: alternativen en körning valde bland kan inte räknas fram i efterhand. En fil från
+        // före 0.85.0 saknar nyckeln — tillagt fält med default, så FORMAT_VERSION höjs inte.
+        val payload = fullPayload()
+        val restored = BackupSerializer.decode(BackupSerializer.encode(payload)).getOrThrow()
+        assertEquals(payload.suggestionRecords.map { it.candidates }, restored.suggestionRecords.map { it.candidates })
+        assertEquals(2, restored.suggestionRecords.first().candidates.size)
+
+        val root = Json.parseToJsonElement(BackupSerializer.encode(payload)).jsonObject
+        val records = root.getValue("suggestionRecords").jsonArray.map { JsonObject(it.jsonObject - "candidates") }
+        val utanKandidater = JsonObject(root + ("suggestionRecords" to JsonArray(records))).toString()
+        val old = BackupSerializer.decode(utanKandidater).getOrThrow()
+        assertTrue(old.suggestionRecords.all { it.candidates.isEmpty() })
+        assertEquals(payload.suggestionRecords.map { it.buyIsin }, old.suggestionRecords.map { it.buyIsin })
+        // Bevakningarnas kandidater har en egen nyckel och påverkas inte.
+        assertEquals(payload.switchWatches.map { it.candidates }, old.switchWatches.map { it.candidates })
+        assertEquals(BackupPayload.FORMAT_VERSION, old.formatVersion)
     }
 
     @Test

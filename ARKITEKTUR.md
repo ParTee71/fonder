@@ -249,8 +249,8 @@ staleness-gaten (`isPriceStale`) falskt negativ.
 
 ## Datamodell
 
-**Room** (`data/room/AppDatabase`, version **21**, `exportSchema = true`). Schemafilerna ligger i
-`app/schemas/` och används av migreringstesterna. Migreringarna 1→2 … 20→21 står i
+**Room** (`data/room/AppDatabase`, version **22**, `exportSchema = true`). Schemafilerna ligger i
+`app/schemas/` och används av migreringstesterna. Migreringarna 1→2 … 21→22 står i
 `AppDatabase` och har var sitt `MigrationXYTest` (skill `room-migrations`).
 
 | Entitet | Tabell | Nyckel | I backupen |
@@ -258,6 +258,7 @@ staleness-gaten (`isPriceStale`) falskt negativ.
 | `FundEntity` | `funds` | `fundId` | ja |
 | `TransactionEntity` | `transactions` | `id` (autoincrement); fälten `fundId`, `type`, `epochDay`, `shares`, `pricePerShare`, `fee`, `dateEstimated` (importens uppskattade köpdatum, IMP-2, sedan 20→21) | ja |
 | `SuggestionRecordEntity` | `suggestion_records` | `id` (autoincrement) | ja |
+| `SuggestionCandidateEntity` | `suggestion_candidates` | främmande nyckel till `suggestion_records` (kaskad), sedan 21→22 | ja, med sitt förslag |
 | `SwitchWatchEntity` | `switch_watches` | `id` (autoincrement) | ja |
 | `SwitchWatchCandidateEntity` | `switch_watch_candidates` | främmande nyckel till `switch_watches` | ja, med sitt byte |
 | `SuggestionDismissalEntity` | `suggestion_dismissals` | `sellIsin`, `buyIsin`, `kind` | ja |

@@ -765,7 +765,7 @@ class FundPriceUpdateWorkerTest {
         override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {
             moves.forEach { move ->
                 val index = recorded.indexOfFirst { it.id == move.id }
-                recorded[index] = recorded[index].copy(batchEpochMillis = move.batchEpochMillis, planIndex = move.planIndex, switchValueKr = move.switchValueKr)
+                recorded[index] = recorded[index].copy(batchEpochMillis = move.batchEpochMillis, planIndex = move.planIndex, switchValueKr = move.switchValueKr, candidates = move.candidates)
             }
             records.forEach { record(it) }
         }
@@ -1451,6 +1451,64 @@ class FundPriceUpdateWorkerTest {
         assertEquals(1, suggestionRepo.recorded.size)
         assertEquals(2_000L, suggestionRepo.recorded.single().batchEpochMillis)
         assertEquals(1L, suggestionRepo.recorded.single().id)
+    }
+
+    /** Den valda köpfonden SE_CAND (högst avkastning, billigast) plus [alternatives] på nivå 3. */
+    private fun setLevelThreeCandidates(vararg alternatives: SwitchPlanCalc.Candidate) {
+        switchCandidatesByLevel[3] = listOf(SwitchPlanCalc.Candidate(candidateMetadata("SE_CAND", risk = 3, totalFee = 0.1, developmentOneYear = 0.4), 0.4)) + alternatives
+    }
+
+    private fun alternative(isin: String, fee: Double, oneYear: Double) = SwitchPlanCalc.Candidate(
+        candidateMetadata(isin, risk = 3, totalFee = fee, developmentOneYear = oneYear).copy(category = "Globalfond", fundType = "Aktiefond", companyName = "Fondbolaget"),
+        oneYear
+    )
+
+    @Test
+    fun `scanSwitchPlan sparar upp till tre alternativ med fondens fakta i rangordning`() = runTest {
+        setUpOverweightedPortfolio()
+        setLevelThreeCandidates(
+            alternative("SE_ALT1", fee = 0.2, oneYear = 0.30),
+            alternative("SE_ALT2", fee = 0.3, oneYear = 0.20),
+            alternative("SE_ALT3", fee = 0.4, oneYear = 0.10),
+            alternative("SE_ALT4", fee = 0.5, oneYear = 0.05)
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+
+        scanSwitchPlan(suggestionRepo, testDay)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals("SE_CAND", record.buyIsin)
+        assertEquals(listOf("SE_ALT1", "SE_ALT2", "SE_ALT3"), record.candidates.map { it.isin })
+        assertEquals(listOf(0, 1, 2), record.candidates.map { it.position })
+        val first = record.candidates.first()
+        assertEquals("Kandidat SE_ALT1", first.name)
+        assertEquals(0.2, first.totalFee ?: -1.0, 1e-9)
+        assertEquals(3, first.risk)
+        assertEquals("Globalfond", first.category)
+        assertEquals("Aktiefond", first.fundType)
+        assertEquals("Fondbolaget", first.companyName)
+        assertEquals(0.30, first.developmentOneYear ?: -1.0, 1e-9)
+    }
+
+    @Test
+    fun `en flyttad rad far den nya korningens alternativ`() = runTest {
+        // Infokortet (#240) läser kandidaterna ur raden — en rad som flyttas till en ny körning
+        // ska visa den körningens alternativ, inte de den spelades in med.
+        setUpOverweightedPortfolio()
+        setLevelThreeCandidates(alternative("SE_GAMMAL", fee = 0.2, oneYear = 0.30))
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val suggestionRepo = FakeSuggestionRecordRepository()
+        scanSwitchPlan(suggestionRepo, testDay, batchEpochMillis = 1_000)
+
+        setLevelThreeCandidates(alternative("SE_NY1", fee = 0.2, oneYear = 0.30), alternative("SE_NY2", fee = 0.3, oneYear = 0.20))
+        scanSwitchPlan(suggestionRepo, testDay, batchEpochMillis = 2_000)
+
+        val record = suggestionRepo.recorded.single()
+        assertEquals(2_000L, record.batchEpochMillis)
+        assertEquals(listOf("SE_NY1", "SE_NY2"), record.candidates.map { it.isin })
     }
 
     @Test

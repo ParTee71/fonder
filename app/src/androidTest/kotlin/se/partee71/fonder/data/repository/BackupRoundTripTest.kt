@@ -26,6 +26,7 @@ import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
+import se.partee71.fonder.data.room.entities.SuggestionCandidateEntity
 import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
@@ -112,6 +113,20 @@ class BackupRoundTripTest {
                 batchEpochMillis = 1_754_200_000_000,
                 // Dagen båda NAV-utgångslägena gäller (issue #197) — kan inte räknas fram i efterhand.
                 navEpochDay = 19_798
+            )
+        )
+        // Köpkandidaterna förslaget gavs med (issue #239) — alternativen körningen valde bland går inte
+        // att få fram igen ur källan. Insatta i omvänd ordning, så rundturen prövar positionen.
+        db.suggestionRecordDao().insertCandidates(
+            listOf(
+                SuggestionCandidateEntity(
+                    recordId = 1, isin = "SE0000709124", name = "Alternativ två", position = 1, totalFee = null, risk = null,
+                    category = null, fundType = null, companyName = null, developmentOneYear = null
+                ),
+                SuggestionCandidateEntity(
+                    recordId = 1, isin = "SE0000709123", name = "Alternativ Global", position = 0, totalFee = 0.25, risk = 4,
+                    category = "Globalfond", fundType = "Aktiefond", companyName = "Fondbolaget AB", developmentOneYear = 0.083
+                )
             )
         )
         db.suggestionRecordDao().insert(
@@ -248,6 +263,21 @@ class BackupRoundTripTest {
         assertEquals(listOf(19_798L, null, null), records.map { it.navEpochDay })
         assertEquals(201.5, records[0].sellNavAtSuggestion, 1e-9)
         assertEquals(95.25, records[0].buyNavAtSuggestion, 1e-9)
+
+        // Kandidaterna (issue #239) med varje fält, i rangordning, knutna till sitt förslag.
+        val withCandidates = db.suggestionRecordDao().getAllWithCandidates().map { it.toDomain() }
+        val restoredCandidates = withCandidates.single { it.id == 1L }.candidates
+        assertEquals(listOf("SE0000709123", "SE0000709124"), restoredCandidates.map { it.isin })
+        assertEquals(listOf("Alternativ Global", "Alternativ två"), restoredCandidates.map { it.name })
+        assertEquals(listOf(0, 1), restoredCandidates.map { it.position })
+        assertEquals(listOf(1L, 1L), restoredCandidates.map { it.recordId })
+        assertEquals(listOf(0.25, null), restoredCandidates.map { it.totalFee })
+        assertEquals(listOf(4, null), restoredCandidates.map { it.risk })
+        assertEquals(listOf("Globalfond", null), restoredCandidates.map { it.category })
+        assertEquals(listOf("Aktiefond", null), restoredCandidates.map { it.fundType })
+        assertEquals(listOf("Fondbolaget AB", null), restoredCandidates.map { it.companyName })
+        assertEquals(listOf(0.083, null), restoredCandidates.map { it.developmentOneYear })
+        assertTrue(withCandidates.filter { it.id != 1L }.all { it.candidates.isEmpty() })
 
         val dismissals = db.suggestionDismissalDao().getAll().map { it.toDomain() }
         assertEquals(listOf("SE0004617590", "SE0005991445"), dismissals.map { it.buyIsin })

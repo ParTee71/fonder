@@ -67,7 +67,9 @@ object SwitchPlanCalc {
      * samma belopp. [sellValueKr] är **inte** nödvändigtvis hela positionen — den är begränsad
      * till gapet, se klassens KDoc — så beloppet måste visas för användaren; annars är rådet
      * tvetydigt ("sälj fonden" ≠ "sälj för 4 000 kr"). [feeDelta] = köpkandidatens avgift minus
-     * säljfondens (positivt = dyrare).
+     * säljfondens (positivt = dyrare). [alternatives] är de upp till [MAX_ALTERNATIVES] kandidaterna
+     * närmast efter köpfonden i samma rangordning ([rankBuyCandidates]) — det infokortet visar
+     * (issue #239).
      */
     data class Switch(
         val sellFund: Fund,
@@ -76,7 +78,8 @@ object SwitchPlanCalc {
         val buyName: String,
         val fromLevel: Int,
         val toLevel: Int,
-        val feeDelta: Double
+        val feeDelta: Double,
+        val alternatives: List<Candidate> = emptyList()
     )
 
     /**
@@ -93,6 +96,12 @@ object SwitchPlanCalc {
      * stanna efter det första bytet är medvetet vald framför en stor omplacering.
      */
     const val MAX_SWITCHES_PER_PLAN = 3
+
+    /**
+     * Antal andra köpkandidater som sparas med varje byte (issue #239) — infokortet på Beslut visar
+     * tre alternativ på samma risknivå (beslut i #237).
+     */
+    const val MAX_ALTERNATIVES = 3
 
     /**
      * Hur gammal en inspelad plan får vara för att fortfarande visas (HEM-8). Samma princip som
@@ -341,9 +350,12 @@ object SwitchPlanCalc {
                 .sortedByDescending { it.feePercent!! }
                 .firstNotNullOfOrNull { slot ->
                     val excludedForSell = excludedPairs.filter { it.first == slot.isin }.mapTo(mutableSetOf()) { it.second }
-                    pickBuyCandidate(candidates, underEntry.key, usedBuyIsins + excludedForSell)?.let { slot to it }
+                    rankBuyCandidates(candidates, underEntry.key, usedBuyIsins + excludedForSell)
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { slot to it }
                 } ?: break
-            val (sellSlot, buyCandidate) = match
+            val (sellSlot, ranked) = match
+            val buyCandidate = ranked.first()
 
             // Storleksbestäm bytet till gapet — se klassens KDoc. Båda gapen är uttryckta i
             // procentenheter av portföljen, så de räknas om till kronor mot samma total.
@@ -359,7 +371,8 @@ object SwitchPlanCalc {
                 buyName = buyCandidate.metadata.name,
                 fromLevel = sellSlot.level,
                 toLevel = underEntry.key,
-                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent!!
+                feeDelta = buyCandidate.metadata.totalFee!! - sellSlot.feePercent!!,
+                alternatives = ranked.drop(1).take(MAX_ALTERNATIVES)
             )
             usedBuyIsins += buyCandidate.metadata.isin
 
@@ -379,16 +392,22 @@ object SwitchPlanCalc {
     }
 
     /**
-     * Översta kvartilen på [Candidate.twelveMonthReturn], därefter lägst avgift — se klassens
-     * KDoc. Regeln förutsätter att [candidates] är nivåns **avkastningsrangordnade** köpbara
-     * fonder; hämtas de i avgiftsordning blir avkastningen bara en särskiljare mellan de
-     * billigaste och den uppmätta kanten uteblir (issue #75, punkt 3).
+     * Nivåns köpkandidater i bytesplanens rangordning (issue #239): **översta kvartilen** på
+     * [Candidate.twelveMonthReturn] sorterad på lägst avgift, därefter resten i avkastningsordning.
+     * Det första elementet är köpfonden planen väljer, de följande dess alternativ — en och samma
+     * funktion, så valet och alternativen inte kan glida isär. Lika avgift inom kvartilen avgörs av
+     * avkastningen (stabil sortering), lika avkastning av ordningen in.
+     *
+     * Regeln förutsätter att [candidates] är nivåns **avkastningsrangordnade** köpbara fonder; hämtas
+     * de i avgiftsordning blir avkastningen bara en särskiljare mellan de billigaste och den uppmätta
+     * kanten uteblir (issue #75, punkt 3). Kandidater utan avgift, på en annan nivå eller i
+     * [excludeIsins] tas inte med.
      */
-    private fun pickBuyCandidate(candidates: List<Candidate>, level: Int, excludeIsins: Set<String>): Candidate? {
+    fun rankBuyCandidates(candidates: List<Candidate>, level: Int, excludeIsins: Set<String>): List<Candidate> {
         val atLevel = candidates.filter { it.metadata.risk == level && it.metadata.isin !in excludeIsins && it.metadata.totalFee != null }
-        if (atLevel.isEmpty()) return null
+        if (atLevel.isEmpty()) return emptyList()
         val sortedByReturn = atLevel.sortedByDescending { it.twelveMonthReturn }
         val quartileCount = ceil(sortedByReturn.size * 0.25).toInt().coerceAtLeast(1)
-        return sortedByReturn.take(quartileCount).minByOrNull { it.metadata.totalFee!! }
+        return sortedByReturn.take(quartileCount).sortedBy { it.metadata.totalFee!! } + sortedByReturn.drop(quartileCount)
     }
 }

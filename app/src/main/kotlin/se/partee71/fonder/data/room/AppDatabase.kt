@@ -16,6 +16,7 @@ import se.partee71.fonder.data.room.entities.FundEntity
 import se.partee71.fonder.data.room.entities.FundMetadataEntity
 import se.partee71.fonder.data.room.entities.FundPriceEntity
 import se.partee71.fonder.data.room.entities.FxRateEntity
+import se.partee71.fonder.data.room.entities.SuggestionCandidateEntity
 import se.partee71.fonder.data.room.entities.SuggestionDismissalEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
@@ -32,9 +33,10 @@ import se.partee71.fonder.data.room.entities.TransactionEntity
         SuggestionRecordEntity::class,
         SwitchWatchEntity::class,
         SwitchWatchCandidateEntity::class,
-        SuggestionDismissalEntity::class
+        SuggestionDismissalEntity::class,
+        SuggestionCandidateEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -507,6 +509,42 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 21 → 22 (HEM-8, issue #239): `suggestion_candidates` — upp till tre andra köpbara
+         * fonder på samma risknivå per bytesplansförslag, med fondens fakta från körningen. Infokortet
+         * på Beslut visar dem som alternativ.
+         *
+         * Bara en ny tabell, samma form som `switch_watch_candidates` (14→15): främmande nyckel till
+         * `suggestion_records(id)` med `ON DELETE CASCADE` och index på `recordId` — indexet krävs av
+         * Rooms schemaverifiering för FK-kolumnen. Befintliga förslag får **inga** kandidater: vilka
+         * alternativ deras körning valde bland går inte att återskapa, och en efterhandsfråga mot
+         * källan hade sett ut som de alternativ rådet faktiskt gavs med. Inga befintliga rader eller
+         * kolumner rörs.
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `suggestion_candidates` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `recordId` INTEGER NOT NULL,
+                        `isin` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `position` INTEGER NOT NULL,
+                        `totalFee` REAL,
+                        `risk` INTEGER,
+                        `category` TEXT,
+                        `fundType` TEXT,
+                        `companyName` TEXT,
+                        `developmentOneYear` REAL,
+                        FOREIGN KEY(`recordId`) REFERENCES `suggestion_records`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_suggestion_candidates_recordId` ON `suggestion_candidates` (`recordId`)")
+            }
+        }
+
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -527,7 +565,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_17_18,
             MIGRATION_18_19,
             MIGRATION_19_20,
-            MIGRATION_20_21
+            MIGRATION_20_21,
+            MIGRATION_21_22
         )
     }
 }

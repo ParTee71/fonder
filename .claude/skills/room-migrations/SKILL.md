@@ -11,9 +11,11 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
 
 ## Nuläge
 
-- `data/room/AppDatabase.kt` — `version = 21`, `exportSchema = true`. Migreringarna
-  `MIGRATION_1_2 … MIGRATION_20_21` ligger i `companion object` och samlas i `MIGRATIONS`.
-  Senaste: `MIGRATION_20_21` lägger `transactions.dateEstimated` (`NOT NULL DEFAULT 0`, även i
+- `data/room/AppDatabase.kt` — `version = 22`, `exportSchema = true`. Migreringarna
+  `MIGRATION_1_2 … MIGRATION_21_22` ligger i `companion object` och samlas i `MIGRATIONS`.
+  Senaste: `MIGRATION_21_22` skapar `suggestion_candidates` (bytesplansförslagens sparade
+  köpkandidater, FK till `suggestion_records` med `ON DELETE CASCADE` och index på `recordId`,
+  HEM-8, #239; samma form som `switch_watch_candidates`). Före den: `MIGRATION_20_21` lägger `transactions.dateEstimated` (`NOT NULL DEFAULT 0`, även i
   entiteten via `@ColumnInfo(defaultValue = "0")`; gamla rader räknas som kända datum, TRX-9, #222).
   Före den: `MIGRATION_19_20` lägger `suggestion_records.navEpochDay` (nullbar utan default — dagen
   båda NAV-utgångslägena gäller; gamla rader vet den inte och mäts från förslagsdagen, SET-5, #197).
@@ -21,7 +23,7 @@ allvarligaste formen av regel 1-brott. Se även skill `data-safety-backup` (rund
   (`fund_metadata.availableAtHandelsbanken = 0` → `NULL`, #153). Före den: `MIGRATION_17_18` lägger `switch_watches.indexOnly` (`NOT NULL DEFAULT 0`, filtret "bara
   indexfonder", ANA-13, #150) — defaulten står också i entiteten (`@ColumnInfo(defaultValue = "0")`),
   så Rooms validering prövar den.
-- Migreringstester: `Migration12Test … Migration1920Test` (ett per steg) i
+- Migreringstester: `Migration12Test … Migration2122Test` (ett per steg) i
   `androidTest/…/data/room/`, plus DAO-tester och `BackupRoundTripTest`. De körs bara i
   jobbet `instrumented-tests` i `android.yml`, alltså bara i PR som rör `app/src/main`,
   `app/src/androidTest` eller byggfilerna (skill `ci-budget`).

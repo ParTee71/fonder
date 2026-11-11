@@ -3,8 +3,11 @@ package se.partee71.fonder.data.room.daos
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
+import se.partee71.fonder.data.room.entities.SuggestionCandidateEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordWithCandidates
 
 @Dao
 interface SuggestionRecordDao {
@@ -24,6 +27,7 @@ interface SuggestionRecordDao {
      * `MIN_GAP_PP`) men avgiftsskanningen spelade in en rad — utan filtret hade Hem då visat
      * ett avgiftsbyte som "1. Sälj X → Köp Y" i en plan det aldrig ingick i.
      */
+    @Transaction
     @Query(
         """
         SELECT * FROM suggestion_records
@@ -37,7 +41,7 @@ interface SuggestionRecordDao {
         ORDER BY planIndex ASC, id ASC
         """
     )
-    fun observeLatestBatch(): Flow<List<SuggestionRecordEntity>>
+    fun observeLatestBatch(): Flow<List<SuggestionRecordWithCandidates>>
 
     /**
      * Hela historiken, nyast först (SET-5, issue #80) — facit-vyns läsväg, till skillnad från
@@ -45,19 +49,21 @@ interface SuggestionRecordDao {
      * dygn, sedan körning, sedan plats i planen, så en batch alltid hänger ihop i listan även
      * när två körningar landat samma dygn.
      */
+    @Transaction
     @Query(
         """
         SELECT * FROM suggestion_records
         ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, planIndex ASC
         """
     )
-    fun observeHistory(): Flow<List<SuggestionRecordEntity>>
+    fun observeHistory(): Flow<List<SuggestionRecordWithCandidates>>
 
     /**
      * Förslag av sorten [kind] från och med [sinceEpochDay], nyast först — avgiftsbytena som Beslut
      * och flikmärket läser (ANA-9, NAV-9). Urvalet ligger i SQL av samma skäl som [observeLatestBatch]:
      * märket är aktivt hela tiden, och tabellen växer med varje backstop-körning.
      */
+    @Transaction
     @Query(
         """
         SELECT * FROM suggestion_records
@@ -65,7 +71,7 @@ interface SuggestionRecordDao {
         ORDER BY suggestedAtEpochDay DESC, batchEpochMillis DESC, id DESC
         """
     )
-    fun observeRecent(kind: String, sinceEpochDay: Long): Flow<List<SuggestionRecordEntity>>
+    fun observeRecent(kind: String, sinceEpochDay: Long): Flow<List<SuggestionRecordWithCandidates>>
 
     /**
      * Markerar (eller avmarkerar) ett förslag som genomfört (HEM-8/SET-5, issue #80). Kolumnen
@@ -100,11 +106,12 @@ interface SuggestionRecordDao {
      * `planIndex 0`. Id, kvittering och NAV-utgångsläge behålls; beloppet följer den nya planen.
      */
     @Query("UPDATE suggestion_records SET batchEpochMillis = :batchEpochMillis, planIndex = :planIndex, switchValueKr = :switchValueKr WHERE id = :id")
-    suspend fun moveToBatch(id: Long, batchEpochMillis: Long, planIndex: Int, switchValueKr: Double?)
+    suspend fun moveToBatch(id: Long, batchEpochMillis: Long, planIndex: Int, switchValueKr: Double?): Int
 
     /** Raderna med [ids] — de öppna bevakningarnas källförslag (BYT-1), aldrig hela historiken. */
+    @Transaction
     @Query("SELECT * FROM suggestion_records WHERE id IN (:ids)")
-    fun observeByIds(ids: List<Long>): Flow<List<SuggestionRecordEntity>>
+    fun observeByIds(ids: List<Long>): Flow<List<SuggestionRecordWithCandidates>>
 
     /**
      * Den **senaste** planraden per fondpar bland paren i [sellIsins] × [buyIsins] — de avstådda
@@ -112,6 +119,7 @@ interface SuggestionRecordDao {
      * och tabellen växer med varje körning. Anroparen filtrerar till exakta par; frågan kan ge
      * korsade par när flera avståenden delar sälj- eller köpfond.
      */
+    @Transaction
     @Query(
         """
         SELECT * FROM suggestion_records r
@@ -125,10 +133,45 @@ interface SuggestionRecordDao {
         ORDER BY r.planIndex ASC, r.id ASC
         """
     )
-    fun observeLatestPlanRecordsFor(sellIsins: List<String>, buyIsins: List<String>): Flow<List<SuggestionRecordEntity>>
+    fun observeLatestPlanRecordsFor(sellIsins: List<String>, buyIsins: List<String>): Flow<List<SuggestionRecordWithCandidates>>
 
     @Insert
     suspend fun insert(record: SuggestionRecordEntity): Long
+
+    /** Kandidaterna till ett förslag (issue #239) — skrivs i samma transaktion som förslaget, se [replaceCandidates]. */
+    @Insert
+    suspend fun insertCandidates(candidates: List<SuggestionCandidateEntity>)
+
+    /** Tar bort förslagets kandidater — första halvan av [replaceCandidates]. */
+    @Query("DELETE FROM suggestion_candidates WHERE recordId = :recordId")
+    suspend fun deleteCandidates(recordId: Long)
+
+    /**
+     * Byter förslagets kandidater mot [candidates] (issue #239) — en flyttad rad
+     * ([moveToBatch]) får den nya körningens alternativ, annars visade infokortet de gamla.
+     * Atomärt, så en avbruten skrivning aldrig lämnar förslaget utan sina kandidater.
+     */
+    @Transaction
+    suspend fun replaceCandidates(recordId: Long, candidates: List<SuggestionCandidateEntity>) {
+        deleteCandidates(recordId)
+        if (candidates.isNotEmpty()) insertCandidates(candidates.map { it.copy(id = 0, recordId = recordId) })
+    }
+
+    /**
+     * Förslaget och dess kandidater, knutna till det id insättningen faktiskt gav — inspelningens och
+     * återställningens enda skrivväg för en ny rad (issue #239), så de två inte kan glida isär.
+     */
+    @Transaction
+    suspend fun insertWithCandidates(record: SuggestionRecordEntity, candidates: List<SuggestionCandidateEntity>): Long {
+        val id = insert(record)
+        if (candidates.isNotEmpty()) insertCandidates(candidates.map { it.copy(id = 0, recordId = id) })
+        return id
+    }
+
+    /** Hela tabellen med kandidaterna — backup-kontraktets läsväg (NFR-1). */
+    @Transaction
+    @Query("SELECT * FROM suggestion_records ORDER BY id ASC")
+    suspend fun getAllWithCandidates(): List<SuggestionRecordWithCandidates>
 
     /**
      * Hela tabellen. Ingen produktionsläsare — verifieringsfrågan för tester (SET-1:s

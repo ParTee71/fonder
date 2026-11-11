@@ -9,7 +9,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import se.partee71.fonder.data.room.AppDatabase
 import se.partee71.fonder.data.room.daos.SuggestionRecordDao
+import se.partee71.fonder.data.room.entities.SuggestionCandidateEntity
 import se.partee71.fonder.data.room.entities.SuggestionRecordEntity
+import se.partee71.fonder.data.room.entities.SuggestionRecordWithCandidates
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 
@@ -42,14 +45,25 @@ interface SuggestionRecordRepository {
 
     suspend fun record(record: SuggestionRecord)
 
-    /** En inspelad planrad som flyttas till en ny körning — se [commitBatch]. */
-    data class BatchMove(val id: Long, val batchEpochMillis: Long, val planIndex: Int, val switchValueKr: Double?)
+    /**
+     * En inspelad planrad som flyttas till en ny körning — se [commitBatch]. [candidates] är den nya
+     * körningens alternativ och **ersätter** radens (issue #239).
+     */
+    data class BatchMove(
+        val id: Long,
+        val batchEpochMillis: Long,
+        val planIndex: Int,
+        val switchValueKr: Double?,
+        val candidates: List<SuggestionCandidate> = emptyList()
+    )
 
     /**
      * Skriver en omräknad plan (HEM-8, issue #143) i **en** transaktion: rader för par som redan
      * spelats in i dag flyttas till den nya körningen ([moves] — samma rad, samma kvittering, så
      * facit räknar rådet en gång), nya par spelas in ([records]). Atomärt, så en avbruten
-     * skrivning aldrig lämnar en körning utan sitt steg 0.
+     * skrivning aldrig lämnar en körning utan sitt steg 0. Kandidaterna ([SuggestionRecord.candidates],
+     * issue #239) skrivs med: en ny rad får sina, en flyttad rad får den nya körningens i stället för
+     * sina gamla.
      */
     suspend fun commitBatch(moves: List<BatchMove>, records: List<SuggestionRecord>)
 
@@ -106,32 +120,41 @@ class RoomSuggestionRecordRepository @Inject constructor(
     private val dao: SuggestionRecordDao
 ) : SuggestionRecordRepository {
 
-    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = dao.observeLatestBatch().map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeLatestBatch(): Flow<List<SuggestionRecord>> = dao.observeLatestBatch().map { list -> list.map(SuggestionRecordWithCandidates::toDomain) }
 
-    override fun observeHistory(): Flow<List<SuggestionRecord>> = dao.observeHistory().map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeHistory(): Flow<List<SuggestionRecord>> = dao.observeHistory().map { list -> list.map(SuggestionRecordWithCandidates::toDomain) }
 
-    override fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> = dao.observeRecent(kind.name, sinceEpochDay).map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    override fun observeRecent(kind: SuggestionKind, sinceEpochDay: Long): Flow<List<SuggestionRecord>> = dao.observeRecent(kind.name, sinceEpochDay).map { list -> list.map(SuggestionRecordWithCandidates::toDomain) }
 
     override suspend fun hasRecordedToday(sellIsin: String, buyIsin: String, epochDay: Long, kind: SuggestionKind): Boolean = dao.existsForDay(sellIsin, buyIsin, epochDay, kind.name)
 
     override suspend fun record(record: SuggestionRecord) {
-        dao.insert(SuggestionRecordEntity.fromDomain(record))
+        database.withTransaction { insertWithCandidates(record) }
     }
 
     override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {
         database.withTransaction {
-            moves.forEach { dao.moveToBatch(it.id, it.batchEpochMillis, it.planIndex, it.switchValueKr) }
-            records.forEach { dao.insert(SuggestionRecordEntity.fromDomain(it)) }
+            moves.forEach { move ->
+                // En rad som hunnit försvinna (gallring, återställning) flyttas inte — och får då inga
+                // kandidater heller: en kandidat utan förslag fäller främmande nyckeln och hela körningen.
+                val moved = dao.moveToBatch(move.id, move.batchEpochMillis, move.planIndex, move.switchValueKr)
+                if (moved > 0) dao.replaceCandidates(move.id, move.candidates.map { SuggestionCandidateEntity.fromDomain(it, move.id) })
+            }
+            records.forEach { insertWithCandidates(it) }
         }
     }
 
-    override fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> = if (ids.isEmpty()) flowOf(emptyList()) else dao.observeByIds(ids.toList()).map { list -> list.map(SuggestionRecordEntity::toDomain) }
+    private suspend fun insertWithCandidates(record: SuggestionRecord) {
+        dao.insertWithCandidates(SuggestionRecordEntity.fromDomain(record), record.candidates.map { SuggestionCandidateEntity.fromDomain(it, record.id) })
+    }
+
+    override fun observeByIds(ids: Set<Long>): Flow<List<SuggestionRecord>> = if (ids.isEmpty()) flowOf(emptyList()) else dao.observeByIds(ids.toList()).map { list -> list.map(SuggestionRecordWithCandidates::toDomain) }
 
     override fun observeLatestPlanRecordsFor(pairs: Set<Pair<String, String>>): Flow<List<SuggestionRecord>> = if (pairs.isEmpty()) {
         flowOf(emptyList())
     } else {
         dao.observeLatestPlanRecordsFor(pairs.map { it.first }.distinct(), pairs.map { it.second }.distinct())
-            .map { list -> list.map(SuggestionRecordEntity::toDomain).filter { (it.sellIsin to it.buyIsin) in pairs } }
+            .map { list -> list.map(SuggestionRecordWithCandidates::toDomain).filter { (it.sellIsin to it.buyIsin) in pairs } }
     }
 
     override suspend fun setFollowed(id: Long, followed: Boolean) {

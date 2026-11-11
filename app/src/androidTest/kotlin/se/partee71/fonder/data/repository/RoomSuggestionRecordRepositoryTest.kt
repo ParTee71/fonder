@@ -14,6 +14,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import se.partee71.fonder.data.room.AppDatabase
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionRecord
 
 /**
@@ -80,5 +81,48 @@ class RoomSuggestionRecordRepositoryTest {
         assertEquals(0, kept.planIndex)
         assertEquals(1_000.0, kept.switchValueKr!!, 1e-9)
         assertTrue(repository.observeLatestBatch().first().single().id == existing.id)
+    }
+
+    private fun candidates(vararg isins: String) = isins.mapIndexed { position, isin -> SuggestionCandidate(isin = isin, name = "Fond $isin", position = position, totalFee = 0.2, risk = 4) }
+
+    @Test
+    fun commitBatch_skriver_nya_radens_kandidater_och_byter_den_flyttades() = runTest {
+        // Issue #239: en flyttad rad får den nya körningens alternativ, inte de den spelades in med.
+        repository.record(record(planIndex = 0, buyIsin = "SE_A", batchEpochMillis = 1_000).copy(candidates = candidates("SE_GAMMAL1", "SE_GAMMAL2")))
+        val existing = repository.observeHistory().first().single()
+        assertEquals(listOf("SE_GAMMAL1", "SE_GAMMAL2"), existing.candidates.map { it.isin })
+        assertEquals(existing.id, existing.candidates.first().recordId)
+
+        repository.commitBatch(
+            moves = listOf(
+                SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis = 2_000, planIndex = 1, switchValueKr = 2_500.0, candidates = candidates("SE_NY"))
+            ),
+            records = listOf(record(planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000).copy(candidates = candidates("SE_B1", "SE_B2", "SE_B3")))
+        )
+
+        val latest = repository.observeLatestBatch().first()
+        assertEquals(listOf(listOf("SE_B1", "SE_B2", "SE_B3"), listOf("SE_NY")), latest.map { row -> row.candidates.map { it.isin } })
+        assertEquals(listOf(0, 1, 2), latest.first().candidates.map { it.position })
+        assertEquals(
+            1,
+            db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM suggestion_candidates WHERE recordId = ${existing.id}").use {
+                it.moveToFirst()
+                it.getInt(0)
+            }
+        )
+    }
+
+    @Test
+    fun commitBatch_hoppar_over_en_flyttad_rad_som_forsvunnit_utan_att_falla() = runTest {
+        // Raden lästes före transaktionen och kan ha gallrats eller ersatts av en återställning sedan.
+        // Dess kandidater får då inte skrivas — de hade fällt främmande nyckeln och hela körningen.
+        repository.commitBatch(
+            moves = listOf(SuggestionRecordRepository.BatchMove(id = 999, batchEpochMillis = 2_000, planIndex = 1, switchValueKr = 2_500.0, candidates = candidates("SE_X"))),
+            records = listOf(record(planIndex = 0, buyIsin = "SE_B", batchEpochMillis = 2_000).copy(candidates = candidates("SE_B1")))
+        )
+
+        val stored = repository.observeHistory().first().single()
+        assertEquals("SE_B", stored.buyIsin)
+        assertEquals(listOf("SE_B1"), stored.candidates.map { it.isin })
     }
 }
