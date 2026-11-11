@@ -23,6 +23,7 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
 import se.partee71.fonder.domain.usecase.FundAnalysisCalc
@@ -756,8 +757,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 val existing = recordedToday
                     .filter { it.sellIsin == sellIsin && it.buyIsin == switch.buyIsin }
                     .maxWithOrNull(compareBy({ it.batchEpochMillis }, { it.id }))
+                // Kandidaterna följer den här körningen, även för en flyttad rad (issue #239).
+                val candidates = suggestionCandidatesOf(switch)
                 if (existing != null) {
-                    moves += SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis, index, switch.sellValueKr)
+                    moves += SuggestionRecordRepository.BatchMove(existing.id, batchEpochMillis, index, switch.sellValueKr, candidates)
                     continue
                 }
 
@@ -779,7 +782,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     buyNavAtSuggestion = nav.buyNav,
                     switchValueKr = switch.sellValueKr,
                     batchEpochMillis = batchEpochMillis,
-                    navEpochDay = nav.epochDay
+                    navEpochDay = nav.epochDay,
+                    candidates = candidates
                 )
             }
             if (moves.isNotEmpty() || inserts.isNotEmpty()) {
@@ -793,6 +797,26 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             // Tak mot obegränsad tillväxt — se SuggestionRecordRepository.prune. Körs efter
             // inspelningen, så dagens rader aldrig kan falla offer för sin egen gallring.
             suggestionRecordRepository.prune(today)
+        }
+
+        /**
+         * Bytets alternativ ([SwitchPlanCalc.Switch.alternatives]) som sparade kandidater (HEM-8,
+         * issue #239) — fondens fakta kopieras ur kandidatens metadata nu, så infokortet visar
+         * fonden som den såg ut när rådet gavs.
+         */
+        private fun suggestionCandidatesOf(switch: SwitchPlanCalc.Switch): List<SuggestionCandidate> = switch.alternatives.mapIndexed { position, candidate ->
+            val metadata = candidate.metadata
+            SuggestionCandidate(
+                isin = metadata.isin,
+                name = metadata.name,
+                position = position,
+                totalFee = metadata.totalFee,
+                risk = metadata.risk,
+                category = metadata.category,
+                fundType = metadata.fundType,
+                companyName = metadata.companyName,
+                developmentOneYear = candidate.twelveMonthReturn
+            )
         }
 
         /**

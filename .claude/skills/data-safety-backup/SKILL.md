@@ -43,7 +43,7 @@ ett `File` eller ett Drive-anrop i `BackupRepository` — den I/O:n ligger i sk�
 
 **Ingår** (fälten i `BackupPayload`, `formatVersion = 1`): fonder, transaktioner, samtliga
 inspelade förslag (`SuggestionRecord`, inkl. `followed`, `switchValueKr`, `batchEpochMillis`,
-`kind`, `navEpochDay`), pågående och avslutade byten (`switchWatches`, ANA-12, #114), avstådda bytesförslag
+`kind`, `navEpochDay` och de inbäddade köpkandidaterna `candidates`, #239), pågående och avslutade byten (`switchWatches`, ANA-12, #114), avstådda bytesförslag
 (`suggestionDismissals`, HEM-14), riskprofil (SET-3, inkl.
 legacy-fältet `targetRiskLevel`), kontotyp (SET-4), temaval och den egenvalda referensfonden
 (`chosenBenchmarkIsin`, HEM-10).
@@ -131,7 +131,7 @@ arbetsnamn `fonder_drive_backup` och `fonder_drive_backup_now` avregistreras vid
 
 | Del | Var | Vad |
 |---|---|---|
-| `BackupFingerprint` | `data/repository/BackupFingerprint.kt` | SHA-256 över `BackupSerializer.encode` av en normaliserad payload: `exportedAtEpochMillis = 0`, `Fund.fondlistaFundId` bortplockad, bara kvitterade förslag (`followed != null`), av bevakningarnas kandidater bara de användaren lagt till (`MANUELL`, utan id/position/nollpunkt), utgångna bevakningar (`UTGANGEN`) räknade som öppna, listor sorterade. Det som bakgrunden själv skriver ska inte ge en påminnelse. Nytt fält i kontraktet följer med automatiskt – är det något bakgrunden skriver, normalisera bort det här och i `BackupFingerprintTest`. |
+| `BackupFingerprint` | `data/repository/BackupFingerprint.kt` | SHA-256 över `BackupSerializer.encode` av en normaliserad payload: `exportedAtEpochMillis = 0`, `Fund.fondlistaFundId` bortplockad, bara kvitterade förslag (`followed != null`) och utan sina köpkandidater, av bevakningarnas kandidater bara de användaren lagt till (`MANUELL`, utan id/position/nollpunkt), utgångna bevakningar (`UTGANGEN`) räknade som öppna, listor sorterade. Det som bakgrunden själv skriver ska inte ge en påminnelse. Nytt fält i kontraktet följer med automatiskt – är det något bakgrunden skriver, normalisera bort det här och i `BackupFingerprintTest`. |
 | `BackupStatusRepository` | `data/repository/BackupStatusRepository.kt` | `recordBackup(json, target)` efter varje lyckad kopia **och** återställning – fingeravtryck och antal ur **exakt** den sträng som skrevs eller lästes, aldrig ur en ny läsning; `reminder` = `observeChanges` → debounce → `snapshot` → `BackupReminderCalc`. Ingen skrivväg behöver flagga ändringar. |
 | `BackupReminderCalc` | `domain/usecase/BackupReminderCalc.kt` | Ren regel: ingen data → ingen påminnelse; ingen kopia → påminnelse; annat fingeravtryck → påminnelse med antal nya transaktioner. |
 

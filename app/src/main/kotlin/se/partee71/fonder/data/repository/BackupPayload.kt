@@ -37,6 +37,12 @@ data class BackupPayload(
     val exportedAtEpochMillis: Long,
     val funds: List<Fund> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
+    /**
+     * Inspelade förslag, med sina sparade köpkandidater inbäddade (`SuggestionRecord.candidates`,
+     * issue #239). Kandidaterna har default `emptyList()`, så en fil från före 0.85.0 läses som
+     * förslag utan alternativ — och en äldre app hoppar över den okända nyckeln
+     * ([BackupSerializer]: `ignoreUnknownKeys`), därför ingen ny [FORMAT_VERSION].
+     */
     val suggestionRecords: List<SuggestionRecord> = emptyList(),
     /**
      * Pågående och avslutade byten med sina bevakade alternativ (ANA-12, issue #114). Genuin

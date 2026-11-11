@@ -51,7 +51,7 @@ class FakeSuggestionRecordRepository : SuggestionRecordRepository {
     override suspend fun commitBatch(moves: List<SuggestionRecordRepository.BatchMove>, records: List<SuggestionRecord>) {
         val moved = this.records.value.map { record ->
             moves.firstOrNull { it.id == record.id }
-                ?.let { record.copy(batchEpochMillis = it.batchEpochMillis, planIndex = it.planIndex, switchValueKr = it.switchValueKr) }
+                ?.let { record.copy(batchEpochMillis = it.batchEpochMillis, planIndex = it.planIndex, switchValueKr = it.switchValueKr, candidates = it.candidates) }
                 ?: record
         }
         this.records.value = moved + records

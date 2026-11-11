@@ -39,6 +39,14 @@ import kotlinx.serialization.Serializable
  *   ([se.partee71.fonder.domain.usecase.SwitchOutcomeCalc]). Null för rader inspelade före
  *   0.81.0: de vet inte vilken dag kurserna var från, och ett påhittat datum hade sett ut som ett
  *   känt — de mäts därför från [suggestedAtEpochDay] som förut ([navBaseEpochDay]).
+ * @param candidates upp till [se.partee71.fonder.domain.usecase.SwitchPlanCalc.MAX_ALTERNATIVES]
+ *   andra köpbara fonder på samma risknivå som [buyIsin], i planskanningens rangordning (HEM-8,
+ *   issue #239) — infokortet på Beslut visar dem som alternativ. Sparas i stället för att räknas om
+ *   vid visning: urvalet är gjort mot källans avkastning och köpbarhet **den** körningen, och en ny
+ *   källfråga hade gett andra alternativ än de rådet faktiskt valdes bland. Byts mot den nya
+ *   körningens när raden flyttas ([se.partee71.fonder.data.repository.SuggestionRecordRepository.commitBatch]).
+ *   Tom för avgiftsbyten ([SuggestionKind.FEE], som har [FundMetadata.shownAlternativeIsins]) och
+ *   för rader inspelade före 0.85.0.
  */
 @Serializable
 data class SuggestionRecord(
@@ -53,11 +61,39 @@ data class SuggestionRecord(
     val followed: Boolean? = null,
     val batchEpochMillis: Long = 0,
     val kind: SuggestionKind = SuggestionKind.RISK_PLAN,
-    val navEpochDay: Long? = null
+    val navEpochDay: Long? = null,
+    val candidates: List<SuggestionCandidate> = emptyList()
 ) {
     /** Dagen utfallet mäts från: [navEpochDay], eller förslagsdagen för rader från före 0.81.0. */
     val navBaseEpochDay: Long get() = navEpochDay ?: suggestedAtEpochDay
 }
+
+/**
+ * En köpkandidat som sparats med ett bytesplansförslag (HEM-8, issue #239) — se
+ * [SuggestionRecord.candidates]. Fondens fakta kopieras in vid inspelningen i stället för att slås
+ * upp i `fund_metadata` vid visning: metadata är cache som skrivs om, och rådet ska visa fonden som
+ * den såg ut när förslaget gavs. Därför ingår kandidaten i backup-kontraktet (NFR-1).
+ *
+ * @param recordId förslaget kandidaten hör till; 0 innan förslaget skrivits.
+ * @param position platsen i rangordningen, 0 = bästa alternativet efter den valda köpfonden.
+ * @param totalFee årlig avgift i procent, som [FundMetadata.totalFee].
+ * @param developmentOneYear källans 12-månadersavkastning (t.ex. 0.083 = 8,3 %) — samma källa och
+ *   enhet som [FundMetadata.developmentOneYear], den siffra rangordningen gjordes på.
+ */
+@Serializable
+data class SuggestionCandidate(
+    val id: Long = 0,
+    val recordId: Long = 0,
+    val isin: String,
+    val name: String,
+    val position: Int,
+    val totalFee: Double? = null,
+    val risk: Int? = null,
+    val category: String? = null,
+    val fundType: String? = null,
+    val companyName: String? = null,
+    val developmentOneYear: Double? = null
+)
 
 /**
  * Sorten av inspelat råd (issue #91) — de mäts var för sig i facit (SET-5) och läses av olika

@@ -6,6 +6,7 @@ import org.junit.Test
 import se.partee71.fonder.data.datastore.ThemeMode
 import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
@@ -136,6 +137,18 @@ class BackupFingerprintTest {
             suggestionRecords = payload.suggestionRecords + record.copy(id = 8, followed = null)
         )
         assertEquals(BackupFingerprint.of(payload), BackupFingerprint.of(background))
+    }
+
+    @Test
+    fun `forslagens sparade kandidater paverkar inte - aven pa ett kvitterat forslag`() {
+        // Issue #239: skanningen skriver kandidaterna och byter dem när en rad flyttas till en ny
+        // körning, även när raden är kvitterad — det är inget användaren gjort.
+        val followed = record.copy(followed = true)
+        val before = payload.copy(suggestionRecords = listOf(followed))
+        val after = payload.copy(
+            suggestionRecords = listOf(followed.copy(candidates = listOf(SuggestionCandidate(recordId = 7, isin = "SE0000000003", name = "Alternativ", position = 0))))
+        )
+        assertEquals(BackupFingerprint.of(before), BackupFingerprint.of(after))
     }
 
     @Test

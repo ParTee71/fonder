@@ -19,7 +19,8 @@ import se.partee71.fonder.domain.model.SwitchWatchCloseReason
  * - `Fund.fondlistaFundId` — en källnyckel bakgrundsuppdateringen slår upp och sparar själv.
  * - Inspelade förslag som användaren inte kvitterat (`followed == null`) — bakgrundsskanningen
  *   (HEM-8) spelar in och gallrar dem på egen hand. Kvitterade förslag är användarens val och
- *   räknas.
+ *   räknas — men utan sina kandidater (`SuggestionRecord.candidates`, issue #239): dem skriver och
+ *   byter skanningen själv, även på en kvitterad rad som flyttas till en ny körning.
  * - Bytesbevakningarnas **automatiska** kandidater (`SwitchWatchCandidateSource.AUTO`, ANA-13) —
  *   de fylls på och byts ut av appen. Kvar blir bara de kandidater användaren själv lagt till
  *   (`MANUELL`), och för dem bara vilken fond det är: id, position och nollpunkten
@@ -40,7 +41,7 @@ object BackupFingerprint {
             exportedAtEpochMillis = 0,
             funds = payload.funds.map { it.copy(fondlistaFundId = null) }.sortedBy { it.fundId },
             transactions = payload.transactions.sortedBy { it.id },
-            suggestionRecords = payload.suggestionRecords.filter { it.followed != null }.sortedBy { it.id },
+            suggestionRecords = payload.suggestionRecords.filter { it.followed != null }.map { it.copy(candidates = emptyList()) }.sortedBy { it.id },
             switchWatches = payload.switchWatches.map(::userPart).sortedBy { it.id },
             suggestionDismissals = payload.suggestionDismissals.sortedWith(compareBy({ it.sellIsin }, { it.buyIsin }, { it.kind }))
         )
