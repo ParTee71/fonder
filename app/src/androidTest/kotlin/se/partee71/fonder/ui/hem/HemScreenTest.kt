@@ -31,6 +31,7 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
 import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.ui.diagram.CHART_PERIOD_ROW_TEST_TAG
@@ -558,12 +559,15 @@ class HemScreenTest {
         profitTake = null
     )
 
-    // --- Riskprofil (HEM-7, issue #68) ---
+    // --- Riskprofil (HEM-7, issue #68, #238) ---
+
+    /** Riskkortet för en målfördelning och ett klassificerat värde per nivå, utan bytesplan. */
+    private fun riskOf(target: Map<Int, Double>, valueByLevelKr: Map<Int, Double>) = PortfolioRiskSource.summary(PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = target), valueByLevelKr, emptyMap()), emptyList())
 
     @Test
     fun riskkortet_uteblir_helt_utan_sparad_profil() {
         composeRule.setContent {
-            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true, riskProfile = null)))) }
+            FonderTheme { HemContent(state = HemUiState(portfolio = DetailUiState.Content(HemPortfolio(hasHoldings = true, risk = null)))) }
         }
 
         composeRule.onNodeWithText("Riskprofil").assertDoesNotExist()
@@ -575,7 +579,7 @@ class HemScreenTest {
             portfolio = DetailUiState.Content(
                 HemPortfolio(
                     hasHoldings = true,
-                    riskProfile = RiskProfile(targetRiskLevel = 5),
+                    risk = riskOf(mapOf(5 to 1.0), mapOf(3 to 500.0, 4 to 500.0)),
                     portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.5, includedValueKr = 1000.0, excludedCount = 0)
                 )
             )
@@ -597,14 +601,13 @@ class HemScreenTest {
         // Andelarna är medvetet olika sinsemellan — annars kan flera ExposureBar-rader råka
         // rendera samma procenttext, vilket gör onNodeWithText tvetydig (kräver exakt en träff).
         val target = mapOf(3 to 0.31, 4 to 0.46, 5 to 0.23)
-        val actual = mapOf(3 to 0.12, 4 to 0.53, 5 to 0.35)
+        val actual = mapOf(3 to 120.0, 4 to 530.0, 5 to 350.0)
         val state = HemUiState(
             portfolio = DetailUiState.Content(
                 HemPortfolio(
                     hasHoldings = true,
-                    riskProfile = RiskProfile(targetAllocation = target),
-                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0),
-                    riskLevelDeviations = PortfolioRiskCalc.deviationByLevel(target, actual).toImmutableList()
+                    risk = riskOf(target, actual),
+                    portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 4.0, includedValueKr = 1000.0, excludedCount = 0)
                 )
             )
         )
@@ -615,16 +618,11 @@ class HemScreenTest {
 
         scrollToRiskCard()
 
-        composeRule.onNodeWithText("Mål mot faktisk fördelning").assertExists()
-        composeRule.onNodeWithText("Nivå 3").assertExists()
-        composeRule.onNodeWithText("Nivå 4").assertExists()
-        composeRule.onNodeWithText("Nivå 5").assertExists()
-        composeRule.onNodeWithText("31,0 %").assertExists()
-        composeRule.onNodeWithText("46,0 %").assertExists()
-        composeRule.onNodeWithText("23,0 %").assertExists()
-        composeRule.onNodeWithText("12,0 %").assertExists()
-        composeRule.onNodeWithText("53,0 %").assertExists()
-        composeRule.onNodeWithText("35,0 %").assertExists()
+        // En stapel per nivå med målstreck; raden läses som en mening (ExposureBar med mål).
+        composeRule.onNodeWithText("Du har mer risk än ditt mål").assertExists()
+        composeRule.onNodeWithContentDescription("Nivå 3: 12,0 %, mål 31,0 %").assertExists()
+        composeRule.onNodeWithContentDescription("Nivå 4: 53,0 %, mål 46,0 %").assertExists()
+        composeRule.onNodeWithContentDescription("Nivå 5: 35,0 %, mål 23,0 %").assertExists()
     }
 
     @Test
@@ -635,7 +633,7 @@ class HemScreenTest {
             portfolio = DetailUiState.Content(
                 HemPortfolio(
                     hasHoldings = true,
-                    riskProfile = RiskProfile(targetAllocation = mapOf(3 to 1.0)),
+                    risk = riskOf(mapOf(3 to 1.0), mapOf(3 to 10_000.0)),
                     portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.0, includedValueKr = 10_000.0, excludedCount = 0)
                 )
             ),
@@ -659,7 +657,7 @@ class HemScreenTest {
             portfolio = DetailUiState.Content(
                 HemPortfolio(
                     hasHoldings = true,
-                    riskProfile = RiskProfile(targetRiskLevel = 4),
+                    risk = riskOf(mapOf(4 to 1.0), emptyMap()),
                     portfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 1)
                 )
             )

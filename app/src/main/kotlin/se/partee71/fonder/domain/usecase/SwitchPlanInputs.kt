@@ -10,6 +10,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
+import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.Transaction
 
 /**
@@ -35,6 +36,23 @@ class SwitchPlanInputs(
 
     companion object {
         /**
+         * Bevakningarna som likviden på väg (BYT-3) räknas ur: **alla**, även stängda (deras köp får
+         * inte förbrukas igen), utom [excludeWatchId], och de öppnas källförslags köpfond (riktat
+         * uppslag). En läsväg för planen och riskkortet ([PortfolioRiskSource]), så de mäter samma likvid.
+         */
+        suspend fun loadWatches(
+            switchWatchRepository: SwitchWatchRepository,
+            suggestionRecordRepository: SuggestionRecordRepository,
+            excludeWatchId: Long? = null
+        ): WatchInputs {
+            val watches = switchWatchRepository.getAll().filterNot { it.id == excludeWatchId }
+            val buyIsinByRecordId = suggestionRecordRepository
+                .observeByIds(watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }).first()
+                .associate { it.id to it.buyIsin }
+            return WatchInputs(watches, buyIsinByRecordId)
+        }
+
+        /**
          * Läser läget. Likviden räknas ur **alla** bevakningar utom [excludeWatchId] — den bevakning
          * vars målnivå just ska väljas räknas inte på någon nivå ([SwitchPlanCalc.preselectTargetLevel]).
          */
@@ -56,14 +74,12 @@ class SwitchPlanInputs(
             val heldIsins = withValue.mapNotNull { it.fund.isin }.distinct()
             val metadataByIsin = if (heldIsins.isEmpty()) emptyMap() else metadataFor(heldIsins)
 
-            // Alla bevakningar (de stängdas köp får inte förbrukas igen), de öppnas källförslags
-            // köpfond (riktat uppslag) och innehavens redan lästa metadata.
-            val watches = switchWatchRepository.getAll().filterNot { it.id == excludeWatchId }
-            val buyIsinByRecordId = suggestionRecordRepository
-                .observeByIds(watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }).first()
-                .associate { it.id to it.buyIsin }
+            val (watches, buyIsinByRecordId) = loadWatches(switchWatchRepository, suggestionRecordRepository, excludeWatchId)
             val pending = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, metadataByIsin, today)
             return SwitchPlanInputs(funds, transactions, withValue, prices, metadataByIsin, pending)
         }
     }
 }
+
+/** Bevakningarna och källförslagens köpfond per rad-id — se [SwitchPlanInputs.loadWatches]. */
+data class WatchInputs(val watches: List<SwitchWatch>, val buyIsinByRecordId: Map<Long, String>)

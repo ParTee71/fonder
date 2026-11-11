@@ -57,7 +57,7 @@ Två moduler, som i ReseApoteket (#171):
 Paketnamnen är oförändrade (`se.partee71.fonder.domain.…`). De use case som läser repositories,
 DataStore eller schemaläggaren ligger kvar i `:app` i samma paket `domain/usecase`, eftersom
 repository-gränssnitten finns i `data/`: `RecordTransaction`, `SwitchPlanInputs`,
-`TargetLevelPreselection`, `DismissedPlanSource`, `InProgressSwitches`, `SwitchTransitions` +
+`TargetLevelPreselection`, `PortfolioRiskSource`, `DismissedPlanSource`, `InProgressSwitches`, `SwitchTransitions` +
 `SwitchChoicesSource`, `SwitchQuestions` + `FollowedSuggestionLookup`, `PendingDecisionsSource`
 (med `PendingDecisions`/`OpenSwitchWatch` i samma fil), `SwitchRows` (bygger på `PendingDecisions`)
 och `FacitSummary`. Inget i `:core` beror på Room – Room-entiteterna står i `data/room` och mappas
@@ -106,6 +106,10 @@ domain/
                   PortfolioExposureCalc (exponeringskarta: fondtyp/region/index-aktivt, POR-9, #66) ·
                   RiskProfileCalc (målrisknivå ur enkätsvar, SET-3, #68) ·
                   PortfolioRiskCalc (innehavens värdeviktade risknivå, HEM-7, #68) ·
+                  SwitchEffectCalc (riskkortets läge, andel per nivå mot målet och bytesplanens effekt per
+                  nivå, kumulativt, HEM-7/HEM-17, #238) ·
+                  PortfolioRiskSource (riskkortets underlag: profilen, likviden på väg och planen lagd på —
+                  en källa för Hem och Beslut, HEM-7/HEM-17, #238) ·
                   SwitchWatchCalc (utveckling sedan säljdagen för bevakade alternativ, ANA-12, #114) ·
                   SwitchPlanInputs (portföljläget bytesplanen och målnivåns förval räknas på: innehav med
                   värde, metadata, likvid på väg — en läsväg för bakgrundskörningen och förvalet, BYT-3) ·

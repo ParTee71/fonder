@@ -305,6 +305,15 @@ private fun ColumnScope.Values() {
     ExposureBar(label = "Sverige", fraction = 0.46)
     ExposureBar(label = "Nordamerika", fraction = 0.38, color = MaterialTheme.colorScheme.secondary)
     ExposureBar(label = "Övrigt", fraction = 0.16, color = MaterialTheme.colorScheme.outline)
+    Label("ExposureBar med mål")
+    ExposureBar(label = "Nivå 2", fraction = 0.08, target = 0.20)
+    ExposureBar(
+        label = "Nivå 4",
+        fraction = 0.52,
+        target = 0.45,
+        color = MaterialTheme.colorScheme.secondary,
+        targetColor = MaterialTheme.colorScheme.primary
+    )
 }
 
 @Composable

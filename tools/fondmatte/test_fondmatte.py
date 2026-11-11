@@ -654,3 +654,33 @@ class OverlapTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SwitchEffectTest(unittest.TestCase):
+    def test_in_line_mixed_and_too_little(self):
+        # Inom 5 pp överallt: i linje, oavsett snitt.
+        r = fm.switch_effect({"level_values": {"3": 48, "4": 52}, "target": {"3": 0.5, "4": 0.5}})
+        self.assertEqual(r["direction"], "IN_LINE")
+        # 50/50 på nivå 2 och 6 mot allt på 4: rätt snitt, fel mix.
+        r = fm.switch_effect({"level_values": {"2": 50, "6": 50}, "target": {"4": 1.0}})
+        self.assertEqual(r["direction"], "MIXED")
+        r = fm.switch_effect({"level_values": {"2": 100}, "target": {"4": 1.0}, "moves": [{"from": 2, "to": 4, "amount": 100}]})
+        self.assertEqual(r["direction"], "TOO_LITTLE_RISK")
+        self.assertAlmostEqual(r["steps"][0]["to"]["after"], 1.0, places=12)
+        self.assertEqual(r["total_to_move"], 100.0)
+
+    def test_pending_counts_on_target_level_and_empty_portfolio(self):
+        r = fm.switch_effect({"level_values": {"4": 50}, "pending": {"2": 50}, "target": {"2": 0.5, "4": 0.5}})
+        self.assertEqual(r["direction"], "IN_LINE")
+        r = fm.switch_effect({"level_values": {}, "target": {"3": 1.0}})
+        self.assertIsNone(r["direction"])
+        self.assertEqual(r["levels"], [{"level": 3, "target": 1.0, "actual": 0.0}])
+
+    def test_amount_is_clamped_and_reach_is_reported(self):
+        r = fm.switch_effect({"level_values": {"5": 25, "2": 75}, "target": {"2": 1.0}, "moves": [{"from": 5, "to": 2, "amount": 40}]})
+        self.assertAlmostEqual(r["steps"][0]["from"]["after"], 0.0, places=12)
+        self.assertTrue(r["reaches_target_after_plan"])
+        self.assertEqual(r["total_to_move"], 25.0)
+        r = fm.switch_effect({"level_values": {"4": 70, "2": 30}, "target": {"2": 0.5, "4": 0.5}, "moves": [{"from": 4, "to": 2, "amount": 10}]})
+        self.assertFalse(r["reaches_target_after_plan"])
+

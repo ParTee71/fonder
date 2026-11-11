@@ -3,7 +3,7 @@
 App för att hålla koll på fonder: ladda kurser, registrera transaktioner, räkna ut värde
 och visa utveckling i diagram — med molnbackup via Google Drive.
 
-> Version: 0.83.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
+> Version: 0.84.0 (följer `versionName`/[KRAVLISTA.md](KRAVLISTA.md))
 
 **Kravspecifikation:** [KRAVLISTA.md](KRAVLISTA.md) · **Utvecklingsregler:** [CLAUDE.md](CLAUDE.md)
 
@@ -138,6 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
+| 0.84.0 | Riskkortet på Översikten har en stapel per risknivå med ett streck för målet, en mening om läget (för mycket risk, för lite, fel mix eller i linje) och hur mycket bytesplanen flyttar. Likvid som väntar på köp räknas nu på sin målnivå, som i bytesplanen (#238). |
 | 0.83.0 | Köp vars datum importen uppskattat ur kurshistoriken märks "uppskattat datum" i Händelser, och i den utfällda raden går datumet att rätta med datumväljaren – märkningen försvinner då. Databasversion 21 (#222). |
 | 0.82.2 | Intern: komponentbiblioteket android-ui 0.9.2 med rättningar – Ångra får sina 5 s från att meddelandet syns, "Försök igen" under en pågående läsning visar inte den avbrutna läsningen som fel, och redigeringens meny visas först när det sparade är läst. Utseendet är oförändrat (#224). |
 | 0.82.1 | Importens uppskattade inköpsdatum är deterministiskt: bland dagar nära snittkursen väljs den senaste, och datumet markeras som säkert bara när alla träffar ligger inom 30 dagar – annars ombeds användaren välja datum (#200). |

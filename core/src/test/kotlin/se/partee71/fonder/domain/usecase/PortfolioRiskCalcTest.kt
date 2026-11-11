@@ -103,51 +103,12 @@ class PortfolioRiskCalcTest {
         assertEquals(1, result.excludedCount)
     }
 
-    // --- Avvikelse per risknivå (HEM-7, issue #71) ---
+    // --- Värde per risknivå (HEM-7, issue #71/#75/#238) ---
+    // Mål mot faktisk per nivå räknas sedan #238 i SwitchEffectCalc (SwitchEffectCalcTest);
+    // här ligger regressionen för nämnaren, som valueByLevel bär.
 
     @Test
-    fun `deviationByLevel racknar mal minus faktisk per niva`() {
-        val deviations = PortfolioRiskCalc.deviationByLevel(
-            targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40)
-        )
-
-        val byLevel = deviations.associateBy { it.level }
-        assertEquals(0.15, byLevel.getValue(3).deviationFraction, 1e-9)
-        assertEquals(0.0, byLevel.getValue(4).deviationFraction, 1e-9)
-        assertEquals(-0.15, byLevel.getValue(5).deviationFraction, 1e-9)
-    }
-
-    @Test
-    fun `deviationByLevel sorterar storst undervikning forst`() {
-        val deviations = PortfolioRiskCalc.deviationByLevel(
-            targetAllocation = mapOf(3 to 0.25, 4 to 0.5, 5 to 0.25),
-            actualAllocation = mapOf(3 to 0.10, 4 to 0.50, 5 to 0.40)
-        )
-
-        assertEquals(listOf(3, 4, 5), deviations.map { it.level })
-    }
-
-    @Test
-    fun `deviationByLevel tar med niva som bara finns pa ena sidan med full avvikelse`() {
-        val deviations = PortfolioRiskCalc.deviationByLevel(
-            targetAllocation = mapOf(4 to 1.0),
-            actualAllocation = mapOf(4 to 0.6, 6 to 0.4)
-        )
-
-        val byLevel = deviations.associateBy { it.level }
-        assertEquals(0.4, byLevel.getValue(4).deviationFraction, 1e-9)
-        assertEquals(0.0, byLevel.getValue(6).targetFraction, 1e-9)
-        assertEquals(-0.4, byLevel.getValue(6).deviationFraction, 1e-9)
-    }
-
-    @Test
-    fun `deviationByLevel med tomma fordelningar ger en tom lista`() {
-        assertEquals(emptyList<PortfolioRiskCalc.LevelDeviation>(), PortfolioRiskCalc.deviationByLevel(emptyMap(), emptyMap()))
-    }
-
-    @Test
-    fun `actualAllocation normaliserar mot det klassificerade vardet, inte hela portfoljen`() {
+    fun `valueByLevel tar bara det klassificerade vardet, inte hela portfoljen`() {
         // Regression (issue #75): Bucket.fraction divideras med includedValueKr, som också rymmer
         // innehav med okänd risknivå. Andelarna summerade då till mindre än 1 medan målet
         // summerar till exakt 1 — så varje nivå såg underviktad ut.
@@ -162,21 +123,22 @@ class PortfolioRiskCalcTest {
         assertEquals(0.7, exposure.byRiskLevel.buckets.single().fraction, 1e-9)
         assertEquals(0.3, exposure.byRiskLevel.unknownFraction, 1e-9)
 
-        val actual = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel)
+        val valueByLevel = PortfolioRiskCalc.valueByLevel(exposure.byRiskLevel)
 
-        assertEquals(mapOf(4 to 1.0), actual)
+        assertEquals(mapOf(4 to 700.0), valueByLevel)
         // 100 % av det klassificerade värdet ligger på målnivån — ingen avvikelse att åtgärda.
-        val deviation = PortfolioRiskCalc.deviationByLevel(mapOf(4 to 1.0), actual).single()
-        assertEquals(0.0, deviation.deviationFraction, 1e-9)
+        val effect = SwitchEffectCalc.compute(valueByLevel, emptyMap(), mapOf(4 to 1.0), emptyList())!!
+        assertEquals(1.0, effect.levels.single().actualFraction, 1e-9)
+        assertEquals(SwitchEffectCalc.Direction.IN_LINE, effect.direction)
     }
 
     @Test
-    fun `actualAllocation ger en tom fordelning utan klassificerat varde`() {
+    fun `valueByLevel ar tom utan klassificerat varde`() {
         val exposure = PortfolioExposureCalc.compute(
             listOf(portfolioHolding("A", currentValue = 1000.0)),
             mapOf("SEA" to metadata("SEA", risk = null))
         )
 
-        assertEquals(emptyMap<Int, Double>(), PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel))
+        assertEquals(emptyMap<Int, Double>(), PortfolioRiskCalc.valueByLevel(exposure.byRiskLevel))
     }
 }

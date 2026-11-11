@@ -1,0 +1,11 @@
+{
+  "_kommentar": "Påhittad portfölj (issue #238): mål 20/35/45 på nivå 2–4, för mycket på 4 och 5. 2 000 kr likvid väntar på köp på nivå 3 (BYT-3). Tre byten i följd, det tredje utan känt belopp.",
+  "level_values": {"2": 8000, "3": 24000, "4": 52000, "5": 14000},
+  "pending": {"3": 2000},
+  "target": {"2": 0.20, "3": 0.35, "4": 0.45},
+  "moves": [
+    {"from": 5, "to": 2, "amount": 7000},
+    {"from": 5, "to": 3, "amount": 5000},
+    {"from": 4, "to": 2, "amount": null}
+  ]
+}

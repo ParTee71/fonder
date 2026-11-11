@@ -33,7 +33,7 @@ import se.partee71.fonder.domain.model.TransactionType
  * sitt återstående värde och kan användas till en annan underviktad nivå.
  *
  * Fördelningen räknas mot portföljens **klassificerade** värde — innehav med känd risknivå och
- * känd kurs — precis som [PortfolioRiskCalc.actualAllocation], så planen och riskkortet ovanför
+ * känd kurs — precis som [PortfolioRiskCalc.valueByLevel] och [SwitchEffectCalc], så planen och riskkortet ovanför
  * den beskriver samma procenttal. Ett innehav som saknar avgiftsuppgift räknas med i sin nivås
  * vikt men kan inte väljas som säljkandidat (avgiften avgör vilken position som säljs).
  *
@@ -279,8 +279,11 @@ object SwitchPlanCalc {
         return result
     }
 
-    /** Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. */
-    private fun gapsPp(
+    /**
+     * Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. Delad med
+     * [SwitchEffectCalc], så riskkortets läge och planen mäter gapen på samma sätt.
+     */
+    internal fun gapsPp(
         targetAllocation: Map<Int, Double>,
         levelValues: Map<Int, Double>,
         totalValueKr: Double
@@ -311,7 +314,7 @@ object SwitchPlanCalc {
         // nämnaren och ur sin egen nivås vikt — en perfekt balanserad 50/50-portfölj där ena
         // fonden saknade avgift såg då ut som 0/100 och fick ett byte som gjorde den 75/25
         // (issue #75). Nämnaren är portföljens klassificerade värde, samma som
-        // [PortfolioRiskCalc.actualAllocation] använder, så procenttalen i planen och i
+        // [SwitchEffectCalc] använder, så procenttalen i planen och i
         // riskkortet ovanför beskriver samma fördelning.
         val positions = positionsOf(holdings, metadataByIsin)
         // Likviden på väg (BYT-3) väger på sin målnivå och i nämnaren, men ligger inte i sellSlots.

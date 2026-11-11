@@ -58,7 +58,7 @@ object PortfolioExposureCalc {
          * TP-21), till skillnad från [byType]/[byRegion] sorterad **stigande på nivå** i stället
          * för fallande på värde — en ordnad skala ska visas i sin egen ordning, inte om-sorterad
          * efter storlek (POR-9, issue #71). Konsumeras av HEM-7:s mål-mot-faktisk-jämförelse via
-         * [PortfolioRiskCalc.deviationByLevel].
+         * [PortfolioRiskCalc.valueByLevel] och [SwitchEffectCalc].
          */
         val byRiskLevel: Dimension = Dimension.EMPTY,
         val indexStatus: IndexStatusSplit,
