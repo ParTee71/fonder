@@ -39,14 +39,18 @@ import se.partee71.fonder.domain.usecase.CheaperAlternative
 import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
+import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.testing.captureLightAndDark
+import se.partee71.fonder.ui.components.FundFacts
+import se.partee71.fonder.ui.components.PULL_TO_REFRESH_TEST_TAG
 import se.partee71.fonder.ui.theme.FonderTheme
 import se.partee71.ui.common.ListUiState
 
 /**
- * Fliken Beslut (NAV-9) i JVM med Robolectric: rubrikraden mot riskprofilen, listan Byten (BYT-4)
- * med tillstånd och beslut, tomt läge, vägen till Facit och skärmdumpar ljust + mörkt. Förslagens och bevakningarnas egna interaktioner testas
+ * Fliken Beslut (NAV-9, issue #240) i JVM med Robolectric: riskkortet med "Ändra mål", råden (BYT-4)
+ * med effekt och beslut, infokortet (BYT-5), tomt läge, vägen till Facit och skärmdumpar ljust + mörkt. Förslagens och bevakningarnas egna interaktioner testas
  * instrumenterat i `androidTest/…/ui/beslut/BeslutScreenTest` (flyttade från Hem).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -56,7 +60,7 @@ class BeslutScreenTest {
     val composeRule = createComposeRule()
 
     private val balanced = RiskProfile(
-        targetAllocation = mapOf(4 to 1.0),
+        targetAllocation = mapOf(2 to 0.20, 3 to 0.35, 4 to 0.45),
         answers = RiskProfileAnswers(TimeHorizon.SJU_TILL_15_AR, DownturnReaction.GOR_INGET, PrimaryGoal.BALANSERAD)
     )
 
@@ -112,31 +116,40 @@ class BeslutScreenTest {
     )
 
     /**
-     * Mockupens läge (BYT-4): ett sålt planbyte (planrad 1 ersatt av sin bevakning), ett föreslaget,
+     * Mockupens läge (C2, BYT-4): ett sålt planbyte (planrad 1 ersatt av sin bevakning), ett föreslaget,
      * ett kvitterat i Facit, ett billigare alternativ, och i den hopfällda sektionen ett köpt, ett
-     * utgånget och ett avstått byte; sju följda i facit med deras resultat i kronor.
+     * utgånget och ett överhoppat byte; sju följda i facit med deras resultat i kronor. Riskkortet
+     * räknas som i appen ([PortfolioRiskSource.summary]) på mockupens fördelning.
      */
-    private val full = BeslutUiState(
-        riskProfile = balanced,
-        accountType = AccountType.ISK_KF,
-        followedCount = 7,
-        followedExcessKr = 4_210.0
-    ).withDecisions(
-        PendingDecisions(
-            openWatches = listOf(
-                OpenSwitchWatch(
-                    watchId = 3, sellFundName = "Tillväxtmarknad Bred", daysWaiting = 2, candidateCount = 3,
-                    leaderName = "Global Indexfond A", leaderChangeFraction = 0.018, proceedsKr = 18_400.0,
-                    sourceRecordId = 11, sourceKind = SuggestionKind.RISK_PLAN
-                )
-            ),
-            switchPlan = listOf(planRow1, planRow2, planRow3),
-            cheaperAlternatives = listOf(cheaper),
-            dismissedSuggestions = listOf(planRow2.copy(recordId = 14, sellFundName = "Aktiefond Investmentbolag", buyFundName = "Zero"))
-        ).withSwitches(closedWatches, today)
-    )
+    private val full: BeslutUiState = run {
+        val state = BeslutUiState(
+            riskProfile = balanced,
+            accountType = AccountType.ISK_KF,
+            followedCount = 7,
+            followedExcessKr = 4_210.0
+        ).withDecisions(
+            PendingDecisions(
+                openWatches = listOf(
+                    OpenSwitchWatch(
+                        watchId = 3, sellFundName = "Tillväxtmarknad Bred", daysWaiting = 2, candidateCount = 3,
+                        leaderName = "Global Indexfond A", leaderChangeFraction = 0.018, proceedsKr = 18_400.0,
+                        sourceRecordId = 11, sourceKind = SuggestionKind.RISK_PLAN
+                    )
+                ),
+                switchPlan = listOf(planRow1, planRow2, planRow3),
+                cheaperAlternatives = listOf(cheaper),
+                dismissedSuggestions = listOf(planRow2.copy(recordId = 14, sellFundName = "Aktiefond Investmentbolag", buyFundName = "Zero"))
+            ).withSwitches(closedWatches, today)
+        )
+        val base = PortfolioRiskSource.RiskBase(
+            riskProfile = balanced,
+            valueByLevelKr = mapOf(2 to 8_000.0, 3 to 26_000.0, 4 to 52_000.0, 5 to 14_000.0),
+            pendingProceedsByLevel = emptyMap()
+        )
+        state.copy(riskSummary = PortfolioRiskSource.summary(base, state.decisions.switchPlan))
+    }
 
-    /** Allt avstått (HEM-14), ett byte i planen och ett billigare alternativ: inget att besluta, men raden för att ångra finns kvar. */
+    /** Allt överhoppat (HEM-14), ett byte i planen och ett billigare alternativ: inget att besluta, men raden för att ångra finns kvar. */
     private val withDismissed = full.withDecisions(
         PendingDecisions(
             dismissedSuggestions = listOf(planRow2),
@@ -144,23 +157,76 @@ class BeslutScreenTest {
         ).withSwitches(emptyList(), today)
     )
 
+    private val planInfo = SuggestionInfo(
+        row = SwitchRow.Suggested(planRow2),
+        proposed = FundFacts(
+            name = "Räntefond Kort",
+            risk = 2,
+            totalFeePercent = 0.20,
+            oneYearFraction = 0.039,
+            type = "Räntefond, Korta räntor",
+            company = "Nordiska Fonder AB"
+        ),
+        alternatives = listOf(
+            FundFacts(name = "Kort Ränta Index", risk = 2, totalFeePercent = 0.10, oneYearFraction = 0.034, type = "Räntefond"),
+            FundFacts(name = "Obligationsfond Sverige", risk = 2, totalFeePercent = 0.45, oneYearFraction = 0.041, type = "Räntefond"),
+            FundFacts(name = "Nordisk Företagsobligation", risk = 2, totalFeePercent = 0.60, oneYearFraction = -0.008, type = "Räntefond")
+        )
+    )
+
     @Test
-    fun `rubrikraden visar riskprofil mal och kontotyp och Andra oppnar riskprofilen`() {
+    fun `riskkortet visar laget och malet och Andra mal oppnar riskprofilen`() {
         var opened = 0
         composeRule.setContent { FonderTheme { BeslutContent(state = full, onOpenRiskProfile = { opened++ }) } }
 
-        composeRule.onNodeWithText("Mot riskprofil 4,00").assertIsDisplayed()
-        composeRule.onNodeWithText("Balanserad tillväxt · ISK/KF").assertIsDisplayed()
-        composeRule.onNodeWithText("Ändra").performClick()
+        composeRule.onNodeWithText("Du har mer risk än ditt mål").assertIsDisplayed()
+        composeRule.onNodeWithText("Ditt mål är Balanserad tillväxt.", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Mot riskprofil", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Ändra mål").performClick()
 
         assertEquals(1, opened)
     }
 
     @Test
-    fun `utan profil sags det ut i stallet for en gissad niva`() {
-        composeRule.setContent { FonderTheme { BeslutContent(state = BeslutUiState(list = ListUiState.Empty)) } }
+    fun `utan profil visas Satt ett mal med vad som kravs`() {
+        var opened = 0
+        composeRule.setContent { FonderTheme { BeslutContent(state = BeslutUiState(list = ListUiState.Empty), onOpenRiskProfile = { opened++ }) } }
 
-        composeRule.onNodeWithText("Ingen riskprofil satt").assertIsDisplayed()
+        composeRule.onNodeWithText("Sätt ett mål").assertIsDisplayed()
+        composeRule.onNodeWithText("Byten föreslås när du satt ett mål och kontotypen ISK/KF.").assertIsDisplayed()
+        composeRule.onNodeWithText("Ändra mål").performClick()
+
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun `med profil men utan riskkort finns Andra mal anda`() {
+        // Kortets underlag läses ännu, eller målet saknar fördelning — vägen till Riskprofil ska finnas.
+        var opened = 0
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(riskSummary = null), onOpenRiskProfile = { opened++ }) } }
+
+        composeRule.onNodeWithText("Ditt mål är Balanserad tillväxt.").assertIsDisplayed()
+        composeRule.onNodeWithText("Sätt ett mål").assertDoesNotExist()
+        composeRule.onNodeWithText("Ändra mål").performClick()
+
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun `utan ISK eller KF sags gaten ut och ingen omrakningsknapp finns`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(accountType = AccountType.DEPA_AF)) } }
+
+        composeRule.onNodeWithText("Byten föreslås när du satt ett mål och kontotypen ISK/KF.").assertIsDisplayed()
+        composeRule.onNodeWithText("Räkna om bytesplanen").assertDoesNotExist()
+    }
+
+    @Test
+    fun `med gaten finns ingen omrakningsknapp utan dra for att uppdatera`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
+
+        composeRule.onNodeWithText("Räkna om bytesplanen").assertDoesNotExist()
+        composeRule.onNodeWithText("Byten föreslås", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithTag(PULL_TO_REFRESH_TEST_TAG).assertExists()
     }
 
     @Test
@@ -171,7 +237,7 @@ class BeslutScreenTest {
         }
 
         composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
-        composeRule.onNodeWithText("Byten").assertDoesNotExist()
+        composeRule.onNodeWithText("Så kommer du närmare målet").assertDoesNotExist()
         composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Facit · 1 följt förslag"))
         composeRule.onNodeWithText("Facit · 1 följt förslag").performClick()
 
@@ -179,7 +245,7 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun `lasfel visar bara felet utan profilrad och facitrad`() {
+    fun `lasfel visar bara felet utan riskkort och facitrad`() {
         composeRule.setContent {
             FonderTheme {
                 BeslutContent(state = BeslutUiState(list = ListUiState.Error(AppErrors.map(DataError.Database)), followedCount = 1))
@@ -187,7 +253,7 @@ class BeslutScreenTest {
         }
 
         composeRule.onNodeWithText("Kunde inte visa innehållet").assertIsDisplayed()
-        composeRule.onNodeWithText("Ingen riskprofil satt").assertDoesNotExist()
+        composeRule.onNodeWithText("Sätt ett mål").assertDoesNotExist()
         composeRule.onNodeWithText("Facit · 1 följt förslag").assertDoesNotExist()
     }
 
@@ -214,53 +280,73 @@ class BeslutScreenTest {
     }
 
     @Test
-    fun `listan Byten visar ett byte per rad med tillstandschip i mockupens ordning`() {
+    fun `raden visar rad som konsekvens med chip effekt och avgift`() {
         composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
 
-        composeRule.onNodeWithText("Byten").assertIsDisplayed()
-        // Föreslaget (2) + Avgift (1) + Sålt (1); det kvitterade väntar inte.
-        composeRule.onNodeWithText("3 väntar på dig").assertIsDisplayed()
-        // Det sålda planbytet ersätter planrad 1 — ingen "1. Sälj Tillväxtmarknad Bred …" finns kvar.
-        composeRule.onAllNodesWithText("1. Sälj", substring = true).assertCountEquals(0)
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        // Varje rad är en nod (chip, ursprung, rubrik, underlag) — exakt textmatchning per del.
+        list.performScrollToNode(hasText("Så kommer du närmare målet"))
+        // Föreslaget (1) + Avgift (1) + Sålt (1); det kvitterade väntar inte.
+        composeRule.onNodeWithText("3 väntar på dig").assertIsDisplayed()
+        // Varje rad är en nod (chip, rubrik, effekt) — exakt textmatchning per del.
         listOf(
-            "Sålt · dag 2 av 14",
-            "Bytesplan · byte 1",
-            "Tillväxtmarknad Bred → välj köpfond",
-            "${MoneyFormat.kr(18_400.0)} väntar på likviden · 3 bevakade alternativ",
-            "Bytesplan · byte 2",
-            "2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)",
-            "Sälj Sverige Småbolag → Köp Småbolag Index",
-            "Sparar ca ${MoneyFormat.kr(960.0)}/år · avgift 1,40 % → 0,40 %",
-            "Avslutade och avstådda (3)",
-            "Hur gick det?"
+            "Sålt · dag 2 av 14 · välj köpfond",
+            "Tillväxtmarknad Bred → ?",
+            "${MoneyFormat.krWhole(18_400.0)} väntar.",
+            "Sänker risken · steg 2",
+            "Sverige Småbolag → Räntefond Kort, ${MoneyFormat.krWhole(12_500.0)}",
+            // Steg 2 räknat från mockupens fördelning: nivå 5 har 14 000 av 100 000 kr, bytet flyttar 12 500 kr.
+            // En decimal, som riskkortets staplar.
+            "Nivå 5 ${MoneyFormat.percent(0.14)} → ${MoneyFormat.percent(0.015)}, nivå 2 ${MoneyFormat.percent(0.08)} → ${MoneyFormat.percent(0.205)}. Dessutom 1,05 % lägre avgift per år.",
+            "Sparar avgift · påverkar inte risken",
+            "Sverige Småbolag → Småbolag Index",
+            "Samma sorts fond, 1,40 % → 0,40 % i avgift. Ca ${MoneyFormat.krWhole(960.0)}/år.",
+            "Avslutade och överhoppade (3)",
+            "Så har råden gått"
         ).forEach { text ->
             list.performScrollToNode(hasText(text))
             composeRule.onAllNodesWithText(text).assertCountEquals(1)
         }
-        // Chipen för förslagen: planens "Föreslaget" och det billigare alternativets "Avgift".
-        list.performScrollToNode(hasText("2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)"))
-        composeRule.onNode(hasText("2. Sälj Sverige Småbolag (nivå 5) → Köp Räntefond Kort (nivå 2)")).assert(hasText("Föreslaget"))
-        list.performScrollToNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index"))
-        composeRule.onNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index")).assert(hasText("Avgift"))
+        // Inga av de gamla orden (acceptanskriterierna i #240).
+        listOf("likviden", "Avgiftsskillnad", "Bytesplan · byte", "Registrera säljet", "Avstå", "Hur gick det?").forEach { old ->
+            composeRule.onAllNodesWithText(old, substring = true).assertCountEquals(0)
+        }
         composeRule.onNodeWithText("Inga byten att besluta om").assertDoesNotExist()
     }
 
     @Test
-    fun `salt visar ledaren med tecken och oppnar bevakningen`() {
+    fun `forbehallet sager att appen aldrig byter och hur ofta raden stammer`() {
+        composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
+
+        val text = "Appen byter aldrig åt dig – du gör bytet hos din bank. Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria."
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText(text))
+        composeRule.onNodeWithText(text).assertExists()
+    }
+
+    @Test
+    fun `ett steg som bygger pa ett tidigare sager det`() {
+        val second = planRow2.copy(recordId = 15, planIndex = 2, sellFundName = "Energi Norden", buyFundName = "Räntefond Bred", followed = false)
+        val state = full.withDecisions(PendingDecisions(switchPlan = listOf(planRow2, second)).withSwitches(emptyList(), today))
+        composeRule.setContent { FonderTheme { BeslutContent(state = state) } }
+
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Gör steg 2 först.", substring = true))
+        composeRule.onAllNodesWithText("Gör steg", substring = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun `salt visar ledaren med tecken och Valj kopfond oppnar bevakningen`() {
         var opened: Long? = null
         composeRule.setContent { FonderTheme { BeslutContent(state = full, onOpenSwitchWatch = { opened = it }) } }
 
-        composeRule.onNodeWithText("Bäst sedan säljdagen: Global Indexfond A ${MoneyFormat.percentSigned(0.018)}", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Öppna bevakningen: Tillväxtmarknad Bred").performClick()
+        composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasContentDescription("Välj köpfond: Tillväxtmarknad Bred"))
+        composeRule.onNodeWithText("Bäst hittills: Global Indexfond A ${MoneyFormat.percentSigned(0.018)}", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Välj köpfond: Tillväxtmarknad Bred").performClick()
 
         assertEquals(3L, opened)
     }
 
     @Test
-    fun `registrera saljet och avsta visas pa ett oppet forslag och anropar sina callbacks`() {
-        // HEM-14/BYT-2: "Registrera säljet" öppnar säljformuläret för förslaget, "Avstå" döljer paret.
+    fun `jag har salt och hoppa over visas pa ett oppet forslag och anropar sina callbacks`() {
+        // HEM-14/BYT-2: "Jag har sålt" öppnar säljformuläret för förslaget, "Hoppa över" döljer paret.
         var followed: SwitchPlanResolver.Suggestion? = null
         var dismissed: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
@@ -274,25 +360,25 @@ class BeslutScreenTest {
         }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasContentDescription("Avstå: sälj Sverige Småbolag, köp Räntefond Kort"))
-        composeRule.onNodeWithContentDescription("Avstå: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
-        composeRule.onNodeWithContentDescription("Registrera säljet: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
+        list.performScrollToNode(hasContentDescription("Hoppa över: Sverige Småbolag → Räntefond Kort"))
+        composeRule.onNodeWithContentDescription("Hoppa över: Sverige Småbolag → Räntefond Kort").performClick()
+        composeRule.onNodeWithContentDescription("Registrera sälj: Sverige Småbolag → Räntefond Kort").performClick()
         // Det sålda bytet erbjuds inte att säljas igen (BYT-1).
-        composeRule.onAllNodesWithContentDescription("Registrera säljet: sälj Tillväxtmarknad Bred, köp Global Indexfond A").assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription("Registrera sälj: Tillväxtmarknad Bred → Global Indexfond A").assertCountEquals(0)
 
         assertEquals(12L, dismissed?.recordId)
         assertEquals(12L, followed?.recordId)
     }
 
     @Test
-    fun `ett kvitterat forslag erbjuder Bevaka alternativ i stallet for Registrera saljet`() {
+    fun `ett kvitterat forslag erbjuder Bevaka alternativ i stallet for Jag har salt`() {
         // FollowedToggleRow finns bara i Facit (SET-5) sedan Följ går via formuläret (BYT-2).
         var watched: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent { FonderTheme { BeslutContent(state = full, onStartSwitchWatch = { watched = it }) } }
 
         composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText("Bevaka alternativ"))
         composeRule.onAllNodesWithText("Genomförd").assertCountEquals(0)
-        composeRule.onAllNodesWithContentDescription("Registrera säljet: sälj Energi Norden, köp Räntefond Bred").assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription("Registrera sälj: Energi Norden → Räntefond Bred").assertCountEquals(0)
         composeRule.onNodeWithText("Bevaka alternativ").performClick()
 
         assertEquals(13L, watched?.recordId)
@@ -307,31 +393,94 @@ class BeslutScreenTest {
         }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index"))
-        composeRule.onNodeWithContentDescription("Avstå: sälj Sverige Småbolag, köp Småbolag Index").performClick()
-        composeRule.onNodeWithContentDescription("Registrera säljet: sälj Sverige Småbolag, köp Småbolag Index").performClick()
+        list.performScrollToNode(hasContentDescription("Hoppa över: Sverige Småbolag → Småbolag Index"))
+        composeRule.onNodeWithContentDescription("Hoppa över: Sverige Småbolag → Småbolag Index").performClick()
+        composeRule.onNodeWithContentDescription("Registrera sälj: Sverige Småbolag → Småbolag Index").performClick()
 
         assertEquals(SuggestionKind.FEE, dismissed?.kind)
         assertEquals(21L, followed?.recordId)
     }
 
     @Test
-    fun `avslutade och avstadda ligger hopfallda och avstadda kan angras`() {
+    fun `utropstecknet oppnar infokortet for radet`() {
+        var shown: SwitchRow.Suggested? = null
+        composeRule.setContent { FonderTheme { BeslutContent(state = full, onShowInfo = { shown = it }) } }
+
+        val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
+        list.performScrollToNode(hasContentDescription("Mer om fonderna: Sverige Småbolag → Räntefond Kort"))
+        composeRule.onNodeWithContentDescription("Mer om fonderna: Sverige Småbolag → Räntefond Kort").performClick()
+        assertEquals(12L, shown?.suggestion?.recordId)
+
+        list.performScrollToNode(hasContentDescription("Mer om fonderna: Sverige Småbolag → Småbolag Index"))
+        composeRule.onNodeWithContentDescription("Mer om fonderna: Sverige Småbolag → Småbolag Index").performClick()
+        assertEquals(21L, shown?.suggestion?.recordId)
+    }
+
+    @Test
+    fun `infokortet visar fondens fakta och tre alternativ och Jag har salt stanger och foljer`() {
+        var followed: SwitchPlanResolver.Suggestion? = null
+        var hidden = 0
+        composeRule.setContent {
+            FonderTheme { BeslutContent(state = full.copy(info = planInfo), onFollow = { followed = it }, onHideInfo = { hidden++ }) }
+        }
+
+        composeRule.onNodeWithText("Vårt förslag").assertExists()
+        composeRule.onNodeWithText("Nordiska Fonder AB").assertExists()
+        composeRule.onNodeWithText("Räntefond, Korta räntor").assertExists()
+        composeRule.onNodeWithText("Andra fonder på risknivå 2").assertExists()
+        listOf("Kort Ränta Index", "Obligationsfond Sverige", "Nordisk Företagsobligation").forEach {
+            composeRule.onNodeWithText(it, substring = true).assertExists()
+        }
+        composeRule.onNodeWithText("Jag har sålt Sverige Småbolag").performClick()
+
+        assertEquals(12L, followed?.recordId)
+        assertEquals(1, hidden)
+    }
+
+    @Test
+    fun `infokortet utan alternativ sager det och saknade fakta star som okant`() {
+        var hidden = 0
+        val bare = planInfo.copy(proposed = FundFacts(name = "Räntefond Kort", risk = 2), alternatives = emptyList())
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(info = bare), onHideInfo = { hidden++ }) } }
+
+        composeRule.onNodeWithText("Inga andra köpbara fonder hittades på nivå 2.").assertExists()
+        composeRule.onAllNodesWithText("okänt", substring = true).assertCountEquals(4)
+        composeRule.onNodeWithText("Stäng").performClick()
+
+        assertEquals(1, hidden)
+    }
+
+    @Test
+    fun `infokortet for ett billigare alternativ visar de andra billigare`() {
+        val info = SuggestionInfo(
+            row = SwitchRow.Suggested(cheaper.suggestion, cheaper = cheaper),
+            proposed = FundFacts(name = "Småbolag Index", risk = 5, totalFeePercent = 0.40),
+            alternatives = emptyList()
+        )
+        composeRule.setContent { FonderTheme { BeslutContent(state = full.copy(info = info)) } }
+
+        composeRule.onNodeWithText("Andra billigare alternativ").assertExists()
+        composeRule.onNodeWithText("Inga andra billigare alternativ hittades.").assertExists()
+        composeRule.onNodeWithText("Jag har sålt Sverige Småbolag").assertExists()
+    }
+
+    @Test
+    fun `avslutade och overhoppade ligger hopfallda och overhoppade kan angras`() {
         var undone: SwitchPlanResolver.Suggestion? = null
         composeRule.setContent {
             FonderTheme { BeslutContent(state = withDismissed, onUndoDismissal = { undone = it }) }
         }
 
-        composeRule.onNodeWithText("Inga byten att besluta om").assertIsDisplayed()
+        composeRule.onNodeWithText("Inga byten att besluta om").assertExists()
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasText("Avslutade och avstådda (2)"))
-        composeRule.onNodeWithText("Avslutade och avstådda (2)").performClick()
-        list.performScrollToNode(hasText("Sälj Sverige Småbolag → Köp Småbolag Index"))
-        composeRule.onAllNodesWithText("Avstått").assertCountEquals(2)
-        composeRule.onNodeWithContentDescription("Ångra avstående: sälj Sverige Småbolag, köp Räntefond Kort").performClick()
+        list.performScrollToNode(hasText("Avslutade och överhoppade (2)"))
+        composeRule.onNodeWithText("Avslutade och överhoppade (2)").performClick()
+        list.performScrollToNode(hasText("Sverige Småbolag → Småbolag Index"))
+        composeRule.onAllNodesWithText("Överhoppat").assertCountEquals(2)
+        composeRule.onNodeWithContentDescription("Ångra: visa Sverige Småbolag → Räntefond Kort igen").performClick()
         assertEquals(12L, undone?.recordId)
 
-        composeRule.onNodeWithContentDescription("Ångra avstående: sälj Sverige Småbolag, köp Småbolag Index").performClick()
+        composeRule.onNodeWithContentDescription("Ångra: visa Sverige Småbolag → Småbolag Index igen").performClick()
         assertEquals(SuggestionKind.FEE, undone?.kind)
         assertEquals(21L, undone?.recordId)
     }
@@ -341,38 +490,46 @@ class BeslutScreenTest {
         composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
 
         val list = composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG)
-        list.performScrollToNode(hasText("Avslutade och avstådda (3)"))
-        composeRule.onNodeWithText("Avslutade och avstådda (3)").performClick()
+        list.performScrollToNode(hasText("Avslutade och överhoppade (3)"))
+        composeRule.onNodeWithText("Avslutade och överhoppade (3)").performClick()
         list.performScrollToNode(hasText("Global Stars → inget köp registrerat"))
         composeRule.onNodeWithText("Köpt 7 okt").assertExists()
         composeRule.onNodeWithText("Aktiefond Global → Global Indexnära").assertExists()
         composeRule.onNodeWithText("Utgånget").assertExists()
-        // Bara det avstådda kan ångras — ett avslutat byte står i Facit.
+        // Bara det överhoppade kan ångras — ett avslutat byte står i Facit.
         composeRule.onAllNodesWithText("Ångra").assertCountEquals(1)
     }
 
     @Test
-    fun `utan avslutade eller avstadda visas ingen hopfalld sektion`() {
+    fun `utan avslutade eller overhoppade visas ingen hopfalld sektion`() {
         val noClosed = full.withDecisions(full.decisions.copy(dismissedSuggestions = emptyList()).withSwitches(emptyList(), today))
         composeRule.setContent { FonderTheme { BeslutContent(state = noClosed) } }
 
-        composeRule.onNodeWithText("Avslutade och avstådda", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Avslutade och överhoppade", substring = true).assertDoesNotExist()
     }
 
     // Lång skärm, så att hela listan – även de billigare alternativen och den hopfällda sektionen – kommer med i bilden.
-    @Config(qualifiers = "w390dp-h1600dp-xxhdpi")
+    @Config(qualifiers = "w390dp-h2200dp-xxhdpi")
     @Test
     fun `skärmdump med byten och facit`() = composeRule.captureLightAndDark("BeslutScreen_full") {
         BeslutContent(state = full)
     }
 
+    @Config(qualifiers = "w390dp-h1200dp-xxhdpi")
     @Test
-    fun `skärmdump med ett avstått förslag`() = composeRule.captureLightAndDark("BeslutScreen_dismissed") {
+    fun `skärmdump med ett överhoppat förslag`() = composeRule.captureLightAndDark("BeslutScreen_dismissed") {
         BeslutContent(state = withDismissed)
     }
 
     @Test
     fun `skärmdump utan något att besluta`() = composeRule.captureLightAndDark("BeslutScreen_empty") {
-        BeslutContent(state = BeslutUiState(list = ListUiState.Empty, riskProfile = balanced, accountType = AccountType.ISK_KF))
+        BeslutContent(state = BeslutUiState(list = ListUiState.Empty))
+    }
+
+    // Infokortet ritas i ett eget fönster (bottenarket) — hela skärmen fotograferas.
+    @Config(qualifiers = "w390dp-h1400dp-xxhdpi")
+    @Test
+    fun `skärmdump med infokortet`() = composeRule.captureLightAndDark("BeslutScreen_info", screen = true) {
+        BeslutContent(state = full.copy(info = planInfo))
     }
 }

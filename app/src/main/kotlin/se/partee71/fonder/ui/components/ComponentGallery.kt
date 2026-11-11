@@ -314,7 +314,19 @@ private fun ColumnScope.Values() {
         color = MaterialTheme.colorScheme.secondary,
         targetColor = MaterialTheme.colorScheme.primary
     )
+    Label("FundFactsCard och FundFactsRow (Besluts infokort)")
+    FundFactsCard(facts = galleryFacts, badge = "Vårt förslag", reason = "Vald för att den är billigast bland de bästa.")
+    FundFactsRow(facts = galleryFacts.copy(name = "Kort Ränta Index", oneYearFraction = -0.008, company = null))
 }
+
+private val galleryFacts = FundFacts(
+    name = "Räntefond Kort",
+    risk = 2,
+    totalFeePercent = 0.20,
+    oneYearFraction = 0.039,
+    type = "Räntefond, Korta räntor",
+    company = "Nordiska Fonder AB"
+)
 
 @Composable
 private fun ColumnScope.Status() {

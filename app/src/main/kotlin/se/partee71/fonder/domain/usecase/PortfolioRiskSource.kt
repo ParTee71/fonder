@@ -93,19 +93,30 @@ class PortfolioRiskSource @Inject constructor(
         fun summary(base: RiskBase, plan: List<SwitchPlanResolver.Suggestion>): RiskSummary? {
             val sorted = plan.sortedBy { it.planIndex }
             val unbroken = sorted.withIndex().takeWhile { (position, suggestion) -> suggestion.planIndex == position }.count()
-            val moves = sorted.withIndex()
-                .filterNot { (_, suggestion) -> suggestion.inProgress || suggestion.followed }
-                .map { (position, suggestion) ->
-                    SwitchEffectCalc.Move(suggestion.fromLevel, suggestion.toLevel, suggestion.switchValueKr.takeIf { position < unbroken })
-                }
+            val counted = sorted.withIndex().filterNot { (_, suggestion) -> suggestion.inProgress || suggestion.followed }
+            val moves = counted.map { (position, suggestion) ->
+                SwitchEffectCalc.Move(suggestion.fromLevel, suggestion.toLevel, suggestion.switchValueKr.takeIf { position < unbroken })
+            }
             val effect = SwitchEffectCalc.compute(base.valueByLevelKr, base.pendingProceedsByLevel, base.riskProfile.effectiveAllocation, moves) ?: return null
-            return RiskSummary(base.riskProfile, effect)
+            // Stegen i samma ordning som [moves] — Beslut visar varje bytes effekt på sin egen rad (issue #240).
+            val stepByRecordId = counted.zip(effect.steps).mapNotNull { (indexed, step) -> step?.let { indexed.value.recordId to it } }.toMap()
+            return RiskSummary(base.riskProfile, effect, stepByRecordId)
         }
     }
 }
 
-/** Riskkortet redo för visning: profilen och [SwitchEffectCalc]s resultat. */
-data class RiskSummary(val riskProfile: RiskProfile, val effect: SwitchEffectCalc.Result)
+/**
+ * Riskkortet redo för visning: profilen och [SwitchEffectCalc]s resultat.
+ *
+ * @param stepByRecordId effekten per nivå av varje planbyte, nyckad på förslagets
+ *   [SwitchPlanResolver.Suggestion.recordId] — saknas för sålda, genomförda och steg som inte går att
+ *   räkna (okänt belopp eller efter en lucka i planen). Beslut läser den per rad (issue #240).
+ */
+data class RiskSummary(
+    val riskProfile: RiskProfile,
+    val effect: SwitchEffectCalc.Result,
+    val stepByRecordId: Map<Long, SwitchEffectCalc.StepEffect> = emptyMap()
+)
 
 /**
  * Bevakningen med bara det likviden (BYT-3) räknas på — kandidaternas kurser och position tas bort,

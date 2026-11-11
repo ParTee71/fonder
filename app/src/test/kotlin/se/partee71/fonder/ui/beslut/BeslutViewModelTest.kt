@@ -1,5 +1,6 @@
 package se.partee71.fonder.ui.beslut
 
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,7 @@ import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
+import se.partee71.fonder.domain.model.SuggestionCandidate
 import se.partee71.fonder.domain.model.SuggestionDismissal
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SuggestionRecord
@@ -45,13 +47,17 @@ import se.partee71.fonder.domain.model.SwitchWatch
 import se.partee71.fonder.domain.model.SwitchWatchCandidate
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
+import se.partee71.fonder.domain.usecase.CachedRiskBaseSource
 import se.partee71.fonder.domain.usecase.DismissedPlanSource
 import se.partee71.fonder.domain.usecase.FacitSummary
 import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
 import se.partee71.fonder.domain.usecase.RecordTransaction
 import se.partee71.fonder.domain.usecase.SuggestionDismissals
+import se.partee71.fonder.domain.usecase.SwitchEffectCalc
 import se.partee71.fonder.domain.usecase.SwitchOrigin
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
@@ -109,7 +115,10 @@ class BeslutViewModelTest {
             testTargetLevelPreselection(transactionRepo, switchWatchRepo)
         ),
         dismissalRepo,
-        scheduler
+        scheduler,
+        CachedRiskBaseSource(transactionRepo, priceRepo, metadataRepo, PortfolioRiskSource(preferencesRepository, switchWatchRepo, suggestionRepo)),
+        suggestionRepo,
+        metadataRepo
     )
 
     @Before
@@ -661,13 +670,12 @@ class BeslutViewModelTest {
     }
 
     @Test
-    fun `backgroundWorkRunning speglar schemalaggarens korstatus`() = runTest(dispatcher) {
+    fun `en kursuppdatering snurrar listan`() = runTest(dispatcher) {
         scheduler.runningWork.value = setOf(BackgroundWork.PRICE_REFRESH)
 
         viewModel().uiState.test {
             var state = awaitItem()
-            while (state.loading || !state.backgroundWorkRunning) state = awaitItem()
-            assertTrue(state.backgroundWorkRunning)
+            while (state.loading || !state.pricesWorking) state = awaitItem()
             // Ledaren i ett sålt byte räknas ur kurscachen — listan Byten snurrar.
             assertTrue(state.switchesWorking)
             cancelAndIgnoreRemainingEvents()
@@ -688,12 +696,179 @@ class BeslutViewModelTest {
     }
 
     @Test
-    fun `recomputeSwitchPlan ber schemalaggaren om en skanning`() = runTest(dispatcher) {
-        viewModel().onEvent(BeslutEvent.RecomputeSwitchPlan)
+    fun `dra for att uppdatera ber schemalaggaren om en skanning med gaten`() = runTest(dispatcher) {
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || !state.canRecomputeSwitchPlan) state = awaitItem()
+            vm.onEvent(BeslutEvent.Refresh)
+            cancelAndIgnoreRemainingEvents()
+        }
 
         assertEquals(1, scheduler.switchPlanScans)
         // Användarens uttryckliga omräkning hämtar alla kurser först — till skillnad från omräkningen efter en transaktion.
         assertEquals(1, scheduler.forcedSwitchPlanScans)
+    }
+
+    @Test
+    fun `dra for att uppdatera utan gaten startar ingen skanning`() = runTest(dispatcher) {
+        // SET-4: i depå/AF ges ingen plan — en skanning hade inte gett något.
+        preferencesRepository.setAccountType(AccountType.DEPA_AF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskProfile == null || state.accountType == null) state = awaitItem()
+            vm.onEvent(BeslutEvent.Refresh)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(0, scheduler.switchPlanScans)
+    }
+
+    // --- Riskkortet och effekten per råd (HEM-17, issue #240) ---
+
+    @Test
+    fun `riskkortet raknas ur cachen med planen och radets effekt per niva`() = runTest(dispatcher) {
+        // Innehav: 10 000 kr på nivå 5. Mål: hälften på nivå 3. Planens byte flyttar 2 500 kr 5 → 3.
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 0.5, 5 to 0.5)))
+        transactionRepo.funds.value = listOf(Fund(fundId = "HELD", name = "Innehav", isin = "SE_HELD"))
+        transactionRepo.transactions.value = listOf(
+            Transaction(
+                id = 1,
+                fundId = "HELD",
+                type = TransactionType.KOP,
+                epochDay = LocalDate.now().toEpochDay() - 30,
+                shares = 100.0,
+                pricePerShare = 90.0
+            )
+        )
+        priceRepo.latestPrices.value = mapOf("HELD" to FundPrice(fundId = "HELD", epochDay = LocalDate.now().toEpochDay(), nav = 100.0))
+
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading || state.riskSummary == null || state.decisions.switchPlan.isEmpty()) state = awaitItem()
+            val summary = state.riskSummary!!
+            assertEquals(SwitchEffectCalc.Direction.TOO_MUCH_RISK, summary.effect.direction)
+            val effect = state.effectFor(state.decisions.switchPlan.single())!!
+            assertEquals(5, effect.from.level)
+            assertEquals(1.0, effect.from.beforeFraction, 1e-9)
+            assertEquals(0.75, effect.from.afterFraction, 1e-9)
+            assertEquals(3, effect.to.level)
+            assertEquals(0.25, effect.to.afterFraction, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `utan profil finns inget riskkort`() = runTest(dispatcher) {
+        viewModel().uiState.test {
+            var state = awaitItem()
+            while (state.loading) state = awaitItem()
+            assertNull(state.riskSummary)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Infokortet (BYT-5, issue #240) ---
+
+    private fun candidate(isin: String, position: Int) = SuggestionCandidate(
+        isin = isin,
+        name = "Alternativ $position",
+        position = position,
+        totalFee = 0.1 * (position + 1),
+        risk = 3,
+        category = "Räntefond",
+        companyName = "Bolaget",
+        developmentOneYear = 0.02 * position
+    )
+
+    /** Väntar in den enda förslagsraden, öppnar dess infokort och returnerar läget med kortet laddat. */
+    private suspend fun ReceiveTurbine<BeslutUiState>.openInfo(vm: BeslutViewModel): BeslutUiState {
+        var state = awaitItem()
+        while (state.loading || state.switches.active.isEmpty()) state = awaitItem()
+        vm.onEvent(BeslutEvent.ShowInfo(state.switches.active.single() as SwitchRow.Suggested))
+        while (state.info == null) state = awaitItem()
+        return state
+    }
+
+    @Test
+    fun `infokortet visar foreslagen fond och de sparade alternativen i ordning`() = runTest(dispatcher) {
+        setUpSwitchPlan()
+        suggestionRepo.records.value = listOf(
+            planRecord().copy(candidates = listOf(candidate("SE_ALT2", 2), candidate("SE_ALT0", 0), candidate("SE_ALT1", 1), candidate("SE_ALT3", 3)))
+        )
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = openInfo(vm)
+            val info = state.info!!
+            assertEquals("Kandidat", info.proposed.name)
+            assertEquals(3, info.proposed.risk)
+            assertEquals(0.3, info.proposed.totalFeePercent!!, 1e-9)
+            // Högst tre, i rangordningen de sparades i.
+            assertEquals(listOf("Alternativ 0", "Alternativ 1", "Alternativ 2"), info.alternatives.map { it.name })
+            assertEquals("Räntefond", info.alternatives.first().type)
+
+            vm.onEvent(BeslutEvent.HideInfo)
+            while (state.info != null) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `infokortet stangs nar forslaget forsvinner ur listan`() = runTest(dispatcher) {
+        // Planen räknas om medan kortet är öppet: "Jag har sålt" får aldrig gälla ett gammalt förslag.
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            var state = openInfo(vm)
+            suggestionRepo.records.value = emptyList()
+            while (state.info != null) state = awaitItem()
+            assertNull(state.info)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `infokortet utan sparade alternativ har en tom lista`() = runTest(dispatcher) {
+        // Rader inspelade före 0.85.0 har inga kandidater — kortet säger att inga hittades.
+        setUpSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        val vm = viewModel()
+
+        vm.uiState.test {
+            val state = openInfo(vm)
+            assertTrue(state.info!!.alternatives.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `infokortet for ett billigare alternativ visar jamforelsens andra alternativ`() = runTest(dispatcher) {
+        setUpCheaperAlternative()
+        metadataRepo.metadataByIsin = metadataRepo.metadataByIsin +
+            ("SE_HELD" to metadataRepo.metadataByIsin.getValue("SE_HELD").copy(shownAlternativeIsins = listOf("SE_IDX", "SE_IDX2", "SE_GONE"))) +
+            ("SE_IDX2" to meta("SE_IDX2", "Småbolag Index B", fee = 0.5, risk = 5))
+        val vm = viewModel()
+
+        vm.uiState.test {
+            val state = openInfo(vm)
+            val info = state.info!!
+            assertEquals("Småbolag Index", info.proposed.name)
+            // Det föreslagna står inte bland alternativen, och en fond utan cachad metadata hoppas över.
+            assertEquals(listOf("Småbolag Index B"), info.alternatives.map { it.name })
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // --- Pågående byten (ANA-12), flyttade från Hem ---

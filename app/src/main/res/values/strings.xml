@@ -252,8 +252,8 @@
     <string name="format_switch_depa_tax_per_amount">Skatt per %1$s som byts</string>
     <string name="switch_none_not_a_holding">Bytesförslag ges bara för fonder du äger.</string>
     <plurals name="format_switch_dismissed">
-        <item quantity="one">%1$d förslag du avstått från visas inte här. Ångra under Avstådda på fliken Beslut.</item>
-        <item quantity="other">%1$d förslag du avstått från visas inte här. Ångra under Avstådda på fliken Beslut.</item>
+        <item quantity="one">%1$d förslag du hoppat över visas inte här. Ångra under Avslutade och överhoppade på fliken Beslut.</item>
+        <item quantity="other">%1$d förslag du hoppat över visas inte här. Ångra under Avslutade och överhoppade på fliken Beslut.</item>
     </plurals>
     <string name="format_switch_plan_to">%1$d. Byt till %2$s</string>
     <string name="format_switch_plan_from">%1$d. Byt hit från %2$s</string>
@@ -545,12 +545,8 @@
 
     <!-- Bytesplan på Beslut (HEM-8, NAV-9) -->
     <string name="switch_plan_title">Bytesplan</string>
-    <string name="format_switch_plan_row">%1$d. Sälj %2$s (nivå %3$d) → Köp %4$s (nivå %5$d)</string>
     <string name="format_switch_plan_amount">Belopp: %1$s</string>
     <string name="format_switch_plan_fee_delta">Avgiftsskillnad: %1$s</string>
-    <string name="switch_plan_recompute">Räkna om bytesplanen</string>
-    <string name="switch_plan_recompute_running">Räknar om …</string>
-    <string name="switch_plan_recompute_explain">Planen räknas normalt om automatiskt några gånger per dygn, och direkt när du ändrar riskprofil eller kontotyp. Avviker ingen risknivå tillräckligt mycket från ditt mål ges inget förslag — då ändras ingenting här.</string>
     <string name="switch_plan_disclaimer">Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria.</string>
     <string name="settings_import_orders_button">Importera avräkningsnotor</string>
     <string name="import_orders_title">Importera avräkningsnotor</string>
@@ -644,56 +640,81 @@
     <string name="switch_watch_disclaimer">Appen genomför aldrig ett byte. ”Köpte den här” öppnar köpformuläret — köpet du registrerar där avslutar bytet.</string>
     <string name="format_beslut_switch_watch_title">%1$s → %2$s</string>
     <string name="beslut_switch_watch_no_leader">Ingen utveckling uppmätt än — kurserna fylls på i bakgrunden.</string>
-    <string name="format_beslut_risk_profile">Mot riskprofil %1$s</string>
-    <string name="beslut_no_risk_profile">Ingen riskprofil satt</string>
-    <string name="beslut_change_risk_profile">Ändra</string>
-    <string name="beslut_outcome_title">Hur gick det?</string>
+    <string name="beslut_change_goal">Ändra mål</string>
+    <string name="beslut_no_goal_title">Sätt ett mål</string>
+    <string name="beslut_gate_body">Byten föreslås när du satt ett mål och kontotypen ISK/KF.</string>
+    <string name="beslut_outcome_title">Så har råden gått</string>
     <string name="beslut_follow">Följ</string>
-    <string name="beslut_dismiss">Avstå</string>
+    <string name="beslut_dismiss">Hoppa över</string>
     <string name="beslut_undo_dismissal">Ångra</string>
     <string name="format_fee_follow_a11y">Följ: byt till det billigare alternativet %1$s</string>
     <string name="format_beslut_follow_a11y">Följ: sälj %1$s, köp %2$s</string>
-    <string name="format_beslut_dismiss_a11y">Avstå: sälj %1$s, köp %2$s</string>
-    <string name="format_beslut_undo_dismissal_a11y">Ångra avstående: sälj %1$s, köp %2$s</string>
-    <string name="format_beslut_cheaper_savings">Sparar ca %1$s/år</string>
+    <string name="format_beslut_dismiss_a11y">Hoppa över: %1$s → %2$s</string>
+    <string name="format_beslut_undo_dismissal_a11y">Ångra: visa %1$s → %2$s igen</string>
     <plurals name="format_beslut_facit_row">
         <item quantity="one">Facit · %1$d följt förslag</item>
         <item quantity="other">Facit · %1$d följda förslag</item>
     </plurals>
     <string name="beslut_empty_title">Inga byten att besluta om</string>
     <string name="beslut_empty_body">Här samlas bytesförslag mot din riskprofil, billigare alternativ till dina fonder och pågående byten. Förslagen skapas av bakgrundsuppdateringen — bytesplanen när riskprofil och kontotyp är satta och portföljen avviker från målfördelningen.</string>
-    <!-- Listan Byten på Beslut (BYT-4) -->
-    <string name="beslut_switches_title">Byten</string>
+    <!-- Listan Byten på Beslut (BYT-4, issue #240) -->
+    <string name="beslut_switches_title">Så kommer du närmare målet</string>
     <string name="format_beslut_switches_waiting">%1$d väntar på dig</string>
-    <string name="switch_state_proposed">Föreslaget</string>
-    <string name="switch_state_fee">Avgift</string>
-    <string name="format_switch_state_sold">Sålt · dag %1$d av %2$d</string>
+    <string name="format_switch_chip_lower">Sänker risken · steg %1$d</string>
+    <string name="format_switch_chip_raise">Höjer risken · steg %1$d</string>
+    <string name="format_switch_chip_step">Byte · steg %1$d</string>
+    <string name="switch_chip_fee">Sparar avgift · påverkar inte risken</string>
+    <string name="format_switch_state_sold">Sålt · dag %1$d av %2$d · välj köpfond</string>
     <string name="format_switch_state_bought">Köpt %1$s</string>
     <string name="switch_state_bought">Köpt</string>
     <string name="switch_state_cancelled">Avbrutet</string>
     <string name="switch_state_expired">Utgånget</string>
-    <string name="switch_state_dismissed">Avstått</string>
-    <string name="format_switch_origin_plan_step">Bytesplan · byte %1$d</string>
-    <string name="switch_origin_plan">Bytesplan</string>
-    <string name="switch_origin_standalone">Eget sälj</string>
-    <string name="format_beslut_switch_pair">Sälj %1$s → Köp %2$s</string>
-    <string name="format_beslut_cheaper_fees">avgift %1$s → %2$s</string>
-    <string name="format_beslut_sold_title">%1$s → välj köpfond</string>
-    <string name="format_beslut_sold_proceeds">%1$s väntar på likviden</string>
-    <plurals name="format_beslut_sold_candidates">
-        <item quantity="one">%1$d bevakat alternativ</item>
-        <item quantity="other">%1$d bevakade alternativ</item>
-    </plurals>
-    <string name="beslut_sold_leader_label">Bäst sedan säljdagen:</string>
-    <string name="beslut_register_sale">Registrera säljet</string>
-    <string name="format_beslut_register_sale_a11y">Registrera säljet: sälj %1$s, köp %2$s</string>
-    <string name="beslut_open_watch">Öppna bevakningen</string>
-    <string name="format_beslut_open_watch_a11y">Öppna bevakningen: %1$s</string>
+    <string name="switch_state_dismissed">Överhoppat</string>
+    <string name="format_beslut_plan_title">%1$s → %2$s, %3$s</string>
+    <string name="format_beslut_effect">Nivå %1$d %2$s → %3$s, nivå %4$d %5$s → %6$s.</string>
+    <string name="format_beslut_effect_unknown">Flyttar pengar från nivå %1$d till nivå %2$d.</string>
+    <string name="format_beslut_effect_fee_lower">Dessutom %1$s lägre avgift per år.</string>
+    <string name="format_beslut_effect_fee_higher">Avgiften blir %1$s högre per år.</string>
+    <string name="format_beslut_after_step">Gör steg %1$d först.</string>
+    <string name="format_beslut_fee_effect">Samma sorts fond, %1$s → %2$s i avgift.</string>
+    <string name="format_beslut_fee_savings">Ca %1$s/år.</string>
+    <string name="format_beslut_sold_title">%1$s → ?</string>
+    <string name="format_beslut_sold_proceeds">%1$s väntar.</string>
+    <string name="beslut_sold_leader_label">Bäst hittills:</string>
+    <string name="beslut_register_sale">Jag har sålt</string>
+    <string name="format_beslut_register_sale_a11y">Registrera sälj: %1$s → %2$s</string>
+    <string name="beslut_open_watch">Välj köpfond</string>
+    <string name="format_beslut_open_watch_a11y">Välj köpfond: %1$s</string>
     <string name="format_beslut_closed_no_buy">%1$s → inget köp registrerat</string>
     <string name="format_beslut_closed_bought_unknown">%1$s → köp registrerat</string>
-    <string name="format_beslut_closed_title">Avslutade och avstådda (%1$d)</string>
-    <string name="format_beslut_closed_explain">Avslutade byten visas här i %1$d dagar, sedan i Facit. Ett avstående gäller i %2$d dagar.</string>
-    <string name="beslut_never_switches">Appen genomför aldrig ett byte åt dig.</string>
+    <string name="format_beslut_closed_title">Avslutade och överhoppade (%1$d)</string>
+    <string name="format_beslut_closed_explain">Avslutade byten visas här i %1$d dagar, sedan i Facit. Ett överhoppat förslag hålls borta i %2$d dagar.</string>
+    <string name="beslut_never_switches">Appen byter aldrig åt dig – du gör bytet hos din bank.</string>
+    <!-- Infokortet på Beslut (BYT-5, issue #240) -->
+    <string name="format_beslut_info_a11y">Mer om fonderna: %1$s → %2$s</string>
+    <string name="format_beslut_info_sale">Du säljer för %1$s.</string>
+    <string name="beslut_info_badge">Vårt förslag</string>
+    <string name="format_beslut_info_reason_plan">Vald för att den är billigast bland fonderna på risknivå %1$d som gått bäst det senaste året.</string>
+    <string name="beslut_info_reason_fee">Vald för att den har samma inriktning som fonden du äger men lägre avgift.</string>
+    <string name="format_beslut_info_alternatives_plan">Andra fonder på risknivå %1$d</string>
+    <string name="beslut_info_alternatives_plan_body">Samma risk som förslaget. Du kan köpa en av dem i stället om du hellre vill det.</string>
+    <string name="beslut_info_alternatives_fee">Andra billigare alternativ</string>
+    <string name="beslut_info_alternatives_fee_body">Också billigare än fonden du äger, med samma inriktning.</string>
+    <string name="format_beslut_info_no_alternatives_plan">Inga andra köpbara fonder hittades på nivå %1$d.</string>
+    <string name="beslut_info_no_alternatives_fee">Inga andra billigare alternativ hittades.</string>
+    <string name="beslut_info_columns">Kolumnerna: avgift per år · utveckling senaste året.</string>
+    <string name="format_beslut_info_register_sale">Jag har sålt %1$s</string>
+    <string name="beslut_info_close">Stäng</string>
+    <!-- Fondens fakta (FundFactsCard, BYT-5) -->
+    <string name="fund_facts_unknown">okänt</string>
+    <string name="fund_facts_risk">Risk</string>
+    <string name="format_fund_facts_risk">%1$d av 7</string>
+    <string name="format_fund_facts_risk_short">Risk %1$d av 7</string>
+    <string name="fund_facts_fee">Avgift per år</string>
+    <string name="fund_facts_one_year">Senaste året</string>
+    <string name="fund_facts_type">Typ</string>
+    <string name="fund_facts_company">Fondbolag</string>
+    <string name="format_risk_card_goal">Ditt mål är %1$s.</string>
     <string-array name="month_short">
         <item>jan</item>
         <item>feb</item>
