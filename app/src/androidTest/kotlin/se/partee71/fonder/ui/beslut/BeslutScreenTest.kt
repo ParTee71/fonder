@@ -191,7 +191,8 @@ class BeslutScreenTest {
         composeRule.onNodeWithContentDescription("Mer om fonderna: Dyr fond → Billig fond").performScrollTo().performClick()
         composeRule.onNodeWithText("Fondbolaget AB").assertIsDisplayed()
         composeRule.onNodeWithText("Inga andra köpbara fonder hittades på nivå 3.").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Stäng").performScrollTo().performClick()
+        // Footern ligger fast under arkets skrollbara innehåll — ingen skroll.
+        composeRule.onNodeWithText("Stäng").performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) { composeRule.onAllNodesWithText("Fondbolaget AB").fetchSemanticsNodes().isEmpty() }
     }
