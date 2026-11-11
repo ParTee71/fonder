@@ -279,8 +279,11 @@ object SwitchPlanCalc {
         return result
     }
 
-    /** Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. */
-    private fun gapsPp(
+    /**
+     * Avvikelse per nivå i procentenheter av [totalValueKr] — positiv = underviktad. Delad med
+     * [SwitchEffectCalc], så riskkortets läge och planen mäter gapen på samma sätt.
+     */
+    internal fun gapsPp(
         targetAllocation: Map<Int, Double>,
         levelValues: Map<Int, Double>,
         totalValueKr: Double

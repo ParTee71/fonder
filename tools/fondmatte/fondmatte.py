@@ -716,6 +716,61 @@ def facit_golden(fixture: dict) -> dict:
     }
 
 
+# --- Bytenas effekt per risknivå (issue #238) -----------------------------------------------
+
+MIN_GAP_PP = 5.0  # SwitchPlanCalc.MIN_GAP_PP: under den avvikelsen är portföljen i linje
+DIRECTION_MIN_LEVELS = 0.25  # SwitchEffectCalc.DIRECTION_MIN_LEVELS
+
+
+def switch_effect(fixture: dict) -> dict:
+    """Riskkortets underlag som SwitchEffectCalc: andel per nivå mot målet, läget, summan att
+    flytta och varje bytes effekt, kumulativt (steg n räknas från läget efter steg n−1).
+
+    Nämnaren är det klassificerade värdet plus likviden som väntar på köp på sin målnivå (BYT-3).
+    Ett steg med okänt belopp (`amount` null) gör det och alla senare steg `null`."""
+    try:
+        values = {int(k): float(v) for k, v in fixture["level_values"].items() if float(v) > 0}
+        for k, v in fixture.get("pending", {}).items():
+            if float(v) > 0:
+                values[int(k)] = values.get(int(k), 0.0) + float(v)
+        target = {int(k): float(v) for k, v in fixture["target"].items()}
+        moves = [(int(m["from"]), int(m["to"]), None if m.get("amount") is None else float(m["amount"])) for m in fixture.get("moves", [])]
+    except KeyError as e:
+        raise FixtureError(f"fältet {e} saknas (se README: level_values, target, pending, moves med from, to, amount)") from None
+    total = sum(values.values())
+    target_sum = sum(target.values())
+    weighted_target = sum(k * v for k, v in target.items()) / target_sum
+    levels = sorted({k for k, v in target.items() if v > 0} | set(values))
+    shares = [{"level": k, "target": target.get(k, 0.0), "actual": values.get(k, 0.0) / total if total > 0 else 0.0} for k in levels]
+    amounts = [a for _, _, a in moves]
+    to_move = sum(amounts) if moves and all(a is not None for a in amounts) else None
+    if total <= 0:
+        return {"levels": shares, "direction": None, "weighted_actual": None, "weighted_target": weighted_target, "steps": [None] * len(moves), "total_to_move": to_move}
+
+    weighted_actual = sum(k * v for k, v in values.items()) / total
+    gaps = [(target.get(k, 0.0) * total - values.get(k, 0.0)) / total * 100 for k in set(target) | set(values)]
+    if all(abs(g) < MIN_GAP_PP for g in gaps):
+        direction = "IN_LINE"
+    elif weighted_actual - weighted_target >= DIRECTION_MIN_LEVELS:
+        direction = "TOO_MUCH_RISK"
+    elif weighted_target - weighted_actual >= DIRECTION_MIN_LEVELS:
+        direction = "TOO_LITTLE_RISK"
+    else:
+        direction = "MIXED"
+
+    steps, known = [], True
+    for frm, to, amount in moves:
+        if not known or amount is None:
+            known = False
+            steps.append(None)
+            continue
+        before_from, before_to = values.get(frm, 0.0) / total, values.get(to, 0.0) / total
+        values[frm] = values.get(frm, 0.0) - amount
+        values[to] = values.get(to, 0.0) + amount
+        steps.append({"from": {"level": frm, "before": before_from, "after": values[frm] / total}, "to": {"level": to, "before": before_to, "after": values[to] / total}})
+    return {"levels": shares, "direction": direction, "weighted_actual": weighted_actual, "weighted_target": weighted_target, "steps": steps, "total_to_move": to_move}
+
+
 # --- Kommandoraden --------------------------------------------------------------------------
 
 
@@ -750,6 +805,8 @@ def parse_fixture(fixture: dict) -> tuple[list[Transaction], Prices, date]:
 
 
 def golden(fixture: dict) -> dict:
+    if "level_values" in fixture:
+        return finite_or_none({"conventions": {"min_gap_pp": MIN_GAP_PP, "direction_min_levels": DIRECTION_MIN_LEVELS}, "switch_effect": switch_effect(fixture)})
     if "suggestions" in fixture:
         return finite_or_none(
             {

@@ -17,6 +17,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import se.partee71.fonder.data.common.AppErrors
 import se.partee71.fonder.data.common.DataError
+import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.CheaperAlternative
@@ -24,6 +25,8 @@ import se.partee71.fonder.domain.usecase.MoneyFormat
 import se.partee71.fonder.domain.usecase.OpenSwitchWatch
 import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
 import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.TaxCalc
@@ -210,5 +213,55 @@ class HemScreenshotTest {
     @Test
     fun `skarmdump av totalkortet med schablonskatt i ISK`() = composeRule.captureLightAndDark("HemScreen_isk") {
         HemContent(state = iskPortfolio)
+    }
+
+    // --- Riskkortet (HEM-7, issue #238, mockup C2) ---
+
+    /** Mockupens påhittade läge: mål 20/35/45 på nivå 2–4, för mycket på 4 och 5, planen flyttar 16 500 kr. */
+    private val risk = PortfolioRiskSource.summary(
+        PortfolioRiskSource.RiskBase(
+            riskProfile = RiskProfile(targetAllocation = mapOf(2 to 0.20, 3 to 0.35, 4 to 0.45)),
+            valueByLevelKr = mapOf(2 to 8_000.0, 3 to 26_000.0, 4 to 52_000.0, 5 to 14_000.0),
+            pendingProceedsByLevel = emptyMap()
+        ),
+        listOf(
+            SwitchPlanResolver.Suggestion(
+                recordId = 1, planIndex = 0, sellIsin = "SE_S", buyIsin = "SE_K", sellFundName = "Sverige Småbolag",
+                buyFundName = "Räntefond Kort", fromLevel = 5, toLevel = 2, feeDeltaPercent = -1.1, switchValueKr = 12_500.0
+            ),
+            SwitchPlanResolver.Suggestion(
+                recordId = 2, planIndex = 1, sellIsin = "SE_E", buyIsin = "SE_R", sellFundName = "Energi Norden",
+                buyFundName = "Räntefond Bred", fromLevel = 4, toLevel = 3, feeDeltaPercent = -0.2, switchValueKr = 4_000.0
+            )
+        )
+    )!!
+
+    private val riskPortfolioRisk = PortfolioRiskCalc.Result(weightedAverageRisk = 3.72, includedValueKr = 100_000.0, excludedCount = 0)
+
+    @Test
+    fun `riskkortet visar laget en stapel per niva med mal och summan att flytta`() {
+        composeRule.setContent { FonderTheme { RiskCard(risk = risk, portfolioRisk = riskPortfolioRisk, working = false) } }
+        composeRule.onNodeWithText("Du har mer risk än ditt mål").assertExists()
+        composeRule.onNodeWithText("Flytta ca ${MoneyFormat.krWhole(16_500.0)} så är du framme.").assertExists()
+        composeRule.onNode(hasContentDescription("Nivå 4: ${MoneyFormat.percent(0.52)}, mål ${MoneyFormat.percent(0.45)}")).assertExists()
+        composeRule.onNode(hasContentDescription("Nivå 5: ${MoneyFormat.percent(0.14)}, mål ${MoneyFormat.percent(0.0)}")).assertExists()
+        // Nivåer utan mål och innehav visas inte.
+        composeRule.onNode(hasContentDescription("Nivå 1", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `riskkortet i linje namner ingen summa att flytta`() {
+        val inLine = PortfolioRiskSource.summary(
+            PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = mapOf(3 to 0.5, 4 to 0.5)), mapOf(3 to 48.0, 4 to 52.0), emptyMap()),
+            emptyList()
+        )!!
+        composeRule.setContent { FonderTheme { RiskCard(risk = inLine, portfolioRisk = riskPortfolioRisk, working = false) } }
+        composeRule.onNodeWithText("Du ligger i linje med ditt mål").assertExists()
+        composeRule.onNodeWithText("Flytta ca", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `skarmdump av riskkortet`() = composeRule.captureLightAndDark("HemScreen_riskkort") {
+        RiskCard(risk = risk, portfolioRisk = riskPortfolioRisk, working = false)
     }
 }

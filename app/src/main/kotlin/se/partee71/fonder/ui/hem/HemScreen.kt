@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
-import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.usecase.BackupReminder
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
 import se.partee71.fonder.domain.usecase.MoneyFormat
@@ -28,6 +27,8 @@ import se.partee71.fonder.domain.usecase.PendingDecisions
 import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.RiskSummary
+import se.partee71.fonder.domain.usecase.SwitchEffectCalc
 import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.components.ApproxTaxRow
 import se.partee71.fonder.ui.components.CardTitleRow
@@ -180,12 +181,11 @@ fun HemContent(
                         onFundClick = onFundClick
                     )
                 }
-                portfolio.riskProfile?.let { riskProfile ->
+                portfolio.risk?.let { risk ->
                     item(contentType = "risk") {
                         RiskCard(
-                            riskProfile = riskProfile,
+                            risk = risk,
                             portfolioRisk = portfolio.portfolioRisk,
-                            levelDeviations = portfolio.riskLevelDeviations,
                             working = state.riskWorking
                         )
                     }
@@ -516,39 +516,68 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
 }
 
 /**
- * Målfördelning (SET-3) mot innehavens faktiska fördelning per risknivå (HEM-7, uppgraderad
- * från en enskild målnivå till en fördelning i issue #71) — ren läsvy, ingen åtgärdsknapp.
- * Det värdeviktade snittet ([RiskProfile.weightedTargetLevel] mot
- * [PortfolioRiskCalc.Result.weightedAverageRisk]) visas kvar som en sammanfattning överst
- * (samma [PeriodRow]-mönster som tidigare, regel 4), men huvudinnehållet är nu per-nivå-raderna
- * längre ned — en enda skalär kan inte skilja en 50/50-mix av nivå 1 och 6 från 100 % nivå
- * 3,5, se [PortfolioRiskCalc]s precisionsanmärkning. Per-nivå-raderna återanvänder
- * [se.partee71.fonder.ui.components.ExposureBar] (regel 4) — här är den rätt komponenten,
- * till skillnad från #68 där en enskild nivå var en position på en skala, inte en andel.
+ * Riskkortet (HEM-7, issue #238, mockup C2): läget i en mening, en stapel per risknivå med
+ * **målstreck** ([ExposureBar] med `target`, regel 4) och hur mycket bytesplanen flyttar. Bara
+ * nivåer som finns i målet eller innehavet visas. En nivå med minst 5 procentenheter för mycket
+ * ritas i koppar med målstrecket i blått, de andra tvärtom — samma gräns som planen säljer vid.
  *
- * Bytesplanen som konsumerar avvikelsen (HEM-8) visas sedan 0.61.0 på fliken Beslut (NAV-9).
+ * Det värdeviktade snittet ([SwitchEffectCalc.Result.weightedTargetLevel] mot
+ * [SwitchEffectCalc.Result.weightedActualLevel]) står kvar under staplarna med sitt förbehåll:
+ * en enda skalär kan inte skilja en 50/50-mix av nivå 1 och 6 från 100 % nivå 3,5, se
+ * [PortfolioRiskCalc]s precisionsanmärkning. Ren läsvy — bytena själva ligger på fliken Beslut (NAV-9).
  */
 @Composable
-private fun RiskCard(
-    riskProfile: RiskProfile,
+internal fun RiskCard(
+    risk: RiskSummary,
     portfolioRisk: PortfolioRiskCalc.Result,
-    levelDeviations: List<PortfolioRiskCalc.LevelDeviation>,
     working: Boolean
 ) {
+    val effect = risk.effect
     AppCard(modifier = Modifier.fillMaxWidth().padding(Spacing.l)) {
         CardTitleRow(title = stringResource(R.string.hem_risk_title), working = working)
+        effect.direction?.let { direction ->
+            Text(
+                stringResource(direction.headlineRes()),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = Spacing.s)
+            )
+        }
+        Text(
+            stringResource(R.string.hem_risk_scale),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs)
+        )
+        effect.levels.forEach { level ->
+            val over = level.isOverweight
+            ExposureBar(
+                label = stringResource(R.string.format_hem_risk_level, level.level),
+                fraction = level.actualFraction,
+                target = level.targetFraction,
+                color = if (over) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                targetColor = if (over) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+            )
+        }
+        val toMove = effect.totalToMoveKr
+        if (toMove != null && effect.direction != SwitchEffectCalc.Direction.IN_LINE) {
+            Text(
+                stringResource(R.string.format_hem_risk_move, MoneyFormat.krWhole(toMove)),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = Spacing.xs)
+            )
+        }
         PeriodRow(
             label = stringResource(R.string.hem_risk_target_label),
             amount = null,
             fraction = null,
-            valueText = riskProfile.weightedTargetLevel?.let { MoneyFormat.decimal(it) },
-            modifier = Modifier.padding(top = Spacing.s)
+            valueText = MoneyFormat.decimal(effect.weightedTargetLevel),
+            modifier = Modifier.padding(top = Spacing.l)
         )
         PeriodRow(
             label = stringResource(R.string.hem_risk_actual_label),
             amount = null,
             fraction = null,
-            valueText = portfolioRisk.weightedAverageRisk?.let { MoneyFormat.decimal(it) },
+            valueText = effect.weightedActualLevel?.let { MoneyFormat.decimal(it) },
             modifier = Modifier.padding(top = Spacing.xs)
         )
         Text(
@@ -565,27 +594,15 @@ private fun RiskCard(
                 modifier = Modifier.padding(top = Spacing.xs)
             )
         }
-        if (levelDeviations.isNotEmpty()) {
-            Text(
-                stringResource(R.string.hem_risk_distribution_title),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = Spacing.l)
-            )
-            levelDeviations.sortedBy { it.level }.forEach { deviation ->
-                Text(
-                    stringResource(R.string.format_hem_risk_level, deviation.level),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = Spacing.s)
-                )
-                ExposureBar(label = stringResource(R.string.hem_risk_target_bar_label), fraction = deviation.targetFraction)
-                ExposureBar(
-                    label = stringResource(R.string.hem_risk_actual_bar_label),
-                    fraction = deviation.actualFraction,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-            }
-        }
     }
+}
+
+/** Riskkortets rubrikmening för läget (HEM-7). */
+private fun SwitchEffectCalc.Direction.headlineRes(): Int = when (this) {
+    SwitchEffectCalc.Direction.TOO_MUCH_RISK -> R.string.hem_risk_direction_too_much
+    SwitchEffectCalc.Direction.TOO_LITTLE_RISK -> R.string.hem_risk_direction_too_little
+    SwitchEffectCalc.Direction.MIXED -> R.string.hem_risk_direction_mixed
+    SwitchEffectCalc.Direction.IN_LINE -> R.string.hem_risk_direction_in_line
 }
 
 /**

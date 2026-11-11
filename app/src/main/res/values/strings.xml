@@ -527,15 +527,20 @@
     <string name="riskprofile_no_levels_yet">Kan inte föreslå en skala än — risknivåer hämtas första gången appen slår upp fondmetadata (t.ex. via Fondsök eller ett innehav).</string>
 
     <!-- Riskprofil på Hem (HEM-7, issue #68, mål-mot-faktisk per nivå i issue #71) -->
+    <string name="format_exposure_bar_target">%1$s · mål %2$s</string>
+    <string name="format_exposure_bar_target_description">%1$s: %2$s, mål %3$s</string>
     <string name="hem_risk_title">Riskprofil</string>
     <string name="hem_risk_target_label">Målnivå</string>
     <string name="hem_risk_actual_label">Innehavens snittnivå</string>
     <string name="hem_risk_explain">Innehavens genomsnittliga risknivå, viktad på aktuellt värde — inte portföljens samlade risk (korrelation och riskspridning räknas inte in).</string>
     <string name="format_hem_risk_excluded">%1$d fond(er) saknar känd risknivå och räknas inte in.</string>
-    <string name="hem_risk_distribution_title">Mål mot faktisk fördelning</string>
     <string name="format_hem_risk_level">Nivå %1$d</string>
-    <string name="hem_risk_target_bar_label">Mål</string>
-    <string name="hem_risk_actual_bar_label">Faktisk</string>
+    <string name="hem_risk_direction_too_much">Du har mer risk än ditt mål</string>
+    <string name="hem_risk_direction_too_little">Du har mindre risk än ditt mål</string>
+    <string name="hem_risk_direction_mixed">Rätt risk i snitt, men på fel nivåer</string>
+    <string name="hem_risk_direction_in_line">Du ligger i linje med ditt mål</string>
+    <string name="hem_risk_scale">Risknivå 1 är lägst och 7 högst. Så ligger dina pengar i dag, strecket är målet:</string>
+    <string name="format_hem_risk_move">Flytta ca %1$s så är du framme.</string>
 
     <!-- Bytesplan på Beslut (HEM-8, NAV-9) -->
     <string name="switch_plan_title">Bytesplan</string>

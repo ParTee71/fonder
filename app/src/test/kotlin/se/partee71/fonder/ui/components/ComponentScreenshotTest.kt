@@ -119,6 +119,22 @@ class ComponentScreenshotTest {
     }
 
     @Test
+    fun `ExposureBar med målstreck`() = composeRule.captureLightAndDark("ExposureBar_target") {
+        Column {
+            ExposureBar(label = "Nivå 2", fraction = 0.08, target = 0.20)
+            ExposureBar(
+                label = "Nivå 4",
+                fraction = 0.52,
+                target = 0.45,
+                color = MaterialTheme.colorScheme.secondary,
+                targetColor = MaterialTheme.colorScheme.primary
+            )
+            ExposureBar(label = "Nivå 5", fraction = 0.14, target = 0.0, color = MaterialTheme.colorScheme.secondary, targetColor = MaterialTheme.colorScheme.primary)
+            ExposureBar(label = "Nivå 3", fraction = 0.0, target = 1.0)
+        }
+    }
+
+    @Test
     fun `AnalysisStatus banner och vägledning`() = composeRule.captureLightAndDark("AnalysisStatus_gul") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AnalysisStatusBanner(analysis = sampleAnalysis)

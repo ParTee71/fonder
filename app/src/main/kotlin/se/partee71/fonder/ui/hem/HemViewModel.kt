@@ -33,7 +33,6 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundMetadata
 import se.partee71.fonder.domain.model.FundPrice
 import se.partee71.fonder.domain.model.Holding
-import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.BackupReminder
@@ -48,7 +47,9 @@ import se.partee71.fonder.domain.usecase.PortfolioFeeCalc
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
 import se.partee71.fonder.domain.usecase.PortfolioReturnSeriesCalc
 import se.partee71.fonder.domain.usecase.PortfolioRiskCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
 import se.partee71.fonder.domain.usecase.PortfolioTotalCalc
+import se.partee71.fonder.domain.usecase.RiskSummary
 import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.ui.common.RetrySignal
 import se.partee71.fonder.ui.common.catchAsDetailError
@@ -117,12 +118,15 @@ data class HemPortfolio(
     val navEpochDay: Long? = null,
     /** Portföljens totala fondavgift per år (HEM-5, issue #60). */
     val feeSummary: PortfolioFeeCalc.Result = PortfolioFeeCalc.Result(totalAnnualFeeKr = 0.0, byHolding = emptyList(), unknownFeeCount = 0),
-    /** Riskprofilens målnivå (SET-3), null om ingen profil är satt — raden uteblir helt då (HEM-7, issue #68). */
-    val riskProfile: RiskProfile? = null,
-    /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68). */
+    /** Innehavens genomsnittliga risknivå, viktad på värde (HEM-7, issue #68) — här för antalet fonder utan känd nivå. */
     val portfolioRisk: PortfolioRiskCalc.Result = PortfolioRiskCalc.Result(weightedAverageRisk = null, includedValueKr = 0.0, excludedCount = 0),
-    /** Målfördelning mot innehavens faktiska fördelning, per risknivå — tom om ingen profil är satt (HEM-7, issue #71). */
-    val riskLevelDeviations: ImmutableList<PortfolioRiskCalc.LevelDeviation> = persistentListOf(),
+    /**
+     * Riskkortets portföljdel ([PortfolioRiskSource.base]), null utan profil. Bytesplanen läggs på i
+     * förslagens egen gren ([risk]), så ett nytt förslag inte räknar om portföljen.
+     */
+    val riskBase: PortfolioRiskSource.RiskBase? = null,
+    /** Riskkortet (HEM-7, HEM-17): andel per nivå mot målet, läget och summan att flytta — null utan profil, då uteblir kortet. */
+    val risk: RiskSummary? = null,
     /**
      * Årets ungefärliga schablonskatt i ISK/KF (HEM-16, issue #199) — null utan ISK/KF (SET-4), för
      * ett år utan parametrar ([TaxCalc.ISK_PARAMETERS]) eller när ett innehavs värde inte går att avgöra.
@@ -181,6 +185,13 @@ data class HemUiState(
  */
 private const val PORTFOLIO_FALLBACK_LOOKBACK_YEARS = 1L
 
+/** Portföljen med riskkortet räknat ur [HemPortfolio.riskBase] och planen i [decisions] (HEM-17). */
+private fun DetailUiState<HemPortfolio>.withRisk(decisions: PendingDecisions): DetailUiState<HemPortfolio> {
+    val content = this as? DetailUiState.Content ?: return this
+    val risk = content.value.riskBase?.let { PortfolioRiskSource.summary(it, decisions.switchPlan) }
+    return DetailUiState.Content(content.value.copy(risk = risk))
+}
+
 /** Användarens handlingar på Översikt, till [HemViewModel.onEvent]. */
 sealed interface HemEvent {
     /** Dra ned för att uppdatera (UI-11). */
@@ -208,6 +219,7 @@ class HemViewModel internal constructor(
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val fundPriceRefreshScheduler: FundPriceRefreshScheduler,
     private val backupStatusRepository: BackupStatusRepository,
+    private val portfolioRiskSource: PortfolioRiskSource,
     /** "Idag" — fast i testerna, så att årets skatt (HEM-16) inte beror på när de körs. */
     private val today: () -> LocalDate
 ) : ViewModel() {
@@ -220,7 +232,8 @@ class HemViewModel internal constructor(
         preferencesRepository: PreferencesRepository,
         pendingDecisionsSource: PendingDecisionsSource,
         fundPriceRefreshScheduler: FundPriceRefreshScheduler,
-        backupStatusRepository: BackupStatusRepository
+        backupStatusRepository: BackupStatusRepository,
+        portfolioRiskSource: PortfolioRiskSource
     ) : this(
         transactionRepository,
         fundPriceRepository,
@@ -229,6 +242,7 @@ class HemViewModel internal constructor(
         pendingDecisionsSource,
         fundPriceRefreshScheduler,
         backupStatusRepository,
+        portfolioRiskSource,
         LocalDate::now
     )
 
@@ -258,7 +272,9 @@ class HemViewModel internal constructor(
      */
     private val settings: Flow<Settings> =
         combine(
-            preferencesRepository.riskProfile,
+            // Profilen och bevakningarna (BYT-3) ur riskkällan — likviden som väntar på köp räknas på
+            // sin målnivå, så kortet och bytesplanen mäter samma gap (HEM-7).
+            portfolioRiskSource.observeContext(),
             combine(preferencesRepository.benchmark, preferencesRepository.chosenBenchmarkIsin) { derived, chosen ->
                 // Eget val vinner alltid över appens (HEM-10, issue #102) — och ersätter hela
                 // blandningen, inte en del av den: väljer man en fond är det den man vill mätas
@@ -266,8 +282,8 @@ class HemViewModel internal constructor(
                 chosen?.let { listOf(BenchmarkComponentRef(isin = it, weight = 1.0)) } ?: derived
             },
             preferencesRepository.accountType
-        ) { riskProfile, benchmark, accountType ->
-            Settings(riskProfile, benchmark, accountType)
+        ) { riskContext, benchmark, accountType ->
+            Settings(riskContext, benchmark, accountType)
         }
 
     /**
@@ -357,7 +373,6 @@ class HemViewModel internal constructor(
                 }
                 refreshMetadata(enriched.mapNotNull { it.fund.isin })
                 requestBenchmarkIfMissing(currentSettings.benchmark, hasHoldings = enriched.isNotEmpty())
-                val riskProfile = currentSettings.riskProfile
                 val exposure = PortfolioExposureCalc.compute(enriched, metadataByIsin)
                 val navEpochDay = PortfolioCalc.oldestKnownNavEpochDay(enriched)
                 val transactionsByFundId = transactions.groupBy { it.fundId }
@@ -385,14 +400,8 @@ class HemViewModel internal constructor(
                         .toImmutableList(),
                     navEpochDay = navEpochDay,
                     feeSummary = PortfolioFeeCalc.compute(enriched, metadataByIsin, today),
-                    riskProfile = riskProfile,
                     portfolioRisk = PortfolioRiskCalc.compute(enriched, metadataByIsin),
-                    riskLevelDeviations = riskProfile?.let {
-                        PortfolioRiskCalc.deviationByLevel(
-                            targetAllocation = it.effectiveAllocation,
-                            actualAllocation = PortfolioRiskCalc.actualAllocation(exposure.byRiskLevel)
-                        )
-                    }.orEmpty().toImmutableList(),
+                    riskBase = portfolioRiskSource.base(currentSettings.risk, funds, transactions, exposure.byRiskLevel, metadataByIsin, today),
                     iskTax = if (currentSettings.accountType == AccountType.ISK_KF) TaxCalc.iskTaxForYear(today.year, today, transactions, historyByFundId) else null
                 )
             }
@@ -400,7 +409,8 @@ class HemViewModel internal constructor(
             .combine(pendingDecisionsSource.observe()) { state, decisions ->
                 // Egen gren av samma skäl som körstatusen nedan: förslag och bevakningar har ingenting
                 // med innehav, kurser eller inställningar att göra och ska inte kunna räkna om portföljen.
-                state.copy(decisions = decisions)
+                // Riskkortets effekt av planen (HEM-17) läggs på här av samma skäl — den beräkningen är liten.
+                state.copy(decisions = decisions, portfolio = state.portfolio.withRisk(decisions))
             }.combine(backupStatusRepository.reminder.onStart { emit(null) }) { state, reminder ->
                 // Egen gren: påminnelsen (HEM-12) räknas ur backup-kontraktet, inte ur innehav och
                 // kurser, och ska inte kunna räkna om portföljen. `onStart` så Hem inte väntar in
@@ -551,7 +561,8 @@ class HemViewModel internal constructor(
     }
 
     private data class Settings(
-        val riskProfile: RiskProfile?,
+        /** Riskprofilen och bevakningarna (SET-3, BYT-3) — se [PortfolioRiskSource.observeContext]. */
+        val risk: PortfolioRiskSource.Context,
         /** Referensblandningen (HEM-10) — härledd cache, satt av bakgrundsjobbet, inte ett användarval. */
         val benchmark: List<BenchmarkComponentRef>,
         /** Kontotypen (SET-4) — ISK/KF visar årets schablonskatt (HEM-16). */

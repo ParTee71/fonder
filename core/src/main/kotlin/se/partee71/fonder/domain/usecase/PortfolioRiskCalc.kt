@@ -63,12 +63,17 @@ object PortfolioRiskCalc {
      * [compute] använder för sitt viktade snitt.
      */
     fun actualAllocation(byRiskLevel: PortfolioExposureCalc.Dimension): Map<Int, Double> {
-        val classifiedValueKr = byRiskLevel.buckets.sumOf { it.valueKr }
+        val valueByLevel = valueByLevel(byRiskLevel)
+        val classifiedValueKr = valueByLevel.values.sum()
         if (classifiedValueKr <= 0.0) return emptyMap()
-        return byRiskLevel.buckets.mapNotNull { bucket ->
-            bucket.label.toIntOrNull()?.let { level -> level to bucket.valueKr / classifiedValueKr }
-        }.toMap()
+        return valueByLevel.mapValues { (_, valueKr) -> valueKr / classifiedValueKr }
     }
+
+    /**
+     * Det klassificerade värdet per risknivå i kronor — det [actualAllocation] delar med sin summa
+     * och [SwitchEffectCalc] räknar på, med likviden som väntar på köp (BYT-3) adderad.
+     */
+    fun valueByLevel(byRiskLevel: PortfolioExposureCalc.Dimension): Map<Int, Double> = byRiskLevel.buckets.mapNotNull { bucket -> bucket.label.toIntOrNull()?.let { level -> level to bucket.valueKr } }.toMap()
 
     /**
      * Avvikelse per risknivå (HEM-7/issue #71) — målfördelningen

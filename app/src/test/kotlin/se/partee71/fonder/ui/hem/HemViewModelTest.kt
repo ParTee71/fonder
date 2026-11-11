@@ -65,6 +65,8 @@ import se.partee71.fonder.domain.usecase.FundAnalysisCalc
 import se.partee71.fonder.domain.usecase.InProgressSwitches
 import se.partee71.fonder.domain.usecase.PendingDecisionsSource
 import se.partee71.fonder.domain.usecase.PortfolioPerformanceCalc
+import se.partee71.fonder.domain.usecase.PortfolioRiskSource
+import se.partee71.fonder.domain.usecase.SwitchEffectCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.testing.FailingUntilRetry
 import se.partee71.fonder.testing.RECENT_PURCHASE_DAYS
@@ -144,6 +146,7 @@ class HemViewModelTest {
         },
         fakeScheduler,
         backupStatus,
+        PortfolioRiskSource(preferencesRepository, fakeSwitchWatchRepo, fakeSuggestionRecordRepo),
         today
     )
 
@@ -466,21 +469,21 @@ class HemViewModelTest {
     // --- Riskprofil (HEM-7, issue #68) ---
 
     @Test
-    fun `riskProfile ar null och portfolioRisk saknar varde utan sparad profil`() = runTest(dispatcher) {
+    fun `riskkortet saknas och portfolioRisk saknar varde utan sparad profil`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
 
         val vm = viewModel()
         vm.uiState.test {
             var state = awaitItemSkipping { it.loading }
-            assertNull(state.content.riskProfile)
+            assertNull(state.content.risk)
             assertNull(state.content.portfolioRisk.weightedAverageRisk)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `riskProfile speglar sparad malniva och portfolioRisk raknar det vardeviktade snittet`() = runTest(dispatcher) {
+    fun `riskkortet speglar sparad malniva och snittet ar fondens egen niva`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
@@ -490,10 +493,13 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItemSkipping { it.loading || it.content.riskProfile == null || it.content.portfolioRisk.weightedAverageRisk == null }
-            assertEquals(5, state.content.riskProfile?.targetRiskLevel)
+            var state = awaitItemSkipping { it.loading || it.content.risk?.effect?.weightedActualLevel == null }
+            assertEquals(5, state.content.risk?.riskProfile?.targetRiskLevel)
+            assertEquals(5.0, state.content.risk!!.effect.weightedTargetLevel, 1e-9)
             // Ett enda innehav -> det värdeviktade snittet är exakt fondens egen risknivå.
+            assertEquals(4.0, state.content.risk!!.effect.weightedActualLevel!!, 1e-9)
             assertEquals(4.0, state.content.portfolioRisk.weightedAverageRisk ?: -1.0, 1e-9)
+            assertEquals(SwitchEffectCalc.Direction.TOO_LITTLE_RISK, state.content.risk!!.effect.direction)
             assertEquals(0, state.content.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
         }
@@ -508,15 +514,16 @@ class HemViewModelTest {
 
         val vm = viewModel()
         vm.uiState.test {
-            var state = awaitItemSkipping { it.loading || it.content.riskProfile == null }
+            var state = awaitItemSkipping { it.loading || it.content.risk == null }
             assertNull(state.content.portfolioRisk.weightedAverageRisk)
+            assertNull(state.content.risk!!.effect.direction)
             assertEquals(1, state.content.portfolioRisk.excludedCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `riskLevelDeviations jamfor malfordelningen mot innehavens faktiska niva-fordelning`() = runTest(dispatcher) {
+    fun `riskkortet jamfor malfordelningen mot innehavens faktiska niva-fordelning`() = runTest(dispatcher) {
         val today = LocalDate.now()
         val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
         metadataByIsin = mapOf(
@@ -528,8 +535,8 @@ class HemViewModelTest {
         val vm = viewModel()
         vm.uiState.test {
             // Vänta tills metadatan landat — den faktiska fördelningen är tom innan dess.
-            var state = awaitItemSkipping { it.loading || it.content.riskLevelDeviations.none { it.actualFraction > 0.0 } }
-            val byLevel = state.content.riskLevelDeviations.associateBy { it.level }
+            var state = awaitItemSkipping { it.loading || it.content.risk?.effect?.levels.orEmpty().none { it.actualFraction > 0.0 } }
+            val byLevel = state.content.risk!!.effect.levels.associateBy { it.level }
             assertEquals(0.5, byLevel.getValue(3).targetFraction, 1e-9)
             assertEquals(0.0, byLevel.getValue(3).actualFraction, 1e-9)
             assertEquals(0.5, byLevel.getValue(4).targetFraction, 1e-9)
@@ -539,14 +546,22 @@ class HemViewModelTest {
     }
 
     @Test
-    fun `riskLevelDeviations ar tom utan en sparad profil`() = runTest(dispatcher) {
-        val today = LocalDate.now()
-        val fond = holdFundAWorth1200(fakeTransactionRepo, fakeFundPriceRepo, today)
+    fun `riskkortet raknar summan att flytta ur bytesplanen och effekten per niva`() = runTest(dispatcher) {
+        // Innehav på nivå 5 för 1 200 kr, mål 100 % nivå 3; planen säljer 2 500 kr (inspelat belopp,
+        // större än innehavet — kortet visar planens belopp, inte en egen omräkning).
+        setUpHoldingWithMetadataForSwitchPlan()
+        preferencesRepository.setAccountType(AccountType.ISK_KF)
+        preferencesRepository.setRiskProfile(RiskProfile(targetAllocation = mapOf(3 to 1.0)))
 
-        val vm = viewModel()
-        vm.uiState.test {
-            var state = awaitItemSkipping { it.loading }
-            assertTrue(state.content.riskLevelDeviations.isEmpty())
+        viewModel().uiState.test {
+            val state = awaitItemSkipping { it.loading || it.content.risk?.effect?.totalToMoveKr == null || it.content.risk?.effect?.direction == null }
+            val effect = state.content.risk!!.effect
+            assertEquals(2_500.0, effect.totalToMoveKr!!, 1e-9)
+            assertEquals(SwitchEffectCalc.Direction.TOO_MUCH_RISK, effect.direction)
+            val step = effect.steps.single()!!
+            assertEquals(5, step.from.level)
+            assertEquals(1.0, step.from.beforeFraction, 1e-9)
+            assertEquals(3, step.to.level)
             cancelAndIgnoreRemainingEvents()
         }
     }
