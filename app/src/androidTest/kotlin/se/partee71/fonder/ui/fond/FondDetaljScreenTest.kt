@@ -611,7 +611,7 @@ class FondDetaljScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("2 förslag du avstått från visas inte här", substring = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("2 förslag du hoppat över visas inte här", substring = true).performScrollTo().assertExists()
         composeRule.onNodeWithText("Riskprofilens bytesplan föreslår inget byte", substring = true).assertDoesNotExist()
     }
 

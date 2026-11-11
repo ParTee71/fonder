@@ -54,6 +54,7 @@
 [component-only]
 \bPullToRefreshBox\b	PullToRefreshContainer
 \bExposedDropdownMenuBox\b	SelectField
+\bModalBottomSheet\b	AppBottomSheet (android-ui)
 
 [vico]
 \bcom\.patrykandpatrick\.vico\b	FundLineChart i ui/diagram – Vico bara där (TP-12)

@@ -32,6 +32,7 @@ import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.TaxCalc
 import se.partee71.fonder.testing.captureLightAndDark
 import se.partee71.fonder.testing.isDrawn
+import se.partee71.fonder.ui.components.RiskCard
 import se.partee71.fonder.ui.theme.FonderTheme
 import se.partee71.ui.common.DetailUiState
 

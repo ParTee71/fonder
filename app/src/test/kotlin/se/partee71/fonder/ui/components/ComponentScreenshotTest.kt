@@ -135,6 +135,31 @@ class ComponentScreenshotTest {
     }
 
     @Test
+    fun `FundFactsCard med märke och alternativrad`() = composeRule.captureLightAndDark("FundFactsCard_default") {
+        Column {
+            FundFactsCard(
+                facts = FundFacts(
+                    name = "Räntefond Kort",
+                    risk = 2,
+                    totalFeePercent = 0.20,
+                    oneYearFraction = 0.039,
+                    type = "Räntefond, Korta räntor",
+                    company = "Nordiska Fonder AB"
+                ),
+                badge = "Vårt förslag",
+                reason = "Vald för att den är billigast bland fonderna på risknivå 2 som gått bäst det senaste året."
+            )
+            FundFactsRow(FundFacts(name = "Kort Ränta Index", risk = 2, totalFeePercent = 0.10, oneYearFraction = 0.034, type = "Räntefond"))
+            FundFactsRow(FundFacts(name = "Nordisk Företagsobligation", risk = 2, totalFeePercent = 0.60, oneYearFraction = -0.008))
+        }
+    }
+
+    @Test
+    fun `FundFactsCard med okända värden`() = composeRule.captureLightAndDark("FundFactsCard_unknown") {
+        FundFactsCard(facts = FundFacts(name = "Okänd Fond"))
+    }
+
+    @Test
     fun `AnalysisStatus banner och vägledning`() = composeRule.captureLightAndDark("AnalysisStatus_gul") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AnalysisStatusBanner(analysis = sampleAnalysis)

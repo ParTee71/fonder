@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -107,6 +108,27 @@ class PortfolioRiskSourceTest {
     }
 
     @Test
+    fun `stegens effekt nycklas pa forslagets id for Besluts rader`() {
+        // Issue #240: varje råd visar sin egen effekt — sålda och genomförda har ingen, de räknas inte.
+        val base = PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = mapOf(2 to 0.5, 4 to 0.5)), mapOf(4 to 1_000.0), emptyMap())
+
+        val summary = PortfolioRiskSource.summary(
+            base,
+            listOf(
+                suggestion(planIndex = 0, amount = 300.0, inProgress = true),
+                suggestion(planIndex = 1, amount = 200.0),
+                suggestion(planIndex = 2, amount = 100.0)
+            )
+        )!!
+
+        assertEquals(setOf(1L, 2L), summary.stepByRecordId.keys)
+        assertEquals(0.8, summary.stepByRecordId.getValue(1L).from.afterFraction, 1e-9)
+        // Kumulativt: steg 2 räknas från läget efter steg 1.
+        assertEquals(0.8, summary.stepByRecordId.getValue(2L).from.beforeFraction, 1e-9)
+        assertEquals(0.7, summary.stepByRecordId.getValue(2L).from.afterFraction, 1e-9)
+    }
+
+    @Test
     fun `efter ett avstatt steg gar resten av planen inte att rakna`() {
         // Steg 0 avstått (HEM-14) och borta ur den visade planen; steg 1 förutsatte det.
         val base = PortfolioRiskSource.RiskBase(RiskProfile(targetAllocation = mapOf(2 to 0.5, 4 to 0.5)), mapOf(4 to 1_000.0), emptyMap())
@@ -115,6 +137,7 @@ class PortfolioRiskSourceTest {
 
         assertNull(summary.effect.totalToMoveKr)
         assertEquals(listOf(null), summary.effect.steps)
+        assertTrue(summary.stepByRecordId.isEmpty())
     }
 
     @Test
