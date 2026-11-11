@@ -689,6 +689,7 @@
     <string name="format_beslut_closed_bought_unknown">%1$s → köp registrerat</string>
     <string name="format_beslut_closed_title">Avslutade och överhoppade (%1$d)</string>
     <string name="format_beslut_closed_explain">Avslutade byten visas här i %1$d dagar, sedan i Facit. Ett överhoppat förslag hålls borta i %2$d dagar.</string>
+    <string name="beslut_plan_accuracy">Råden stämmer ungefär 3 gånger av 4.</string>
     <string name="beslut_never_switches">Appen byter aldrig åt dig – du gör bytet hos din bank.</string>
     <!-- Infokortet på Beslut (BYT-5, issue #240) -->
     <string name="format_beslut_info_a11y">Mer om fonderna: %1$s → %2$s</string>

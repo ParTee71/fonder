@@ -317,7 +317,7 @@ class BeslutScreenTest {
     fun `forbehallet sager att appen aldrig byter och hur ofta raden stammer`() {
         composeRule.setContent { FonderTheme { BeslutContent(state = full) } }
 
-        val text = "Appen byter aldrig åt dig – du gör bytet hos din bank. Rätt cirka 3 gånger av 4, uppmätt spann −10 till +13 procentenheter, på en risknivå under sex år — inte en garanti. Byten är gratis i ISK/KF, men inte riskfria."
+        val text = "Appen byter aldrig åt dig – du gör bytet hos din bank. Råden stämmer ungefär 3 gånger av 4."
         composeRule.onNodeWithTag(BESLUT_LIST_TEST_TAG).performScrollToNode(hasText(text))
         composeRule.onNodeWithText(text).assertExists()
     }

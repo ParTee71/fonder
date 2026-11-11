@@ -229,7 +229,7 @@ private fun BeslutList(
             }
             // Förbehållet (HEM-8): appen byter aldrig, och planens träffsäkerhet så länge ett planbyte står på listan.
             item(contentType = "caption") {
-                val accuracy = if (switches.active.any { it.state == SwitchRowState.PROPOSED }) " " + stringResource(R.string.switch_plan_disclaimer) else ""
+                val accuracy = if (switches.active.any { it.state == SwitchRowState.PROPOSED }) " " + stringResource(R.string.beslut_plan_accuracy) else ""
                 CaptionText(stringResource(R.string.beslut_never_switches) + accuracy)
             }
         }
