@@ -396,6 +396,10 @@
     <string name="settings_riskprofile_button">Öppna riskprofil</string>
     <!-- Kontotyp (SET-4, issue #70) -->
     <string name="settings_account_type_section">Kontotyp</string>
+    <string name="settings_switch_watch_ttl_section">Bevakning av byten</string>
+    <string name="settings_switch_watch_ttl_body">Hur många dagar ett pågående byte bevakas efter säljdagen. Så länge räknas likviden som pengar på väg i bytesplanen. Sedan stängs bytet som utgånget.</string>
+    <string name="settings_switch_watch_ttl_note">Väljer du en kortare tid stängs öppna byten som är äldre än så. Ett stängt byte öppnas inte igen.</string>
+    <string name="format_settings_switch_watch_ttl_option">%1$d</string>
     <string name="settings_account_type_body" formatted="false">Styr om Beslut föreslår en bytesplan mot din riskprofil. I depå/AF kostar ett fondbyte 30 % skatt på vinsten, en kostnad ingen signal appen har kan motivera — därför ges inga bytesförslag där.</string>
     <string name="account_type_isk_kf">ISK/KF</string>
     <string name="account_type_depa_af">Depå/AF</string>

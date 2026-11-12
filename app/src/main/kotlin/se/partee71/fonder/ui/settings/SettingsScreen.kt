@@ -40,6 +40,7 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.usecase.BackupReminderCalc
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.components.CardTitleRow
 import se.partee71.fonder.ui.components.ChoiceChipRow
 import se.partee71.fonder.ui.theme.Error
@@ -131,6 +132,7 @@ fun SettingsScreen(
         onOpenGallery = onOpenGallery,
         onClearBenchmark = { viewModel.onEvent(SettingsEvent.ClearBenchmark) },
         onAccountTypeSelect = { viewModel.onEvent(SettingsEvent.SetAccountType(it)) },
+        onSwitchWatchTtlSelect = { viewModel.onEvent(SettingsEvent.SetSwitchWatchTtl(it)) },
         onExportBackup = { exportPicker.launch("fonder-backup-${LocalDate.now()}.json") },
         onRestoreBackup = { restorePicker.launch(BACKUP_MIME_TYPES) },
         onBackupMessageDismiss = { viewModel.onEvent(SettingsEvent.BackupMessageDismissed) },
@@ -164,6 +166,7 @@ fun SettingsContent(
     onOpenGallery: (() -> Unit)? = null,
     onClearBenchmark: () -> Unit = {},
     onAccountTypeSelect: (AccountType) -> Unit = {},
+    onSwitchWatchTtlSelect: (Long) -> Unit = {},
     onExportBackup: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
     onBackupMessageDismiss: () -> Unit = {},
@@ -221,6 +224,19 @@ fun SettingsContent(
                 optionLabel = { type -> stringResource(type.labelRes()) },
                 onSelect = onAccountTypeSelect
             )
+        }
+
+        // Bevakningstiden för pågående byten (SET-8, issue #244) — samma kort och väljare som
+        // kontotypen (regel 4). Valet styr utgång, likvid på väg och "dag N av X" överallt.
+        AppCard(modifier = Modifier.fillMaxWidth().padding(top = Spacing.l)) {
+            ItemRowText(title = stringResource(R.string.settings_switch_watch_ttl_section), subtitle = stringResource(R.string.settings_switch_watch_ttl_body), modifier = Modifier.padding(bottom = Spacing.s))
+            ChoiceChipRow(
+                options = SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS,
+                selected = state.switchWatchTtlDays,
+                optionLabel = { days -> stringResource(R.string.format_settings_switch_watch_ttl_option, days) },
+                onSelect = onSwitchWatchTtlSelect
+            )
+            ItemRowText(title = null, subtitle = stringResource(R.string.settings_switch_watch_ttl_note), modifier = Modifier.padding(top = Spacing.s))
         }
 
         // Jämförelsereferensen (HEM-10, issue #102) — appens val är ett förslag, användarens

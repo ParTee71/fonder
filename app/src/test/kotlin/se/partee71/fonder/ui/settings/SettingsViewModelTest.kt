@@ -65,6 +65,7 @@ import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.DriveBackupFile
 import se.partee71.fonder.domain.usecase.FeeComparisonCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 
@@ -392,6 +393,37 @@ class SettingsViewModelTest {
             assertEquals(1, reads)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Bevakningstid för pågående byten (SET-8, issue #244) ---
+
+    @Test
+    fun `vald bevakningstid sparas visas och ber om en omrakning`() = runTest(dispatcher) {
+        // Bakgrundskörningen stänger då byten som passerat den nya tiden och räknar om likviden på väg.
+        val preferencesRepository = PreferencesRepository(dataStore)
+        val vm = viewModel(preferencesRepository)
+
+        vm.uiState.test {
+            assertEquals(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, awaitItem().switchWatchTtlDays)
+            vm.onEvent(SettingsEvent.SetSwitchWatchTtl(60L))
+            advanceUntilIdle()
+            assertEquals(60L, expectMostRecentItem().switchWatchTtlDays)
+        }
+        assertEquals(60L, preferencesRepository.switchWatchTtlDays.first())
+        assertEquals(1, fakeScheduler.switchPlanScans)
+    }
+
+    @Test
+    fun `samma bevakningstid igen eller en otillaten tid kostar ingen skanning`() = runTest(dispatcher) {
+        val preferencesRepository = PreferencesRepository(dataStore)
+        val vm = viewModel(preferencesRepository)
+
+        vm.onEvent(SettingsEvent.SetSwitchWatchTtl(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS))
+        vm.onEvent(SettingsEvent.SetSwitchWatchTtl(45L))
+        advanceUntilIdle()
+
+        assertEquals(0, fakeScheduler.switchPlanScans)
+        assertNull(preferencesRepository.switchWatchTtlDaysSetting.first())
     }
 
     // --- Omräkning av bytesplanen vid kontotypsbyte (HEM-8, issue #88) ---

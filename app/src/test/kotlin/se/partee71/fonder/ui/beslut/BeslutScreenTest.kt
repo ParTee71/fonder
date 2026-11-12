@@ -289,7 +289,7 @@ class BeslutScreenTest {
         composeRule.onNodeWithText("3 väntar på dig").assertIsDisplayed()
         // Varje rad är en nod (chip, rubrik, effekt) — exakt textmatchning per del.
         listOf(
-            "Sålt · dag 2 av 14 · välj köpfond",
+            "Sålt · dag 2 av 30 · välj köpfond",
             "Tillväxtmarknad Bred → ?",
             "${MoneyFormat.krWhole(18_400.0)} väntar.",
             "Sänker risken · steg 2",

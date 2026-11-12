@@ -43,6 +43,7 @@ class BackupSerializerTest {
     private fun fullPayload() = BackupPayload(
         exportedAtEpochMillis = 1_754_300_000_000,
         chosenBenchmarkIsin = "SE0011527613",
+        switchWatchTtlDays = 60L,
         funds = listOf(
             Fund(fundId = "SHB0000442", name = "Fond A", currency = "SEK", isin = "SE0000582033", fondlistaFundId = "SHB0000442"),
             Fund(fundId = "LU0055631609", name = "Fond utan koder", currency = "USD", isin = null, fondlistaFundId = null)
@@ -227,7 +228,7 @@ class BackupSerializerTest {
             setOf(
                 "formatVersion", "exportedAtEpochMillis", "funds", "transactions",
                 "suggestionRecords", "switchWatches", "suggestionDismissals", "riskProfile", "accountType",
-                "themeMode", "chosenBenchmarkIsin"
+                "themeMode", "chosenBenchmarkIsin", "switchWatchTtlDays"
             ),
             root.keys
         )
@@ -306,6 +307,18 @@ class BackupSerializerTest {
         assertEquals(2, restored.switchWatches.size)
         assertTrue(restored.switchWatches.all { it.sellTransactionId == null && it.buyTransactionId == null })
         assertEquals(BackupPayload.FORMAT_VERSION, restored.formatVersion)
+    }
+
+    @Test
+    fun `bevakningstiden overlever och en aldre fil utan den lases som inget val`() {
+        // SET-8 (issue #244): ett val, därför i kontraktet. En fil från före 1.0.0 saknar nyckeln
+        // helt — samma formatversion, och återställningen ger då standardtiden.
+        val restored = BackupSerializer.decode(BackupSerializer.encode(fullPayload())).getOrThrow()
+        assertEquals(60L, restored.switchWatchTtlDays)
+
+        val utanTid = BackupSerializer.encode(fullPayload()).replace(Regex(",\\s*\"switchWatchTtlDays\": \\d+"), "")
+        assertFalse(utanTid.contains("switchWatchTtlDays"))
+        assertNull(BackupSerializer.decode(utanTid).getOrThrow().switchWatchTtlDays)
     }
 
     @Test

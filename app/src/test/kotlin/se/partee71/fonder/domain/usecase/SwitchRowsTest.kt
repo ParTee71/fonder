@@ -184,8 +184,8 @@ class SwitchRowsTest {
         val rows = SwitchRows.build(
             PendingDecisions(),
             closedWatches = listOf(
-                closed(1, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.WATCH_TTL_DAYS),
-                closed(2, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.WATCH_TTL_DAYS + 1)
+                closed(1, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS),
+                closed(2, SwitchWatchCloseReason.KOPT, closedDaysAgo = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1)
             ),
             today = today
         )

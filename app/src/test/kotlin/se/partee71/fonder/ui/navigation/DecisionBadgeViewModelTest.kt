@@ -56,7 +56,7 @@ class DecisionBadgeViewModelTest {
             FakeCachedPriceRepository(),
             metadata,
             DismissedPlanSource(records, dismissals, preferences, metadata),
-            InProgressSwitches(switchWatchRepo, records)
+            InProgressSwitches(switchWatchRepo, records, preferences)
         )
         return DecisionBadgeViewModel(source)
     }

@@ -102,7 +102,7 @@ class BeslutViewModelTest {
             priceRepo,
             metadataRepo,
             DismissedPlanSource(suggestionRepo, dismissalRepo, preferencesRepository, metadataRepo),
-            InProgressSwitches(switchWatchRepo, suggestionRepo)
+            InProgressSwitches(switchWatchRepo, suggestionRepo, preferencesRepository)
         ),
         FacitSummary(suggestionRepo, facitTransactions, priceRepo, metadataRepo, dispatcher),
         preferencesRepository,
@@ -960,7 +960,7 @@ class BeslutViewModelTest {
             SwitchWatch(
                 sellIsin = "SE_SALJ",
                 sellFundName = "Fond A",
-                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1).toEpochDay()
             )
         )
 
@@ -1115,8 +1115,8 @@ class BeslutViewModelTest {
         val today = LocalDate.now()
         val recent = switchWatchRepo.start(SwitchWatch(sellIsin = "SE_1", sellFundName = "Fond 1", soldAtEpochDay = today.toEpochDay() - 20))
         val old = switchWatchRepo.start(SwitchWatch(sellIsin = "SE_2", sellFundName = "Fond 2", soldAtEpochDay = today.toEpochDay() - 40))
-        switchWatchRepo.close(recent, SwitchWatchCloseReason.AVBRUTEN, today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS))
-        switchWatchRepo.close(old, SwitchWatchCloseReason.UTGANGEN, today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1))
+        switchWatchRepo.close(recent, SwitchWatchCloseReason.AVBRUTEN, today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS))
+        switchWatchRepo.close(old, SwitchWatchCloseReason.UTGANGEN, today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1))
 
         viewModel().uiState.test {
             var state = awaitItem()

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import se.partee71.fonder.data.common.AppErrors
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.FundPriceRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
@@ -117,7 +118,8 @@ data class SwitchWatchDetail(
     val soldAtEpochDay: Long = 0,
     val proceedsKr: Double? = null,
     val daysWaiting: Long = 0,
-    val ttlDays: Long = SwitchWatchCalc.WATCH_TTL_DAYS,
+    /** Bevakningstiden (SET-8) — "dag N av X". */
+    val ttlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS,
     /** Öppen men äldre än TTL:n — läget beskrivs inte längre av verkligheten (ANA-12). */
     val expired: Boolean = false,
     val closed: Boolean = false,
@@ -245,7 +247,8 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val fundMetadataRepository: FundMetadataRepository,
     private val transactionRepository: TransactionRepository,
     private val targetLevelPreselection: TargetLevelPreselection,
-    private val scheduler: FundPriceRefreshScheduler
+    private val scheduler: FundPriceRefreshScheduler,
+    private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
     private val metadata = MutableStateFlow<Map<String, FundMetadata>>(emptyMap())
@@ -289,12 +292,12 @@ class SwitchWatchViewModel @AssistedInject constructor(
     private val watch: Flow<SwitchWatch?> = switchWatchRepository.observe(watchId)
 
     val uiState: StateFlow<SwitchWatchUiState> = combine(
-        watch,
+        combine(watch, preferencesRepository.switchWatchTtlDays, ::Pair),
         metadata,
         histories,
         sellSeries,
         combine(fillingCandidates, emptyReason, message, profileSuggestion, ::Transient)
-    ) { watch, metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg, suggestion) ->
+    ) { (watch, ttlDays), metadataByIsin, historyByIsin, sellPoints, (filling, reason, msg, suggestion) ->
         if (watch == null) return@combine SwitchWatchUiState(watch = DetailUiState.Error(AppErrors.notFound()))
 
         val today = LocalDate.now()
@@ -332,7 +335,8 @@ class SwitchWatchViewModel @AssistedInject constructor(
             soldAtEpochDay = watch.soldAtEpochDay,
             proceedsKr = watch.proceedsKr,
             daysWaiting = SwitchWatchCalc.daysWaiting(watch, today),
-            expired = SwitchWatchCalc.isExpired(watch, today),
+            ttlDays = ttlDays,
+            expired = SwitchWatchCalc.isExpired(watch, today, ttlDays),
             closed = !watch.isOpen,
             boughtFundName = watch.boughtIsin?.let { isin ->
                 watch.candidates.firstOrNull { it.isin == isin }?.name ?: metadataByIsin[isin]?.name ?: isin

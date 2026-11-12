@@ -3,6 +3,7 @@ package se.partee71.fonder.domain.usecase
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
+import se.partee71.fonder.data.datastore.PreferencesRepository
 import se.partee71.fonder.data.repository.FundMetadataRepository
 import se.partee71.fonder.data.repository.SuggestionRecordRepository
 import se.partee71.fonder.data.repository.SwitchWatchRepository
@@ -39,14 +40,34 @@ import se.partee71.fonder.worker.FundPriceRefreshScheduler
  *
  * Appen utför **aldrig** ett byte. Allt här registrerar vad användaren gjort.
  */
-class RecordTransaction @Inject constructor(
+class RecordTransaction internal constructor(
     private val transactionRepository: TransactionRepository,
     private val switchWatchRepository: SwitchWatchRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
     private val fundMetadataRepository: FundMetadataRepository,
     private val scheduler: FundPriceRefreshScheduler,
-    private val targetLevelPreselection: TargetLevelPreselection
+    private val targetLevelPreselection: TargetLevelPreselection,
+    /** Bevakningstiden (SET-8) — ett sälj äldre än så startar ingen bevakning (issue #244). */
+    private val ttlDays: suspend () -> Long = { SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS }
 ) {
+    @Inject
+    constructor(
+        transactionRepository: TransactionRepository,
+        switchWatchRepository: SwitchWatchRepository,
+        suggestionRecordRepository: SuggestionRecordRepository,
+        fundMetadataRepository: FundMetadataRepository,
+        scheduler: FundPriceRefreshScheduler,
+        targetLevelPreselection: TargetLevelPreselection,
+        preferencesRepository: PreferencesRepository
+    ) : this(
+        transactionRepository,
+        switchWatchRepository,
+        suggestionRecordRepository,
+        fundMetadataRepository,
+        scheduler,
+        targetLevelPreselection,
+        { preferencesRepository.switchWatchTtlDays.first() }
+    )
 
     /** En transaktion att skriva, med användarens svar på bytesväljaren ("Inget byte" om väljaren inte visats). */
     data class Entry(val transaction: Transaction, val decision: SwitchDecision = SwitchDecision.None)
@@ -146,6 +167,7 @@ class RecordTransaction @Inject constructor(
         // Dedupen går på transaktionen; bevakningar med länk matchar bara på den, så två sälj
         // samma dag i samma fond kan få varsin.
         if (switchWatchRepository.hasOpenForTransaction(sale.id)) return null
+        val ttl = ttlDays()
 
         val record = suggestion?.let { recordById(it.recordId) }
         val existing = switchWatchRepository.findOpenWithoutTransactionFor(isin, sale.epochDay)
@@ -153,7 +175,7 @@ class RecordTransaction @Inject constructor(
         // bevakningen startats ur ett **annat** förslag: då hade R aldrig kopplats och målnivån
         // blivit fel. En bevakning utan förslag tar över R (rad och målnivå) när den kopplas.
         if (existing != null && (record == null || existing.sourceRecordId == null || existing.sourceRecordId == record.id)) {
-            if (SwitchWatchCalc.isExpired(existing, today)) return null
+            if (SwitchWatchCalc.isExpired(existing, today, ttl)) return null
             val adopt = record?.takeIf { existing.sourceRecordId == null }
             val linked = switchWatchRepository.linkSellTransaction(
                 existing.id,
@@ -164,6 +186,11 @@ class RecordTransaction @Inject constructor(
             )
             return if (linked) existing.id else null
         }
+
+        // Ett sälj äldre än bevakningstiden startar ingen ny bevakning: den vore utgången redan när
+        // den skapades och stängdes av nästa bakgrundskörning — Pågående byte hade öppnats och
+        // stängts igen inom en sekund (issue #244).
+        if (SwitchWatchCalc.isExpiredSoldAt(sale.epochDay, today, ttl)) return null
 
         val proceedsKr = sale.amount - sale.fee
         // Ur en planrad gäller radens nivå oförändrad; fristående förväljs den (issue #150).
@@ -206,7 +233,8 @@ class RecordTransaction @Inject constructor(
         if (switchWatchRepository.hasOpenForTransaction(sale.id)) return null
         val watch = switchWatchRepository.observe(watchId).first() ?: return null
         if (!watch.isOpen || watch.sellTransactionId != null) return null
-        if (SwitchWatchCalc.isExpired(watch, today) || SwitchWatchCalc.isExpired(watch.copy(soldAtEpochDay = sale.epochDay), today)) return null
+        val ttl = ttlDays()
+        if (SwitchWatchCalc.isExpired(watch, today, ttl) || SwitchWatchCalc.isExpired(watch.copy(soldAtEpochDay = sale.epochDay), today, ttl)) return null
         val linked = switchWatchRepository.linkSellTransaction(watchId, sale.id, sale.amount - sale.fee, soldAtEpochDay = sale.epochDay)
         return if (linked) watchId else null
     }

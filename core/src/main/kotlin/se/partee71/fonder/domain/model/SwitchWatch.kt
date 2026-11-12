@@ -116,7 +116,7 @@ enum class SwitchWatchCandidateSource {
 /**
  * Varför en bevakning stängdes. [KOPT] är det enda avslut som bär ett [SwitchWatch.boughtIsin];
  * [UTGANGEN] sätts av bakgrundskörningen när bevakningen legat orörd längre än
- * [se.partee71.fonder.domain.usecase.SwitchWatchCalc.WATCH_TTL_DAYS] — ett gammalt läge är fel
+ * [se.partee71.fonder.domain.usecase.SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS] (eller den valda bevakningstiden, SET-8) — ett gammalt läge är fel
  * på ett sätt gammal cache inte är (samma princip som `SwitchPlanCalc.PLAN_TTL_DAYS`).
  */
 @Serializable

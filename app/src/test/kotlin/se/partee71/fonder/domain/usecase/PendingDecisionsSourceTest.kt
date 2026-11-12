@@ -84,7 +84,7 @@ class PendingDecisionsSourceTest {
             FakeCachedPriceRepository(),
             metadata,
             DismissedPlanSource(records, dismissals, preferences, metadata),
-            InProgressSwitches(watches, records)
+            InProgressSwitches(watches, records, preferences)
         )
         return source.observe().first(until)
     }
@@ -153,7 +153,7 @@ class PendingDecisionsSourceTest {
 
     @Test
     fun `en utgangen bevakning markerar inte planraden`() = runTest(dispatcher) {
-        // Öppen men äldre än WATCH_TTL_DAYS: Beslut visar den inte, så raden är inte "sålt" heller.
+        // Öppen men äldre än bevakningstiden: Beslut visar den inte, så raden är inte "sålt" heller.
         records.records.value = listOf(record(1, 0), record(2, 1))
         watches.start(
             SwitchWatch(
@@ -161,7 +161,7 @@ class PendingDecisionsSourceTest {
                 sellFundName = "Såld",
                 sellTransactionId = 5,
                 sourceRecordId = 1,
-                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+                soldAtEpochDay = LocalDate.now().minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1).toEpochDay()
             )
         )
 

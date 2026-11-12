@@ -74,7 +74,13 @@ data class BackupPayload(
      * automatiskt valda blandningen (`PreferencesRepository.benchmark`), som är cache i samma
      * kategori som `fundFilterVocabulary`.
      */
-    val chosenBenchmarkIsin: String? = null
+    val chosenBenchmarkIsin: String? = null,
+    /**
+     * Bevakningstiden användaren valt för pågående byten (SET-8, issue #244), null om inget val
+     * gjorts — ett **val**, därför med. Default null, så en fil från före 1.0.0 läses som
+     * standardtiden utan att [FORMAT_VERSION] höjs.
+     */
+    val switchWatchTtlDays: Long? = null
 ) {
     companion object {
         /**

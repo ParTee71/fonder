@@ -33,6 +33,7 @@ class SwitchTransitionsTest {
 
     private val today: LocalDate = LocalDate.of(2026, 10, 12)
     private val day = today.toEpochDay()
+    private val ttl = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
 
     private fun row(recordId: Long, planIndex: Int, sellIsin: String = "SE_SALJ", buyIsin: String = "SE_KOP", toLevel: Int = 3, inProgress: Boolean = false) = SwitchPlanResolver.Suggestion(
         recordId = recordId, planIndex = planIndex, sellIsin = sellIsin, buyIsin = buyIsin, sellFundName = sellIsin, buyFundName = buyIsin,
@@ -53,16 +54,27 @@ class SwitchTransitionsTest {
         closedAtEpochDay = if (closed) day else null, closeReason = if (closed) SwitchWatchCloseReason.AVBRUTEN else null
     )
 
-    private fun sale(isin: String? = "SE_SALJ", plan: List<SwitchPlanResolver.Suggestion> = emptyList(), watches: List<SwitchWatch> = emptyList()) = SwitchTransitions.suggestFor(TransactionType.SALJ, isin, day, plan, watches, today)
+    private fun sale(isin: String? = "SE_SALJ", plan: List<SwitchPlanResolver.Suggestion> = emptyList(), watches: List<SwitchWatch> = emptyList()) = SwitchTransitions.suggestFor(TransactionType.SALJ, isin, day, plan, watches, today, ttl)
 
     private fun purchase(
         isin: String? = "SE_KOP",
         epochDay: Long = day,
         watches: List<SwitchWatch> = emptyList(),
         buyIsinByRecordId: Map<Long, String> = emptyMap()
-    ) = SwitchTransitions.suggestFor(TransactionType.KOP, isin, epochDay, emptyList(), watches, today, buyIsinByRecordId)
+    ) = SwitchTransitions.suggestFor(TransactionType.KOP, isin, epochDay, emptyList(), watches, today, ttl, buyIsinByRecordId)
 
     // --- Sälj ---
+
+    @Test
+    fun `ett salj aldre an bevakningstiden far bara inget byte`() {
+        // Issue #244: en bevakning ur ett så gammalt sälj vore utgången redan när den startades.
+        val old = SwitchTransitions.suggestFor(TransactionType.SALJ, "SE_SALJ", day - ttl - 1, emptyList(), emptyList(), today, ttl)
+        val onLimit = SwitchTransitions.suggestFor(TransactionType.SALJ, "SE_SALJ", day - ttl, emptyList(), emptyList(), today, ttl)
+
+        assertEquals(listOf(SwitchDecision.None), old.options)
+        assertEquals(SwitchDecision.None, old.preselected)
+        assertTrue(SwitchDecision.Standalone in onLimit.options)
+    }
 
     @Test
     fun `salj utan planrad forvaljer inget byte och erbjuder fristaende`() {
@@ -157,7 +169,7 @@ class SwitchTransitionsTest {
 
     @Test
     fun `kop fore saljdagen eller mot en utgangen bevakning erbjuds inte`() {
-        val expired = watch(1, soldAt = day - SwitchWatchCalc.WATCH_TTL_DAYS - 1)
+        val expired = watch(1, soldAt = day - SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS - 1)
         val later = watch(2, soldAt = day + 1)
 
         val choices = purchase(watches = listOf(expired, later))
@@ -181,7 +193,7 @@ class SwitchTransitionsTest {
     fun `linkableWatch ger en okopplad bevakning startad samma dag - saljet sparat som inget byte kopplar annars aldrig`() {
         val sameDay = watch(1, soldAt = day, sellTransactionId = null, sourceRecordId = 7)
 
-        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(sameDay), today)?.id)
+        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(sameDay), today, ttl)?.id)
     }
 
     @Test
@@ -190,37 +202,37 @@ class SwitchTransitionsTest {
             watch(1, soldAt = day, sellTransactionId = null), // samma dag — erbjuds, men äldre går före
             watch(2, soldAt = day - 3, sellTransactionId = 9), // redan kopplad
             watch(3, soldAt = day - 2, sellTransactionId = null, sellIsin = "SE_ANNAN"),
-            watch(4, soldAt = day - SwitchWatchCalc.WATCH_TTL_DAYS - 1, sellTransactionId = null), // utgången
+            watch(4, soldAt = day - SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS - 1, sellTransactionId = null), // utgången
             watch(5, soldAt = day - 1, sellTransactionId = null),
             watch(6, soldAt = day - 4, sellTransactionId = null),
             watch(7, soldAt = day - 2, sellTransactionId = null, closed = true)
         )
 
-        assertEquals(6L, SwitchTransitions.linkableWatch("SE_SALJ", day, watches, today)?.id)
-        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(watches[1], watches[3], watches[6]), today))
-        assertNull(SwitchTransitions.linkableWatch(null, day, watches, today))
+        assertEquals(6L, SwitchTransitions.linkableWatch("SE_SALJ", day, watches, today, ttl)?.id)
+        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(watches[1], watches[3], watches[6]), today, ttl))
+        assertNull(SwitchTransitions.linkableWatch(null, day, watches, today, ttl))
     }
 
     @Test
     fun `linkableWatch galler bade fore och efter saljdagen inom WATCH_TTL_DAYS`() {
-        val before = watch(1, soldAt = day - SwitchWatchCalc.WATCH_TTL_DAYS, sellTransactionId = null)
-        val after = watch(2, soldAt = day + SwitchWatchCalc.WATCH_TTL_DAYS, sellTransactionId = null)
-        val tooLate = watch(3, soldAt = day + SwitchWatchCalc.WATCH_TTL_DAYS + 1, sellTransactionId = null)
+        val before = watch(1, soldAt = day - SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, sellTransactionId = null)
+        val after = watch(2, soldAt = day + SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, sellTransactionId = null)
+        val tooLate = watch(3, soldAt = day + SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1, sellTransactionId = null)
 
-        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(before, tooLate), today)?.id)
-        assertEquals(2L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(after, tooLate), today)?.id)
-        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(tooLate), today))
+        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(before, tooLate), today, ttl)?.id)
+        assertEquals(2L, SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(after, tooLate), today, ttl)?.id)
+        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", day, listOf(tooLate), today, ttl))
     }
 
     @Test
     fun `en koppling som gjorde bevakningen utgangen pa saljdagen erbjuds inte`() {
-        // Bevakningen är färsk, men säljet är äldre än WATCH_TTL_DAYS — flyttad dit hade nästa
+        // Bevakningen är färsk, men säljet är äldre än bevakningstiden — flyttad dit hade nästa
         // bakgrundskörning stängt den som utgången innan köpet kunnat avsluta bytet.
         val fresh = watch(1, soldAt = day - 2, sellTransactionId = null)
-        val saleDay = day - SwitchWatchCalc.WATCH_TTL_DAYS - 1
+        val saleDay = day - SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS - 1
 
-        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", saleDay, listOf(fresh), today))
-        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day - SwitchWatchCalc.WATCH_TTL_DAYS, listOf(fresh), today)?.id)
+        assertNull(SwitchTransitions.linkableWatch("SE_SALJ", saleDay, listOf(fresh), today, ttl))
+        assertEquals(1L, SwitchTransitions.linkableWatch("SE_SALJ", day - SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, listOf(fresh), today, ttl)?.id)
     }
 
     @Test
@@ -228,7 +240,7 @@ class SwitchTransitionsTest {
         val watches = listOf(watch(2, soldAt = day - 1, sellTransactionId = null), watch(1, soldAt = day - 3, sellTransactionId = null))
         val inputs = SwitchChoicesSource.Inputs(emptyList(), watches, emptyMap(), today)
 
-        assertEquals(listOf(1L, 2L), SwitchTransitions.linkableWatches("SE_SALJ", day, watches, today).map { it.id })
+        assertEquals(listOf(1L, 2L), SwitchTransitions.linkableWatches("SE_SALJ", day, watches, today, ttl).map { it.id })
         assertEquals(1L, inputs.linkableWatch("SE_SALJ", day)?.id)
         assertEquals(2L, inputs.linkableWatch("SE_SALJ", day, exclude = setOf(1L))?.id)
         assertNull(inputs.linkableWatch("SE_SALJ", day, exclude = setOf(1L, 2L)))
@@ -269,7 +281,7 @@ class SwitchTransitionsTest {
                 FakeCachedPriceRepository(),
                 metadata,
                 DismissedPlanSource(records, FakeSuggestionDismissalRepository(), preferences, metadata),
-                InProgressSwitches(watches, records)
+                InProgressSwitches(watches, records, preferences)
             ),
             watches,
             records

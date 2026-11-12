@@ -13,7 +13,7 @@ enum class SwitchRowState {
     /** Ett billigare alternativ som väntar på beslut (ANA-9). */
     FEE,
 
-    /** Sålt, väntar på köp — en öppen bevakning som inte passerat [SwitchWatchCalc.WATCH_TTL_DAYS] (BYT-1). */
+    /** Sålt, väntar på köp — en öppen bevakning som inte passerat bevakningstiden (BYT-1, SET-8). */
     SOLD,
 
     /** Bevakningen stängd som köpt. */
@@ -22,7 +22,7 @@ enum class SwitchRowState {
     /** Bevakningen avbruten av användaren. */
     CANCELLED,
 
-    /** Bevakningen stängd som utgången — eller öppen men äldre än [SwitchWatchCalc.WATCH_TTL_DAYS]. */
+    /** Bevakningen stängd som utgången — eller öppen men äldre än bevakningstiden (SET-8). */
     EXPIRED,
 
     /** Förslaget avstått (HEM-14). */
@@ -91,7 +91,9 @@ sealed interface SwitchRow {
  */
 data class SwitchRows(
     val active: List<SwitchRow> = emptyList(),
-    val closed: List<SwitchRow> = emptyList()
+    val closed: List<SwitchRow> = emptyList(),
+    /** Bevakningstiden (SET-8) listan byggdes med — hur länge [closed] visar avslutade byten. */
+    val watchTtlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
 ) {
     /** Planens förslag som väntar på beslut. */
     val proposedCount: Int get() = active.count { it is SwitchRow.Suggested && it.state == SwitchRowState.PROPOSED && it.waiting }
@@ -118,7 +120,7 @@ data class SwitchRows(
          * - Planrader och billigare alternativ som är pågående ([SwitchPlanResolver.Suggestion.inProgress])
          *   visas inte som förslag; deras bevakning står redan som Sålt.
          * - Ordning: Sålt (repositoriets ordning), planens förslag i `planIndex`-ordning, billigare alternativ.
-         * - [closedWatches]: stängda bevakningar visas i [SwitchWatchCalc.WATCH_TTL_DAYS] dagar efter
+         * - [closedWatches]: stängda bevakningar visas i [PendingDecisions.watchTtlDays] dagar efter
          *   stängningen, nyast först; en **öppen** bevakning i listan (passerat gränsen men ännu inte
          *   stängd av bakgrundskörningen) visas som Utgånget. Därefter de avstådda förslagen, planens först.
          */
@@ -160,7 +162,7 @@ data class SwitchRows(
                 .filterNot { consumed(it.suggestion) }
                 .map { SwitchRow.Suggested(it.suggestion, cheaper = it, watched = it.suggestion.sellIsin in decisions.watchedSellIsins) }
 
-            val since = today.toEpochDay() - SwitchWatchCalc.WATCH_TTL_DAYS
+            val since = today.toEpochDay() - decisions.watchTtlDays
             val closed = closedWatches
                 .filter { it.isOpen || (it.closedAtEpochDay ?: Long.MIN_VALUE) >= since }
                 .sortedBy { it.isOpen } // stängd före öppen, så distinctBy behåller avslutet
@@ -172,7 +174,7 @@ data class SwitchRows(
                 .filterNot { row -> openWatches.any { it.isSourceOf(row) } }
                 .map { SwitchRow.Dismissed(it) }
 
-            return SwitchRows(active = sold + proposed + cheaper, closed = closed + dismissed)
+            return SwitchRows(active = sold + proposed + cheaper, closed = closed + dismissed, watchTtlDays = decisions.watchTtlDays)
         }
 
         private fun OpenSwitchWatch.isSourceOf(row: SwitchPlanResolver.Suggestion): Boolean = (sourceRecordId != null && sourceRecordId == row.recordId) || (sourcePair != null && sourcePair == row.sellIsin to row.buyIsin)

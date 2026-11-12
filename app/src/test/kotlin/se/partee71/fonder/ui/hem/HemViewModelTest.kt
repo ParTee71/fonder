@@ -141,7 +141,7 @@ class HemViewModelTest {
                 fakeFundPriceRepo,
                 fakeFundMetadataRepo,
                 DismissedPlanSource(fakeSuggestionRecordRepo, dismissals, preferencesRepository, fakeFundMetadataRepo),
-                InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo)
+                InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo, preferencesRepository)
             )
         },
         fakeScheduler,

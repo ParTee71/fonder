@@ -197,8 +197,8 @@ class FakeSwitchWatchRepository : SwitchWatchRepository {
         }
     }
 
-    override suspend fun expireStale(today: LocalDate): Int {
-        val stale = watches.value.filter { SwitchWatchCalc.isExpired(it, today) }
+    override suspend fun expireStale(today: LocalDate, ttlDays: Long): Int {
+        val stale = watches.value.filter { SwitchWatchCalc.isExpired(it, today, ttlDays) }
         stale.forEach { close(it.id, SwitchWatchCloseReason.UTGANGEN, today) }
         return stale.size
     }

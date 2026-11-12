@@ -26,6 +26,7 @@ import se.partee71.fonder.data.room.entities.SwitchWatchCandidateEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchEntity
 import se.partee71.fonder.data.room.entities.SwitchWatchWithCandidates
 import se.partee71.fonder.data.room.entities.TransactionEntity
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 
 /**
  * Kontrakt för backup/restore av all användardata (regel 1 — datasäkerhet, NFR-1).
@@ -94,12 +95,13 @@ class LocalBackupRepository @Inject constructor(
         riskProfile = preferences.riskProfile.first(),
         accountType = preferences.accountType.first(),
         themeMode = preferences.themeMode.first(),
-        chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first()
+        chosenBenchmarkIsin = preferences.chosenBenchmarkIsin.first(),
+        switchWatchTtlDays = preferences.switchWatchTtlDaysSetting.first()
     )
 
     /**
      * Room-halvan via [InvalidationTracker] på kontraktets tabeller — bara en signal, ingen
-     * läsning av raderna — och DataStore-halvan via kontraktets fyra inställningar. Varje källa
+     * läsning av raderna — och DataStore-halvan via kontraktets fem inställningar. Varje källa
      * ger en första signal, så anroparen bör `debounce`:a.
      */
     override fun observeChanges(): Flow<Unit> = merge(
@@ -116,7 +118,8 @@ class LocalBackupRepository @Inject constructor(
         preferences.riskProfile.map { },
         preferences.accountType.map { },
         preferences.themeMode.map { },
-        preferences.chosenBenchmarkIsin.map { }
+        preferences.chosenBenchmarkIsin.map { },
+        preferences.switchWatchTtlDaysSetting.map { }
     )
 
     /**
@@ -173,6 +176,12 @@ class LocalBackupRepository @Inject constructor(
             payload.chosenBenchmarkIsin
                 ?.let { preferences.setChosenBenchmarkIsin(it) }
                 ?: preferences.clearChosenBenchmarkIsin()
+            // Samma sak för bevakningstiden (SET-8); ett värde som inte är en tillåten tid
+            // (en fil från en nyare app) blir standardtiden i stället för att fälla återställningen.
+            payload.switchWatchTtlDays
+                ?.takeIf { it in SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS }
+                ?.let { preferences.setSwitchWatchTtlDays(it) }
+                ?: preferences.clearSwitchWatchTtlDays()
             // Tom-plan-markören är den här enhetens skanningsstatus, inte en del av filen: en markör
             // nyare än den återställda planens körning hade dolt en plan som aldrig räknats bort.
             preferences.clearSwitchPlanEmptiedAt()

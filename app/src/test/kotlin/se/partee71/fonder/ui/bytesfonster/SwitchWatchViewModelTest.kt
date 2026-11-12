@@ -21,7 +21,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import se.partee71.fonder.data.common.DataError
 import se.partee71.fonder.data.repository.FakeCachedPriceRepository
 import se.partee71.fonder.data.repository.FakeFundMetadataRepository
@@ -43,6 +45,7 @@ import se.partee71.fonder.domain.model.Transaction
 import se.partee71.fonder.domain.model.TransactionType
 import se.partee71.fonder.domain.usecase.SwitchPlanCalc
 import se.partee71.fonder.domain.usecase.SwitchWatchCalc
+import se.partee71.fonder.testing.testPreferencesRepository
 import se.partee71.fonder.testing.testTargetLevelPreselection
 import se.partee71.fonder.ui.navigation.TransactionFormKey
 import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
@@ -55,6 +58,11 @@ import se.partee71.fonder.worker.FakeFundPriceRefreshScheduler
 class SwitchWatchViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
+
+    @get:Rule val tempFolder = TemporaryFolder()
+
+    /** Bevakningstiden läses ur riktiga inställningar (SET-8) — standardtiden när inget valts. */
+    private val preferences by lazy { testPreferencesRepository(dispatcher, tempFolder, "switch_watch_vm") }
     private val today: LocalDate = LocalDate.now()
     private val soldAt = today.minusDays(3)
 
@@ -133,7 +141,8 @@ class SwitchWatchViewModelTest {
         metadataRepo,
         fakeTransactionRepo,
         testTargetLevelPreselection(fakeTransactionRepo, switchWatchRepo, riskProfile, fakePriceRepo),
-        scheduler
+        scheduler,
+        preferences
     )
 
     @Test
@@ -729,7 +738,8 @@ class SwitchWatchViewModelTest {
         metadataRepo,
         fakeTransactionRepo,
         testTargetLevelPreselection(transactions, switchWatchRepo, riskProfile, fakePriceRepo),
-        scheduler
+        scheduler,
+        preferences
     )
 
     @Test
@@ -840,7 +850,8 @@ class SwitchWatchViewModelTest {
             metadataRepo,
             fakeTransactionRepo,
             testTargetLevelPreselection(fakeTransactionRepo, flaky, riskProfile, fakePriceRepo),
-            scheduler
+            scheduler,
+            preferences
         )
 
         vm.uiState.test {

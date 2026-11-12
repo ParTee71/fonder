@@ -451,6 +451,7 @@ class SwitchPlanCalcTest {
     // --- Likvid som väntar på köp (BYT-3) ---
 
     private val today: LocalDate = LocalDate.of(2026, 10, 12)
+    private val ttl = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
     private val soldAt = today.minusDays(2).toEpochDay()
 
     private fun sell(id: Long, fundId: String, kr: Double, day: Long = soldAt) = Transaction(id = id, fundId = fundId, type = TransactionType.SALJ, epochDay = day, shares = 1.0, pricePerShare = kr)
@@ -480,7 +481,7 @@ class SwitchPlanCalcTest {
         watches: List<SwitchWatch>,
         transactions: List<Transaction>,
         buyIsinByRecordId: Map<Long, String> = emptyMap()
-    ) = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, levelMetadata, today)
+    ) = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, levelMetadata, today, ttl)
 
     @Test
     fun `en oppen bevakning med saljtransaktion raknas som likvid pa sin malniva`() {
@@ -491,7 +492,7 @@ class SwitchPlanCalcTest {
 
     @Test
     fun `bevakningar utan saljtransaktion belopp eller malniva samt stangda och utgangna raknas inte`() {
-        val expiredDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+        val expiredDay = today.minusDays(ttl + 1).toEpochDay()
         val watches = listOf(
             watch(1, sellTransactionId = null), // "Bevaka alternativ" ur ett förslag — pengarna är inte bevisligen fria
             watch(2, sellTransactionId = 99), // säljet är borttaget (TRX-2)

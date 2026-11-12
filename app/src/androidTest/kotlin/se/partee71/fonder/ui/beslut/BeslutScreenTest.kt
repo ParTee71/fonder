@@ -293,7 +293,7 @@ class BeslutScreenTest {
         }
 
         composeRule.onNodeWithText("Fond A → ?").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Sålt · dag 2 av 14 · välj köpfond").assertIsDisplayed()
+        composeRule.onNodeWithText("Sålt · dag 2 av 30 · välj köpfond").assertIsDisplayed()
         composeRule.onNodeWithText("Bäst hittills: Kandidat B", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Välj köpfond").performScrollTo().performClick()
 

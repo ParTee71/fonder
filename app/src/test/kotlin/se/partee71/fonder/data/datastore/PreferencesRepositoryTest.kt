@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ import se.partee71.fonder.domain.model.PrimaryGoal
 import se.partee71.fonder.domain.model.RiskProfile
 import se.partee71.fonder.domain.model.RiskProfileAnswers
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 
 /**
  * Riskprofilens DataStore-rundtur (SET-3, issue #68) — genuin användardata, till skillnad
@@ -133,6 +135,38 @@ class PreferencesRepositoryTest {
         repository.setAccountType(AccountType.ISK_KF)
 
         assertEquals(AccountType.ISK_KF, repository.accountType.first())
+    }
+
+    // --- Bevakningstid för pågående byten (SET-8, issue #244) ---
+
+    @Test
+    fun `bevakningstiden ar standardtiden innan nagot val gjorts`() = runTest {
+        assertNull(repository.switchWatchTtlDaysSetting.first())
+        assertEquals(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, repository.switchWatchTtlDays.first())
+    }
+
+    @Test
+    fun `bevakningstiden rundturar och kan nollstallas`() = runTest {
+        repository.setSwitchWatchTtlDays(60L)
+        assertEquals(60L, repository.switchWatchTtlDays.first())
+        assertEquals(60L, repository.switchWatchTtlDaysSetting.first())
+
+        repository.clearSwitchWatchTtlDays()
+        assertNull(repository.switchWatchTtlDaysSetting.first())
+        assertEquals(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, repository.switchWatchTtlDays.first())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `en otillaten bevakningstid sparas aldrig`() = runTest {
+        repository.setSwitchWatchTtlDays(45L)
+    }
+
+    @Test
+    fun `ett okant sparat varde lases som standardtiden`() = runTest {
+        // En fil skriven av en nyare version, eller ett trasigt värde, ska inte ge ett godtyckligt fönster.
+        dataStore.edit { it[longPreferencesKey("switch_watch_ttl_days")] = 45L }
+
+        assertEquals(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, repository.switchWatchTtlDays.first())
     }
 
     // --- Trasig inställningsfil ---

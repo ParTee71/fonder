@@ -43,13 +43,14 @@ class SwitchPlanInputs(
         suspend fun loadWatches(
             switchWatchRepository: SwitchWatchRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
+            ttlDays: Long,
             excludeWatchId: Long? = null
         ): WatchInputs {
             val watches = switchWatchRepository.getAll().filterNot { it.id == excludeWatchId }
             val buyIsinByRecordId = suggestionRecordRepository
                 .observeByIds(watches.filter { it.isOpen }.mapNotNullTo(mutableSetOf()) { it.sourceRecordId }).first()
                 .associate { it.id to it.buyIsin }
-            return WatchInputs(watches, buyIsinByRecordId)
+            return WatchInputs(watches, buyIsinByRecordId, ttlDays)
         }
 
         /**
@@ -62,6 +63,7 @@ class SwitchPlanInputs(
             switchWatchRepository: SwitchWatchRepository,
             suggestionRecordRepository: SuggestionRecordRepository,
             today: LocalDate,
+            ttlDays: Long,
             metadataFor: suspend (List<String>) -> Map<String, FundMetadata>,
             excludeWatchId: Long? = null
         ): SwitchPlanInputs {
@@ -74,12 +76,15 @@ class SwitchPlanInputs(
             val heldIsins = withValue.mapNotNull { it.fund.isin }.distinct()
             val metadataByIsin = if (heldIsins.isEmpty()) emptyMap() else metadataFor(heldIsins)
 
-            val (watches, buyIsinByRecordId) = loadWatches(switchWatchRepository, suggestionRecordRepository, excludeWatchId)
-            val pending = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, metadataByIsin, today)
+            val (watches, buyIsinByRecordId) = loadWatches(switchWatchRepository, suggestionRecordRepository, ttlDays, excludeWatchId)
+            val pending = SwitchPlanCalc.pendingProceedsByLevel(watches, transactions, funds, buyIsinByRecordId, metadataByIsin, today, ttlDays)
             return SwitchPlanInputs(funds, transactions, withValue, prices, metadataByIsin, pending)
         }
     }
 }
 
-/** Bevakningarna och källförslagens köpfond per rad-id — se [SwitchPlanInputs.loadWatches]. */
-data class WatchInputs(val watches: List<SwitchWatch>, val buyIsinByRecordId: Map<Long, String>)
+/**
+ * Bevakningarna och källförslagens köpfond per rad-id — se [SwitchPlanInputs.loadWatches] — och
+ * bevakningstiden (SET-8) de lästes med, så likviden på väg räknas med samma gräns som läsningen.
+ */
+data class WatchInputs(val watches: List<SwitchWatch>, val buyIsinByRecordId: Map<Long, String>, val ttlDays: Long)

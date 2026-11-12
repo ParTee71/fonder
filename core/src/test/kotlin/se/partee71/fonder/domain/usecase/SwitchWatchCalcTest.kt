@@ -117,9 +117,37 @@ class SwitchWatchCalcTest {
     }
 
     @Test
-    fun `TTL-gransen gar exakt vid fjortonde dygnet`() {
-        assertFalse(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(SwitchWatchCalc.WATCH_TTL_DAYS)))
-        assertTrue(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1)))
+    fun `TTL-gransen gar exakt vid det valda dygnet`() {
+        assertFalse(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(30), ttlDays = 30))
+        assertTrue(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(31), ttlDays = 30))
+        assertFalse(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(14), ttlDays = 14))
+        assertTrue(SwitchWatchCalc.isExpired(watch(), soldAt.plusDays(15), ttlDays = 14))
+    }
+
+    @Test
+    fun `isExpiredSoldAt ger samma svar som isExpired for en oppen bevakning`() {
+        // Gränsen finns på ett ställe: ett sälj som är för gammalt för att starta en bevakning
+        // (issue #244) prövas mot samma regel som en bevakning som redan finns.
+        for (ttl in SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS) {
+            for (days in listOf(0L, ttl - 1, ttl, ttl + 1, ttl + 30)) {
+                val today = soldAt.plusDays(days)
+                assertEquals(
+                    "ttl $ttl, dag $days",
+                    SwitchWatchCalc.isExpired(watch(), today, ttl),
+                    SwitchWatchCalc.isExpiredSoldAt(soldAt.toEpochDay(), today, ttl)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `standardtiden ar 30 dagar och bara tillatna tider godtas`() {
+        assertEquals(30L, SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS)
+        assertEquals(listOf(14L, 30L, 60L, 90L), SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS)
+        assertEquals(60L, SwitchWatchCalc.sanitizeTtlDays(60L))
+        assertEquals(30L, SwitchWatchCalc.sanitizeTtlDays(null))
+        assertEquals(30L, SwitchWatchCalc.sanitizeTtlDays(45L))
+        assertEquals(30L, SwitchWatchCalc.sanitizeTtlDays(0L))
     }
 
     @Test
@@ -128,7 +156,7 @@ class SwitchWatchCalcTest {
         // användaren faktiskt gjorde.
         val closed = watch(closedAtEpochDay = soldAt.plusDays(2).toEpochDay())
 
-        assertFalse(SwitchWatchCalc.isExpired(closed, soldAt.plusDays(60)))
+        assertFalse(SwitchWatchCalc.isExpired(closed, soldAt.plusDays(120), ttlDays = 30))
     }
 
     @Test

@@ -41,6 +41,7 @@ import se.partee71.fonder.domain.model.SuggestionKind
 import se.partee71.fonder.domain.model.SwitchWatchCandidateSource
 import se.partee71.fonder.domain.model.SwitchWatchCloseReason
 import se.partee71.fonder.domain.model.TimeHorizon
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 
 /**
  * Rundturen som NFR-1 (regel 1) faktiskt kräver: **backup → tömning → restore** mot riktig Room
@@ -213,6 +214,8 @@ class BackupRoundTripTest {
         // Eget val av jämförelsefond (HEM-10, issue #102) — ett val, inte härledd cache, och
         // därför en del av kontraktet.
         preferences.setChosenBenchmarkIsin("SE0011527613")
+        // Bevakningstiden för pågående byten (SET-8, issue #244) — ett val, inte standardtiden.
+        preferences.setSwitchWatchTtlDays(60L)
     }
 
     @Test
@@ -333,6 +336,7 @@ class BackupRoundTripTest {
         assertEquals(AccountType.ISK_KF, preferences.accountType.first())
         assertEquals(ThemeMode.DARK, preferences.themeMode.first())
         assertEquals("SE0011527613", preferences.chosenBenchmarkIsin.first())
+        assertEquals(60L, preferences.switchWatchTtlDays.first())
     }
 
     @Test
@@ -383,6 +387,21 @@ class BackupRoundTripTest {
         backup.restore(utanVal).getOrThrow()
 
         assertNull(preferences.chosenBenchmarkIsin.first())
+    }
+
+    @Test
+    fun en_fil_utan_bevakningstid_ger_standardtiden() = runTest {
+        // En fil från före 1.0.0 saknar valet: återställningen ersätter (SET-6), så ett val gjort
+        // efter att filen skrevs får inte överleva — standardtiden gäller (SET-8).
+        seed()
+        val utanTid = backup.export().getOrThrow().replace(Regex(",\\s*\"switchWatchTtlDays\": \\d+"), "")
+        assertFalse(utanTid.contains("switchWatchTtlDays"))
+        preferences.setSwitchWatchTtlDays(90L)
+
+        backup.restore(utanTid).getOrThrow()
+
+        assertNull(preferences.switchWatchTtlDaysSetting.first())
+        assertEquals(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, preferences.switchWatchTtlDays.first())
     }
 
     @Test
