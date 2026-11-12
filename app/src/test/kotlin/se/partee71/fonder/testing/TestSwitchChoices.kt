@@ -31,7 +31,7 @@ fun testPendingDecisionsSource(
     priceRepo,
     metadataRepo,
     DismissedPlanSource(suggestionRepo, dismissalRepo, preferences, metadataRepo),
-    InProgressSwitches(switchWatchRepo, suggestionRepo)
+    InProgressSwitches(switchWatchRepo, suggestionRepo, preferences)
 )
 
 /** Bytesväljarens indata (BYT-2) ur samma fakes — formulärets och PDF-importens tester. */

@@ -31,13 +31,20 @@ object SwitchWatchCalc {
     const val AUTO_CANDIDATES = 3
 
     /**
-     * Hur länge en bevakning är öppen utan att röras. Ett fondbyte går på T+1–T+3 och tar med
-     * marginal för helger och röda dagar aldrig två veckor; en bevakning som legat orörd längre
-     * beskriver ett läge som inte finns kvar. Samma princip som `SwitchPlanCalc.PLAN_TTL_DAYS`:
-     * ett gammalt läge är fel på ett sätt gammal cache inte är. Bevakningen stängs som utgången
-     * — den **raderas aldrig**, den bär vad användaren faktiskt gjorde.
+     * Hur länge en bevakning är öppen utan att röras, som standard. Ett fondbyte går på T+1–T+3,
+     * men ett långsamt byte (eller en bevakning startad ur en äldre säljrad, SLD-5) behöver mer
+     * än två veckor; en bevakning som legat orörd längre än den valda tiden beskriver ett läge
+     * som inte finns kvar. Användaren väljer tiden i Inställningar bland [ALLOWED_WATCH_TTL_DAYS]
+     * (SET-8, issue #244). Bevakningen stängs som utgången — den **raderas aldrig**, den bär vad
+     * användaren faktiskt gjorde.
      */
-    const val WATCH_TTL_DAYS = 14L
+    const val DEFAULT_WATCH_TTL_DAYS = 30L
+
+    /** De bevakningstider som går att välja i Inställningar (SET-8), kortast först. */
+    val ALLOWED_WATCH_TTL_DAYS: List<Long> = listOf(14L, 30L, 60L, 90L)
+
+    /** [days] om det är en tillåten bevakningstid, annars [DEFAULT_WATCH_TTL_DAYS] — en okänd eller trasig inställning ska inte ge ett godtyckligt fönster. */
+    fun sanitizeTtlDays(days: Long?): Long = days?.takeIf { it in ALLOWED_WATCH_TTL_DAYS } ?: DEFAULT_WATCH_TTL_DAYS
 
     /**
      * Hur långt före säljdagen kandidathistoriken hämtas. Nollpunkten måste finnas *i* serien
@@ -110,11 +117,18 @@ object SwitchWatchCalc {
     fun daysWaiting(watch: SwitchWatch, today: LocalDate): Long = (today.toEpochDay() - watch.soldAtEpochDay).coerceAtLeast(0)
 
     /**
-     * Sant när en **öppen** bevakning passerat [WATCH_TTL_DAYS]. En redan stängd bevakning är
+     * Sant när en **öppen** bevakning passerat [ttlDays]. En redan stängd bevakning är
      * aldrig utgången — den har ett avslut, och att räkna om den till "utgången" hade skrivit
      * över vad användaren faktiskt gjorde.
      */
-    fun isExpired(watch: SwitchWatch, today: LocalDate): Boolean = watch.isOpen && daysWaiting(watch, today) > WATCH_TTL_DAYS
+    fun isExpired(watch: SwitchWatch, today: LocalDate, ttlDays: Long): Boolean = watch.isOpen && isExpiredSoldAt(watch.soldAtEpochDay, today, ttlDays)
+
+    /**
+     * Sant när en bevakning med säljdag [soldAtEpochDay] vore utgången [today] — gränsen på ett
+     * ställe, också för en bevakning som ännu inte finns (ett sälj som är för gammalt för att
+     * starta en, SLD-5/BYT-2, issue #244).
+     */
+    fun isExpiredSoldAt(soldAtEpochDay: Long, today: LocalDate, ttlDays: Long): Boolean = (today.toEpochDay() - soldAtEpochDay).coerceAtLeast(0) > ttlDays
 
     /**
      * Nollpunkten ur en hämtad kurshistorik: kursen på [soldAtEpochDay], annars **första kända

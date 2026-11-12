@@ -184,7 +184,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
          * med flit, till skillnad från [MAX_OUTCOME_NAVS_PER_RUN]s inkrementella ifyllnad: Hems
          * kort pekar ut vilket alternativ som gått bäst, och en halvfylld cache hade utsett en
          * ledare bland de kandidater som råkade hinna med — ett svar som ser lika säkert ut men
-         * är fel. En bevakning är dessutom kortlivad (14 dygn) och normalt ensam.
+         * är fel. En bevakning är dessutom kortlivad (bevakningstiden, SET-8, standard 30 dygn) och normalt ensam.
          */
         private const val MAX_WATCH_NAVS_PER_RUN = SwitchWatchCalc.MAX_CANDIDATES
 
@@ -278,7 +278,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                     switchWatchRepository
                 )
                 scanOutcomeNavs(transactionRepository, fundPriceRepository, suggestionRecordRepository)
-                scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository)
+                scanSwitchWatches(transactionRepository, fundPriceRepository, switchWatchRepository, preferencesRepository.switchWatchTtlDays.first())
             }
             if (scanBenchmark) {
                 scanBenchmark(transactionRepository, fundPriceRepository, fundMetadataRepository, preferencesRepository)
@@ -441,9 +441,10 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             transactionRepository: TransactionRepository,
             fundPriceRepository: FundPriceRepository,
             switchWatchRepository: SwitchWatchRepository,
+            ttlDays: Long,
             today: LocalDate = LocalDate.now()
         ) {
-            switchWatchRepository.expireStale(today)
+            switchWatchRepository.expireStale(today, ttlDays)
 
             val open = switchWatchRepository.observeOpen().first()
             if (open.isEmpty()) return
@@ -732,7 +733,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 suggestionRecordRepository,
                 switchWatchRepository,
                 targetAllocation,
-                today
+                today,
+                preferencesRepository.switchWatchTtlDays.first()
             )
             if (plan.switches.isEmpty()) {
                 // Tom plan: bytet är gjort eller behovet borta. Går inte att spela in som rader —
@@ -834,7 +836,8 @@ class FundPriceUpdateWorker @AssistedInject constructor(
             suggestionRecordRepository: SuggestionRecordRepository,
             switchWatchRepository: SwitchWatchRepository,
             targetAllocation: Map<Int, Double>,
-            today: LocalDate
+            today: LocalDate,
+            ttlDays: Long
         ): ComputedPlan {
             val none = ComputedPlan(emptyList(), emptyMap(), conclusive = true)
             // Innehav, kurser, metadata och likviden som väntar på köp (BYT-3) — samma läsväg som
@@ -845,6 +848,7 @@ class FundPriceUpdateWorker @AssistedInject constructor(
                 switchWatchRepository,
                 suggestionRecordRepository,
                 today,
+                ttlDays,
                 metadataFor = fundMetadataRepository::metadataFor
             )
             if (inputs.holdings.isEmpty()) return none

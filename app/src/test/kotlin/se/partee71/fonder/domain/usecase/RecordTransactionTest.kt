@@ -4,6 +4,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -234,6 +235,52 @@ class RecordTransactionTest {
     }
 
     @Test
+    fun `ett salj aldre an bevakningstiden startar ingen bevakning men sparas`() = runTest {
+        // Issue #244: bevakningen var utgången redan när den skapades, stängdes av nästa
+        // bakgrundskörning och Pågående byte hoppade tillbaka efter en sekund.
+        setUpPlan()
+        val ttl = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
+
+        val recorded = useCase.record(entry(sale(day = today.minusDays(ttl + 1).toEpochDay()), SwitchDecision.Standalone), today)
+
+        assertNull(recorded.watchId)
+        assertTrue(watches.watches.value.isEmpty())
+        assertEquals(recorded.id, transactions.transactions.value.single().id)
+    }
+
+    @Test
+    fun `startWatchForSale startar pa gransen men inte dagen efter`() = runTest {
+        setUpPlan()
+        val ttl = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
+        val onLimit = useCase.record(entry(sale(day = today.minusDays(ttl).toEpochDay())), today)
+        val tooOld = useCase.record(entry(sale(day = today.minusDays(ttl + 1).toEpochDay())), today)
+        val saved = transactions.transactions.value.associateBy { it.id }
+
+        assertNull(useCase.startWatchForSale(saved.getValue(tooOld.id), today))
+        assertNotNull(useCase.startWatchForSale(saved.getValue(onLimit.id), today))
+        assertEquals(onLimit.id, watches.watches.value.single().sellTransactionId)
+    }
+
+    @Test
+    fun `den valda bevakningstiden styr vilka salj som kan starta en bevakning`() = runTest {
+        setUpPlan()
+        val sixtyDays = RecordTransaction(
+            transactions,
+            watches,
+            records,
+            metadata,
+            scheduler,
+            TargetLevelPreselection({ riskProfile }, transactions, prices, watches, records),
+            ttlDays = { 60L }
+        )
+
+        val recorded = sixtyDays.record(entry(sale(day = today.minusDays(45).toEpochDay()), SwitchDecision.Standalone), today)
+
+        assertNotNull(recorded.watchId)
+        assertEquals(recorded.id, watches.watches.value.single().sellTransactionId)
+    }
+
+    @Test
     fun `salj for en planrad kopplar en okopplad bevakning samma dag i stallet for att starta en ny`() = runTest {
         setUpPlan()
         val existing = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.toEpochDay(), sourceRecordId = 7, targetLevel = 3))
@@ -403,7 +450,7 @@ class RecordTransactionTest {
     fun `koppling gors inte for ett kop en kopplad stangd utgangen eller okand bevakning - saljet sparas anda`() = runTest {
         setUpPlan()
         val linked = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(2).toEpochDay(), sellTransactionId = 99))
-        val expired = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 2).toEpochDay()))
+        val expired = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 2).toEpochDay()))
         val closed = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(2).toEpochDay()))
         watches.close(closed, SwitchWatchCloseReason.AVBRUTEN, today)
         val open = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(2).toEpochDay()))
@@ -428,7 +475,7 @@ class RecordTransactionTest {
         // bakgrundskörning den direkt, utan att köpet någonsin kunde avsluta bytet.
         setUpPlan()
         val watchId = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = today.minusDays(5).toEpochDay()))
-        val tooOld = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+        val tooOld = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1).toEpochDay()
 
         val recorded = useCase.record(entry(sale(day = tooOld), SwitchDecision.LinksWatch(watchId)), today)
 
@@ -725,7 +772,7 @@ class RecordTransactionTest {
         // Bakgrundskörningen har inte hunnit stänga den; den kan inte kopplas (utgången) men är
         // ändå säljets — en ny bredvid hade gett två bevakningar för samma sälj (fond + dag).
         setUpPlan()
-        val expiredDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 2).toEpochDay()
+        val expiredDay = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 2).toEpochDay()
         val expired = watches.start(SwitchWatch(sellIsin = "SE_SALJ", sellFundName = "Såld fond", soldAtEpochDay = expiredDay))
 
         assertNull(useCase.startWatchForSale(savedSale(sale(day = expiredDay)), today))

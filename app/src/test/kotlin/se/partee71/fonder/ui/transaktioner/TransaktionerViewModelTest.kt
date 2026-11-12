@@ -85,6 +85,10 @@ class TransaktionerViewModelTest {
     /** Fast "idag" så att årets resultat inte beror på när testet körs. */
     private val today = LocalDate.of(2026, 10, 11)
 
+    /** Ett sälj inom bevakningstiden (SET-8) och ett köp långt före — bevakningstesterna (SLD-5). */
+    private val saleDay = today.minusDays(5).toEpochDay()
+    private val buyDay = today.minusDays(100).toEpochDay()
+
     private fun viewModel(repo: TransactionRepository = fakeRepo, prices: FundPriceRepository = fakePriceRepo) = TransaktionerViewModel(
         repo,
         fakeSwitchWatchRepo,
@@ -458,8 +462,8 @@ class TransaktionerViewModelTest {
     private fun givenSoldFundWithIsin(fee: Double = 0.0) {
         funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
-            salj(id = 2, day = 200, shares = 10.0, price = 150.0, fee = fee),
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0)
+            salj(id = 2, day = saleDay, shares = 10.0, price = 150.0, fee = fee),
+            kop(id = 1, day = buyDay, shares = 10.0, price = 100.0)
         )
     }
 
@@ -469,10 +473,10 @@ class TransaktionerViewModelTest {
         val utanIsin = Fund(fundId = "SHB0000627", name = "Utan ISIN", isin = null)
         funds.value = listOf(medIsin, utanIsin)
         transactions.value = listOf(
-            kop(id = 1, day = 100, shares = 10.0, price = 100.0, fundId = medIsin.fundId),
-            salj(id = 2, day = 200, shares = 10.0, price = 150.0, fundId = medIsin.fundId),
-            kop(id = 3, day = 100, shares = 5.0, price = 100.0, fundId = utanIsin.fundId),
-            salj(id = 4, day = 200, shares = 5.0, price = 120.0, fundId = utanIsin.fundId)
+            kop(id = 1, day = buyDay, shares = 10.0, price = 100.0, fundId = medIsin.fundId),
+            salj(id = 2, day = saleDay, shares = 10.0, price = 150.0, fundId = medIsin.fundId),
+            kop(id = 3, day = buyDay, shares = 5.0, price = 100.0, fundId = utanIsin.fundId),
+            salj(id = 4, day = saleDay, shares = 5.0, price = 120.0, fundId = utanIsin.fundId)
         )
         viewModel().uiState.test {
             val rows = awaitLoaded().rows
@@ -505,7 +509,7 @@ class TransaktionerViewModelTest {
         assertEquals("SE_MED", watch.sellIsin)
         assertEquals("Med ISIN", watch.sellFundName)
         // Utvecklingen ska mätas från dagen pengarna frigjordes, inte från idag.
-        assertEquals(200L, watch.soldAtEpochDay)
+        assertEquals(saleDay, watch.soldAtEpochDay)
         assertEquals(1_475.0, watch.proceedsKr!!, 1e-9)
         // Målnivån är säljfondens egen risknivå ur cachen — det närmaste "något likvärdigt".
         assertEquals(6, watch.targetLevel)
@@ -535,8 +539,8 @@ class TransaktionerViewModelTest {
     fun `ett salj som redan bevakas erbjuder ingen ny bevakning`() = runTest(dispatcher) {
         // Gaten går på transaktionen (BYT-1): sälj 2 är bevakat, sälj 3 samma fond och dag är det inte.
         givenSoldFundWithIsin()
-        transactions.value = listOf(salj(id = 3, day = 200, shares = 2.0, price = 150.0)) + transactions.value
-        fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = 200, sellTransactionId = 2))
+        transactions.value = listOf(salj(id = 3, day = saleDay, shares = 2.0, price = 150.0)) + transactions.value
+        fakeSwitchWatchRepo.start(SwitchWatch(sellIsin = "SE_MED", sellFundName = "Med ISIN", soldAtEpochDay = saleDay, sellTransactionId = 2))
         viewModel().uiState.test {
             val rows = awaitLoaded().rows
             assertFalse(rows.first { it.transaction.id == 2L }.canStartSwitchWatch)
@@ -549,7 +553,7 @@ class TransaktionerViewModelTest {
     fun `en utgangen okopplad bevakning samma dag blockerar som forut`() = runTest(dispatcher) {
         // Bakgrundskörningen har inte hunnit stänga den: den kan inte kopplas, men är säljets —
         // en knapp som startade en ny bredvid hade gett två bevakningar för samma sälj (fond + dag).
-        val soldAt = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 2).toEpochDay()
+        val soldAt = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 2).toEpochDay()
         funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
         transactions.value = listOf(
             salj(id = 2, day = soldAt, shares = 10.0, price = 150.0),
@@ -559,6 +563,31 @@ class TransaktionerViewModelTest {
 
         viewModel().uiState.test {
             assertFalse(awaitLoaded().rows.first { it.sale != null }.canStartSwitchWatch)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ett salj aldre an bevakningstiden erbjuder ingen bevakning och knappen foljer installningen`() = runTest(dispatcher) {
+        // Issue #244: knappen startade en bevakning som var utgången redan från början, och
+        // Pågående byte stängdes igen efter en sekund. Gränsen är bevakningstiden (SET-8).
+        val ttl = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
+        funds.value = listOf(Fund(fundId = "SHB0000442", name = "Med ISIN", isin = "SE_MED"))
+        transactions.value = listOf(
+            salj(id = 2, day = today.minusDays(ttl).toEpochDay(), shares = 5.0, price = 150.0),
+            salj(id = 3, day = today.minusDays(ttl + 1).toEpochDay(), shares = 5.0, price = 150.0),
+            kop(id = 1, day = today.minusDays(200).toEpochDay(), shares = 10.0, price = 100.0)
+        )
+
+        viewModel().uiState.test {
+            val rows = awaitLoaded().rows
+            assertTrue(rows.first { it.transaction.id == 2L }.canStartSwitchWatch)
+            assertFalse(rows.first { it.transaction.id == 3L }.canStartSwitchWatch)
+
+            preferencesRepository.setSwitchWatchTtlDays(60L)
+            var state = awaitItem()
+            while (!state.rows.first { it.transaction.id == 3L }.canStartSwitchWatch) state = awaitItem()
+            assertTrue(state.rows.first { it.transaction.id == 2L }.canStartSwitchWatch)
             cancelAndIgnoreRemainingEvents()
         }
     }

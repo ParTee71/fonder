@@ -26,7 +26,9 @@ class TargetLevelPreselection internal constructor(
     private val transactionRepository: TransactionRepository,
     private val fundPriceRepository: FundPriceRepository,
     private val switchWatchRepository: SwitchWatchRepository,
-    private val suggestionRecordRepository: SuggestionRecordRepository
+    private val suggestionRecordRepository: SuggestionRecordRepository,
+    /** Bevakningstiden (SET-8) — vilka öppna bevakningar som räknas som likvid på väg (BYT-3). */
+    private val ttlDays: suspend () -> Long = { SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS }
 ) {
     @Inject
     constructor(
@@ -40,7 +42,8 @@ class TargetLevelPreselection internal constructor(
         transactionRepository,
         fundPriceRepository,
         switchWatchRepository,
-        suggestionRecordRepository
+        suggestionRecordRepository,
+        { preferencesRepository.switchWatchTtlDays.first() }
     )
 
     /**
@@ -86,6 +89,7 @@ class TargetLevelPreselection internal constructor(
             switchWatchRepository,
             suggestionRecordRepository,
             today,
+            ttlDays(),
             metadataFor,
             excludeWatchId
         )

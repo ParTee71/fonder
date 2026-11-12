@@ -1795,7 +1795,7 @@ class FundPriceUpdateWorkerTest {
             )
         )
 
-        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, today)
 
         assertEquals(listOf("SE_A", "SE_B"), refreshSinceCalls.map { it.second })
         assertTrue(refreshCalls.isEmpty())
@@ -1809,11 +1809,11 @@ class FundPriceUpdateWorkerTest {
             SwitchWatch(
                 sellIsin = "SE_GAMMAL",
                 sellFundName = "Gammal",
-                soldAtEpochDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 1).toEpochDay()
+                soldAtEpochDay = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 1).toEpochDay()
             )
         )
 
-        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, today)
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS, today)
 
         val watch = watchRepo.watches.value.single()
         assertFalse(watch.isOpen)
@@ -1823,11 +1823,26 @@ class FundPriceUpdateWorkerTest {
     }
 
     @Test
+    fun `scanSwitchWatches stanger efter den valda bevakningstiden`() = runTest {
+        // SET-8: samma bevakning, 20 dagar gammal — utgången med 14 dagar, öppen med 30.
+        val today = testDay
+        val watchRepo = FakeSwitchWatchRepository()
+        watchRepo.start(SwitchWatch(sellIsin = "SE_TJUGO", sellFundName = "Tjugo", soldAtEpochDay = today.minusDays(20).toEpochDay()))
+
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, 30L, today)
+        assertTrue(watchRepo.watches.value.single().isOpen)
+
+        FundPriceUpdateWorker.scanSwitchWatches(fakeTransactionRepo, fakeFundPriceRepo, watchRepo, 14L, today)
+        assertEquals(SwitchWatchCloseReason.UTGANGEN, watchRepo.watches.value.single().closeReason)
+    }
+
+    @Test
     fun `scanSwitchWatches gor inget utan oppna bevakningar`() = runTest {
         FundPriceUpdateWorker.scanSwitchWatches(
             fakeTransactionRepo,
             fakeFundPriceRepo,
             FakeSwitchWatchRepository(),
+            SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS,
             testDay
         )
 

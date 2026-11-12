@@ -37,6 +37,7 @@ import se.partee71.fonder.domain.model.AccountType
 import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.Fund
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.worker.BackgroundWork
 import se.partee71.fonder.worker.FundPriceRefreshScheduler
 import se.partee71.ui.common.UiError
@@ -79,6 +80,8 @@ data class SettingsUiState(
     val lastPriceSyncEpochMillis: Long? = null,
     /** Kontotypen fondinnehaven ligger i, null om inget val gjorts (SET-4, issue #70) — styr om bytesplanen (HEM-8) ges alls. */
     val accountType: AccountType? = null,
+    /** Bevakningstiden för pågående byten (SET-8, issue #244). */
+    val switchWatchTtlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS,
     /** Sant medan en export eller återställning pågår — knapparna släcks, se [SettingsViewModel.export] (SET-6, issue #82). */
     val backupInProgress: Boolean = false,
     val backupMessage: BackupMessage? = null,
@@ -136,6 +139,9 @@ sealed interface SettingsEvent {
 
     /** Kontotypen (SET-4). */
     data class SetAccountType(val type: AccountType) : SettingsEvent
+
+    /** Användaren valde bevakningstid för pågående byten (SET-8). */
+    data class SetSwitchWatchTtl(val days: Long) : SettingsEvent
 
     /** Tömmer hela databasen (SET-1). */
     data object ClearDatabase : SettingsEvent
@@ -242,6 +248,8 @@ class SettingsViewModel @Inject constructor(
                 lastBackup = backup.lastBackup,
                 driveBackupNeedsAuth = backup.driveNeedsAuth
             )
+        }.combine(preferences.switchWatchTtlDays) { state, ttlDays ->
+            state.copy(switchWatchTtlDays = ttlDays)
         }.combine(benchmarkState) { state, benchmark ->
             state.copy(
                 chosenBenchmarkName = benchmark.chosenName,
@@ -269,6 +277,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.ChooseBenchmark -> chooseBenchmark(event.fund)
             SettingsEvent.ClearBenchmark -> clearBenchmark()
             is SettingsEvent.SetAccountType -> setAccountType(event.type)
+            is SettingsEvent.SetSwitchWatchTtl -> setSwitchWatchTtl(event.days)
             SettingsEvent.ClearDatabase -> clearDatabase()
             SettingsEvent.ClearedMessageDismissed -> onClearedMessageDismissed()
             is SettingsEvent.Export -> export(event.write)
@@ -338,6 +347,21 @@ class SettingsViewModel @Inject constructor(
             if (type == AccountType.ISK_KF && previous != AccountType.ISK_KF) {
                 fundPriceRefreshScheduler.triggerSwitchPlanScan()
             }
+        }
+    }
+
+    /**
+     * Sparar bevakningstiden (SET-8) och, vid ett faktiskt byte, begär en omräkning: bakgrundskörningen
+     * stänger då öppna byten som passerat den nya tiden och räknar om likviden på väg (BYT-3) — annars
+     * hade Beslut och planen visat olika gränser tills nästa schemalagda körning.
+     */
+    private fun setSwitchWatchTtl(days: Long) {
+        if (days !in SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS) return
+        viewModelScope.launch {
+            val previous = preferences.switchWatchTtlDays.first()
+            if (previous == days) return@launch
+            preferences.setSwitchWatchTtlDays(days)
+            fundPriceRefreshScheduler.triggerSwitchPlanScan()
         }
     }
 

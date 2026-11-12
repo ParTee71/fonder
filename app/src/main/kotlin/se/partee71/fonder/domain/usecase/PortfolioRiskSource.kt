@@ -48,9 +48,13 @@ class PortfolioRiskSource @Inject constructor(
      * vilar på ändrats**: kandidaternas kurser skrivs av bakgrundskörningen hela tiden, och Hem läser
      * kontexten i samma gren som portföljen — varje sådan skrivning hade annars räknat om hela Översikten.
      */
-    fun observeContext(): Flow<Context> = combine(preferencesRepository.riskProfile, switchWatchRepository.observeOpen()) { profile, _ -> profile }
-        .mapLatest { profile ->
-            val loaded = SwitchPlanInputs.loadWatches(switchWatchRepository, suggestionRecordRepository)
+    fun observeContext(): Flow<Context> = combine(
+        preferencesRepository.riskProfile,
+        preferencesRepository.switchWatchTtlDays,
+        switchWatchRepository.observeOpen()
+    ) { profile, ttlDays, _ -> profile to ttlDays }
+        .mapLatest { (profile, ttlDays) ->
+            val loaded = SwitchPlanInputs.loadWatches(switchWatchRepository, suggestionRecordRepository, ttlDays)
             Context(profile, loaded.copy(watches = loaded.watches.map { it.forPendingProceeds() }))
         }
         .distinctUntilChanged()
@@ -76,7 +80,7 @@ class PortfolioRiskSource @Inject constructor(
     ): RiskBase? {
         val profile = context.riskProfile ?: return null
         if (profile.effectiveAllocation.isEmpty()) return null
-        val pending = SwitchPlanCalc.pendingProceedsByLevel(context.watches.watches, transactions, funds, context.watches.buyIsinByRecordId, metadataByIsin, today)
+        val pending = SwitchPlanCalc.pendingProceedsByLevel(context.watches.watches, transactions, funds, context.watches.buyIsinByRecordId, metadataByIsin, today, context.watches.ttlDays)
         return RiskBase(profile, PortfolioRiskCalc.valueByLevel(byRiskLevel), pending)
     }
 

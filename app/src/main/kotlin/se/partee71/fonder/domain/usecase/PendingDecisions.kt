@@ -69,7 +69,7 @@ data class PendingDecisions(
     val cheaperAlternatives: List<CheaperAlternative> = emptyList(),
     /** Billigare alternativ användaren avstått från — som [dismissedSuggestions]. */
     val dismissedCheaperAlternatives: List<CheaperAlternative> = emptyList(),
-    /** Öppna bevakningar som inte passerat [SwitchWatchCalc.WATCH_TTL_DAYS], i repositoriets ordning. */
+    /** Öppna bevakningar som inte passerat [watchTtlDays], i repositoriets ordning. */
     val openWatches: List<OpenSwitchWatch> = emptyList(),
     /**
      * Säljfonder som redan har en öppen bevakning, **även** utgångna — styr om ett kvitterat byte
@@ -83,7 +83,12 @@ data class PendingDecisions(
      * bevakningarna — sätts av [PendingDecisionsSource] med [withSwitches]. Antalen nedan läser
      * den, så Beslut, "Att besluta" och flikmärket aldrig kan visa olika.
      */
-    val switches: SwitchRows = SwitchRows()
+    val switches: SwitchRows = SwitchRows(),
+    /**
+     * Bevakningstiden (SET-8) listan räknades med — "dag N av X" på en Sålt-rad och hur länge
+     * avslutade byten syns (BYT-4) läser den härifrån, så texten och urvalet aldrig går isär.
+     */
+    val watchTtlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
 ) {
     /** Planens byten som väntar på ett beslut — se [SwitchRows.proposedCount]. */
     val openSwitchCount: Int get() = switches.proposedCount
@@ -129,9 +134,9 @@ class PendingDecisionsSource @Inject constructor(
     private val inProgressSwitches: InProgressSwitches
 ) {
 
-    fun observe(): Flow<PendingDecisions> {
-        val closedSince = LocalDate.now().minusDays(SwitchWatchCalc.WATCH_TTL_DAYS).toEpochDay()
-        return combine(suggestions(), switchWatches(), switchWatchRepository.observeClosedSince(closedSince)) { resolved, watches, closed ->
+    fun observe(): Flow<PendingDecisions> = preferencesRepository.switchWatchTtlDays.flatMapLatest { ttlDays ->
+        val closedSince = LocalDate.now().minusDays(ttlDays).toEpochDay()
+        combine(suggestions(), switchWatches(ttlDays), switchWatchRepository.observeClosedSince(closedSince)) { resolved, watches, closed ->
             PendingDecisions(
                 switchPlan = watches.inProgress.mark(resolved.plan),
                 dismissedSuggestions = resolved.dismissedPlan,
@@ -139,7 +144,8 @@ class PendingDecisionsSource @Inject constructor(
                 cheaperAlternatives = resolved.cheaper.map { it.copy(suggestion = it.suggestion.copy(inProgress = watches.inProgress.marks(it.suggestion))) },
                 dismissedCheaperAlternatives = resolved.dismissedCheaper,
                 openWatches = watches.visible,
-                watchedSellIsins = watches.sellIsins
+                watchedSellIsins = watches.sellIsins,
+                watchTtlDays = ttlDays
             ).withSwitches(closedWatches = watches.expired + closed, today = LocalDate.now())
         }
     }
@@ -191,18 +197,18 @@ class PendingDecisionsSource @Inject constructor(
     /** De öppna bevakningarna som Beslut visar, och vilka planrader de gör pågående — ur **en** läsning av tabellen. */
     private class Watches(
         val visible: List<OpenSwitchWatch>,
-        /** Öppna bevakningar som passerat [SwitchWatchCalc.WATCH_TTL_DAYS] — Utgånget tills bakgrundskörningen stänger dem. */
+        /** Öppna bevakningar som passerat bevakningstiden (SET-8) — Utgånget tills bakgrundskörningen stänger dem. */
         val expired: List<SwitchWatch>,
         /** Säljfonder med öppen bevakning, **även** utgångna — se [PendingDecisions.watchedSellIsins]. */
         val sellIsins: Set<String>,
         val inProgress: InProgressSwitches.Keys
     )
 
-    private fun switchWatches(): Flow<Watches> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
+    private fun switchWatches(ttlDays: Long): Flow<Watches> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
         val today = LocalDate.now()
         val sellIsins = watches.mapTo(mutableSetOf()) { it.sellIsin }
-        val (expired, visible) = watches.partition { SwitchWatchCalc.isExpired(it, today) }
-        val inProgress = inProgressSwitches.keysFor(watches, today)
+        val (expired, visible) = watches.partition { SwitchWatchCalc.isExpired(it, today, ttlDays) }
+        val inProgress = inProgressSwitches.keysFor(watches, today, ttlDays)
         if (visible.isEmpty()) return@flatMapLatest inProgress.map { Watches(emptyList(), expired, sellIsins, it) }
 
         val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()

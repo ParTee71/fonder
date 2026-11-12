@@ -247,6 +247,7 @@ object SwitchPlanCalc {
      * @param buyIsinByRecordId källförslagens köpfond per rad-id, se [SwitchTransitions.suggestFor].
      * @param metadataByIsin risknivå per ISIN för "fond på målnivån" — de innehav som finns;
      *   en köpt fond som saknas här matchas bara som kandidat eller föreslagen fond.
+     * @param ttlDays bevakningstiden (SET-8) — en äldre öppen bevakning räknas inte som likvid.
      */
     fun pendingProceedsByLevel(
         watches: List<SwitchWatch>,
@@ -254,7 +255,8 @@ object SwitchPlanCalc {
         funds: List<Fund>,
         buyIsinByRecordId: Map<Long, String>,
         metadataByIsin: Map<String, FundMetadata>,
-        today: LocalDate
+        today: LocalDate,
+        ttlDays: Long
     ): Map<Int, Double> {
         val transactionIds = transactions.mapTo(mutableSetOf()) { it.id }
         val isinByFundId = funds.associate { it.fundId to it.isin }
@@ -265,7 +267,7 @@ object SwitchPlanCalc {
         val result = mutableMapOf<Int, Double>()
 
         watches
-            .filter { it.isOpen && !SwitchWatchCalc.isExpired(it, today) }
+            .filter { it.isOpen && !SwitchWatchCalc.isExpired(it, today, ttlDays) }
             .filter { it.sellTransactionId != null && it.sellTransactionId in transactionIds }
             .sortedWith(compareBy({ it.soldAtEpochDay }, { it.id }))
             .forEach { watch ->

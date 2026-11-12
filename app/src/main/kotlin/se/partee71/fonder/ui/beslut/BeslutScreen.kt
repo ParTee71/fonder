@@ -40,7 +40,6 @@ import se.partee71.fonder.domain.usecase.SwitchEffectCalc
 import se.partee71.fonder.domain.usecase.SwitchPlanResolver
 import se.partee71.fonder.domain.usecase.SwitchRow
 import se.partee71.fonder.domain.usecase.SwitchRowState
-import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 import se.partee71.fonder.ui.components.CenteredState
 import se.partee71.fonder.ui.components.ExpandableSection
 import se.partee71.fonder.ui.components.FundFactsCard
@@ -234,10 +233,10 @@ private fun BeslutList(
             }
         }
 
-        // Avslutade (14 dagar efter stängningen) och överhoppade (HEM-14) — hopfällt; ingen snackbar finns
+        // Avslutade (bevakningstiden efter stängningen, SET-8) och överhoppade (HEM-14) — hopfällt; ingen snackbar finns
         // i appen, så ångra-vägen är raden här.
         if (switches.closed.isNotEmpty()) {
-            item(contentType = "closed") { ClosedSection(switches.closed, onUndo = onUndoDismissal) }
+            item(contentType = "closed") { ClosedSection(switches.closed, switches.watchTtlDays, onUndo = onUndoDismissal) }
         }
 
         item(contentType = "section-heading") { SectionHeading(stringResource(R.string.beslut_outcome_title)) }
@@ -325,7 +324,7 @@ private fun SwitchesHeading(waiting: Int, working: Boolean) {
 
 /**
  * Chipets text för en rad (BYT-4) — vad rådet gör, inte varifrån det kommer: "Sänker risken · steg 1",
- * "Sparar avgift · påverkar inte risken", "Sålt · dag 2 av 14 · välj köpfond". Tillståndet står
+ * "Sparar avgift · påverkar inte risken", "Sålt · dag 2 av 30 · välj köpfond". Tillståndet står
  * alltid i text (UI-3).
  */
 @Composable
@@ -336,7 +335,7 @@ private fun switchChipText(row: SwitchRow): String = when (row) {
         planStepChip(row.suggestion.fromLevel, row.suggestion.toLevel, row.suggestion.planIndex)
     }
 
-    is SwitchRow.Sold -> stringResource(R.string.format_switch_state_sold, row.watch.daysWaiting, SwitchWatchCalc.WATCH_TTL_DAYS)
+    is SwitchRow.Sold -> stringResource(R.string.format_switch_state_sold, row.watch.daysWaiting, row.ttlDays)
 
     is SwitchRow.Closed -> when (row.state) {
         SwitchRowState.BOUGHT ->
@@ -671,11 +670,11 @@ private fun SoldLeader(watch: OpenSwitchWatch) {
 
 /**
  * "Avslutade och överhoppade (N)" (BYT-4, HEM-14) — hopfälld som standard: byten stängda som köpta,
- * avbrutna eller utgångna i [SwitchWatchCalc.WATCH_TTL_DAYS] dagar efter stängningen (sedan bara i
+ * avbrutna eller utgångna i [ttlDays] dagar (bevakningstiden, SET-8) efter stängningen (sedan bara i
  * Facit), och de överhoppade förslagen med **Ångra**, som visar förslaget igen.
  */
 @Composable
-private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
+private fun ClosedSection(rows: List<SwitchRow>, ttlDays: Long, onUndo: (SwitchPlanResolver.Suggestion) -> Unit) {
     ExpandableSection(
         title = stringResource(R.string.format_beslut_closed_title, rows.size),
         modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s, bottom = Spacing.s)
@@ -683,7 +682,7 @@ private fun ClosedSection(rows: List<SwitchRow>, onUndo: (SwitchPlanResolver.Sug
         Column {
             ItemRowText(
                 title = null,
-                subtitle = stringResource(R.string.format_beslut_closed_explain, SwitchWatchCalc.WATCH_TTL_DAYS, SuggestionDismissals.TTL_DAYS)
+                subtitle = stringResource(R.string.format_beslut_closed_explain, ttlDays, SuggestionDismissals.TTL_DAYS)
             )
             rows.forEach { row ->
                 AppDivider(Modifier.padding(top = Spacing.s))

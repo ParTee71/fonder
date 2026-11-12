@@ -28,7 +28,7 @@ interface SwitchWatchRepository {
 
     /**
      * Bevakningar stängda på eller efter [epochDay], senast stängda först — Besluts sektion
-     * "Avslutade och avstådda" (BYT-4) visar dem i [SwitchWatchCalc.WATCH_TTL_DAYS] dagar.
+     * "Avslutade och avstådda" (BYT-4) visar dem lika många dagar som bevakningstiden (SET-8).
      */
     fun observeClosedSince(epochDay: Long): Flow<List<SwitchWatch>>
 
@@ -146,14 +146,14 @@ interface SwitchWatchRepository {
     suspend fun clearTransactionLinks(transactionId: Long)
 
     /**
-     * Stänger öppna bevakningar som passerat [SwitchWatchCalc.WATCH_TTL_DAYS] som
+     * Stänger öppna bevakningar som passerat bevakningstiden [ttlDays] (SET-8) som
      * [SwitchWatchCloseReason.UTGANGEN] — de raderas aldrig. Ett fondbyte tar dagar, inte
      * veckor; en bevakning som legat orörd längre än så beskriver ett läge som inte finns
      * längre (samma princip som `SwitchPlanCalc.PLAN_TTL_DAYS`).
      *
      * @return antalet stängda bevakningar.
      */
-    suspend fun expireStale(today: LocalDate): Int
+    suspend fun expireStale(today: LocalDate, ttlDays: Long): Int
 
     /** Ersätter hela innehållet — återställningens skrivväg (SET-6), aldrig en sammanslagning. */
     suspend fun replaceAll(watches: List<SwitchWatch>)
@@ -299,10 +299,10 @@ class RoomSwitchWatchRepository @Inject constructor(
         dao.clearTransactionLinks(transactionId)
     }
 
-    override suspend fun expireStale(today: LocalDate): Int {
+    override suspend fun expireStale(today: LocalDate, ttlDays: Long): Int {
         val stale = dao.getOpen()
             .map(SwitchWatchWithCandidates::toDomain)
-            .filter { SwitchWatchCalc.isExpired(it, today) }
+            .filter { SwitchWatchCalc.isExpired(it, today, ttlDays) }
         stale.forEach { close(it.id, SwitchWatchCloseReason.UTGANGEN, today) }
         return stale.size
     }

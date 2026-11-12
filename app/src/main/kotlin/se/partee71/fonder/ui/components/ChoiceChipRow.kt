@@ -16,6 +16,7 @@ import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +32,8 @@ import androidx.compose.ui.semantics.semantics
  *
  * @param optionLabel `@Composable` så anropsstället kan slå upp etiketten via `stringResource`
  *   direkt, utan att själv behöva resolva strängar i förväg.
+ * @param optionDescription vad skärmläsaren säger i stället för etiketten, när etiketten är
+ *   förkortad för att alla val ska rymmas (bevakningstidens "30" läses "30 dagar", SET-8).
  */
 @Composable
 fun <T> ChoiceChipRow(
@@ -39,7 +42,8 @@ fun <T> ChoiceChipRow(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    optionDescription: (@Composable (T) -> String)? = null
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()).selectableGroup(),
@@ -52,7 +56,8 @@ fun <T> ChoiceChipRow(
                 index = index,
                 count = options.size,
                 onClick = { onSelect(option) },
-                enabled = enabled
+                enabled = enabled,
+                contentDescription = optionDescription?.invoke(option)
             )
         }
     }
@@ -79,7 +84,8 @@ fun ConnectedChoiceButton(
     count: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    contentDescription: String? = null
 ) {
     val shapes = when {
         count == 1 -> ToggleButtonShapes(
@@ -101,6 +107,7 @@ fun ConnectedChoiceButton(
         modifier = modifier.semantics {
             role = Role.RadioButton
             this.selected = selected
+            contentDescription?.let { this.contentDescription = it }
         },
         shapes = shapes,
         colors = choiceButtonColors()

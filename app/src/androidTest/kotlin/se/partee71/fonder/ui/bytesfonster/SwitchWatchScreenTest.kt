@@ -101,7 +101,7 @@ class SwitchWatchScreenTest {
         // Substring på etiketten, inte på hela beloppet: sv-SE grupperar med hårt blanksteg,
         // och ett testvärde skrivet med vanligt mellanslag hade fallit på det.
         composeRule.onNodeWithText("Belopp:", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Dag 3 av ${SwitchWatchCalc.WATCH_TTL_DAYS}", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Dag 3 av ${SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS}", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -211,7 +211,7 @@ class SwitchWatchScreenTest {
     fun en_utgangen_bevakning_sags_ut() {
         composeRule.setContent { FonderTheme { SwitchWatchContent(state = state(expired = true)) } }
 
-        composeRule.onNodeWithText("äldre än ${SwitchWatchCalc.WATCH_TTL_DAYS} dygn", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("äldre än ${SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS} dygn", substring = true).assertIsDisplayed()
     }
 
     @Test

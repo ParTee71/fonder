@@ -85,7 +85,7 @@ class RoomSwitchWatchRepositoryTest {
         repository.start(watch(sellTransactionId = 7))
         val closed = repository.start(watch(soldAtEpochDay = soldAt - 1))
         repository.close(closed, SwitchWatchCloseReason.AVBRUTEN, today)
-        val expiredDay = today.minusDays(SwitchWatchCalc.WATCH_TTL_DAYS + 3).toEpochDay()
+        val expiredDay = today.minusDays(SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS + 3).toEpochDay()
         val expired = repository.start(watch(soldAtEpochDay = expiredDay))
 
         assertNull(repository.findOpenWithoutTransactionFor("SE_SALJ", soldAt))

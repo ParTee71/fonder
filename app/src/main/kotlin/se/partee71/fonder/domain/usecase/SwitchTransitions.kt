@@ -99,6 +99,8 @@ object SwitchTransitions {
      * @param openWatches de öppna bevakningarna ([SwitchWatchRepository.observeOpen]).
      * @param buyIsinByRecordId källförslagens köpfond per rad-id, för bevakningar startade ur ett
      *   förslag — den föreslagna fonden är ett förval även när den inte lagts som kandidat.
+     * @param ttlDays bevakningstiden (SET-8). Ett sälj äldre än så kan inte starta en bevakning
+     *   (den vore utgången redan när den skapades, issue #244) och får bara [SwitchDecision.None].
      * @return för ett köp utan ISIN eller en fond utan ISIN: bara [SwitchDecision.None].
      */
     fun suggestFor(
@@ -108,14 +110,15 @@ object SwitchTransitions {
         plan: List<SwitchPlanResolver.Suggestion>,
         openWatches: List<SwitchWatch>,
         today: LocalDate,
+        ttlDays: Long,
         buyIsinByRecordId: Map<Long, String> = emptyMap()
     ): SwitchChoices = when (type) {
-        TransactionType.SALJ -> forSale(fundIsin, plan)
-        TransactionType.KOP -> forPurchase(fundIsin, epochDay, openWatches, today, buyIsinByRecordId)
+        TransactionType.SALJ -> forSale(fundIsin, plan, SwitchWatchCalc.isExpiredSoldAt(epochDay, today, ttlDays))
+        TransactionType.KOP -> forPurchase(fundIsin, epochDay, openWatches, today, ttlDays, buyIsinByRecordId)
     }
 
-    private fun forSale(fundIsin: String?, plan: List<SwitchPlanResolver.Suggestion>): SwitchChoices {
-        if (fundIsin == null) return SwitchChoices(listOf(SwitchDecision.None), SwitchDecision.None)
+    private fun forSale(fundIsin: String?, plan: List<SwitchPlanResolver.Suggestion>, tooOld: Boolean): SwitchChoices {
+        if (fundIsin == null || tooOld) return SwitchChoices(listOf(SwitchDecision.None), SwitchDecision.None)
         val rows = plan
             .filter { it.sellIsin == fundIsin && !it.inProgress }
             .sortedBy { it.planIndex }
@@ -134,11 +137,12 @@ object SwitchTransitions {
         epochDay: Long,
         openWatches: List<SwitchWatch>,
         today: LocalDate,
+        ttlDays: Long,
         buyIsinByRecordId: Map<Long, String>
     ): SwitchChoices {
         if (fundIsin == null) return SwitchChoices(listOf(SwitchDecision.None), SwitchDecision.None)
         val eligible = openWatches
-            .filter { it.isOpen && !SwitchWatchCalc.isExpired(it, today) && it.soldAtEpochDay <= epochDay }
+            .filter { it.isOpen && !SwitchWatchCalc.isExpired(it, today, ttlDays) && it.soldAtEpochDay <= epochDay }
             .sortedWith(compareBy({ it.soldAtEpochDay }, { it.id }))
         val options = listOf(SwitchDecision.None) + eligible.map { SwitchDecision.ClosesWatch(it.id) }
         val preselected = when {
@@ -153,7 +157,7 @@ object SwitchTransitions {
     private fun expects(watch: SwitchWatch, isin: String, buyIsinByRecordId: Map<Long, String>): Boolean = watch.candidates.any { it.isin == isin } || watch.sourceRecordId?.let { buyIsinByRecordId[it] } == isin
 
     /**
-     * Den öppna bevakning **utan känd transaktion** av säljfonden inom ±[SwitchWatchCalc.WATCH_TTL_DAYS]
+     * Den öppna bevakning **utan känd transaktion** av säljfonden inom ±[ttlDays] (bevakningstiden, SET-8)
      * från [epochDay] — samma dag inräknad — som ett sälj kan kopplas till **efter att användaren
      * tillfrågats** ([SwitchDecision.LinksWatch], BYT-1). Äldst om flera; null om
      * ingen. En utgången bevakning erbjuds inte.
@@ -164,20 +168,20 @@ object SwitchTransitions {
      * kopplas utan svar; bara "Fristående"/"för planrad" kopplar samma dag utan fråga
      * ([RecordTransaction.startWatchForSale]).
      */
-    fun linkableWatch(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate): SwitchWatch? = linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull()
+    fun linkableWatch(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate, ttlDays: Long): SwitchWatch? = linkableWatches(fundIsin, epochDay, openWatches, today, ttlDays).firstOrNull()
 
     /**
      * Alla bevakningar [linkableWatch] kan peka ut, äldst först — importen behöver nästa när en
      * tidigare säljrad redan tagit den första: en bevakning kopplas av högst en rad. En koppling som
-     * hade gjort bevakningen **utgången** på säljdagen (säljet är äldre än `WATCH_TTL_DAYS`) erbjuds
+     * hade gjort bevakningen **utgången** på säljdagen (säljet är äldre än bevakningstiden) erbjuds
      * inte — den hade stängts av nästa bakgrundskörning utan att någonsin kunna avslutas med ett köp.
      */
-    fun linkableWatches(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate): List<SwitchWatch> {
+    fun linkableWatches(fundIsin: String?, epochDay: Long, openWatches: List<SwitchWatch>, today: LocalDate, ttlDays: Long): List<SwitchWatch> {
         if (fundIsin == null) return emptyList()
         return openWatches
-            .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == fundIsin && !SwitchWatchCalc.isExpired(it, today) }
-            .filter { abs(it.soldAtEpochDay - epochDay) <= SwitchWatchCalc.WATCH_TTL_DAYS }
-            .filterNot { SwitchWatchCalc.isExpired(it.copy(soldAtEpochDay = epochDay), today) }
+            .filter { it.isOpen && it.sellTransactionId == null && it.sellIsin == fundIsin && !SwitchWatchCalc.isExpired(it, today, ttlDays) }
+            .filter { abs(it.soldAtEpochDay - epochDay) <= ttlDays }
+            .filterNot { SwitchWatchCalc.isExpired(it.copy(soldAtEpochDay = epochDay), today, ttlDays) }
             .sortedWith(compareBy({ it.soldAtEpochDay }, { it.id }))
     }
 }
@@ -194,7 +198,7 @@ class SwitchChoicesSource internal constructor(
     private val pendingDecisionsSource: PendingDecisionsSource,
     private val switchWatchRepository: SwitchWatchRepository,
     private val suggestionRecordRepository: SuggestionRecordRepository,
-    /** "Idag" — fast i testerna, så att bevakningarnas utgång (14 dagar) inte beror på när de körs. */
+    /** "Idag" — fast i testerna, så att bevakningarnas utgång inte beror på när de körs. */
     private val today: () -> LocalDate
 ) {
     @Inject
@@ -217,12 +221,13 @@ class SwitchChoicesSource internal constructor(
         val openWatches: List<SwitchWatch>,
         val buyIsinByRecordId: Map<Long, String>,
         val today: LocalDate,
-        val cheaperAlternatives: List<SwitchPlanResolver.Suggestion> = emptyList()
+        val cheaperAlternatives: List<SwitchPlanResolver.Suggestion> = emptyList(),
+        val ttlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS
     ) {
-        fun suggestFor(type: TransactionType, fundIsin: String?, epochDay: Long): SwitchChoices = SwitchTransitions.suggestFor(type, fundIsin, epochDay, plan, openWatches, today, buyIsinByRecordId)
+        fun suggestFor(type: TransactionType, fundIsin: String?, epochDay: Long): SwitchChoices = SwitchTransitions.suggestFor(type, fundIsin, epochDay, plan, openWatches, today, ttlDays, buyIsinByRecordId)
 
         /** Som [SwitchTransitions.linkableWatch], utan bevakningar i [exclude] — de en tidigare rad i samma import redan kopplar. */
-        fun linkableWatch(fundIsin: String?, epochDay: Long, exclude: Set<Long> = emptySet()): SwitchWatch? = SwitchTransitions.linkableWatches(fundIsin, epochDay, openWatches, today).firstOrNull { it.id !in exclude }
+        fun linkableWatch(fundIsin: String?, epochDay: Long, exclude: Set<Long> = emptySet()): SwitchWatch? = SwitchTransitions.linkableWatches(fundIsin, epochDay, openWatches, today, ttlDays).firstOrNull { it.id !in exclude }
     }
 
     fun observe(today: () -> LocalDate = this.today): Flow<Inputs> = switchWatchRepository.observeOpen().flatMapLatest { watches ->
@@ -233,7 +238,9 @@ class SwitchChoicesSource internal constructor(
                 openWatches = watches,
                 buyIsinByRecordId = records.associate { it.id to it.buyIsin },
                 today = today(),
-                cheaperAlternatives = pending.cheaperAlternatives.map { it.suggestion }
+                cheaperAlternatives = pending.cheaperAlternatives.map { it.suggestion },
+                // Samma bevakningstid som Beslut räknade med (SET-8).
+                ttlDays = pending.watchTtlDays
             )
         }
     }

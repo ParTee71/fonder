@@ -209,7 +209,7 @@ class FondDetaljViewModelTest {
             testTargetLevelPreselection(fakeTransactionRepo, fakeSwitchWatchRepo)
         ),
         DismissedPlanSource(fakeSuggestionRecordRepo, fakeDismissalRepo, preferencesRepository, fakeFundMetadataRepo),
-        InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo)
+        InProgressSwitches(fakeSwitchWatchRepo, fakeSuggestionRecordRepo, preferencesRepository)
     )
 
     @Before

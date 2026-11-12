@@ -13,6 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -22,6 +23,7 @@ import se.partee71.fonder.domain.model.BackupRecord
 import se.partee71.fonder.domain.model.BackupTarget
 import se.partee71.fonder.domain.model.FundFilterVocabulary
 import se.partee71.fonder.domain.model.RiskProfile
+import se.partee71.fonder.domain.usecase.SwitchWatchCalc
 
 @Serializable
 enum class ThemeMode { LIGHT, DARK, AUTO }
@@ -52,6 +54,7 @@ class PreferencesRepository @Inject constructor(
     private val switchPlanEmptiedAtKey = longPreferencesKey("switch_plan_emptied_at_epoch_millis")
     private val riskProfileKey = stringPreferencesKey("risk_profile")
     private val accountTypeKey = stringPreferencesKey("account_type")
+    private val switchWatchTtlDaysKey = longPreferencesKey("switch_watch_ttl_days")
 
     /** Issue #96:s ensamma ISIN — läses fortfarande, skrivs aldrig mer. Se [benchmark]. */
     private val benchmarkIsinKey = stringPreferencesKey("benchmark_isin")
@@ -204,6 +207,30 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setAccountType(type: AccountType) {
         dataStore.edit { it[accountTypeKey] = type.name }
+    }
+
+    /**
+     * Hur länge ett pågående byte bevakas efter säljdagen (SET-8, issue #244), som användaren
+     * själv valt — null om inget val gjorts. Rått värde, för backupen (NFR-1): ett val som aldrig
+     * gjorts ska inte skrivas in i filen som ett val. Appen läser [switchWatchTtlDays].
+     */
+    val switchWatchTtlDaysSetting: Flow<Long?> = preferences.map { prefs -> prefs[switchWatchTtlDaysKey] }
+
+    /**
+     * Bevakningstiden som gäller (SET-8): användarens val om det är en tillåten tid, annars
+     * [SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS]. Samma gräns överallt — utgång, likvid på väg
+     * (BYT-3), "dag N av X" och hur länge avslutade byten syns (BYT-4).
+     */
+    val switchWatchTtlDays: Flow<Long> = switchWatchTtlDaysSetting.map(SwitchWatchCalc::sanitizeTtlDays).distinctUntilChanged()
+
+    suspend fun setSwitchWatchTtlDays(days: Long) {
+        require(days in SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS) { "Otillåten bevakningstid: $days" }
+        dataStore.edit { it[switchWatchTtlDaysKey] = days }
+    }
+
+    /** Tillbaka till standardtiden — återställningens väg när filen saknar ett val (SET-6 ersätter, slår inte ihop). */
+    suspend fun clearSwitchWatchTtlDays() {
+        dataStore.edit { it.remove(switchWatchTtlDaysKey) }
     }
 
     /**

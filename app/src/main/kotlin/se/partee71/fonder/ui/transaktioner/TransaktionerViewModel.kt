@@ -199,11 +199,11 @@ class TransaktionerViewModel internal constructor(
             val today = today()
             combine(
                 repository.observeFunds(),
-                switchWatchRepository.observeOpen(),
+                combine(switchWatchRepository.observeOpen(), preferencesRepository.switchWatchTtlDays, ::Pair),
                 filter,
                 startedSwitchWatchId,
                 depaTax(transactions, today.year, today)
-            ) { funds, openWatches, selectedFilter, startedId, depa ->
+            ) { funds, (openWatches, ttlDays), selectedFilter, startedId, depa ->
                 val fundsById = funds.associateBy { it.fundId }
                 val sales = RealizedGainCalculator.compute(transactions)
                 val salesByTransactionId = sales.associateBy { it.transactionId }
@@ -216,7 +216,11 @@ class TransaktionerViewModel internal constructor(
                         fundName = fund?.name ?: tx.fundId,
                         sale = sale,
                         fundIsin = isin,
-                        canStartSwitchWatch = sale != null && isin != null && openWatches.none { it.covers(tx, isin) }
+                        // Ett sälj äldre än bevakningstiden (SET-8) erbjuds inget: bevakningen vore
+                        // utgången redan när den startades och stängdes direkt igen (issue #244).
+                        canStartSwitchWatch = sale != null && isin != null &&
+                            !SwitchWatchCalc.isExpiredSoldAt(tx.epochDay, today, ttlDays) &&
+                            openWatches.none { it.covers(tx, isin, today, ttlDays) }
                     )
                 }
                 TransaktionerUiState(
@@ -291,8 +295,8 @@ class TransaktionerViewModel internal constructor(
      * samma dag blockerar **inte** — knappen kopplar den till säljet i stället för att starta en
      * ny ([RecordTransaction.startWatchForSale]).
      */
-    private fun SwitchWatch.covers(tx: Transaction, isin: String?): Boolean = sellTransactionId == tx.id ||
-        (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today()))
+    private fun SwitchWatch.covers(tx: Transaction, isin: String?, today: LocalDate, ttlDays: Long): Boolean = sellTransactionId == tx.id ||
+        (sellTransactionId == null && sellIsin == isin && soldAtEpochDay == tx.epochDay && SwitchWatchCalc.isExpired(this, today, ttlDays))
 
     /** Kvitterar navigeringen till en nystartad bevakning, så den inte upprepas vid nästa emission. */
     private fun onSwitchWatchOpened() {
