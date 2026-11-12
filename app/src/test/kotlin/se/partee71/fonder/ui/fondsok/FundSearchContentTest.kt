@@ -1,10 +1,14 @@
 package se.partee71.fonder.ui.fondsok
 
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -71,6 +75,19 @@ class FundSearchContentTest {
         composeRule.onNodeWithContentDescription("Tillagd").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Lägg till Global Hållbar C").performClick()
         assertEquals(listOf("Global Hållbar C"), added)
+    }
+
+    @Test
+    fun `träffraden har TalkBack-åtgärden Kopiera fondnamn på noden med namnet (UI-16)`() {
+        composeRule.setContent { FonderTheme { FundSearchContent(state = content) } }
+
+        val node = composeRule.onNodeWithText("Global Hållbar C").fetchSemanticsNode()
+        val action = node.config[SemanticsActions.CustomActions].single { it.label == "Kopiera fondnamn" }
+        composeRule.runOnUiThread { action.action() }
+        composeRule.waitForIdle()
+
+        val clipboard = ApplicationProvider.getApplicationContext<Context>().getSystemService(ClipboardManager::class.java)
+        assertEquals("Global Hållbar C", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
     @Test

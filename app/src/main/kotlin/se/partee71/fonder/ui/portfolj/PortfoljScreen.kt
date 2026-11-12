@@ -37,6 +37,7 @@ import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.TotalCard
 import se.partee71.fonder.ui.components.ValueAsOfRow
 import se.partee71.fonder.ui.components.WorkingIndicator
+import se.partee71.fonder.ui.components.copyableFundName
 import se.partee71.fonder.ui.theme.MonoAmountStyle
 import se.partee71.fonder.ui.theme.ReturnColors
 import se.partee71.fonder.ui.transaktioner.firstTransactionActions
@@ -225,7 +226,7 @@ private fun HoldingRow(
             Text(
                 holding.fund.name,
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.weight(1f, fill = false).copyableFundName(holding.fund.name)
             )
             // Säljsignal-status (ANA-3) bredvid fondnamnet — samma StatusDot som Fonddetalj/
             // Hem (regel 4), utan att behöva öppna Fonddetalj för att se den (POR-8, issue #26).

@@ -34,6 +34,7 @@ import se.partee71.fonder.ui.components.PullToRefreshContainer
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.RiskLevelPicker
 import se.partee71.fonder.ui.components.WorkingIndicator
+import se.partee71.fonder.ui.components.copyableFundName
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.ui.common.UiError
@@ -487,7 +488,7 @@ private fun CandidateCard(
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(end = Spacing.s)
+                modifier = Modifier.weight(1f).padding(end = Spacing.s).copyableFundName(row.name)
             )
             RiskBadge(level = row.riskLevel)
             // Radens egen väntesnurra (NAV-6): utvecklingen sedan säljdagen är talet

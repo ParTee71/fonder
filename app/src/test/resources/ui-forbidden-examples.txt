@@ -150,6 +150,7 @@ Card(modifier = modifier) { content() }
 Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
 PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) { content() }
 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) { }
+val clipboard = currentValueOf(LocalClipboard)
 shape = RoundedCornerShape(50)
 Modifier.height(48.dp)
 CircularProgressIndicator(strokeWidth = 2.dp)
@@ -163,6 +164,10 @@ ToggleFloatingActionButton(checked = expanded, onCheckedChange = onExpandedChang
 [komponent-stopp]
 PullToRefreshBox(isRefreshing = false, onRefresh = {}) { }
 ExposedDropdownMenuBox(expanded = false, onExpandedChange = {}) { }
+val clipboard = LocalClipboard.current
+val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
+val clip = ClipData.newPlainText(name, name)
+clipboard.setClipEntry(entry)
 
 [diagram-ok]
 CartesianChartHost(chart, model)

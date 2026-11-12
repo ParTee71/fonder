@@ -1,10 +1,15 @@
 package se.partee71.fonder.ui.portfolj
 
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -61,6 +66,30 @@ class PortfoljContentTest {
         composeRule.onNodeWithText("Kunde inte visa innehållet").assertIsDisplayed()
         composeRule.onNodeWithText("Försök igen").performScrollTo().performClick()
         assertEquals(1, retries)
+    }
+
+    @Test
+    fun `långtryck på ett innehav kopierar fondnamnet utan att öppna fonden (UI-16)`() {
+        var opened = 0
+        composeRule.setContent {
+            FonderTheme {
+                PortfoljContent(
+                    state = PortfoljUiState(
+                        list = persistentListOf(
+                            Holding(fund = Fund(fundId = "SE_GLOBAL", name = "Global Indexfond A"), netShares = 120.0, netInvested = 30_000.0, currentValue = 34_250.0)
+                        ).toListUiState()
+                    ),
+                    onFundClick = { opened++ }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Global Indexfond A", useUnmergedTree = true).performTouchInput { longClick() }
+        composeRule.waitForIdle()
+
+        val clipboard = ApplicationProvider.getApplicationContext<Context>().getSystemService(ClipboardManager::class.java)
+        assertEquals("Global Indexfond A", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertEquals(0, opened)
     }
 
     @Test

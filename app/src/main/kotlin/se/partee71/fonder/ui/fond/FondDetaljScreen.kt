@@ -40,6 +40,7 @@ import se.partee71.fonder.ui.components.PeriodRow
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.WorkingIndicator
+import se.partee71.fonder.ui.components.copyableFundName
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.FundLineChart
 import se.partee71.fonder.ui.navigation.TransactionFormKey
@@ -465,7 +466,8 @@ private fun SwitchPlanRow(
                         suggestion.planIndex + 1,
                         counterpartName
                     ),
-                    subtitle = null
+                    subtitle = null,
+                    modifier = Modifier.copyableFundName(counterpartName)
                 )
                 // Riskförändringen är bytets, inte den betraktande fondens: pengarna går alltid
                 // från säljkandidatens nivå till köpkandidatens. Att vända pilen när man tittar på
@@ -542,7 +544,8 @@ private fun FeeAlternativeRow(
                 PeriodRow(
                     label = alternative.candidate.name,
                     amount = alternative.annualSavingsKr,
-                    fraction = null
+                    fraction = null,
+                    modifier = Modifier.copyableFundName(alternative.candidate.name)
                 )
                 RiskBadge(level = alternative.candidate.risk, modifier = Modifier.padding(top = Spacing.xs))
             }
