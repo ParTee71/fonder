@@ -33,8 +33,6 @@ data class OpenSwitchWatch(
     val watchId: Long,
     val sellFundName: String,
     val daysWaiting: Long,
-    /** Bevakningstiden (SET-8) — "dag N av X". */
-    val ttlDays: Long = SwitchWatchCalc.DEFAULT_WATCH_TTL_DAYS,
     val candidateCount: Int,
     val leaderName: String? = null,
     val leaderChangeFraction: Double? = null,
@@ -215,11 +213,11 @@ class PendingDecisionsSource @Inject constructor(
 
         val candidateIsins = visible.flatMap { watch -> watch.candidates.map { it.isin } }.distinct()
         combine(fundPriceRepository.observeLatestPrices(candidateIsins), inProgress) { prices, keys ->
-            Watches(visible = visible.map { it.toOpen(prices, today, keys, ttlDays) }, expired = expired, sellIsins = sellIsins, inProgress = keys)
+            Watches(visible = visible.map { it.toOpen(prices, today, keys) }, expired = expired, sellIsins = sellIsins, inProgress = keys)
         }
     }
 
-    private fun SwitchWatch.toOpen(prices: Map<String, FundPrice>, today: LocalDate, keys: InProgressSwitches.Keys, ttlDays: Long): OpenSwitchWatch {
+    private fun SwitchWatch.toOpen(prices: Map<String, FundPrice>, today: LocalDate, keys: InProgressSwitches.Keys): OpenSwitchWatch {
         val leader = SwitchWatchCalc.ranked(
             candidates.map { candidate ->
                 SwitchWatchCalc.outcome(
@@ -234,7 +232,6 @@ class PendingDecisionsSource @Inject constructor(
             watchId = id,
             sellFundName = sellFundName,
             daysWaiting = SwitchWatchCalc.daysWaiting(this, today),
-            ttlDays = ttlDays,
             candidateCount = candidates.size,
             leaderName = leader?.candidate?.name,
             leaderChangeFraction = leader?.changeFraction,

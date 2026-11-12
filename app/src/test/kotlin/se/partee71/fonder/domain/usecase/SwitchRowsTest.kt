@@ -180,7 +180,24 @@ class SwitchRowsTest {
     }
 
     @Test
-    fun `avslutade visas i 14 dagar efter stangningen och sedan inte`() {
+    fun `bevakningstiden styr salt-radens dag N av X och hur lange avslutade syns`() {
+        // SET-8: samma tal överallt — listan byggs med beslutens bevakningstid.
+        val rows = SwitchRows.build(
+            PendingDecisions(openWatches = listOf(open(7)), watchTtlDays = 14L),
+            closedWatches = listOf(
+                closed(1, SwitchWatchCloseReason.KOPT, closedDaysAgo = 14),
+                closed(2, SwitchWatchCloseReason.KOPT, closedDaysAgo = 15)
+            ),
+            today = today
+        )
+
+        assertEquals(14L, (rows.active.single() as SwitchRow.Sold).ttlDays)
+        assertEquals(14L, rows.watchTtlDays)
+        assertEquals(listOf("closed-1"), rows.closed.map { it.key })
+    }
+
+    @Test
+    fun `avslutade visas i bevakningstiden efter stangningen och sedan inte`() {
         val rows = SwitchRows.build(
             PendingDecisions(),
             closedWatches = listOf(

@@ -335,7 +335,7 @@ private fun switchChipText(row: SwitchRow): String = when (row) {
         planStepChip(row.suggestion.fromLevel, row.suggestion.toLevel, row.suggestion.planIndex)
     }
 
-    is SwitchRow.Sold -> stringResource(R.string.format_switch_state_sold, row.watch.daysWaiting, row.watch.ttlDays)
+    is SwitchRow.Sold -> stringResource(R.string.format_switch_state_sold, row.watch.daysWaiting, row.ttlDays)
 
     is SwitchRow.Closed -> when (row.state) {
         SwitchRowState.BOUGHT ->

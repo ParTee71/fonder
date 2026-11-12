@@ -234,7 +234,8 @@ fun SettingsContent(
                 options = SwitchWatchCalc.ALLOWED_WATCH_TTL_DAYS,
                 selected = state.switchWatchTtlDays,
                 optionLabel = { days -> stringResource(R.string.format_settings_switch_watch_ttl_option, days) },
-                onSelect = onSwitchWatchTtlSelect
+                onSelect = onSwitchWatchTtlSelect,
+                optionDescription = { days -> stringResource(R.string.format_settings_switch_watch_ttl_option_description, days) }
             )
             ItemRowText(title = null, subtitle = stringResource(R.string.settings_switch_watch_ttl_note), modifier = Modifier.padding(top = Spacing.s))
         }

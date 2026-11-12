@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTouchHeightIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -49,6 +50,24 @@ class ChoiceChipRowTest {
             .assertIsSelected()
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
         composeRule.onNodeWithText("Mindre än ett år").assertIsNotSelected()
+    }
+
+    @Test
+    fun `en egen beskrivning läses upp i stället för den korta etiketten`() {
+        composeRule.setContent {
+            FonderTheme {
+                ChoiceChipRow(
+                    listOf(14L, 30L),
+                    selected = 30L,
+                    optionLabel = { it.toString() },
+                    onSelect = {},
+                    optionDescription = { "$it dagar" }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("30 dagar").assertIsSelected()
+        composeRule.onNodeWithContentDescription("14 dagar").assertIsNotSelected()
     }
 
     @Test
