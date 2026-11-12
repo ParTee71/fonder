@@ -134,6 +134,8 @@ fun FondDetaljContent(
         header = null,
         onBack = onBack,
         title = state.content.fundName ?: stringResource(R.string.fond_title),
+        // Fondnamnet i toppraden kopieras med långtryck (UI-16, #248); "Fond" medan den laddas inte.
+        titleModifier = state.content.fundName?.let { Modifier.copyableFundName(it) } ?: Modifier,
         onRetry = onRetry,
         sectionGap = Spacing.m,
         // Dra ned hämtar om fondens kurs och historik (UI-11) — samma kodväg som skärmöppningen,

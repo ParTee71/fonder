@@ -1,11 +1,16 @@
 package se.partee71.fonder.ui.fond
 
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -14,11 +19,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.test.core.app.ApplicationProvider
 import java.time.LocalDate
 import kotlin.math.sin
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -111,6 +118,23 @@ class FondDetaljContentTest {
         composeRule.onNodeWithText("Risk 4/7").assertIsDisplayed()
         composeRule.onNodeWithText("Första köp", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Ska du byta?").assertIsDisplayed()
+    }
+
+    @Test
+    fun `fondnamnet i toppraden har TalkBack-åtgärden Kopiera fondnamn, inte Fond medan den laddas (UI-16)`() {
+        var state by mutableStateOf(FondDetaljUiState())
+        composeRule.setContent { FonderTheme { FondDetaljContent(state = state) } }
+        val loading = composeRule.onNode(hasText("Fond") and isHeading()).fetchSemanticsNode()
+        assertFalse(SemanticsActions.CustomActions in loading.config)
+
+        state = content
+        val title = composeRule.onNode(hasText("Global Indexfond A") and isHeading()).fetchSemanticsNode()
+        val action = title.config[SemanticsActions.CustomActions].single { it.label == "Kopiera fondnamn" }
+        composeRule.runOnUiThread { action.action() }
+        composeRule.waitForIdle()
+
+        val clipboard = ApplicationProvider.getApplicationContext<Context>().getSystemService(ClipboardManager::class.java)
+        assertEquals("Global Indexfond A", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
     @Test

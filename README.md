@@ -138,7 +138,7 @@ den fullständiga källan.
 
 | Version | Innehåll |
 |---|---|
-| 1.0.0 | Bevakningstiden för pågående byten går att välja i Inställningar (14, 30, 60 eller 90 dagar, standard 30). "Bevaka alternativ" i Händelser visas bara för sälj inom den tiden, så Pågående byte hoppar inte längre tillbaka efter en sekund (#244). |
+| 1.0.0 | Bevakningstiden för pågående byten går att välja i Inställningar (14, 30, 60 eller 90 dagar, standard 30). "Bevaka alternativ" i Händelser visas bara för sälj inom den tiden, så Pågående byte hoppar inte längre tillbaka efter en sekund (#244). Fondnamnet i Fonddetaljs topprad går också att kopiera med långtryck (#248). |
 | 0.87.0 | Fondnamn går att kopiera: håll fingret på namnet i infokortet, bevakningen, Fonddetaljs byten och alternativ, Portföljen, Översikten och Fondsök (Transaktioner undantaget, där långtryck tar bort). |
 | 0.86.0 | Enklare Beslut: riskkortet med Ändra mål överst (eller Sätt ett mål), varje råd visas som sin följd per risknivå ("Sänker risken · steg 1", "Sparar avgift · påverkar inte risken"), ett infokort med köpfondens fakta och upp till tre alternativ, dra ned i stället för knappen Räkna om bytesplanen, och orden Jag har sålt / Hoppa över / Överhoppat (#240). |
 | 0.85.0 | Intern: varje förslag i bytesplanen sparas med upp till tre andra köpbara fonder på samma risknivå (avgift, risk, kategori, typ, fondbolag och 12-månadersavkastning) och tar dem med i säkerhetskopian – underlaget för infokortet på Beslut (#239). Databasen uppgraderas till version 22. |
