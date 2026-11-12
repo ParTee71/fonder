@@ -55,6 +55,10 @@
 \bPullToRefreshBox\b	PullToRefreshContainer
 \bExposedDropdownMenuBox\b	SelectField
 \bModalBottomSheet\b	AppBottomSheet (android-ui)
+\b(Local)?Clipboard(Manager)?\b	Modifier.copyableFundName (ui/components)
+\bCLIPBOARD_SERVICE\b	Modifier.copyableFundName (ui/components)
+\bClipData\b	Modifier.copyableFundName (ui/components)
+\b(ClipEntry|setClipEntry)\b	Modifier.copyableFundName (ui/components)
 
 [vico]
 \bcom\.patrykandpatrick\.vico\b	FundLineChart i ui/diagram – Vico bara där (TP-12)

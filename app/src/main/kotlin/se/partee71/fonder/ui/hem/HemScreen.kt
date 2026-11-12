@@ -37,6 +37,7 @@ import se.partee71.fonder.ui.components.ReminderRowTone
 import se.partee71.fonder.ui.components.RiskCard
 import se.partee71.fonder.ui.components.StatusDot
 import se.partee71.fonder.ui.components.TotalCard
+import se.partee71.fonder.ui.components.copyableFundName
 import se.partee71.fonder.ui.components.statusTriggerMessages
 import se.partee71.fonder.ui.diagram.ChartSeries
 import se.partee71.fonder.ui.diagram.ChartValueAxis
@@ -462,7 +463,8 @@ private fun FeeHoldingRow(holdingFee: PortfolioFeeCalc.HoldingFee, onClick: () -
             label = holdingFee.fund.name,
             amount = null,
             fraction = null,
-            valueText = MoneyFormat.kr(holdingFee.annualFeeKr)
+            valueText = MoneyFormat.kr(holdingFee.annualFeeKr),
+            modifier = Modifier.copyableFundName(holdingFee.fund.name)
         )
         // Aldrig jämfört (ingen text) och jämfört-utan-träff ("Redan bland de billigaste",
         // samma text som ANA-9:s eget kort i Fonddetalj — regel 4) är skilda tillstånd,
@@ -501,7 +503,7 @@ private fun FlaggedFundRow(flagged: FlaggedHolding, onClick: () -> Unit) {
         ) {
             StatusDot(level = flagged.analysis.status!!, modifier = Modifier.padding(end = Spacing.m))
             Column {
-                Text(flagged.fund.name, style = MaterialTheme.typography.bodyMedium)
+                Text(flagged.fund.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.copyableFundName(flagged.fund.name))
                 Text(
                     statusTriggerMessages(flagged.analysis).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,

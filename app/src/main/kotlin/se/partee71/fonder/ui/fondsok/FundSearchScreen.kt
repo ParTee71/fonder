@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import se.partee71.fonder.R
@@ -17,6 +18,7 @@ import se.partee71.fonder.domain.model.Fund
 import se.partee71.fonder.domain.model.FundCompany
 import se.partee71.fonder.ui.components.RiskBadge
 import se.partee71.fonder.ui.components.SelectField
+import se.partee71.fonder.ui.components.copyableFundName
 import se.partee71.fonder.ui.theme.ListFrameCards
 import se.partee71.ui.components.AppButton
 import se.partee71.ui.components.AppTextField
@@ -154,6 +156,9 @@ private fun FundResultRow(
     val actionLabel = stringResource(actionLabelRes)
     ItemRow(
         title = fund.name,
+        // Raden slås ihop till en nod (som FundFactsRow) så att TalkBack-åtgärden Kopiera fondnamn
+        // hamnar på noden som läser namnet; knappen är klickbar och förblir en egen nod (UI-16).
+        modifier = Modifier.semantics(mergeDescendants = true) {}.copyableFundName(fund.name),
         below = { RiskBadge(level = riskLevel) },
         trailing = {
             if (added) {

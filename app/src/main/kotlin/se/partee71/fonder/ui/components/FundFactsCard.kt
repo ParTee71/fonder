@@ -95,7 +95,11 @@ fun FundFactsCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(facts.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(
+                facts.name,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f).copyableFundName(facts.name)
+            )
             badge?.let { InfoPill(text = it, tone = Tone.Primary, shape = AppTheme.shapes.smallTile) }
         }
         Column(modifier = Modifier.padding(top = Spacing.xs)) {
@@ -145,7 +149,7 @@ fun FundFactsRow(facts: FundFacts, modifier: Modifier = Modifier) {
     val oneYear = facts.oneYearFraction
     ItemRow(
         title = facts.name,
-        modifier = modifier.semantics(mergeDescendants = true) {},
+        modifier = modifier.semantics(mergeDescendants = true) {}.copyableFundName(facts.name),
         subtitle = listOfNotNull(facts.risk?.let { stringResource(R.string.format_fund_facts_risk_short, it) }, facts.type)
             .joinToString(" · ")
             .ifEmpty { null },
